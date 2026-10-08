@@ -35,7 +35,7 @@ const usage = require('../src/ai/usage-ledger');
 const spendLog = require('../src/rag/llm-spend-log');
 const { mountAnalyzerRoutes } = require('../src/ocr/routes');
 const { markTrigger, requireServiceConfirm } = require('../src/ai/ai-trigger');
-const { mountExplainDocument } = require('../src/rag/document-explain-route');
+const { mountExplainDocument, createVerifyMaster } = require('../src/rag/document-explain-route');
 const explain = require('../src/rag/document-explain');
 const { loadAll } = require('./fixtures/explain-eval/load');
 
@@ -117,7 +117,8 @@ async function startApp() {
   // the explanation as server.js mounts it, with the shared digest uncached
   mountExplainDocument(app, { requireAuth, requireServiceConfirm, resolveScanDocs: (q, r, n) => n(), tariffModule: tiers,
     callAI: explainAI, digest: t => explain.buildDigest(t, { callAI: explainAI }), lexLangForText: () => 'uz', logAudit: null,
-    verifyMaster: async id => (await pool.query('SELECT role FROM admins WHERE id = $1', [id])).rows.some(r => r.role === 'master') });
+    // the server's own database check (server.js uses this same function)
+    verifyMaster: createVerifyMaster(pool) });
   // the master's request view (no master check in this test app)
   require('../src/ai/usage-report').mountUsageReportRoutes(app, { requireMasterAdmin: (q, r, n) => n(), pool });
   // the chat's middleware chain as server.js mounts it (question -> trigger
@@ -436,14 +437,29 @@ async function docxOf(text) {
         assert.strictEqual(noOptIn.status, 200);
         assert.strictEqual(noOptIn.body.trace, undefined);
         // a master who asked: this request's trace, not cacheable
+        const tag = 'tr-test-0001abcd';
         const r = await realFetch(base + '/api/draft/explain-document', { method: 'POST', headers: { 'x-user': String(u), 'x-role': 'master', 'content-type': 'application/json' },
-          body: JSON.stringify({ documentText: text, confirmed: true, trace: true }) });
+          body: JSON.stringify({ documentText: text, confirmed: true, trace: true, traceTag: tag }) });
         const body = await r.json();
         assert.strictEqual(r.status, 200);
         assert.strictEqual(r.headers.get('cache-control'), 'no-store');
+        // bound to this request: the page's tag, this request's id, this document's hash
+        assert.strictEqual(body.trace.tag, tag);
+        assert.strictEqual(body.trace.documentSha256, require('crypto').createHash('sha256').update(text).digest('hex'));
+        assert.ok(body.trace.requestId && !Number.isNaN(Date.parse(body.trace.createdAt)));
+        await settle(200);
+        assert.strictEqual((await pool.query('SELECT count(*)::int AS n FROM ai_requests WHERE request_id = $1 AND user_id = $2', [body.trace.requestId, u])).rows[0].n, 1, 'the trace names the request row of this call');
+        // a tag that is not ours is dropped, never echoed
+        const odd = await call({ role: 'master', json: { documentText: text, confirmed: true, trace: true, traceTag: '<img src=x>' } });
+        assert.strictEqual(odd.body.trace.tag, null);
+        // two requests, two traces: the second never carries the first one's tag
+        const second = await call({ role: 'master', json: { documentText: text, confirmed: true, trace: true, traceTag: 'tr-test-0002abcd' } });
+        assert.strictEqual(second.body.trace.tag, 'tr-test-0002abcd');
+        assert.notStrictEqual(second.body.trace.requestId, body.trace.requestId);
         assert.ok(/^HUJJAT DAYJESTI/u.test(body.trace.digest));
         assert.ok(body.trace.scopeLines.some(l => l.includes('jumladan Investor')));
-        assert.deepStrictEqual(Object.keys(body.trace.scopeCounts).sort(), ['candidates', 'dropped', 'selected', 'shortened']);
+        assert.deepStrictEqual(Object.keys(body.trace.scopeCounts).sort(), ['candidates', 'dropped', 'referenced', 'savedChars', 'selected', 'shortened']);
+        assert.ok(Array.isArray(body.trace.scopeSent) && Array.isArray(body.trace.scopeDropped));
         assert.strictEqual(body.trace.conflictCandidates.length, 1);
         await settle(300);
         // nothing of the text reaches the ledger or the request row
@@ -454,10 +470,28 @@ async function docxOf(text) {
       } finally {
         await pool.query("UPDATE admins SET role = 'user' WHERE id = $1", [u]);
       }
-      // the page asks for it only on the master's console opt-in
+      // the page asks for it only on a master's opt-in ("Diagnostika" or the console flag),
+      // keeps it in memory and offers it as a JSON download
       const page = fs.readFileSync(path.join(__dirname, '../public/dashboard.html'), 'utf8');
-      assert.ok(page.includes('confirmed: true, trace: window.__JAI_TRACE === true })'));
-      assert.ok(page.includes('window.__lastExplain = { source: text || null, response: d };'));
+      assert.ok(page.includes('var wantTrace = isMasterUi() && (explainDiagnostics === true || window.__JAI_TRACE === true);'));
+      assert.ok(page.includes('confirmed: true, trace: wantTrace, traceTag: traceTag })'));
+      assert.ok(page.includes('var traceOk = !!(wantTrace && d && d.trace && d.trace.tag === traceTag && traceEpoch === diagEpoch);'));
+      assert.ok(page.includes('lastExplainTrace = { tag: traceTag, epoch: diagEpoch, source: text || null, response: d };'));
+      assert.ok(page.includes("if (isMasterUi()) {\n                    html += '<label class=\"ai-diag-toggle'"));
+      assert.ok(page.includes(`onclick="downloadExplainTrace(\\'' + escapeHtml(tag) + '\\')">JSON yuklab olish</button>`));
+      // switching on, downloading and clearing call nothing (no server, no AI)
+      for (const fn of ['toggleExplainDiagnostics', 'downloadExplainTrace', 'clearExplainTrace', 'invalidateExplainTrace', 'newTraceTag']) {
+        const start = page.indexOf(`function ${fn}(`);
+        const end = page.indexOf('\n        }\n', start);
+        assert.ok(start > 0 && end > start, fn);
+        assert.ok(!/fetch\(|XMLHttpRequest|sendBeacon|callAI/u.test(page.slice(start, end)), `${fn} makes no request`);
+      }
+      // a new chat, another session, a new or removed file drop the old trace
+      for (const at of ['function createNewAiChat()', 'aiAttachments.push(att);', 'function removeSessionDoc(i)', 'currentAiSessionId = session.id;']) {
+        const i = page.indexOf(at);
+        assert.ok(i > 0 && page.slice(i, i + 700).includes('invalidateExplainTrace()'), at);
+      }
+      assert.ok(!/localStorage[^\n]*(?:lastExplainTrace|explainDiagnostics)|sessionStorage[^\n]*(?:lastExplainTrace|explainDiagnostics)/u.test(page), 'never stored in the browser');
     });
 
     await test('a document read whole whose answer was cut: marked partial at the top, the unit is committed (delivered, as a cut chat answer)', async () => {

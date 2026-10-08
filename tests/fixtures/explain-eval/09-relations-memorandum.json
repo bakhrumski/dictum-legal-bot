@@ -1,0 +1,360 @@
+{
+  "id": "relations-memorandum",
+  "type": "hamkorlik memorandumi va huquqiy tekshiruv natijalari (uzun, DOCX)",
+  "title": "Band ichidagi munosabatlar: ariza va ro'yxat, javob va bitim muddati, 'aniqlanmadi' va moliyaviy holat, harakatlar tartibi, va/yoki, ehtimoliy zarar, istisno, ta'rif mezonlari va chegarasi (sintetik)",
+  "synthetic": true,
+  "format": "docx",
+  "pages": [
+    "HAMKORLIK VA INVESTITSIYA MEMORANDUMI № 12-M/2026\nSamarqand shahri, 2026-yil 2-oktabr\n\n\"Oqtosh Savdo\" MChJ (Jamiyat) va \"Qorasuv Invest\" AJ (Investor) quyidagilar haqida kelishdilar.\n\n1. HUQUQIY TEKSHIRUV NATIJALARI\n1.1. Jamiyat «Oqtosh» tovar belgisini ro'yxatdan o'tkazish uchun 2026-yil 10-iyunda ariza topshirgan; tovar belgisi hali ro'yxatdan o'tkazilmagan.\n1.2. «Oqtosh-Lux» belgisi bo'yicha ariza topshirilmagan.\n1.3. Tekshiruv doirasida 2026-yil 1-sentabr holatiga Jamiyatga nisbatan sud ishlari va bankrotlik to'g'risidagi ariza aniqlanmadi; Jamiyatning moliyaviy holati tekshiruv doirasiga kirmagan.\n\n2. TAKLIF VA BITIM\n2.1. Investor Jamiyat taklifiga taklif olingan kundan boshlab 10 ish kuni ichida javob beradi.\n2.2. Asosiy bitim Investor taklifni qabul qilgan kundan boshlab 60 kalendar kun ichida tuziladi.",
+    "3. TO'LOV VA IMZOLASH\n3.1. Investor to'lovni topshirish-qabul dalolatnomasi imzolanganidan keyin 5 bank kuni ichida amalga oshiradi.\n3.2. Kafolat xati Investor va Jamiyat direktori imzolaganda kuchga kiradi.\n\n4. TA'RIFLAR\n4.1. Yirik bitim deganda summasi 1 000 000 000 so'mdan ortiq bo'lgan bitim, shuningdek Jamiyat asosiy vositalarini garovga qo'yish to'g'risidagi bitim tushuniladi.\n4.2. Nazorat qiluvchi shaxs deganda Jamiyat ustav kapitalining 50 foizidan ortig'iga egalik qiluvchi yoki direktorni tayinlash huquqiga ega bo'lgan shaxs tushuniladi.",
+    "5. JAVOBGARLIK VA MAXFIYLIK\n5.1. Investor to'lovni kechiktirsa, kechiktirilgan har bir kun uchun 0,1 foiz penya to'laydi, penya umumiy summasi kechiktirilgan summaning 10 foizidan oshmaydi.\n5.2. Maxfiy ma'lumot oshkor qilinsa, Jamiyatga zarar yetkazilishi mumkin; ehtimoliy zarar 300 000 000 so'mgacha baholanadi.\n5.3. Tomonlar maxfiy ma'lumotni oshkor qilmaydi, sud yoki vakolatli davlat organining yozma talabi bilan oshkor qilish hollari bundan mustasno."
+  ],
+  "filler": {
+    "afterPage": 1,
+    "count": 24,
+    "firstClause": 20,
+    "template": "{n}. HAMKORLIK TARTIBI ({n}-bo'lim)\n{n}.1. Tomonlar ushbu bo'lim bo'yicha ishchi guruh tuzadi va uning tarkibini o'zaro yozishmalar orqali kelishadi; ishchi guruh yig'ilishlari tomonlar uchun qulay joyda o'tkaziladi.\n{n}.2. Ishchi guruh hamkorlik rejasini tayyorlaydi, uni tomonlarning vakolatli shaxslariga yuboradi va rejaga kiritilgan takliflarni umumlashtiradi.\n{n}.3. Tomonlar hamkorlik doirasida olingan tijorat ma'lumotlaridan faqat memorandum maqsadlarida foydalanadi.\n{n}.4. Bo'lim qoidalari memorandumning boshqa bo'limlari bilan birga talqin qilinadi; sarlavhalar qulaylik uchun berilgan va mazmunni o'zgartirmaydi."
+  },
+  "keyPoints": [
+    {
+      "id": "filed-not-registered",
+      "point": "«Oqtosh»: 10-iyunda ariza topshirilgan, lekin hali ro'yxatdan o'tkazilmagan",
+      "anchor": "ariza topshirgan; tovar belgisi hali ro'yxatdan o'tkazilmagan",
+      "page": 1
+    },
+    {
+      "id": "not-filed",
+      "point": "«Oqtosh-Lux»: ariza topshirilmagan (ro'yxat haqida gap yo'q)",
+      "anchor": "belgisi bo'yicha ariza topshirilmagan",
+      "page": 1
+    },
+    {
+      "id": "not-found-scope",
+      "point": "Sud ishlari va bankrotlik arizasi 1-sentabr holatiga aniqlanmadi; moliyaviy holat tekshirilmagan",
+      "anchor": "moliyaviy holati tekshiruv doirasiga kirmagan",
+      "page": 1
+    },
+    {
+      "id": "reply-vs-conclude",
+      "point": "Javob — 10 ish kuni; bitim — 60 kalendar kun",
+      "anchor": "60 kalendar kun ichida tuziladi",
+      "page": 1
+    },
+    {
+      "id": "order",
+      "point": "To'lov dalolatnoma imzolanganidan KEYIN, 5 bank kuni ichida",
+      "anchor": "imzolanganidan keyin 5 bank kuni",
+      "page": "last-1"
+    },
+    {
+      "id": "and-not-or",
+      "point": "Kafolat Investor VA direktor imzolaganda",
+      "anchor": "Investor va Jamiyat direktori imzolaganda",
+      "page": "last-1"
+    },
+    {
+      "id": "criteria",
+      "point": "Yirik bitim: 1 mlrd so'mdan ortiq, shuningdek garov bitimi; nazorat qiluvchi shaxs: 50 foizdan ortiq yoki direktorni tayinlash huquqi",
+      "anchor": "Nazorat qiluvchi shaxs deganda",
+      "page": "last-1"
+    },
+    {
+      "id": "penalty-cap",
+      "point": "Penya kuniga 0,1 foiz, jami 10 foizdan oshmaydi",
+      "anchor": "10 foizidan oshmaydi",
+      "page": "last"
+    },
+    {
+      "id": "possible-damage",
+      "point": "Zarar yetkazilishi MUMKIN; ehtimoliy zarar 300 mln so'mgacha baholanadi",
+      "anchor": "ehtimoliy zarar 300 000 000",
+      "page": "last"
+    },
+    {
+      "id": "exception",
+      "point": "Oshkor qilmaslik; sud yoki vakolatli organ yozma talabi bundan mustasno",
+      "anchor": "oshkor qilish hollari bundan mustasno",
+      "page": "last"
+    }
+  ],
+  "traps": [
+    {
+      "id": "filing-as-registration",
+      "rule": "B",
+      "correct": "«Oqtosh-Lux» bo'yicha ariza topshirilmagan",
+      "wrong": "\"«Oqtosh-Lux» ro'yxatdan o'tmagan\""
+    },
+    {
+      "id": "date-on-wrong-act",
+      "rule": "B",
+      "correct": "10-iyun — ariza topshirilgan sana",
+      "wrong": "\"10-iyunda ro'yxatdan o'tgan\""
+    },
+    {
+      "id": "reply-as-conclude",
+      "rule": "B",
+      "correct": "10 ish kuni — javob muddati",
+      "wrong": "\"Bitim 10 kun ichida tuziladi\""
+    },
+    {
+      "id": "not-found-as-healthy",
+      "rule": "B",
+      "correct": "Moliyaviy holat tekshirilmagan",
+      "wrong": "\"Moliyaviy holati barqaror\""
+    },
+    {
+      "id": "order-reversed",
+      "rule": "B",
+      "correct": "Avval imzolash, keyin to'lov",
+      "wrong": "\"Dalolatnoma to'lovdan keyin imzolanadi\""
+    },
+    {
+      "id": "and-as-or",
+      "rule": "B",
+      "correct": "Investor VA direktor",
+      "wrong": "\"Investor yoki direktor\""
+    },
+    {
+      "id": "possible-as-caused",
+      "rule": "B",
+      "correct": "Zarar yetkazilishi mumkin",
+      "wrong": "\"300 mln so'm zarar yetkaziladi\""
+    },
+    {
+      "id": "threshold-as-penalty",
+      "rule": "A",
+      "correct": "1 mlrd so'm — yirik bitim ta'rifi chegarasi",
+      "wrong": "\"1 mlrd so'm jarima\""
+    },
+    {
+      "id": "criteria-dropped",
+      "rule": "D",
+      "correct": "Ikkala mezon",
+      "wrong": "Bitta mezon"
+    },
+    {
+      "id": "exception-dropped",
+      "rule": "B",
+      "correct": "Sud/vakolatli organ talabi istisnosi",
+      "wrong": "\"Oshkor qilish taqiqlanadi\" (istisnosiz)"
+    }
+  ],
+  "relationAnswers": {
+    "wrong": [
+      {
+        "trap": "filing-as-registration",
+        "kind": "holat",
+        "text": "«Oqtosh-Lux» belgisi ro'yxatdan o'tmagan."
+      },
+      {
+        "trap": "date-on-wrong-act",
+        "kind": "bog'lanish",
+        "text": "«Oqtosh» belgisi 2026-yil 10-iyunda ro'yxatdan o'tkazilgan."
+      },
+      {
+        "trap": "reply-as-conclude",
+        "kind": "bog'lanish",
+        "text": "Asosiy bitim 10 ish kuni ichida tuzilishi kerak."
+      },
+      {
+        "trap": "not-found-as-healthy",
+        "kind": "phrase:financial_ok",
+        "text": "Jamiyatning moliyaviy holati barqaror."
+      },
+      {
+        "trap": "order-reversed",
+        "kind": "tartib",
+        "text": "Dalolatnoma to'lovdan keyin imzolanadi."
+      },
+      {
+        "trap": "and-as-or",
+        "kind": "va/yoki",
+        "text": "Kafolat Investor yoki direktor imzolaganda kuchga kiradi."
+      },
+      {
+        "trap": "possible-as-caused",
+        "kind": "ehtimollik",
+        "text": "Oshkor qilinsa Jamiyatga 300 000 000 so'm zarar yetkaziladi."
+      },
+      {
+        "trap": "threshold-as-penalty",
+        "kind": "ta'rif",
+        "text": "Yirik bitim tuzilsa 1 000 000 000 so'm jarima to'lanadi."
+      },
+      {
+        "trap": "criteria-dropped",
+        "kind": "mezon",
+        "text": "Nazorat qiluvchi shaxs — ustav kapitalining 50 foizidan ortig'iga egalik qiluvchi shaxs."
+      }
+    ],
+    "faithful": "«Oqtosh» tovar belgisi uchun 2026-yil 10-iyunda ariza topshirilgan, lekin belgi hali ro'yxatdan o'tkazilmagan (1.1). «Oqtosh-Lux» bo'yicha ariza topshirilmagan (1.2). 2026-yil 1-sentabr holatiga sud ishlari va bankrotlik arizasi aniqlanmadi; moliyaviy holat tekshiruv doirasiga kirmagan (1.3). Investor 10 ish kuni ichida javob beradi; asosiy bitim 60 kalendar kun ichida tuziladi (2.1, 2.2). To'lov dalolatnoma imzolanganidan keyin 5 bank kuni ichida amalga oshiriladi (3.1). Kafolat Investor va Jamiyat direktori imzolaganda kuchga kiradi (3.2). Yirik bitim — summasi 1 000 000 000 so'mdan ortiq bitim, shuningdek asosiy vositalarni garovga qo'yish bitimi (4.1). Nazorat qiluvchi shaxs — kapitalning 50 foizidan ortig'iga egalik qiluvchi yoki direktorni tayinlash huquqiga ega shaxs (4.2). Kechikish uchun har kuni 0,1 foiz penya, jami 10 foizdan oshmaydi (5.1). Oshkor qilinsa zarar yetkazilishi mumkin; ehtimoliy zarar 300 000 000 so'mgacha baholangan (5.2). Ma'lumot oshkor qilinmaydi, sud yoki vakolatli davlat organining yozma talabi bundan mustasno (5.3)."
+  },
+  "traceChecks": [
+    {
+      "id": "filed-not-registered",
+      "terms": [
+        "ariza topshir",
+        "ro'yxatdan o'tkazilmagan"
+      ]
+    },
+    {
+      "id": "reply-vs-conclude",
+      "terms": [
+        "10 ish kuni",
+        "javob",
+        "60 kalendar kun"
+      ]
+    },
+    {
+      "id": "exception",
+      "terms": [
+        [
+          "bundan mustasno",
+          "istisno"
+        ],
+        [
+          "sud",
+          "vakolatli"
+        ]
+      ]
+    }
+  ],
+  "aiNoteCases": [
+    {
+      "note": "«Oqtosh-Lux» belgisi ro'yxatdan o'tmagan.",
+      "expect": "flagged",
+      "why": "holat: hujjatda shu belgi bo'yicha «ariza topshirilmagan» - ro'yxat haqida emas"
+    },
+    {
+      "note": "Asosiy bitim 10 ish kuni ichida tuzilishi kerak.",
+      "expect": "flagged",
+      "why": "bog'lanish: 10 ish kuni hujjatda javob berish muddati"
+    },
+    {
+      "note": "Investor 10 ish kuni ichida javob beradi, asosiy bitim esa 60 kalendar kun ichida tuziladi.",
+      "expect": "kept",
+      "why": "har bir muddat o'z harakati bilan"
+    },
+    {
+      "note": "Qo'shimcha izoh yo'q.",
+      "expect": "removed",
+      "why": "to'ldiruvchi"
+    }
+  ],
+  "evalSet": {
+    "note": "Yurist ko'zi bilan belgilangan: 'correct' - mazmuni to'g'ri, manbani aynan takrorlamaydi; 'wrong' - mazmuni noto'g'ri, lekin manba so'zlarini ishlatadi. Natija faqat shu to'plam uchun; semantik aniqlik kafolati emas.",
+    "correct": [
+      {
+        "id": "c-reply",
+        "text": "Investor taklifga o'n ish kuni ichida munosabat bildiradi."
+      },
+      {
+        "id": "c-conclude-sign",
+        "text": "Asosiy bitimni imzolash uchun 60 kalendar kun beriladi."
+      },
+      {
+        "id": "c-pay-after-sign",
+        "text": "To'lov dalolatnoma imzolangach 5 bank kuni ichida o'tkaziladi."
+      },
+      {
+        "id": "c-filed",
+        "text": "«Oqtosh» uchun ariza berilgan, biroq ro'yxatga olish hali tugallanmagan."
+      },
+      {
+        "id": "c-not-filed",
+        "text": "«Oqtosh-Lux» uchun hech qanday ariza kiritilmagan."
+      },
+      {
+        "id": "c-both-sign",
+        "text": "Kafolat xati kuchga kirishi uchun Investor ham, direktor ham imzo qo'yishi kerak."
+      },
+      {
+        "id": "c-possible",
+        "text": "Ma'lumot oshkor bo'lsa, Jamiyat zarar ko'rishi ehtimoli bor; bu zarar 300 mln so'mgacha baholangan."
+      },
+      {
+        "id": "c-penalty",
+        "text": "Kechikkan har bir kun uchun 0,1 foiz penya, lekin jami 10 foizdan ko'p emas."
+      },
+      {
+        "id": "c-big-deal",
+        "text": "Yirik bitim — qiymati 1 mlrd so'mdan oshadigan yoki asosiy vositalar garovi bilan bog'liq bitim."
+      },
+      {
+        "id": "c-control",
+        "text": "Nazorat qiluvchi shaxs: kapitalning yarmidan ko'piga ega bo'lgan yoki direktorni tayinlay oladigan shaxs."
+      },
+      {
+        "id": "c-not-found",
+        "text": "1-sentabr holatiga sud ishlari ham, bankrotlik arizasi ham topilmagan; moliyaviy ahvol tekshirilmagan."
+      },
+      {
+        "id": "c-conditional-reply",
+        "text": "Agar Investor 10 ish kuni ichida javob bermasa, taklif bo'yicha kelishuv bo'lmaydi."
+      }
+    ],
+    "wrong": [
+      {
+        "id": "w-swap-periods",
+        "text": "Investor 60 kalendar kun ichida javob beradi; asosiy bitim 10 ish kuni ichida tuziladi.",
+        "expect": "bog'lanish"
+      },
+      {
+        "id": "w-status-swap",
+        "text": "«Oqtosh» tovar belgisi uchun ariza topshirilmagan; tovar belgisi ro'yxatdan o'tkazilgan.",
+        "expect": "holat"
+      },
+      {
+        "id": "w-order",
+        "text": "Investor to'lovni amalga oshirgandan keyin dalolatnoma imzolanadi.",
+        "expect": "tartib"
+      },
+      {
+        "id": "w-or",
+        "text": "Kafolat xati Investor yoki Jamiyat direktori imzolaganda kuchga kiradi.",
+        "expect": "va/yoki"
+      },
+      {
+        "id": "w-caused",
+        "text": "Maxfiy ma'lumot oshkor qilinsa, Jamiyatga zarar yetkaziladi; zarar 300 000 000 so'm.",
+        "expect": "ehtimollik"
+      },
+      {
+        "id": "w-threshold-penalty",
+        "text": "Investor to'lovni kechiktirsa, 1 000 000 000 so'm jarima to'laydi.",
+        "expect": "ta'rif"
+      },
+      {
+        "id": "w-penalty-swap",
+        "text": "Penya umumiy summasi kechiktirilgan summaning 0,1 foizidan oshmaydi, har bir kun uchun 10 foiz penya to'lanadi.",
+        "expect": "chegara"
+      },
+      {
+        "id": "w-exception-denied",
+        "text": "Tomonlar maxfiy ma'lumotni oshkor qilmaydi, sud talabi bilan oshkor qilish hollari ham bundan mustasno emas.",
+        "expect": "istisno"
+      },
+      {
+        "id": "w-financial",
+        "text": "Jamiyatning moliyaviy holati tekshiruv doirasida aniqlandi va sud ishlari mavjud emas.",
+        "expect": "holat",
+        "why": "'aniqlandi' (tekshirilgan) - hujjatda moliyaviy holat tekshiruvga kirmagan; lug'atda bunday holat yo'q"
+      },
+      {
+        "id": "w-and-criteria",
+        "text": "Nazorat qiluvchi shaxs deganda 50 foizdan ortiq ulushga egalik qiluvchi va direktorni tayinlash huquqiga ega shaxs tushuniladi.",
+        "expect": "va/yoki"
+      },
+      {
+        "id": "w-conditional-period",
+        "text": "Agar asosiy bitim 10 ish kuni ichida tuzilmasa, Investor taklifdan voz kechadi.",
+        "expect": "bog'lanish"
+      },
+      {
+        "id": "w-date-act",
+        "text": "«Oqtosh» belgisi 2026-yil 10-iyunda ro'yxatdan o'tkazilgan.",
+        "expect": "bog'lanish"
+      }
+    ]
+  }
+}

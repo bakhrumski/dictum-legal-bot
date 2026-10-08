@@ -7581,7 +7581,7 @@ require('../rag/document-explain-route').mountExplainDocument(app, {
   requireAuth, requireServiceConfirm: require('../ai/ai-trigger').requireServiceConfirm, resolveScanDocs, tariffModule,
   callAI: callCheapAI, digest: digestLongDocumentDetailed, lexLangForText, logAudit,
   // the stage trace goes to an account that is master in the database
-  verifyMaster: async (adminId) => !!adminId && (await pool.query('SELECT role FROM admins WHERE id = $1', [adminId])).rows.some(r => r.role === 'master'),
+  verifyMaster: require('../rag/document-explain-route').createVerifyMaster(pool),
 });
 
 // Master-gated corpus learning: generalize a good opinion into an ANONYMIZED

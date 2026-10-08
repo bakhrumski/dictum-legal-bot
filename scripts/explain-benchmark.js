@@ -220,6 +220,127 @@ const scopeRows = [
   ...fixtures.filter(f => f.traceChecks || f.id.startsWith('long-')).map(f => scopeCost(f.id, f.pages.join('\n\n'))),
 ];
 
+// ── #423 (relations, references) vs #422 (main at 6572ecd): what changes ──
+// No new call and no cap raised. What moves: the digest prompt and the final
+// prompt get longer (bytes measured from 6572ecd); the digest line format
+// adds field labels ("shart:", "muddat:", ...) to the digest OUTPUT; the
+// key-line list takes more kinds of lines (relations, not only scope words)
+// but sends a line the model already has as a short reference. The list's
+// bound is unchanged (6 000 characters), so the price-table bound of the
+// final call does not grow from it; the expected size is reported apart.
+const PROMPT_422 = { digestBytes: 3233, explainBytes: 4659 }; // UTF-8 bytes of DIGEST_SYSTEM / explainSystem at 6572ecd
+// the #422 selection, for comparison only: scope words only, ";" splits, 25 lines, never a reference
+function scope422(text, { max = 25, maxLen = 320, maxChars = 6000 } = {}) {
+  const lowerNorm = t => String(t || '').toLowerCase().replace(/[ʻʼ‘’`ʹ]/gu, "'").replace(/\s+/gu, ' ');
+  const parts = String(text || '').split(/\n+|(?<=[\p{L})»"'][.;])\s+(?=\S)/u).map(t => t.trim()).filter(t => t.length > 12);
+  const found = []; const seen = new Set();
+  parts.forEach((p, order) => {
+    const n = lowerNorm(p);
+    const groups = ex.SCOPE_GROUPS.filter(g => g.re.test(n)).length;
+    if (!groups) return;
+    const key = n.replace(/[^\p{L}]+/gu, ' ').trim();
+    if (seen.has(key)) return; seen.add(key);
+    found.push({ p, order, score: groups + (/\d/u.test(p.replace(/^\s*\d+(?:\.\d+)*\.?\s*/u, '')) ? 1 : 0) });
+  });
+  const chosen = []; let chars = 0;
+  for (const f of found.sort((a, b) => b.score - a.score || a.order - b.order)) {
+    if (chosen.length >= max) break;
+    const line = f.p.length > maxLen ? `${f.p.slice(0, maxLen)} …` : f.p;
+    if (chars + line.length > maxChars) continue;
+    chars += line.length; chosen.push({ ...f, line });
+  }
+  return { full: chosen.map(c => c.p), lines: chosen.map(c => c.line), candidates: found.length, chars };
+}
+// digest output: field labels on a line, net of the "|" fields #422 already had (assumption, not measured)
+const LABELS = { charsPerLine: [0, 10], sourceCharsPerLine: [400, 250] };
+function compare423(id, text, keyPoints = []) {
+  const full = ex.contentChars(text) <= ex.EXPLAIN_FULL_TEXT_MAX;
+  const parts = full ? 0 : ex.digestChunks(text).chunks.length;
+  const old = scope422(text);
+  const now = ex.scopeSelection(text, { given: full ? text : null }); // digest: no reference assumed (the real digest is unknown here)
+  const keys = sel => (keyPoints.length ? `${keyPoints.filter(k => sel.full.some(l => l.includes(k.anchor))).length}/${keyPoints.length}` : '-');
+  const listBytes = sel => Buffer.byteLength(sel.lines.join('\n'));
+  const finalDelta = (Buffer.byteLength(ex.explainSystem('Uzbek (Latin script)')) - PROMPT_422.explainBytes) + listBytes(now) - listBytes(old);
+  const digestDelta = parts * (Buffer.byteLength(ex.DIGEST_SYSTEM) - PROMPT_422.digestBytes);
+  const chunkChars = full ? [] : ex.digestChunks(text).chunks.map(c => c.text.length);
+  const outTok = which => Math.round(chunkChars.reduce((t, c) => t + (c / LABELS.sourceCharsPerLine[which]) * LABELS.charsPerLine[which], 0) / ASSUME.charsPerToken[which === 1 ? 0 : 1]);
+  const outDelta = [outTok(0), outTok(1)];
+  const usd = m => {
+    const pr = pricing.pricingSnapshot(m) || { in: 0, out: 0 };
+    // input: UTF-8 bytes as the token bound; output: the expected label overhead (high end)
+    return ((finalDelta + digestDelta) * pr.in + outDelta[1] * pr.out) / 1e6;
+  };
+  return { id, chars: ex.contentChars(text), path: full ? 'full text' : 'digest', parts,
+    keyLines422: `${old.full.length} of ${old.candidates}`, keyLines423: `${now.selected} of ${now.candidates}${now.referenced ? ` (${now.referenced} as references)` : ''}`,
+    keysIn422: keys(old), keysIn423: keys(now), listBytes422: listBytes(old), listBytes423: listBytes(now),
+    finalInputDeltaBytes: finalDelta, digestInputDeltaBytes: digestDelta, digestOutputDeltaTokens: outDelta,
+    ...Object.fromEntries(MODELS.map(m => [m, usd(m)])) };
+}
+const rows423 = fixtures.map(f => compare423(f.id, f.pages.join('\n\n'), f.keyPoints));
+// the digest cap with the label overhead, on the three long sizes
+const capRows423 = DIGEST_DOCS.map(d => {
+  const big = Math.max(...ex.digestChunks('x'.repeat(d.chars)).chunks.map(c => c.text.length));
+  const base = [Math.round(big * ASSUME.ratioCompact[0] / ASSUME.charsPerToken[1]), Math.round(big * ASSUME.ratioCompact[1] / ASSUME.charsPerToken[0])];
+  const extra = [Math.round(big / LABELS.sourceCharsPerLine[0] * LABELS.charsPerLine[0] / ASSUME.charsPerToken[1]), Math.round(big / LABELS.sourceCharsPerLine[1] * LABELS.charsPerLine[1] / ASSUME.charsPerToken[0])];
+  const hi = base[1] + extra[1];
+  return { label: d.label, chars: d.chars, biggestPart: big, tokens422: base, tokens423: [base[0] + extra[0], hi], cap: ex.DIGEST_MAX_TOKENS,
+    reachesCap: hi >= ex.DIGEST_MAX_TOKENS ? 'possible at the high end (a cut part is re-read in halves within DIGEST_LIMITS, else not used and named)' : hi >= ex.DIGEST_MAX_TOKENS * 0.85 ? 'no, but close at the high end' : 'no (with margin)' };
+});
+
+// ── Full bound per document, #422 vs #423, with the extra-call scenarios ──
+// Not only the prompt: every digest call (input bytes + its 1 600 cap), the
+// final call (its prompt, the key-line list, the digest at every part's
+// cap), the parts #423 reads as halves from the start (predicted over the
+// cap, no AI), and the worst case where the remaining extra calls of
+// DIGEST_LIMITS are all spent on re-reading cut parts in halves.
+const bytesText = n => 'x'.repeat(Math.max(0, n));
+function fullPlan(text, which) {
+  const full = ex.contentChars(text) <= ex.EXPLAIN_FULL_TEXT_MAX;
+  const cap = ex.DIGEST_MAX_TOKENS;
+  const chunks = full ? [] : ex.digestChunks(text).chunks;
+  const sys = which === '422' ? bytesText(PROMPT_422.digestBytes) : ex.DIGEST_SYSTEM;
+  let pre = [];
+  if (which === '423') {
+    let budget = ex.DIGEST_LIMITS.maxExtraCalls;
+    for (const c of [...chunks].sort((a, b) => ex.predictDigestTokens(b.text) - ex.predictDigestTokens(a.text))) {
+      if (ex.predictDigestTokens(c.text) >= ex.DIGEST_LIMITS.preSplitAt * cap && budget >= 1 && c.text.length >= 2 * ex.DIGEST_LIMITS.minSplitChars) { pre.push(c); budget--; }
+    }
+  }
+  const digestCalls = chunks.flatMap(c => (pre.includes(c) ? [c.text.slice(0, c.text.length / 2), c.text.slice(c.text.length / 2)] : [c.text]))
+    .map(t => ({ maxTokens: cap, messages: [{ role: 'system', text: sys }, { role: 'user', text: `Excerpt 1/1:\n\n[KONTEKST]\n[QISM]\n${t}` }] }));
+  const list = which === '422' ? scope422(text).lines : ex.scopeSelection(text, { given: full ? text : null }).lines;
+  const explainSys = which === '422' ? bytesText(PROMPT_422.explainBytes) : ex.explainSystem('Uzbek (Latin script)');
+  const final = { maxTokens: ex.EXPLAIN_MAX_TOKENS, digestTokens: digestCalls.length * cap,
+    messages: [{ role: 'system', text: explainSys }, { role: 'user', text: `${full ? text : ''}\n${list.join('\n')}` }] };
+  const extraLeft = full ? 0 : ex.DIGEST_LIMITS.maxExtraCalls - pre.length;
+  const biggest = chunks.length ? Math.max(...chunks.map(c => c.text.length)) : 0;
+  // a re-read is two halves of a cut part: at most floor(extraLeft / 2) parts
+  const rereads = Array.from({ length: Math.floor(extraLeft / 2) * 2 }, () => ({ maxTokens: cap, messages: [{ role: 'system', text: sys }, { role: 'user', text: bytesText(Math.ceil(biggest / 2)) }] }));
+  const usual = [...digestCalls, final];
+  // the re-read halves replace a cut part in the final call's input
+  const worst = [...digestCalls, ...rereads, { ...final, digestTokens: final.digestTokens + (rereads.length / 2) * cap }];
+  return { calls: usual.length, worstCalls: worst.length, preSplits: pre.length, usual, worst };
+}
+function denseDoc(chars) {
+  // distinct clauses of about 200 characters each (no boilerplate): the densest case
+  const w = i => i.toString(26).split('').map(d => String.fromCharCode(97 + parseInt(d, 26))).join('');
+  let out = '', i = 0;
+  while (out.length < chars) { i++; out += `${Math.ceil(i / 9)}.${((i - 1) % 9) + 1}. Tomon ${w(i)}lik majburiyatini ${10 + (i % 50)} kun ichida bajaradi; kechiksa har kuni ${i % 9 + 1} foiz penya to'laydi, ${w(i + 7)}lik holati bundan mustasno.\n`; }
+  return out.slice(0, chars);
+}
+const fullDocs = [
+  ...fixtures.filter(f => ex.contentChars(f.pages.join('\n\n')) > ex.EXPLAIN_FULL_TEXT_MAX).map(f => ({ label: f.id, text: ex.markPages(f.pages) })),
+  { label: 'dense synthetic 51 398', text: denseDoc(51398) },
+  { label: 'dense synthetic 120 000', text: denseDoc(120000) },
+];
+const fullRows = fullDocs.map(d => {
+  const o = fullPlan(d.text, '422'), n = fullPlan(d.text, '423');
+  const parts = ex.digestChunks(d.text).chunks;
+  return { label: d.label, chars: ex.contentChars(d.text), predictedTokensPerPart: parts.map(c => ex.predictDigestTokens(c.text)),
+    calls422: `${o.calls} / ${o.worstCalls}`, calls423: `${n.calls} / ${n.worstCalls}`, preSplits: n.preSplits,
+    ...Object.fromEntries(MODELS.map(m => [m, { b422: [bound({ calls: o.usual }, m).usd, bound({ calls: o.worst }, m).usd], b423: [bound({ calls: n.usual }, m).usd, bound({ calls: n.worst }, m).usd] }])) };
+});
+
 const real = syntheticRealDoc(REAL_PAGES);
 const realNew = Object.fromEntries(MODELS.map(m => [m, bound(plan(real, 'new'), m).usd]));
 const realOld = Object.fromEntries(MODELS.map(m => [m, bound(plan(real, 'old'), m).usd]));
@@ -240,7 +361,7 @@ if (args.includes('--prompts')) {
 }
 
 if (args.includes('--json')) {
-  console.log(JSON.stringify({ rows, sizes, digest: { assumptions: ASSUME, rows: digestRows }, scopeCost: scopeRows, real: { pages: REAL_PAGES, old: realOld, new: realNew }, repeats: REPEATS, realDocs: REAL_DOCS, budget }, null, 2));
+  console.log(JSON.stringify({ rows, sizes, digest: { assumptions: ASSUME, rows: digestRows }, scopeCost: scopeRows, change423: { assumptions: LABELS, rows: rows423, cap: capRows423, fullBound: fullRows }, real: { pages: REAL_PAGES, old: realOld, new: realNew }, repeats: REPEATS, realDocs: REAL_DOCS, budget }, null, 2));
 } else {
   const fmt = v => (typeof v === 'number' ? `$${v.toFixed(4)}` : v);
   console.log('DRY RUN - no AI call. Planning figures from src/ai/model-pricing.js (callCostBound): not measured spend, not a guaranteed maximum.\n');
@@ -264,6 +385,18 @@ if (args.includes('--json')) {
   console.log('\nScope lines + contradiction candidates (no AI; input only, no new call, no cap raised) - extra input bound per document:');
   console.log(['document', 'chars', 'scope lines', 'conflict pairs', 'final call +bytes', 'digest calls', 'digest calls +bytes (longer prompt)', ...MODELS.map(m => `${m} +$ (bound)`)].join(' | '));
   for (const r of scopeRows) console.log([r.label, r.chars, r.scopeLines, r.conflictPairs, r.finalExtraBytes, r.digestCalls, r.digestExtraBytes, ...MODELS.map(m => fmt(r[m]))].join(' | '));
+  console.log(`\n#423 vs #422 (no new call, no cap raised; input as UTF-8 bytes = token bound; digest output: field labels, assumed ${LABELS.charsPerLine.join('-')} chars per line, a line per ${LABELS.sourceCharsPerLine.join('-')} source chars - not measured):`);
+  console.log(['document', 'chars', 'path', 'parts', 'key lines #422', 'key lines #423', 'key anchors in list #422', '#423', 'list bytes #422', '#423',
+    'final call +bytes', 'digest calls +bytes', 'digest output +tokens (all parts)', ...MODELS.map(m => `${m} +$`)].join(' | '));
+  for (const r of rows423) console.log([r.id, r.chars, r.path, r.parts, r.keyLines422, r.keyLines423, r.keysIn422, r.keysIn423, r.listBytes422, r.listBytes423,
+    r.finalInputDeltaBytes, r.digestInputDeltaBytes, r.digestOutputDeltaTokens.join('-'), ...MODELS.map(m => fmt(r[m]))].join(' | '));
+  console.log('\nDigest part vs its unchanged 1 600-token cap, with the label overhead (same assumptions as above):');
+  console.log(['document', 'biggest part (chars)', 'expected tokens/part #422', '#423', 'cap', 'reaches cap? (#423)'].join(' | '));
+  for (const r of capRows423) console.log([`${r.label} (${r.chars})`, r.biggestPart, r.tokens422.join('-'), r.tokens423.join('-'), r.cap, r.reachesCap].join(' | '));
+  console.log('\nFull bound per document, #422 vs #423 (price table: every call\'s input bytes and output cap; digest parts at their cap in the final call). "usual" = no part cut; "with re-reads" = the remaining extra calls of DIGEST_LIMITS all spent re-reading cut parts. #423 reads a part predicted at or over the cap (no AI, uncalibrated: 45 tokens per distinct clause) as halves from the start:');
+  console.log(['document', 'chars', 'predicted tokens per part', 'calls #422 usual / with re-reads', 'calls #423 usual / with re-reads', 'pre-split parts', ...MODELS.map(m => `${m} #422 usual / re-reads -> #423 usual / re-reads`)].join(' | '));
+  for (const r of fullRows) console.log([r.label, r.chars, r.predictedTokensPerPart.join(','), r.calls422, r.calls423, r.preSplits,
+    ...MODELS.map(m => `${fmt(r[m].b422[0])} / ${fmt(r[m].b422[1])} -> ${fmt(r[m].b423[0])} / ${fmt(r[m].b423[1])}`)].join(' | '));
   console.log(`\nA ${REAL_PAGES}-page document (~${REAL_PAGES * 2500} chars), bound per run: old ${MODELS.map(m => `${m} ${fmt(realOld[m])}`).join(', ')}; new ${MODELS.map(m => `${m} ${fmt(realNew[m])}`).join(', ')}`);
   console.log(`\nBenchmark budget (old + new, ${REPEATS} repeats; eval set + ${REAL_DOCS} anonymised real documents of ${REAL_PAGES} pages):`);
   for (const m of MODELS) console.log(`  ${m}: eval set ${fmt(budget[m].evalSetUsd)} + real docs ${fmt(budget[m].realDocsUsd)} = ${fmt(budget[m].totalUsd)} (planning figure)`);

@@ -110,9 +110,32 @@ Known state of the suites (Sept 2026):
   selected, not fitted, shortened); scope words the answer drops are
   flagged. The stage `trace` (digest, scope lines, raw answer) is returned
   only on `trace: true` to an account that is master in the database, with
-  `no-store`, never logged or stored (dashboard: `window.__JAI_TRACE = true`,
-  then `window.__lastExplain`); `scripts/explain-trace.js` reports word-for-
-  word presence per stage - never that meaning was kept or lost. Quality is unconfirmed until the lawyer-reviewed
+  `no-store`, never logged or stored (dashboard: the master-only "🔬
+  Diagnostika" toggle under the attached document, then "JSON yuklab olish";
+  kept in the tab's memory only; `window.__JAI_TRACE = true` still works);
+  `scripts/explain-trace.js` reports word-for-word presence per stage -
+  never that meaning was kept or lost.
+  Relations (2026-10-08, the #422 live run moved periods, conditions and
+  statuses to other acts): `src/rag/clause-relations.js`, no AI, warning
+  only - a period or date tied to another act, an act denied/done where
+  the source says otherwise (filing is not registration), reversed order,
+  "or" for "and", possible damage stated as caused, a definition's
+  threshold as a penalty, a defined term missing criteria; the digest line
+  is `<clause> | <who> → <act> | shart: | muddat: | istisno: | oqibat:`,
+  and the trace script reports per key clause which relation slots each
+  stage keeps. The key-line list (max 40 lines, still 6 000 chars) also
+  takes relation lines and sends a line the model already has word for
+  word as a reference (`[matnda]` / `[dayjestda]`), not a repeat. A denial
+  or an "if" counts only for its own claim (a period, amount or act inside a
+  conditional is still checked; only the condition itself is hypothetical);
+  results on the synthetic `evalSet` (`scripts/explain-relations-eval.js`)
+  hold for that set only. Digest fit: parts cut at a clause start, the
+  overlap marked `[KONTEKST]`, and a part predicted (no AI, uncalibrated,
+  `predictedTokens` in the ledger detail) at or over the cap read as halves
+  from the start within the same `maxExtraCalls`. A trace carries the
+  page's `traceTag`, the `requestId` and the document's sha256; the page
+  drops an old trace on a new chat, session, file or switch-off
+  (`createVerifyMaster` is the one database check). Quality is unconfirmed until the lawyer-reviewed
   benchmark (`docs/quality/explain-benchmark.md`) runs.
   `src/rag/question-aspects.js` splits a question into deadline,
   compensation, evidence and remedy and runs a light corpus search for each

@@ -149,23 +149,27 @@ const faithfulDigest = (m) => ({ text: m[1].text.split('\n').filter(l => /^\d+\.
   });
 
   await test('the scope list is open about its limit: candidates, selected, not fitted and shortened are counted and told to the model and under the answer', async () => {
-    // 40 distinct scope-word clauses, some very long: more than the list holds
+    // 60 distinct scope-word clauses, some very long: more than the list holds
     // distinct in their words (clauses that differ only in numbers count as one repeated clause)
     const word = i => 'abcdefghij'[i % 10] + 'klmnop'[Math.floor(i / 10)] + 'ruxsat';
-    const many = Array.from({ length: 40 }, (_, i) => `${i + 1}.1. Tomon ${word(i)} majburiyatini faqat yozma kelishuv bilan bajaradi, bundan tashqari ${i + 10} kun ichida xabar beradi${i % 7 === 0 ? `, ${'qo\'shimcha izoh '.repeat(40)}` : ''}.`).join('\n');
+    const many = Array.from({ length: 60 }, (_, i) => `${i + 1}.1. Tomon ${word(i)} majburiyatini faqat yozma kelishuv bilan bajaradi, bundan tashqari ${i + 10} kun ichida xabar beradi${i % 7 === 0 ? `, ${'qo\'shimcha izoh '.repeat(40)}` : ''}.`).join('\n');
     const sel = ex.scopeSelection(many);
-    assert.strictEqual(sel.candidates, 40);
+    assert.strictEqual(sel.candidates, 60);
     assert.ok(sel.selected <= sel.limits.max && sel.chars <= sel.limits.maxChars);
     assert.strictEqual(sel.dropped, sel.candidates - sel.selected);
-    assert.ok(sel.dropped > 0 && sel.shortened > 0, JSON.stringify(sel));
+    assert.ok(sel.dropped > 0 && sel.shortened > 0, JSON.stringify({ ...sel, lines: undefined, full: undefined }));
+    assert.strictEqual(sel.droppedLines.length, sel.dropped, 'the trace names every line not fitted');
     assert.ok(sel.lines.every(l => l.length <= sel.limits.maxLen + 2));
+    // the model has this document in full: every line is a reference, the list is still counted
+    const inText = ex.scopeSelection(many, { given: many });
+    assert.ok(inText.referenced === inText.selected && inText.lines.every(l => / \[matnda\]$/u.test(l)), inText.lines[0]);
     const ai = recorder(() => ({ text: 'Izoh.', provider: 'stub' }));
     const r = await ex.explainDocument({ documentText: many, langName: 'Uzbek', callAI: ai, digest: t => ex.buildDigest(t, { callAI: ai }) });
     const final = ai.calls[ai.calls.length - 1].messages[1].text;
-    assert.ok(final.includes(`${sel.candidates} ta nomzoddan ${sel.selected} tasi shu yerda, ${sel.dropped} tasi ro'yxat chegarasiga sig'madi`), final.slice(final.indexOf('SAQLANADIGAN'), final.indexOf('SAQLANADIGAN') + 300));
-    assert.ok(final.includes('"…" bilan tugaganlari qisqartirilgan'));
-    assert.deepStrictEqual([r.coverage.scopeLines.candidates, r.coverage.scopeLines.dropped], [40, sel.dropped]);
-    assert.ok(r.reply.includes(`Saqlanadigan shartlar: 40 ta nomzoddan ${sel.selected} tasi modelga alohida berildi, ${sel.dropped} tasi ro'yxat chegarasiga (25 qator / 6000 belgi) sig'madi`), r.reply.slice(-600));
+    assert.ok(final.includes(`${inText.candidates} ta nomzoddan ${inText.selected} tasi shu yerda, ${inText.dropped} tasi ro'yxat chegarasiga sig'madi`), final.slice(final.indexOf('SAQLANADIGAN'), final.indexOf('SAQLANADIGAN') + 300));
+    assert.ok(final.includes('[matnda] / [dayjestda] belgilisi yuqorida to\'liq bor, bu yerda faqat havola'));
+    assert.deepStrictEqual([r.coverage.scopeLines.candidates, r.coverage.scopeLines.dropped], [60, inText.dropped]);
+    assert.ok(r.reply.includes(`Saqlanadigan shartlar: 60 ta nomzoddan ${inText.selected} tasi modelga alohida berildi, ${inText.dropped} tasi ro'yxat chegarasiga (40 qator / 6000 belgi) sig'madi`), r.reply.slice(-600));
     // nothing dropped -> no such note
     const small = await ex.explainDocument({ documentText: doc, langName: 'Uzbek', callAI: recorder(() => ({ text: 'Izoh.', provider: 'stub' })), digest: t => ex.buildDigest(t, { callAI: recorder(() => ({ text: '- band' })) }) });
     assert.strictEqual(small.coverage.scopeLines.dropped, 0);
