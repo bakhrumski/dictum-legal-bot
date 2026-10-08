@@ -71,7 +71,9 @@ const digestWith = callAI => t => ex.buildDigest(t, { callAI });
     assert.strictEqual(plan.chunks[plan.chunks.length - 1].end, t.length);
     for (let i = 1; i < plan.chunks.length; i++) assert.ok(plan.chunks[i].start < plan.chunks[i - 1].end, 'chunks overlap - nothing between them is skipped');
     for (const c of plan.chunks) {
-      assert.ok(c.text.length <= ex.CHUNK);
+      // a chunk may run on to the end of its line (at most 5% more), never cutting a clause for nothing
+      assert.ok(c.text.length <= Math.floor(ex.CHUNK * 1.05) + 1, String(c.text.length));
+      assert.ok(!c.splitAtEnd, 'no line cut in two');
       assert.ok(c.pages && c.pages.from <= c.pages.to);
     }
     assert.strictEqual(plan.chunks[plan.chunks.length - 1].pages.to, byId('long-lease').pageCount);
@@ -325,7 +327,8 @@ const digestWith = callAI => t => ex.buildDigest(t, { callAI });
     const para = Array.from({ length: 30 }, () => `${'z'.repeat(1750)}\n\n${'z'.repeat(2240)}`);
     const early = ex.markPages(para);
     assert.ok(ex.contentChars(early) <= 120000 && ex.digestChunks(early).covered);
-    assert.strictEqual(ex.digestChunks(early).chunks[0].text.length, ex.chunkSizeFor(early.length), 'fell back to fixed cuts rather than leave the end unread');
+    const first = ex.digestChunks(early).chunks[0].text.length;
+    assert.ok(first >= ex.chunkSizeFor(early.length) && first <= ex.chunkSizeFor(early.length) * 1.05 + 1, `did not end early, at most ran on to its line end: ${first}`);
     // chat: excerpt threshold on the document's own size
     const dj = require('../src/rag/document-job');
     const chat = ex.markPages(Array.from({ length: 10 }, () => 'y'.repeat(1995)));

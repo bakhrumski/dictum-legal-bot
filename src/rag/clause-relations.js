@@ -502,7 +502,8 @@ function relationTrace({ source, digest = null, answer, max = 40 }) {
   const key = src.filter(s => relationScore(s) >= 2 || DEF_RE.test(lower(s)) || EXCEPTION.test(lower(s)));
   // boilerplate repeated under other numbers is one clause
   const once = new Set();
-  const uniq = key.filter(s => { const k = lower(s).replace(/[^\p{L}]+/gu, ' ').trim(); if (once.has(k)) return false; once.add(k); return true; }).slice(0, max);
+  // (only when nothing but the list number differs)
+  const uniq = key.filter(s => { const k = lower(s).replace(/^\s*\d+(?:\.\d+)*\.?\s*/u, '').replace(/\s+/gu, ' ').trim(); if (once.has(k)) return false; once.add(k); return true; }).slice(0, max);
   const linesOf = t => (t == null ? null : sentencesOf(t).map(l => ({ text: l, stems: analyseSentence(l).stems })));
   const stages = { digest: linesOf(digest), answer: linesOf(answer) };
   return uniq.map(s => {

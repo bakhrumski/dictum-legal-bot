@@ -15441,7 +15441,7 @@
             var cov = s.service_coverage;
             if (cov) {
                 // technical coverage: which parts reached the model whole - not a semantic or legal check
-                var st = { all_read: 'barcha qismlar o\'qildi', some_excluded: 'ayrim qismlar chiqarildi', none_read: 'hech bir qism o\'qilmadi', not_recorded: 'yozilmagan — to\'liq deb hisoblanmaydi' }[cov.status] || 'noma\'lum';
+                var st = { all_read: 'barcha qismlar o\'qildi', read_with_splits: 'qismlar o\'qildi, lekin band(lar) qismlar chegarasida bo\'lingan — to\'liq deb hisoblanmaydi', some_excluded: 'ayrim qismlar chiqarildi', none_read: 'hech bir qism o\'qilmadi', not_recorded: 'yozilmagan — to\'liq deb hisoblanmaydi' }[cov.status] || 'noma\'lum';
                 lines.push('Xizmat qamrovi (texnik, mazmun tasdig\'i emas): ' + st + (cov.mode === 'digest'
                     ? ' · ' + cov.read + '/' + cov.parts + ' qism' + (cov.cut ? ', ' + cov.cut + ' kesildi' : '') + (cov.failed ? ', ' + cov.failed + ' xato' : '') +
                       (cov.finalRun ? ' · yakuniy javob yaratildi' : ' · yakuniy javob yaratilmadi')

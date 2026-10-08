@@ -552,6 +552,25 @@ Global token chegarasi oshirilmadi. Uchta o'zgarish:
 
 Juda zich hujjatda (har ~150 belgida yangi band) bahodan oshgan qismlar 4 tadan ko'p bo'lishi mumkin. Unda faqat 4 tasi bo'linadi, qolganlari kesilishi mumkin. Kesilgan qism avvalgidek ishlatilmaydi va nomi aytiladi.
 
+### Bandlarni birlashtirish va qism chegarasidan oshgan band (#423 merge'dan keyingi tekshiruv)
+
+**1. Birlashtirish faqat ro'yxat raqami farq qilganda.**
+#423 da kalit qatorlar ro'yxati va dayjest hajmi bahosi qatorlarni harflari bo'yicha solishtirgan, raqamlarni tashlab yuborgan. Natijada summasi yoki sanasi boshqa bo'lgan bandlar bitta deb hisoblangan: «9 000 000 so'm, 5-sana» va «12 000 000 so'm, 10-sana» bitta nomzodga aylangan. Dayjest promptida ham «faqat raqami yoki nomi farq qilsa — bitta qator» deyilgan edi.
+
+Endi ikki band faqat boshidagi ro'yxat raqamidan boshqa hamma narsasi aynan bir xil bo'lsa birlashtiriladi (`repeatKey`). Summa, sana, foiz, muddat, nom yoki band havolasi farq qilsa, bandlar alohida qoladi. Bu dayjest prompti, kalit qatorlar ro'yxati, hajm bahosi va trace'ga tegishli.
+
+**2. Qism chegarasidan oshgan band.**
+- **Matn yo'qolmaydi.** Qismlar bir-birini 300 belgi qoplaydi; test har bir belgining kamida bitta qismda borligini tekshiradi.
+- **Oldin ikki muammo bor edi:**
+  - qator o'rtasida kesilgan band qamrovda baribir `all_read` bo'lib qolardi;
+  - band chegarasida kesish ko'proq chaqiruv talab qilganda kod qattiq uzunlik bo'yicha kesishga qaytardi, shuning uchun oddiy uzun hujjatlarda ham band o'rtasidan kesilardi.
+- **Endi:**
+  - qism qatorining oxirigacha ko'pi bilan 5% uzayishi mumkin. Shu sababli chaqiruvlar soni oshmaydi; baholash hujjatlarida birorta band bo'linmaydi;
+  - bitta qismdan uzun band baribir bo'linadi. Bunda qamrov holati `read_with_splits` bo'ladi, `all_read` emas (dashboard: «… to'liq deb hisoblanmaydi»);
+  - dayjest matni o'zi bu bandni nomlaydi, shuning uchun tushuntirish, xulosa va chat tahlili buni ko'radi;
+  - tushuntirish javobi ostida va xulosa boshida «qo'lda tekshiring» degan eslatma chiqadi.
+- Barcha qismlar to'liq o'qilgani uchun bu holat «qisman xizmat» hisoblanmaydi va limit qaytarilmaydi; o'qilmagan qism bo'lsa, avvalgidek qaytariladi.
+
 ### Xarajat taqqoslash (#423 va #422, dry-run, chaqiruvsiz)
 
 `node scripts/explain-benchmark.js`. Narx jadvali chegarasi har bir chaqiruv uchun hisoblanadi: kirish UTF-8 baytda, chiqish cheklov bo'yicha, dayjest qismlari esa yakuniy chaqiruvga cheklov hajmida kiradi. Ikki holat ko'rsatiladi:

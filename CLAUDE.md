@@ -135,7 +135,11 @@ Known state of the suites (Sept 2026):
   from the start within the same `maxExtraCalls`. A trace carries the
   page's `traceTag`, the `requestId` and the document's sha256; the page
   drops an old trace on a new chat, session, file or switch-off
-  (`createVerifyMaster` is the one database check). Quality is unconfirmed until the lawyer-reviewed
+  (`createVerifyMaster` is the one database check). Clauses are joined
+  as repeats only when nothing but their list number differs
+  (`repeatKey`); a part may run on to its line end (<= 5%, never one more
+  chunk), and a clause still cut between parts makes coverage
+  `read_with_splits` (never `all_read`), named in the digest text. Quality is unconfirmed until the lawyer-reviewed
   benchmark (`docs/quality/explain-benchmark.md`) runs.
   `src/rag/question-aspects.js` splits a question into deadline,
   compensation, evidence and remedy and runs a light corpus search for each
