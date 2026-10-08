@@ -93,7 +93,11 @@ function cutChunks(text, { chunk, overlap, maxChunks, snap }) {
       const window = s.slice(start + Math.floor(chunk * 0.8), end);
       const lastPage = window.lastIndexOf('\n[Sahifa ');
       const lastPara = window.lastIndexOf('\n\n');
-      const cut = lastPage >= 0 ? lastPage : lastPara;
+      // else the start of the last numbered clause: a clause (its act,
+      // condition and exception) is not cut in two
+      const clauses = [...window.matchAll(/\n(?=\d+(?:\.\d+)*\.\s)/gu)];
+      const lastClause = clauses.length ? clauses[clauses.length - 1].index : -1;
+      const cut = lastPage >= 0 ? lastPage : lastPara >= 0 ? lastPara : lastClause;
       if (cut >= 0) end = start + Math.floor(chunk * 0.8) + cut + 1;
     }
     const body = s.slice(start, end);
@@ -137,7 +141,8 @@ const DIGEST_SYSTEM = [
   '- annexes and tables: one line each, naming what it lists and its totals or key rows;',
   '- unfilled template fields (blank lines, "____", "[...]", "XX") as "TO\'LDIRILMAGAN: <field>"; say once if the excerpt looks like a template;',
   '- the page: when the excerpt has "[Sahifa N]" lines, end each line with "(N-sahifa)"; never guess a page or a clause number.',
-  'Leave out signatures, bank details, a definition that only repeats one already listed in this excerpt, and wording that creates no right or duty - but never the criteria of a defined term.',
+  'Leave out signatures, bank details, a definition that only repeats one already listed in this excerpt, and wording that creates no right or duty - but never the criteria of a defined term. A clause that repeats another with only its number or a name changed is one line naming all its clause numbers. Leave out <who> when it is the same as on the line above.',
+  'Text under "[KONTEKST]" was digested with the previous excerpt: read it only to understand what follows, and list nothing from it.',
   'Keep different acts and states apart: filing an application is not registration, and registration is not a right; a deadline to reply is not a deadline to conclude the deal; "no case or application was found" says nothing about financial health or anything not checked; "not identified" is not "does not exist"; damage that "may" occur is not damage caused; a threshold inside a definition is not a penalty; "and" is not "or". Keep which act must come first ("before", "after", "on condition that").',
   'Do not interpret, judge, add consequences or merge separate items. No preamble. Keep the digest compact - about a third of the excerpt\'s length - but a complete condition wins over a short line.',
 ].join('\n');
@@ -392,7 +397,7 @@ function reviewSection(text, source, allowed, srcRelations = null) {
   const uniq = phrases.filter(r => { const k = `${r.kind}|${r.phrase}`; if (seen.has(k)) return false; seen.add(k); return true; });
   // a period, status, order, "and/or", possibility, threshold or criterion
   // tied differently than in the source (src/rag/clause-relations.js)
-  const rel = String(text || '').trim() ? relations.relationFlags(text, srcRelations || relations.analyseText(source), { asserted }) : [];
+  const rel = String(text || '').trim() ? relations.relationFlags(text, srcRelations || relations.analyseText(source), { asserted, denied }) : [];
   return { numbers: v.numbers, derived: v.derived, dates: v.dates, pages: v.pages, clauses: v.clauses, phrases: uniq, relations: rel };
 }
 
@@ -499,16 +504,35 @@ const AS_OF = /holatiga|holati bo'yicha|по состоянию на/u;
 const NEGATED_AFTER = /^[^.!?;]{0,80}?(?:xulosa (?:chiqarib|qilib) bo'lmaydi|aytib bo'lmaydi|hisoblab bo'lmaydi|deb bo'lmaydi|degani emas|ma'nosini (?:bildirmaydi|bermaydi)|anglatmaydi|aytilmagan|deyilmagan|yozilmagan|ko'rsatilmagan|noma'lum|aniq emas|ko'rinmaydi|aytmaydi|ko'rsatmaydi|belgilamaydi|tartiblamaydi|hujjatda yo'q|asos yo'q|нельзя|не означает|не значит|не следует|не указ|неизвестн)/u;
 // ... or what comes before it does ("Hujjatda ... deyilmagan", "... deb aytish mumkin emas")
 const NEGATED_BEFORE = /(?:deyilmagan|aytilmagan|deb aytish mumkin emas|xulosa qilish mumkin emas|нельзя (?:сказать|утверждать|сделать вывод)|не (?:указано|сказано))[^.!?;]{0,40}$/u;
-// ... or it is a condition, not a statement ("agar ... bo'lsa", "если")
+// ... or it is the condition itself, not a statement ("agar X bo'lsa", "если")
 const CONDITIONAL_BEFORE = /(?:^|[^\p{L}'])(?:agar|basharti)(?![\p{L}'])|если|в случае/u;
-const CONDITIONAL_AFTER = /^\s*(?:bo'lsa|bo'lganda|bo'lgan taqdirda|ekan,)/u;
+const CONDITIONAL_AFTER = /^\p{L}*\s*(?:bo'lsa|bo'lganda|bo'lgan taqdirda|ekan,)/u;
+// 2026-10-08 (#423 review): a denial or a condition counts only for the
+// claim it is about. "X, lekin Y degani emas" denies Y, not X; in "agar X
+// bo'lsa, Y" only X is hypothetical - Y (a consequence, an amount, a period)
+// is still a claim and is checked.
+const OTHER_CLAIM = /[;:]|,\s*(?:lekin|ammo|biroq|balki|chunki|shuning uchun|bu|u|bunda|ya'ni|но|а|однако)(?![\p{L}'])|(?:^|\s)(?:lekin|ammo|biroq|однако)(?![\p{L}'])/u;
+const OTHER_CLAIM_BEFORE = /;|,\s*(?:lekin|ammo|biroq|balki|chunki)(?![\p{L}'])|(?:^|\s)(?:lekin|ammo|biroq|однако)(?![\p{L}'])/u;
+const PROTASIS_END = /(?:bo'lsa|\p{L}{2,}sa|bo'lganda|\p{L}+ganda|bo'lgan taqdirda)\s*,|,\s*(?:unda|u holda|то)(?![\p{L}'])/u;
+const claimAfter = after => { const m = after.search(OTHER_CLAIM); return m >= 0 ? after.slice(0, m) : after; };
+const claimBefore = before => { const parts = before.split(OTHER_CLAIM_BEFORE); return parts[parts.length - 1]; };
 
-/** Is the match at `idx` in sentence `s` asserted (not denied, doubted or conditional)? */
+/** Is the claim at [idx, idx+len) of sentence `s` denied or doubted - by words of its own clause? */
+function denied(s, idx, len) {
+  return NEGATED_AFTER.test(claimAfter(s.slice(idx + len))) || NEGATED_BEFORE.test(claimBefore(s.slice(0, idx)));
+}
+
+/** Is the claim inside the condition of a conditional sentence ("agar X bo'lsa", "X bo'lsa")? Its consequence is not. */
+function hypothetical(s, idx, len) {
+  const before = claimBefore(s.slice(0, idx));
+  const c = [...before.matchAll(new RegExp(CONDITIONAL_BEFORE.source, 'gu'))].pop();
+  if (c && !PROTASIS_END.test(before.slice(c.index))) return true;
+  return CONDITIONAL_AFTER.test(s.slice(idx + len));
+}
+
+/** Is the match at `idx` in sentence `s` asserted (not denied or doubted in its own clause, and not the condition of an "if")? */
 function asserted(s, idx, len) {
-  const before = s.slice(0, idx), after = s.slice(idx + len);
-  if (NEGATED_AFTER.test(after) || NEGATED_BEFORE.test(before)) return false;
-  if (CONDITIONAL_BEFORE.test(before) || CONDITIONAL_AFTER.test(after)) return false;
-  return true;
+  return !denied(s, idx, len) && !hypothetical(s, idx, len);
 }
 
 /**
@@ -790,7 +814,35 @@ const pageLabel = p => (p ? ` · ${p.from === p.to ? p.from : `${p.from}–${p.t
 // re-read starts. Every call is a ledger row and also counts against the
 // request's own budget (usage-ledger AI_REQUEST_*): a call it refuses is a
 // part not read, never an unbounded retry.
-const DIGEST_LIMITS = Object.freeze({ concurrency: 8, maxExtraCalls: 4, timeMs: 75000, minSplitChars: 2000 });
+const DIGEST_LIMITS = Object.freeze({ concurrency: 8, maxExtraCalls: 4, timeMs: 75000, minSplitChars: 2000, preSplitAt: 1 });
+
+// A part's digest size, predicted with no AI (2026-10-08, #423 review): one
+// line per distinct clause or key line (a clause repeated with only its
+// number changed counts once), at DIGEST_TOKENS_PER_ITEM - an assumption
+// (about 30 words of Uzbek with the field labels), not a measurement. A part
+// predicted above preSplitAt x the cap is read as two halves from the start:
+// one extra call, instead of a cut call thrown away plus two re-reads. It
+// draws on the same maxExtraCalls as the re-reads, so the total stays bounded.
+// Uncalibrated, so it splits only a part predicted at or above the cap
+// itself; each call's ledger detail records the prediction, so the next live
+// run's output tokens can calibrate it.
+const DIGEST_TOKENS_PER_ITEM = 45; // one digest line per distinct clause, ~30 words with labels
+function predictDigestTokens(text) {
+  const seen = new Set();
+  let items = 0;
+  for (const line of String(text || '').split(/\n+/u)) {
+    const t = line.trim();
+    if (t.length < 15 || /^\[(?:Sahifa|KONTEKST)/u.test(t)) continue;
+    const numbered = /^\d+(?:\.\d+)*\.\s/u.test(t);
+    if (!numbered && (t.length > 600 || !/\s/u.test(t) || !relations.relationScore(t))) continue;
+    const key = lowerNorm(t).replace(/[^\p{L}]+/gu, ' ').trim();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    // a long clause may need a second line
+    items += t.length > 400 ? 2 : 1;
+  }
+  return items * DIGEST_TOKENS_PER_ITEM;
+}
 
 /** Did the call stop at its output cap? (a cut text, or an empty one at "length") */
 function cutAtCap(e) {
@@ -814,7 +866,7 @@ function halvesOf(u, full) {
   const cut = near > 0 ? near + 1 : mid;
   return [
     { ...u, label: `${u.label}a`, end: u.start + cut, text: u.text.slice(0, cut), pages: pagesSpanned(full, u.start, u.start + cut), half: true },
-    { ...u, label: `${u.label}b`, start: u.start + cut, text: u.text.slice(cut), pages: pagesSpanned(full, u.start + cut, u.end), half: true },
+    { ...u, label: `${u.label}b`, start: u.start + cut, text: u.text.slice(cut), pages: pagesSpanned(full, u.start + cut, u.end), half: true, context: 0 },
   ];
 }
 
@@ -835,14 +887,20 @@ async function buildDigest(text, { callAI, userId = null, endpoint = '/api/draft
   const plan = digestChunks(full);
   const n = plan.chunks.length;
   let calls = 0;
+  // the overlap with the previous part is marked as context, so its clauses
+  // are not listed twice
+  const withContext = (u) => {
+    const ctx = u.context || 0;
+    return ctx > 0 && ctx < u.text.length ? `[KONTEKST]\n${u.text.slice(0, ctx)}\n[QISM]\n${u.text.slice(ctx)}` : u.text;
+  };
   const read = async (u) => {
     calls++;
     try {
       const r = await callAI([
         { role: 'system', text: DIGEST_SYSTEM },
-        { role: 'user', text: `Excerpt ${u.label}/${n}${pageLabel(u.pages)}:\n\n${u.text}` },
+        { role: 'user', text: `Excerpt ${u.label}/${n}${pageLabel(u.pages)}:\n\n${withContext(u)}` },
       ], { temperature: 0.1, maxTokens: DIGEST_MAX_TOKENS, userId, endpoint,
-        detail: { phase: 'digest', part: u.label, of: n, chars: u.text.length } });
+        detail: { phase: 'digest', part: u.label, of: n, chars: u.text.length, predictedTokens: predictDigestTokens(u.text), ...(u.preSplit ? { preSplit: true } : {}) } });
       const t = String((r && r.text) || '').trim();
       if (r && r.truncated) return { u, status: 'cut' };
       if (!t) return { u, status: 'failed', reason: 'empty' };
@@ -851,14 +909,23 @@ async function buildDigest(text, { callAI, userId = null, endpoint = '/api/draft
       return { u, status: cutAtCap(e) ? 'cut' : 'failed', reason: String((e && (e.code || e.message)) || 'error').slice(0, 80) };
     }
   };
-  const first = await inPool(plan.chunks.map(c => ({ ...c, label: String(c.index + 1) })), read, L.concurrency);
-  // the re-reads: the first cut parts the extra-call limit allows, all at
-  // once, and only while the time limit has not passed
+  const units = plan.chunks.map((c, i) => ({ ...c, label: String(c.index + 1), context: i > 0 ? Math.max(0, plan.chunks[i - 1].end - c.start) : 0, predicted: predictDigestTokens(c.text) }));
+  // parts predicted over the cap are read as halves from the start, the
+  // largest first, as far as the extra-call limit allows
   let extraCalls = 0;
+  const pre = new Set();
+  for (const u of [...units].sort((a, b) => b.predicted - a.predicted)) {
+    if (u.predicted < L.preSplitAt * DIGEST_MAX_TOKENS || extraCalls + 1 > L.maxExtraCalls || u.text.length < 2 * L.minSplitChars) continue;
+    pre.add(u); extraCalls += 1;
+  }
+  const firstUnits = units.flatMap(u => (pre.has(u) ? halvesOf(u, full).map(h => ({ ...h, preSplit: true, context: 0 })) : [u]));
+  const first = await inPool(firstUnits, read, L.concurrency);
+  // the re-reads: the first cut parts the extra-call limit allows, all at
+  // once, and only while the time limit has not passed (a half is not split again)
   const split = new Set();
   if (Date.now() - started < L.timeMs) {
     for (const r of first) {
-      if (r.status === 'cut' && extraCalls + 2 <= L.maxExtraCalls && r.u.text.length >= L.minSplitChars) { split.add(r); extraCalls += 2; }
+      if (r.status === 'cut' && !r.u.half && extraCalls + 2 <= L.maxExtraCalls && r.u.text.length >= L.minSplitChars) { split.add(r); extraCalls += 2; }
     }
   }
   const halves = [...split].flatMap(r => halvesOf(r.u, full));
@@ -879,9 +946,9 @@ async function buildDigest(text, { callAI, userId = null, endpoint = '/api/draft
     + (plan.covered ? '' : '\n\n(HUJJAT OXIRI DAYJESTGA KIRMADI)');
   return {
     text: body, chunks: n, failed, truncated, covered: plan.covered, totalChars: plan.totalChars,
-    parts: results.map(r => ({ part: r.u.label, pages: r.u.pages, chars: r.u.text.length, status: r.status, retried: !!r.retried, reason: r.reason || null })),
+    parts: results.map(r => ({ part: r.u.label, pages: r.u.pages, chars: r.u.text.length, status: r.status, retried: !!r.retried, preSplit: !!r.u.preSplit, reason: r.reason || null })),
     readParts: results.filter(r => r.status === 'read').length,
-    calls, extraCalls, elapsedMs: Date.now() - started, policy: 'cut_parts_not_used',
+    calls, extraCalls, preSplits: pre.size, elapsedMs: Date.now() - started, policy: 'cut_parts_not_used',
   };
 }
 
@@ -908,7 +975,7 @@ function coverageSummary(digest, { finalRun, mode } = {}) {
     parts: digest.parts.length, chunks: digest.chunks, read: digest.readParts,
     cut: digest.truncated.length, failed: digest.failed.length, covered: digest.covered,
     fullyRead: unreadParts(digest).length === 0, finalRun: !!finalRun,
-    digestCalls: digest.calls, extraCalls: digest.extraCalls, elapsedMs: digest.elapsedMs, policy: digest.policy,
+    digestCalls: digest.calls, extraCalls: digest.extraCalls, preSplits: digest.preSplits || 0, elapsedMs: digest.elapsedMs, policy: digest.policy,
   };
 }
 
@@ -996,7 +1063,7 @@ async function explainDocument({ documentText, langName, callAI, digest, userId 
 }
 
 module.exports = {
-  PAGE_MARK, CHUNK, OVERLAP, MAX_CHUNKS, DIGEST_SYSTEM, DIGEST_MAX_TOKENS, DIGEST_LIMITS, EXPLAIN_FULL_TEXT_MAX, EXPLAIN_MAX_TOKENS,
+  PAGE_MARK, CHUNK, OVERLAP, MAX_CHUNKS, DIGEST_SYSTEM, DIGEST_MAX_TOKENS, DIGEST_LIMITS, DIGEST_TOKENS_PER_ITEM, predictDigestTokens, EXPLAIN_FULL_TEXT_MAX, EXPLAIN_MAX_TOKENS,
   markPages, pagesIn, emptyPages, contentChars, chunkSizeFor, digestChunks, pagesSpanned, buildDigest, digestUnusable, coverageSummary,
   placeholdersIn, coverageNote, coverageStatus, explainSystem,
   unreadParts, scopeLines, scopeSelection, carriedIn, scopeWordsMissing, SCOPE_GROUPS, conflictCandidates, traceStages, verifyExplanation, guardAiNote, unsupportedPhrases, datesIn, cutToLastSentence, finishExplanation, explainDocument, CHECK_SCOPE,

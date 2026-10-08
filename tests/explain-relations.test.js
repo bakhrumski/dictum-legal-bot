@@ -168,6 +168,80 @@ const kinds = text => ex.finishExplanation({ reply: text, source: doc }).check;
     assert.ok(!/meaning (was )?(kept|lost)|LOST|is wrong/iu.test(out.replace(/never a verdict on meaning|not a judgement of meaning|A lawyer compares the meaning/gu, '')));
   });
 
+  await test('negation and conditions count only for the claim they are about: a wrong period, amount or act inside an "if" is still flagged; a denial in another clause does not hide a claim', () => {
+    const rels = t => kinds(t).relations.map(r => r.kind);
+    // a conditional sentence still makes claims about periods, amounts and acts
+    assert.deepStrictEqual(rels('Agar asosiy bitim 10 ish kuni ichida tuzilmasa, Investor taklifdan voz kechadi.'), ["bog'lanish"]);
+    assert.deepStrictEqual(rels("Agar Investor to'lovni kechiktirsa, 1 000 000 000 so'm jarima to'laydi."), ["ta'rif"]);
+    // the consequence of an "if" is a claim; only the condition itself is hypothetical
+    assert.deepStrictEqual(rels("Agar ma'lumot oshkor qilinsa, Jamiyatga 300 000 000 so'm zarar yetkaziladi."), ['ehtimollik']);
+    assert.deepStrictEqual(rels("Agar zarar yetkazilsa, Jamiyat talab qilishi mumkin."), []);
+    assert.deepStrictEqual(rels("Agar «Oqtosh-Lux» ro'yxatdan o'tmagan bo'lsa, uni ro'yxatdan o'tkazish kerak."), [], 'a status inside the condition is not stated');
+    // a denial of THIS claim takes it out; a denial of another claim does not
+    assert.deepStrictEqual(rels("10 ish kuni bitim tuzish muddati emas, balki javob muddati."), []);
+    assert.deepStrictEqual(rels("«Oqtosh-Lux» belgisi ro'yxatdan o'tmagan, lekin bu noqonuniy degani emas."), ['holat']);
+    // the same scoping for the phrase check (status, consequence)
+    const dd = ex.markPages(fixtures.find(f => f.id === 'due-diligence').pages);
+    const phr = t => ex.finishExplanation({ reply: t, source: dd }).check.phrases.map(p => p.label);
+    assert.deepStrictEqual(phr('Agar shartnoma buzilsa, Jamiyat jinoiy javobgarlikka tortiladi.'), ['javobgarlikka tortish', 'jinoiy']);
+    assert.deepStrictEqual(phr("Belgi ro'yxatdan o'tmagan, lekin bu noqonuniy degani emas."), ["ro'yxatdan o'tmagan"]);
+    assert.deepStrictEqual(phr("Agar belgi ro'yxatdan o'tmagan bo'lsa, boshqalar undan foydalanishi mumkin."), []);
+  });
+
+  await test('the evaluation set (correct paraphrases that do not repeat the source, wrong sentences in the source\'s own words): results for THIS set only, as documented', () => {
+    const r = require('../scripts/explain-relations-eval').evaluate();
+    assert.strictEqual(r.scope, 'synthetic evaluation set only - not a semantic accuracy guarantee');
+    assert.deepStrictEqual([r.correct.noFlag, r.correct.total], [9, 12], JSON.stringify(r.correct.falseFlags));
+    assert.deepStrictEqual(r.correct.falseFlags.map(c => c.id).sort(), ['c-conclude-sign', 'c-control', 'c-not-found']);
+    assert.deepStrictEqual([r.wrong.flagged, r.wrong.expectedKind, r.wrong.total], [12, 11, 12]);
+    assert.deepStrictEqual(r.wrong.otherKind.map(w => w.id), ['w-financial']);
+    const out = execFileSync(process.execPath, [path.join(__dirname, '../scripts/explain-relations-eval.js')], { encoding: 'utf8' });
+    assert.ok(out.includes('For this set only - not a semantic accuracy guarantee.'), out);
+  });
+
+  await test('digest fit: a part is cut at a clause start, the overlap with the previous part is marked as context, and a part predicted over the cap (no AI) is read as halves from the start within the same extra-call limit', async () => {
+    // clause boundary: no paragraph break in the window, the cut falls before a numbered clause
+    const clauses = Array.from({ length: 120 }, (_, i) => `${i + 1}.1. Tomon ${'abcdefghijklmnopqrst'[i % 20]}${'uvwxyz'[Math.floor(i / 20)]}lik majburiyatini ${10 + i} kun ichida bajaradi, bundan tashqari xabar beradi.`).join('\n');
+    const chunks = ex.digestChunks(clauses).chunks;
+    for (const c of chunks.slice(0, -1)) assert.ok(/\n$/u.test(c.text) && /^\d+\.1\. /u.test(clauses.slice(c.end)), clauses.slice(c.end - 20, c.end + 20));
+    // overlap marked; every call records its predicted size for calibration
+    const calls = [];
+    const ai = async (m, o) => { calls.push({ text: m[1].text, detail: o.detail }); return { text: '- band', provider: 'stub' }; };
+    const lease = ex.markPages(fixtures.find(f => f.id === 'long-lease').pages);
+    const d = await ex.buildDigest(lease, { callAI: ai });
+    assert.ok(calls.slice(1).every(c => /\n\n\[KONTEKST\]\n[\s\S]+\n\[QISM\]\n/u.test(c.text)), calls[1].text.slice(0, 200));
+    assert.ok(!calls[0].text.includes('[KONTEKST]'));
+    assert.ok(calls.every(c => Number.isInteger(c.detail.predictedTokens)));
+    assert.ok(ex.DIGEST_SYSTEM.includes('Text under "[KONTEKST]" was digested with the previous excerpt'));
+    // these parts are under the cap: no pre-split
+    assert.strictEqual(d.preSplits, 0);
+    // a dense part: predicted over the cap -> halves from the start, one extra call each, never past maxExtraCalls
+    const dense = Array.from({ length: 400 }, (_, i) => `${i + 1}.1. Tomon ${i.toString(26).split('').map(x => String.fromCharCode(97 + parseInt(x, 26))).join('')}lik majburiyatini bajaradi.`).join('\n');
+    const calls2 = [];
+    const d2 = await ex.buildDigest(dense, { callAI: async (m, o) => { calls2.push(o.detail); return { text: '- band', provider: 'stub' }; } });
+    const n = ex.digestChunks(dense).chunks.length;
+    const eligible = ex.digestChunks(dense).chunks.filter(c => ex.predictDigestTokens(c.text) >= ex.DIGEST_MAX_TOKENS && c.text.length >= 2 * ex.DIGEST_LIMITS.minSplitChars).length;
+    assert.ok(eligible >= 2, String(eligible));
+    assert.strictEqual(d2.preSplits, Math.min(eligible, ex.DIGEST_LIMITS.maxExtraCalls));
+    assert.strictEqual(d2.calls, n + d2.preSplits);
+    assert.ok(d2.extraCalls <= ex.DIGEST_LIMITS.maxExtraCalls);
+    assert.strictEqual(calls2.filter(x => x.preSplit).length, 2 * d2.preSplits);
+    assert.ok(d2.parts.filter(p => p.preSplit).every(p => /^\d+[ab]$/u.test(p.part)));
+  });
+
+  await test('the trace script refuses a bundle whose source is not the document the trace was made for', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rel-'));
+    const crypto = require('crypto');
+    const trace = { digest: null, scopeLines: [], answer: 'x', requestId: 'req-1', tag: 'tr-a', documentSha256: crypto.createHash('sha256').update(doc).digest('hex') };
+    fs.writeFileSync(path.join(dir, 'ok.json'), JSON.stringify({ source: `  ${doc}\n`, response: { trace } }));
+    fs.writeFileSync(path.join(dir, 'bad.json'), JSON.stringify({ source: `${doc} (boshqa)`, response: { trace } }));
+    const ok = execFileSync(process.execPath, [path.join(__dirname, '../scripts/explain-trace.js'), '--bundle', path.join(dir, 'ok.json'), '--fixture', 'relations-memorandum'], { encoding: 'utf8' });
+    assert.ok(ok.includes('trace of request req-1 (tag tr-a)'), ok.slice(0, 300));
+    let code = 0;
+    try { execFileSync(process.execPath, [path.join(__dirname, '../scripts/explain-trace.js'), '--bundle', path.join(dir, 'bad.json')], { stdio: 'pipe' }); } catch (e) { code = e.status; }
+    assert.strictEqual(code, 3);
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);
 })();

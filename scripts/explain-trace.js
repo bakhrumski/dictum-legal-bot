@@ -46,6 +46,12 @@ if (arg('--bundle')) {
   source = source || b.source || null;
   const t = (b.response && b.response.trace) || {};
   bundleTrace = t;
+  // the bundle must be one request's: its document hash against the source it carries
+  if (t.documentSha256 && b.source) {
+    const h = require('crypto').createHash('sha256').update(String(b.source).replace(/\u0000/gu, '').trim()).digest('hex'); // as the server reads it
+    if (h !== t.documentSha256) { console.error('The bundle\'s source is not the document this trace was made for (sha256 differs). Stop.'); process.exit(3); }
+  }
+  if (t.requestId) console.log(`trace of request ${t.requestId}${t.tag ? ` (tag ${t.tag})` : ''}${t.createdAt ? `, ${t.createdAt}` : ''}`);
   digest = digest || t.digest || null;
   answer = answer || t.answer || (b.response && b.response.reply) || '';
 }

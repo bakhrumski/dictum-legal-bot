@@ -12347,6 +12347,7 @@
             topicAutoDetect = false;
             pendingChatText = '';
             if (typeof aiAttachments !== 'undefined') { aiAttachments = []; sessionDocs = []; docActionsUsed = { opinion: false, explain: false }; renderAttachChips(); }
+            if (typeof invalidateExplainTrace === 'function') invalidateExplainTrace();
             var banner = document.getElementById('aiReqContextBanner');
             if (banner) banner.style.display = 'none';
             aiOpenedFromRequest = false;
@@ -12395,6 +12396,7 @@
                 if (currentAiSessionId === sessionId) {
                     currentAiSessionId = null;
                     aiChatHistory = [];
+                    if (typeof invalidateExplainTrace === 'function') invalidateExplainTrace();
                     document.getElementById('aiChatHeaderTitle').textContent = 'Yangi suhbat';
                     const welcome = document.getElementById('aiChatWelcome');
                     const msgs = document.getElementById('aiChatMessages');
@@ -13422,6 +13424,8 @@
             if (file.size > ATTACH_MAX) { alert('Fayl hajmi juda katta! Maksimal: 20 MB'); return; }
             var att = { id: ++aiAttachSeq, name: file.name, kind: isPdf ? 'pdf' : isDoc ? 'doc' : 'image', status: 'processing', text: '', error: '', scanService: scanService || 'chat' };
             aiAttachments.push(att);
+            // a new file: an earlier diagnostics trace is not this document's
+            invalidateExplainTrace();
             renderAttachChips();
             extractAttachment(file, att);
         }
@@ -13553,24 +13557,46 @@
         // with no-store. The JSON is for scripts/explain-trace.js --bundle.
         var explainDiagnostics = false;
         var lastExplainTrace = null;
+        // A trace belongs to one explanation request: its tag (sent to the
+        // server and echoed in the trace) and the "epoch" of the conversation
+        // and documents it was made for. A new chat, another session, a new
+        // or removed file, or switching diagnostics off moves the epoch, so an
+        // earlier trace (or a late answer) is never downloaded as a new one.
+        // Nothing here calls the server or an AI.
+        var diagEpoch = 0;
+        function invalidateExplainTrace() {
+            diagEpoch++;
+            lastExplainTrace = null;
+            try { delete window.__lastExplain; } catch (_) { window.__lastExplain = undefined; }
+        }
+        function newTraceTag() {
+            var r = (window.crypto && crypto.getRandomValues) ? Array.prototype.map.call(crypto.getRandomValues(new Uint8Array(8)), function (b) { return ('0' + b.toString(16)).slice(-2); }).join('') : String(Math.random()).slice(2, 18);
+            return 'tr-' + Date.now().toString(36) + '-' + r;
+        }
         function isMasterUi() { return typeof currentUser !== 'undefined' && !!currentUser && currentUser.role === 'master'; }
-        function toggleExplainDiagnostics(el) { explainDiagnostics = !!(el && el.checked); renderAttachChips(); }
-        function downloadExplainTrace() {
-            if (!lastExplainTrace) { showUpdateToast("Diagnostika ma'lumoti yo'q — tushuntirishni Diagnostika yoqilgan holda qayta ishga tushiring.", 'info'); return; }
-            var blob = new Blob([JSON.stringify(lastExplainTrace, null, 2)], { type: 'application/json' });
+        function toggleExplainDiagnostics(el) {
+            explainDiagnostics = !!(el && el.checked);
+            if (!explainDiagnostics) invalidateExplainTrace();
+            renderAttachChips();
+        }
+        function downloadExplainTrace(tag) {
+            if (!lastExplainTrace || lastExplainTrace.tag !== tag || lastExplainTrace.epoch !== diagEpoch) {
+                showUpdateToast("Bu diagnostika eskirgan yoki o'chirilgan — yangi tushuntirishni Diagnostika yoqilgan holda ishga tushiring.", 'info');
+                return;
+            }
+            var blob = new Blob([JSON.stringify({ source: lastExplainTrace.source, response: lastExplainTrace.response }, null, 2)], { type: 'application/json' });
             var a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = 'explain-trace-' + new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-') + '.json';
+            a.download = 'explain-trace-' + tag + '.json';
             document.body.appendChild(a);
             a.click();
             setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 0);
         }
         function clearExplainTrace() {
-            lastExplainTrace = null;
-            try { delete window.__lastExplain; } catch (_) { window.__lastExplain = undefined; }
+            invalidateExplainTrace();
             showUpdateToast("Diagnostika ma'lumoti xotiradan o'chirildi.", 'info');
         }
-        function explainTraceCard(d, hasSource) {
+        function explainTraceCard(d, hasSource, tag) {
             var t = d.trace || {};
             var c = t.scopeCounts || {};
             return '<div class="ai-diag-card"><div class="ai-diag-title">🔬 Diagnostika tayyor</div>' +
@@ -13579,7 +13605,7 @@
                 (c.dropped ? ', ' + escapeHtml(String(c.dropped)) + ' tasi sig\'madi' : '') + '.</p>' +
                 '<p class="ai-diag-note">Faqat shu brauzer xotirasida; serverda saqlanmaydi. Ichida hujjat matni bor — uni repoga, chatga yoki boshqa joyga qo\'ymang. Tekshirish: <code>node scripts/explain-trace.js --bundle fayl.json</code> (so\'z bo\'yicha mexanik signal, ma\'no hukmi emas).' +
                 (hasSource ? '' : ' Skan hujjat: manba matni JSON\'da yo\'q — OCR matnini <code>--source</code> bilan bering.') + '</p>' +
-                '<div class="ai-diag-actions"><button class="ai-attach-suggest" type="button" onclick="downloadExplainTrace()">JSON yuklab olish</button>' +
+                '<div class="ai-diag-actions"><button class="ai-attach-suggest" type="button" onclick="downloadExplainTrace(\'' + escapeHtml(tag) + '\')">JSON yuklab olish</button>' +
                 '<button class="ai-diag-toggle" type="button" onclick="clearExplainTrace()">Xotiradan o\'chirish</button></div></div>';
         }
 
@@ -13614,22 +13640,29 @@
                 // window.__JAI_TRACE = true in the console); the server checks the
                 // role in the database and returns it for this request only
                 var wantTrace = isMasterUi() && (explainDiagnostics === true || window.__JAI_TRACE === true);
+                // a new request: the previous trace is no longer "the last one"
+                if (wantTrace) invalidateExplainTrace();
+                var traceTag = wantTrace ? newTraceTag() : null;
+                var traceEpoch = diagEpoch;
                 var r = await fetch('/api/draft/explain-document', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
-                    body: JSON.stringify({ documentText: text, docTicket: ticket, scanIds: scanIds.length ? scanIds : null, confirmed: true, trace: wantTrace })
+                    body: JSON.stringify({ documentText: text, docTicket: ticket, scanIds: scanIds.length ? scanIds : null, confirmed: true, trace: wantTrace, traceTag: traceTag })
                 });
                 var d = await r.json();
-                if (d && d.trace) {
-                    // kept in this tab only, for scripts/explain-trace.js --bundle
-                    lastExplainTrace = { source: text || null, response: d };
-                    window.__lastExplain = lastExplainTrace;
+                // kept in this tab only, for scripts/explain-trace.js --bundle - and only
+                // when it is this request's trace and nothing changed meanwhile
+                var traceOk = !!(wantTrace && d && d.trace && d.trace.tag === traceTag && traceEpoch === diagEpoch);
+                if (traceOk) {
+                    lastExplainTrace = { tag: traceTag, epoch: diagEpoch, source: text || null, response: d };
+                    window.__lastExplain = { source: text || null, response: d };
                 }
                 var typing = document.getElementById('aiChatTyping'); if (typing) typing.remove();
                 if (!r.ok || !d.reply) { docInfoCard('❌ ' + escapeHtml(d.message || d.error || 'Tushuntirib bo\'lmadi')); return; }
                 renderAiChatReply({ reply: d.reply, provider: d.provider, ragUsed: false, rag: null, qaBank: null },
                     'Hujjat mazmunini tushuntirish: ' + name, messagesEl, true);
                 if (wantTrace) {
-                    docInfoCard(d.trace ? explainTraceCard(d, !!text)
+                    docInfoCard(traceOk ? explainTraceCard(d, !!text, traceTag)
+                        : d.trace ? '🔬 Diagnostika olinmadi: so\'rov davomida suhbat, fayl yoki Diagnostika holati o\'zgardi.'
                         : '🔬 Diagnostika berilmadi: server bu hisobni bazada Master deb tasdiqlamadi.');
                 }
                 // a document not read whole: the reply opens with "Qisman natija" and the units came back
@@ -13645,6 +13678,7 @@
 
         function removeSessionDoc(i) {
             sessionDocs.splice(i, 1);
+            invalidateExplainTrace();
             renderAttachChips();
         }
         // Combined document set: conversation-persistent + newly ready; newly
@@ -14516,6 +14550,7 @@
 
                 currentAiSessionId = session.id;
                 aiChatHistory = session.messages || [];
+                if (typeof invalidateExplainTrace === 'function') invalidateExplainTrace();
                 selectedDatabases = session.databases || ['lex.uz'];
                 // Force-set topic without toggle (selectTopic toggles if same topic)
                 selectedTopic = null; // reset first so selectTopic won't toggle off

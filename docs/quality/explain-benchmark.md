@@ -454,7 +454,7 @@ DB testida tekshirildi: trace faqat aniq so'ralganda va bazada master bo'lgan ak
 | Qo'shimcha mezon tushib qolgan | Nazorat qiluvchi shaxs — faqat 50 foiz mezoni | `mezon` |
 | Istisno tushib qolgan | (dayjest bosqichida) | trace: `exception` topilmadi |
 
-Shu bandlarning to'g'ri bayoni hech qanday belgi olmaydi. 9 ta baholash hujjatining har biri o'z matniga qarshi tekshirilganda soxta belgi chiqmaydi. Inkor qilingan, shubha bildirilgan yoki shartli gap ham belgilanmaydi.
+Shu bandlarning to'g'ri bayoni hech qanday belgi olmaydi. 9 ta baholash hujjatining har biri o'z matniga qarshi tekshirilganda soxta belgi chiqmaydi. Shu da'voni o'z bo'lagida rad etgan gap belgilanmaydi. Shartli gap tekshiruvdan chiqarilmaydi (pastda: «Inkor va shart faqat o'z da'vosiga tegishli»).
 
 ### Qanday tekshiriladi (`src/rag/clause-relations.js`)
 
@@ -505,39 +505,126 @@ Hali ham ro'yxatga kirmaydiganlar: muallif, jo'natuvchi, ulush, direktorlar tari
 
 Tejalgan joy hisobiga ro'yxat chegarasi 25 dan 40 qatorga ko'tarildi. Belgi chegarasi o'zgarmadi (6 000 belgi), shuning uchun yakuniy chaqiruvning narx jadvalidagi chegarasi ro'yxat sababli o'smaydi. 120 000 belgili sinov matnida 56 nomzoddan 40 tasi tanlandi, 16 tasi sig'madi. Sig'maganlar soni modelga va javob ostida aytiladi, ro'yxati esa trace'da (`scopeDropped`) beriladi.
 
+### Inkor va shart faqat o'z da'vosiga tegishli (#423 ko'rib chiqilgandan keyin)
+
+Inkor yoki shart bor gap endi tekshiruvdan butunlay chiqarilmaydi.
+
+- **Inkor** faqat o'z bo'lagidagi da'voni chiqaradi. «…, lekin», «;» yoki «:» yangi da'vo boshlaydi.
+  - «Belgi ro'yxatdan o'tmagan, lekin bu noqonuniy degani emas» — «degani emas» faqat «noqonuniy»ga tegishli, shuning uchun «ro'yxatdan o'tmagan» tekshiriladi.
+  - «10 ish kuni bitim tuzish muddati emas» — inkor aynan shu bog'lanishni rad etadi, belgi qo'yilmaydi.
+- **Shartli gap:** faqat shartning o'zi («agar X bo'lsa») faraz hisoblanadi; oqibat qismi da'vo sifatida tekshiriladi.
+- Shartli gapdagi muddat, summa, harakat, tartib, «va/yoki» va ta'rif chegarasi har doim tekshiriladi. Masalan, «Agar bitim 10 ish kuni ichida tuzilmasa…» — `bog'lanish` belgisi qo'yiladi.
+- Holat («ro'yxatdan o'tmagan») va «ehtimol ↔ aniq» shartning ichida tekshirilmaydi (u yerda hech narsa tasdiqlanmaydi), oqibat qismida esa tekshiriladi.
+
+### Baholash to'plami — natija faqat shu to'plam uchun
+
+`tests/fixtures/explain-eval/09-relations-memorandum.json` ichidagi `evalSet`ni `node scripts/explain-relations-eval.js` hisoblaydi. To'plamni o'zimiz yozganmiz, lug'at ham shu to'plamda sozlangan. Shuning uchun **bu semantik aniqlik kafolati emas.**
+
+| To'plam | Natija |
+|---|---|
+| To'g'ri parafrazalar (manbani aynan takrorlamaydi), 12 ta | 9 tasida belgi yo'q; 3 tasida noto'g'ri belgi |
+| Manba so'zlarini ishlatadigan noto'g'ri gaplar, 12 ta | 12 tasi belgilandi; 11 tasi kutilgan tur bilan |
+
+To'g'ri bo'lsa ham belgilanganlar:
+- «bitimni **imzolash** uchun 60 kun» — lug'atda «imzolash» va «bitim tuzish» boshqa harakat;
+- «kapitalning **yarmidan** ko'pi» — so'z bilan yozilgan raqam mezon sifatida ko'rinmaydi;
+- «moliyaviy ahvol **tekshirilmagan**» — hujjatda «tekshiruv doirasiga kirmagan»; bu sinonim lug'atda yo'q.
+
+Kutilmagan tur bilan belgilangan: «moliyaviy holati aniqlandi» gapi «aniqlandi» uchun emas, boshqa ibora («mavjud emas») uchun belgilandi.
+
+Bu to'plamda belgilanmay qolgan xato yo'q. Shu to'plam yozilgach, ikki umumiy tur qo'shildi:
+- `chegara`: yuqori chegara («oshmaydi», «bilan cheklangan», «…gacha») bilan stavka almashgan;
+- `istisno`: istisno inkor qilingan («bundan mustasno emas»).
+
+### Dayjestning 1 600 tokenga sig'ishi
+
+Global token chegarasi oshirilmadi. Uchta o'zgarish:
+1. **Qism band chegarasida kesiladi.** Sahifa belgisi yoki bo'sh qator bo'lmasa, oxirgi raqamli band boshida kesiladi. Shunda bandning harakati, sharti va istisnosi ikki qismga bo'linmaydi.
+2. **Takror kamaytirildi.**
+   - Oldingi qism bilan umumiy 300 belgi `[KONTEKST]` deb belgilanadi va dayjestga qayta yozilmaydi.
+   - Faqat raqami yoki nomi farq qiladigan band bitta qatorga yoziladi, barcha raqamlari bilan.
+   - `<kim>` yuqoridagi qator bilan bir xil bo'lsa, yozilmaydi.
+3. **AI'siz baho bo'yicha oldindan bo'lish.**
+   - Har bir qismning dayjest hajmi oldindan baholanadi: har bir alohida band uchun 45 token. Bu taxmin, kalibrlanmagan.
+   - Bahosi cheklovga teng yoki undan katta qism boshidanoq ikki yarim sifatida o'qiladi. Bu 1 ta qo'shimcha chaqiruv. Kutish yo'lida esa kesilgan chaqiruv behuda ketadi va yana 2 ta qayta o'qish kerak bo'ladi.
+   - Oldindan bo'lish qayta o'qishlar bilan bir xil `maxExtraCalls` (4) hisobidan olinadi, shuning uchun jami chaqiruvlar chegarasi o'zgarmaydi.
+   - Har bir chaqiruvning ledger tafsilotida `predictedTokens` yoziladi. Keyingi jonli sinov baholashni haqiqiy chiqish bilan kalibrlashga imkon beradi.
+
+Juda zich hujjatda (har ~150 belgida yangi band) bahodan oshgan qismlar 4 tadan ko'p bo'lishi mumkin. Unda faqat 4 tasi bo'linadi, qolganlari kesilishi mumkin. Kesilgan qism avvalgidek ishlatilmaydi va nomi aytiladi.
+
 ### Xarajat taqqoslash (#423 va #422, dry-run, chaqiruvsiz)
 
-`node scripts/explain-benchmark.js`. Yangi chaqiruv yo'q, hech bir token chegarasi oshirilmagan. Narx jadvali chegarasi bo'yicha (kirish = UTF-8 bayt):
+`node scripts/explain-benchmark.js`. Narx jadvali chegarasi har bir chaqiruv uchun hisoblanadi: kirish UTF-8 baytda, chiqish cheklov bo'yicha, dayjest qismlari esa yakuniy chaqiruvga cheklov hajmida kiradi. Ikki holat ko'rsatiladi:
+- **«oddiy»** — hech bir qism kesilmagan;
+- **«qayta o'qish bilan»** — `DIGEST_LIMITS`dagi qolgan qo'shimcha chaqiruvlarning hammasi kesilgan qismlarni qayta o'qishga ketgan.
 
-| Hujjat | Yo'l | Yakuniy chaqiruv +bayt | Dayjest chaqiruvlari +bayt | Dayjest chiqishi +token (taxmin) | aisha-comet +$ | gpt-6-luna +$ |
-|---|---|---|---|---|---|---|
-| contract-supply | to'liq matn | 890 | 0 | 0 | 0.0004 | 0.0001 |
-| due-diligence | to'liq matn | 1 219 | 0 | 0 | 0.0005 | 0.0001 |
-| long-lease (37 888) | dayjest, 5 qism | 1 741 | 2 930 | 0–625 | 0.0025 | 0.0008 |
-| long-service-docx (53 538) | dayjest, 7 qism | 1 808 | 4 102 | 0–885 | 0.0033 | 0.0010 |
-| investment-agreement (21 934) | dayjest, 3 qism | 1 114 | 1 758 | 0–361 | 0.0015 | 0.0005 |
+| Hujjat | Chaqiruvlar #422 → #423 (oddiy / qayta o'qish bilan) | Oldindan bo'lingan | aisha-comet #422 → #423 | gpt-6-luna #422 → #423 |
+|---|---|---|---|---|
+| long-lease (37 888) | 6/10 → 6/10 | 0 | $0.0391 / $0.0582 → $0.0419 / $0.0626 | $0.0250 / $0.0379 → $0.0262 / $0.0398 |
+| long-service-docx (53 538) | 8/12 → 8/12 | 0 | $0.0531 / $0.0722 → $0.0567 / $0.0774 | $0.0334 / $0.0463 → $0.0350 / $0.0486 |
+| investment-agreement (21 934) | 4/8 → 4/8 | 0 | $0.0251 / $0.0441 → $0.0268 / $0.0474 | $0.0165 / $0.0294 → $0.0173 / $0.0308 |
+| zich sintetik 51 398 | 8/12 → 12/12 | 4 | $0.0524 / $0.0715 → $0.0719 / $0.0719 | $0.0331 / $0.0460 → $0.0461 / $0.0461 |
+| zich sintetik 120 000 | 14/18 → 18/18 | 4 | $0.1042 / $0.1247 → $0.1261 / $0.1261 | $0.0627 / $0.0762 → $0.0768 / $0.0768 |
 
-Qayerdan keladi:
-- dayjest prompti +586 bayt har bir qismga;
+Qo'shimcha kirish:
+- dayjest prompti har bir qismga +887 bayt;
 - tushuntirish prompti +461 bayt;
-- ro'yxat ko'proq turdagi qatorlarni oladi; dayjest yo'lida havola hisobga olinmagan (eng yomon holat);
-- dayjest qatoridagi maydon belgilari («shart:», «muddat:» …). Bu taxmin: qatorga 0–10 belgi, har 400–250 manba belgisiga bir qator. O'lchanmagan.
+- kalit qatorlar ro'yxati kattaroq.
 
-**Xavf:** bir qismning kutilgan chiqishi #422 dagi 343–1 280 tokendan 343–1 408 tokenga o'sadi. Eng katta ish (120 000 belgi, qism 9 508 belgi) uchun yuqori chegara 1 521 dan 1 673 ga chiqadi, bu 1 600 tokenlik o'zgarmagan cheklovdan oshishi mumkin. Unda kesilgan qism `DIGEST_LIMITS` doirasida ikki yarmida qayta o'qiladi; baribir kesilsa, ishlatilmaydi va nomi aytiladi. Haqiqiy sarf va `finish_reason` keyingi jonli sinovda ledger'dan o'lchanadi. Chegara ko'tarilmagan.
+Dayjest chiqishiga maydon belgilari qo'shiladi: qatorga 0–10 belgi deb olingan, o'lchanmagan.
+
+Zich hujjatda #423 ning «oddiy» chegarasi #422 ning eng yomon holatiga teng. Sabab: oldindan bo'lish qayta o'qish byudjetini oladi, chaqiruvlar shifti esa o'zgarmaydi.
+
+Eng katta oddiy ishda (120 000 belgi, qism 9 508 belgi) bir qismning kutilgan yuqori chiqishi 1 521 → 1 673 tokenga o'sadi va cheklovdan oshishi mumkin. Haqiqiy `finish_reason` va chiqish tokenlari keyingi jonli sinovda ledger'dan o'lchanadi.
 
 VoiceLab credit'da hisoblaydi; bu yerdagi narx — ro'yxat narxi, tasdiqlangan kurs emas.
 
+### Diagnostika so'rovga bog'langan
+
+- Diagnostikani yoqish, JSON yuklab olish va xotiradan o'chirish hech qanday so'rov yubormaydi (na server, na AI). Statik test va brauzer tekshiruvi buni ko'rsatdi.
+- Brauzer tekshiruvida yuklab olish paytida bitta `/api/ai-chat-sessions` so'rovi ko'rindi. Bu tushuntirish oqimining chat suhbatini saqlash so'rovi, yuklab olishga aloqasi yo'q va AI chaqirmaydi.
+- **Bog'lanish.** Har bir tushuntirish so'roviga brauzer `traceTag` beradi. Server uni trace'da qaytaradi va yoniga `requestId` (shu so'rovning `ai_requests` qatori), `documentSha256` va `createdAt`ni qo'shadi.
+- **Eskirish.** Quyidagi holatlardan keyin oldingi trace yaroqsiz bo'ladi:
+  - yangi suhbat yoki boshqa suhbatga o'tish;
+  - yangi yoki olib tashlangan fayl;
+  - Diagnostikani o'chirish;
+  - yangi so'rov.
+
+  Bunday holda eski kartadagi tugma fayl bermaydi. Javob kelguncha holat o'zgarsa, javob trace sifatida olinmaydi.
+- **Tekshirish skripti.** `scripts/explain-trace.js` manba matnining hash'i trace'nikiga mos kelmasa, to'xtaydi.
+- **Master tekshiruvi.** Server `createVerifyMaster` orqali tekshiradi; `server.js` ham, DB testi ham aynan shu funksiyani ishlatadi. Test real HTTP orqali, real Postgres'da o'tadi:
+  - sessiyasi «master» deb da'vo qilgan, lekin bazada Master bo'lmagan hisob trace olmaydi;
+  - Master trace'ni faqat so'raganda, `no-store` bilan oladi;
+  - teg aynan qaytadi, begona teg tashlab yuboriladi;
+  - `requestId` shu so'rovning `ai_requests` qatoriga mos;
+  - ikkinchi so'rov boshqa teg va boshqa `requestId` oladi.
+
+  Testdagi sessiya qatlami sarlavha orqali simulyatsiya qilingan; production'dagi cookie sessiyasi bu testda yo'q.
+
 ### Testlar va tasdiqlanmagan
 
-- `tests/explain-relations.test.js` (11 ta): har bir xato turi sintetik gapda belgilanadi, to'g'ri bayon belgilanmaydi, o'z matniga qarshi soxta belgi yo'q, inkor/shartli gap belgilanmaydi, ogohlantirish rejimi, asosiy matn va AI izohi bir xil mezonda, dayjest munosabatlari trace'da, kalit qatorlar ro'yxati, takrorlanish, promptlarda hujjatga xos so'z yo'q, trace skripti.
-- DB testi (`upload-no-ai.db.test.js`): trace faqat bazadagi Master'ga, `no-store`; sahifa uni faqat Master opt-in bilan so'raydi va brauzer xotirasiga yozmaydi.
-- Brauzerda tekshirildi (Chromium, desktop 1280 px va telefon 390 px, `/api` o'rniga soxta javoblar):
-  - tugma faqat Master interfeysida chiqadi;
-  - so'rov `trace: true` bilan ketadi;
-  - JSON yuklab olinadi;
+- `tests/explain-relations.test.js` (15 ta) quyidagilarni tekshiradi:
+  - har bir xato turi va to'g'ri bayon;
+  - o'z matniga qarshi soxta belgi yo'qligi;
+  - inkor va shartning o'z da'vosiga tegishliligi;
+  - baholash to'plami natijalari;
+  - band chegarasida kesish, `[KONTEKST]` va oldindan bo'lish;
+  - asosiy matn va AI izohi uchun bir xil mezon;
+  - trace skripti, shu jumladan boshqa hujjatning bundle'i rad etilishi.
+- DB testi (`upload-no-ai.db.test.js`): trace'ning so'rovga bog'lanishi, sahifadagi funksiyalarda so'rov yo'qligi va eski trace'ning yaroqsiz bo'lishi.
+- Brauzerda tekshirildi (Chromium, 1280 px va 390 px, `/api` o'rniga soxta javoblar):
+  - tugma faqat Master uchun chiqadi;
+  - yoqish 0 ta so'rov yuboradi;
+  - JSON yuklanadi;
+  - yangi fayl, yangi suhbat yoki o'chirilgan Diagnostikadan keyin eski karta fayl bermaydi;
+  - kech kelgan javob yangi trace bo'lib qolmaydi;
   - gorizontal toshish yo'q.
 - Haqiqiy iPhone/Safari'da tekshirilmagan. Production'da ham tekshirilmagan.
-- **Tasdiqlanmagan:** jonli modelda munosabatlar haqiqatan saqlanishi. Bu yurist ko'rib chiqadigan benchmark va bitta jonli sinov (Master trace) bilan tekshiriladi; pullik sinov egasining ruxsatisiz boshlanmaydi.
+- **Tasdiqlanmagan:**
+  - jonli modelda munosabatlar haqiqatan saqlanishi;
+  - `predictedTokens` bahosining aniqligi.
+
+  Ikkalasi bitta jonli sinovda javob, ledger va diagnostika JSON'ini birga review qilish orqali tekshiriladi. Pullik sinov egasining ruxsatisiz boshlanmaydi.
 
 ## 5. Qisman natija: foydalanuvchiga ko'rinishi va limit
 

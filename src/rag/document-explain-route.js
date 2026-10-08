@@ -15,8 +15,20 @@
  * explanation is generated at all (422 DOCUMENT_NOT_READ, units released).
  */
 
+const crypto = require('crypto');
 const { explainDocument } = require('./document-explain');
 const usageLedger = require('../ai/usage-ledger');
+
+/**
+ * Is this account master in the DATABASE (not only in its session)? Used for
+ * the stage trace; server.js and the HTTP test use this same function.
+ */
+function createVerifyMaster(pool) {
+  return async (adminId) => !!adminId && (await pool.query('SELECT role FROM admins WHERE id = $1', [adminId])).rows.some(r => r.role === 'master');
+}
+// the client's tag for one request (echoed so the page can tell this
+// request's trace from an older one); anything else is dropped
+const TRACE_TAG = /^[A-Za-z0-9-]{8,64}$/u;
 
 function mountExplainDocument(app, deps) {
   const { requireAuth, requireServiceConfirm, resolveScanDocs, tariffModule, callAI, digest, lexLangForText, logAudit, verifyMaster } = deps;
@@ -75,7 +87,13 @@ function mountExplainDocument(app, deps) {
       let trace;
       if (req.body && req.body.trace === true && req.session && req.session.role === 'master'
         && typeof verifyMaster === 'function' && await verifyMaster(userId).catch(() => false)) {
-        trace = result.trace;
+        const store = usageLedger.current();
+        trace = { ...result.trace,
+          // what this trace belongs to: the client's tag, this request, this document
+          tag: typeof req.body.traceTag === 'string' && TRACE_TAG.test(req.body.traceTag) ? req.body.traceTag : null,
+          requestId: (store && store.requestId) || null,
+          documentSha256: crypto.createHash('sha256').update(documentText).digest('hex'),
+          createdAt: new Date().toISOString() };
         res.set('Cache-Control', 'no-store');
       }
       res.json({ reply: result.reply, provider: result.provider, coverage: result.coverage, check: result.check,
@@ -87,4 +105,4 @@ function mountExplainDocument(app, deps) {
   });
 }
 
-module.exports = { mountExplainDocument };
+module.exports = { mountExplainDocument, createVerifyMaster };

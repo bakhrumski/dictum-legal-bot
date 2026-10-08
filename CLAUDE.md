@@ -125,7 +125,17 @@ Known state of the suites (Sept 2026):
   and the trace script reports per key clause which relation slots each
   stage keeps. The key-line list (max 40 lines, still 6 000 chars) also
   takes relation lines and sends a line the model already has word for
-  word as a reference (`[matnda]` / `[dayjestda]`), not a repeat. Quality is unconfirmed until the lawyer-reviewed
+  word as a reference (`[matnda]` / `[dayjestda]`), not a repeat. A denial
+  or an "if" counts only for its own claim (a period, amount or act inside a
+  conditional is still checked; only the condition itself is hypothetical);
+  results on the synthetic `evalSet` (`scripts/explain-relations-eval.js`)
+  hold for that set only. Digest fit: parts cut at a clause start, the
+  overlap marked `[KONTEKST]`, and a part predicted (no AI, uncalibrated,
+  `predictedTokens` in the ledger detail) at or over the cap read as halves
+  from the start within the same `maxExtraCalls`. A trace carries the
+  page's `traceTag`, the `requestId` and the document's sha256; the page
+  drops an old trace on a new chat, session, file or switch-off
+  (`createVerifyMaster` is the one database check). Quality is unconfirmed until the lawyer-reviewed
   benchmark (`docs/quality/explain-benchmark.md`) runs.
   `src/rag/question-aspects.js` splits a question into deadline,
   compensation, evidence and remedy and runs a light corpus search for each

@@ -125,7 +125,7 @@ function bindAct(toks, fig) {
       if (toks[k].punct) break;
       n++;
       const a = actOf(toks[k].w);
-      if (a) return a;
+      if (a) return { act: a, at: toks[k].at, end: toks[k].end };
     }
   }
   let k = (i >= 0 ? i : toks.length) - 1;
@@ -135,14 +135,24 @@ function bindAct(toks, fig) {
     if (t.w === ';') break;
     if (t.punct) continue;
     if (FROM.test(t.w)) { k -= 3; continue; } // the event the period counts from
+    if (SINCE_WORD.test(t.w)) continue; // "imzolangach", "olgandan": that event too
     const a = actOf(t.w);
-    if (a) return a;
+    if (a) return { act: a, at: t.at, end: t.end };
   }
   return null;
 }
+// a verb form naming the event a period counts from: "imzolangach", "imzolanganidan"
+const SINCE_WORD = /\p{L}{3,}(?:gach|gandan|ganidan|ganda)$/u;
 
-/** "definition" when the sentence defines a term, "sanction" when a sanction word is near the figure, else "other". */
+/**
+ * The role of a figure: "cap" when it is a ceiling ("10 foizidan oshmaydi",
+ * "ko'pi bilan", "chegarasi"), "sanction" when a sanction word is near it,
+ * "definition" when the sentence defines a term, else "other".
+ */
+const CAP_AFTER = /^(?:\p{L}*\s*)?(?:oshmaydi|oshmasligi|oshmagan|oshmasin|ortiq emas|ko'p emas|bilan cheklan\p{L}*|cheklan\p{L}*|не превыша\p{L}*|не более|ограничен\p{L}*)/u;
+const CAP_BEFORE = /(?:ko'pi bilan|eng ko'p|maksimal\p{L}*|chegara\p{L}*|limit\p{L}*|не более|предел\p{L}*|максим\p{L}*)\s+(?:[\p{L}'-]+\s+){0,3}$/u;
 function roleOf(s, toks, fig) {
+  if (/gacha$/u.test(fig.raw) || CAP_AFTER.test(s.slice(fig.end).trimStart()) || CAP_BEFORE.test(s.slice(Math.max(0, fig.at - 60), fig.at))) return 'cap';
   const at = toks.findIndex(t => t.at >= fig.end);
   const from = Math.max(0, (at < 0 ? toks.length : at) - 7), to = Math.min(toks.length, (at < 0 ? toks.length : at) + 4);
   if (toks.slice(from, to).some(t => SANCTION.test(t.w))) return 'sanction';
@@ -193,7 +203,7 @@ function orderPairs(toks) {
       if (d < best) { best = d; other = a; }
     }
     if (!other || best >= 100) continue;
-    out.push(kind === 'before' ? [other, ref] : [ref, other]);
+    out.push(Object.assign(kind === 'before' ? [other, ref] : [ref, other], { at: t.at, end: t.end }));
   }
   return out;
 }
@@ -262,7 +272,7 @@ const criterionIn = (c, s) => {
 function analyseSentence(s) {
   const l = lower(s);
   const toks = tokens(l);
-  const figures = figuresIn(l).map(f => ({ ...f, act: bindAct(toks, f), role: roleOf(l, toks, f) }));
+  const figures = figuresIn(l).map(f => { const b = bindAct(toks, f); return { ...f, act: b ? b.act : null, actAt: b ? b.at : null, actEnd: b ? b.end : null, role: roleOf(l, toks, f) }; });
   const acts = [];
   toks.forEach((t, k) => { if (!t.punct) { const a = actOf(t.w); if (a) acts.push({ act: a, polarity: polarityAt(toks, k), word: t.w }); } });
   const quoted = [...l.matchAll(/«([^»]{2,60})»|"([^"]{2,60})"/gu)].map(m => (m[1] || m[2]).trim());
@@ -306,11 +316,19 @@ function matching(a, src) {
  *   ehtimollik  - damage / risk / loss stated as certain where the source
  *                 states it only as possible;
  *   ta'rif      - a definition's threshold given as a sanction;
- *   mezon       - a defined term with only some of its criteria.
- * `asserted(sentence, index, length)` (document-explain) skips a denied,
- * doubted or conditional mention. A flag is a reason to check by hand.
+ *   mezon       - a defined term with only some of its criteria;
+ *   chegara     - a ceiling ("oshmaydi") given as a rate, or a rate as a ceiling;
+ *   istisno     - an exception the source makes, denied.
+ * `denied(sentence, index, length)` (document-explain) is true when the
+ * claim's own clause denies or doubts it ("... muddati emas", "... degani
+ * emas"); `asserted` also leaves out the condition of an "if" ("agar X
+ * bo'lsa"). A period, date, amount, act, order or connector is checked in a
+ * conditional sentence too - only its denial takes it out; a status and a
+ * "possible vs caused" statement are not checked inside the condition (it
+ * states no status), but are in its consequence. A flag is a reason to
+ * check by hand.
  */
-function relationFlags(answer, src, { asserted = () => true, stage = 'javob' } = {}) {
+function relationFlags(answer, src, { asserted = () => true, denied = () => false, stage = 'javob' } = {}) {
   const where = `${stage}da`;
   const out = [];
   const seen = new Set();
@@ -327,18 +345,31 @@ function relationFlags(answer, src, { asserted = () => true, stage = 'javob' } =
   const ans = sentencesOf(answer).map(analyseSentence);
   ans.forEach((a, ai) => {
     const isAsserted = (needle) => { const i = a.lower.indexOf(needle); return i < 0 || asserted(a.lower, i, needle.length); };
+    // a figure, an act or a connector is a claim in a conditional sentence
+    // too ("agar bitim 10 kun ichida tuzilmasa"): only a denial of that
+    // claim, in its own clause, takes it out ("... muddati emas")
+    const claimDenied = (from, to) => denied(a.lower, from, Math.max(0, to - from))
+      // "... bitim tuzish muddati emas": a bare "emas" right after the claim, in its clause
+      || /^\s*(?:[\p{L}'-]+\s+){0,2}(?:emas|не является)(?![\p{L}'])/u.test(a.lower.slice(to).split(/[,;:]/u)[0]);
     // periods and dates on another act
     for (const f of a.figures) {
       const same = (srcBy.get(f.key) || []).filter(x => f.kind !== 'date' || x.year == null || f.year == null || x.year === f.year);
       if (f.act && f.kind !== 'percent' && f.kind !== 'amount') {
         const acts = new Set(same.map(x => x.act).filter(Boolean));
-        if (acts.size && !acts.has(f.act) && isAsserted(f.raw)) {
+        if (acts.size && !acts.has(f.act) && !claimDenied(Math.min(f.at, f.actAt), Math.max(f.end, f.actEnd))) {
           add("bog'lanish", `«${f.raw}» ${where} «${ACT_LABEL[f.act]}» bilan, hujjatda «${[...acts].map(x => ACT_LABEL[x]).join('», «')}» bilan`);
         }
       }
       // a definition's threshold as a sanction
-      if (f.role === 'sanction' && same.length && !same.some(x => x.role === 'sanction') && same.some(x => x.role === 'definition')) {
+      if (f.role === 'sanction' && same.length && !same.some(x => x.role === 'sanction' || x.role === 'cap') && same.some(x => x.role === 'definition') && !claimDenied(f.at, f.end)) {
         add("ta'rif", `«${f.raw}» ${where} jarima/sanksiya yonida, hujjatda faqat ta'rif chegarasi sifatida`);
+      }
+      // a ceiling given as a rate, or a rate as a ceiling ("0,1 foiz penya,
+      // jami 10 foizdan oshmaydi" -> "10 foiz penya")
+      if (same.length && !claimDenied(f.at, f.end)) {
+        const srcCap = same.some(x => x.role === 'cap'), srcOnlyCap = same.every(x => x.role === 'cap');
+        if (f.role === 'cap' && !srcCap) add('chegara', `«${f.raw}» ${where} yuqori chegara sifatida, hujjatda chegara emas`);
+        else if (f.role === 'sanction' && srcOnlyCap) add('chegara', `«${f.raw}» hujjatda faqat yuqori chegara («oshmaydi»), ${where} jarima/penya stavkasi sifatida`);
       }
     }
     // an act denied or done where the source, on the same matter, says otherwise
@@ -358,14 +389,20 @@ function relationFlags(answer, src, { asserted = () => true, stage = 'javob' } =
     }
     // order of two acts
     for (const p of a.order) {
-      if (srcOrder.has([p[1], p[0]].join('>')) && !srcOrder.has(p.join('>'))) {
+      if (srcOrder.has([p[1], p[0]].join('>')) && !srcOrder.has(p.join('>')) && !claimDenied(p.at, p.end)) {
         add('tartib', `${where} «${ACT_LABEL[p[0]]}» «${ACT_LABEL[p[1]]}»dan oldin; hujjatda teskari`);
       }
     }
     // "and" / "or"
     for (const c of a.connectors) {
       const types = srcConn.get(c.key);
-      if (types && !types.has(c.type)) add('va/yoki', `«${c.words}» — hujjatda shu so'zlar orasida «${c.type === 'or' ? 'va' : 'yoki'}»`);
+      const at = a.lower.indexOf(c.words);
+      if (types && !types.has(c.type) && !(at >= 0 && claimDenied(at, at + c.words.length))) add('va/yoki', `«${c.words}» — hujjatda shu so'zlar orasida «${c.type === 'or' ? 'va' : 'yoki'}»`);
+    }
+    // an exception the source makes, denied ("... bundan mustasno emas")
+    const exDenied = a.lower.match(/(?:bundan mustasno|istisno\p{L}*)\s+(?:[\p{L}'-]+\s+)?(?:emas|qilinmaydi|не является)(?![\p{L}'])/u);
+    if (exDenied && src.sentences.some(x => /bundan mustasno|istisno/u.test(x.lower)) && !src.sentences.some(x => x.lower.includes(exDenied[0]))) {
+      add('istisno', `«${exDenied[0]}» — hujjatda istisno inkor qilinmagan`);
     }
     // possible stated as certain
     for (const n of modalOnly) {
