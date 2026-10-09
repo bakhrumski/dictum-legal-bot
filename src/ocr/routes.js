@@ -27,7 +27,7 @@ const multer = require('multer');
 const voicelab = require('../ai/voicelab');
 const scanLimits = require('./scan-limits');
 const scanStore = require('./scan-store');
-const { markPages } = require('../rag/document-explain');
+const { markPages, contentChars } = require('../rag/document-explain');
 const os = require('os');
 const fs = require('fs');
 
@@ -398,13 +398,24 @@ function mountAnalyzerRoutes(app, deps) {
             error: 'Word fayli haqiqiy .docx emas yoki shikastlangan. Uni Microsoft Word orqali qayta “.docx” formatida saqlang.'
           });
         }
-        const mammoth = require('mammoth');
-        const result = await mammoth.extractRawText({ path: filePath });
-        const text = (result.value || '').trim();
+        // tables keep their rows, columns and headers (src/ocr/docx-text.js);
+        // a document with no table reads exactly as before (mammoth)
+        const docx = await require('./docx-text').docxText(fs.readFileSync(filePath));
+        // the table reader missed words: mammoth's text is used - the text is
+        // kept, the tables' rows and columns are not, and the answer says so
+        if (docx.fallbackReason) console.warn('[ANALYZE] docx table reader not used:', docx.fallbackReason);
+        const tables = docx.tables ? { count: docx.tables, structure: docx.structure } : null;
+        const text = docx.text;
+        // the billable size is the document's own text, measured here: the
+        // markup the table reader adds (row ids, column headers, merged and
+        // empty-cell marks) is not the customer's and is never billed; it is
+        // signed into the ticket so a size sent by the client is never used.
         // DOCX has no fixed pages: the standard page (4 000 characters) is used
-        const size = ledger ? ledger.docUnits({ chars: text.length }) : null;
-        return res.json({ text, pageCount: size ? size.pages : 1, scanned: false, charCount: text.length,
-          units: size ? size.units : null, docTicket: ledger ? ledger.signDocTicket({ text }) : null });
+        const chars = contentChars(text);
+        const size = ledger ? ledger.docUnits({ chars }) : null;
+        return res.json({ text, pageCount: size ? size.pages : 1, scanned: false, charCount: chars, tables: docx.tables,
+          tableStructure: tables ? tables.structure : 'none',
+          units: size ? size.units : null, docTicket: ledger ? ledger.signDocTicket({ text, chars, tables }) : null });
       }
       const pdfParse = require('pdf-parse/lib/pdf-parse.js');
       const buf = fs.readFileSync(filePath);
@@ -428,7 +439,7 @@ function mountAnalyzerRoutes(app, deps) {
         scanned,
         charCount: plain.length,
         units: size ? size.units : null,
-        docTicket: ledger && !scanned ? ledger.signDocTicket({ text, pages }) : null,
+        docTicket: ledger && !scanned ? ledger.signDocTicket({ text, pages, chars: plain.length }) : null,
       });
     } catch (e) {
       console.error('[ANALYZE] extract error:', e.message);

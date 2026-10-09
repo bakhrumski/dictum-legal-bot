@@ -115,6 +115,19 @@ for (const [stage, text] of [['dayjest', digest], ['javob', answer]]) {
   console.log(`\nTied differently than in the source - ${stage === 'dayjest' ? 'digest' : 'answer'} (${flags.length}):`);
   for (const f of flags) console.log(`  [${f.kind}] ${f.note}`);
 }
+// ── Digest -> answer: what a digest line kept that the answer's sentence on it does not hold ──
+if (digest != null) {
+  const sig = rel.digestAnswerSignals(digest, answer, { max: 40 });
+  console.log(`\nDIGEST -> ANSWER - MECHANICAL, word for word (a reason to check by hand, never a verdict; the answer may say it in other words) (${sig.length}):`);
+  for (const x of sig) console.log(`  «${x.topic}»: ${x.lost.map(l => `${l.part} — ${l.value}`).join('; ')}`);
+  const tf = rel.tableFlags(digest, source, { stage: 'dayjest' });
+  if (tf.length) { console.log('\nTable rows - digest:'); for (const f of tf) console.log(`  [${f.kind}] ${f.note}`); }
+}
+const tfa = rel.tableFlags(answer, source);
+if (tfa.length) { console.log('\nTable rows - answer:'); for (const f of tfa) console.log(`  [${f.kind}] ${f.note}`); }
+const periods = ex.silentPeriodChoice(source, answer);
+console.log(`\nTwo periods for one matter, the answer states one or a blend (${periods.length}):`);
+for (const x of periods) console.log(`  ${x.note}`);
 if (bundleTrace && bundleTrace.scopeCounts) {
   const c = bundleTrace.scopeCounts;
   console.log(`\nKey-line list given to the final model: ${c.candidates} candidates, ${c.selected} selected (${c.referenced || 0} as references to text the model already had), ${c.dropped} not fitted, ${c.shortened} shortened.`);

@@ -1,0 +1,95 @@
+{
+  "id": "regression-digest-answer",
+  "type": "investitsiya shartnomasi (sintetik regressiya, production namunasidagi xato turlari)",
+  "title": "Dayjestda to'g'ri, javobda o'zgargan shartlar; ikki xil muddat; ziddiyat bo'lmagan foizlar; tizim [Qism n/m] havolalari (sintetik)",
+  "synthetic": true,
+  "note": "Production diagnostikasida topilgan XATO TURLARI umumiy, anonim matnda takrorlangan. Hujjatdagi ism, summa yoki ibora yo'q.",
+  "pages": [
+    "INVESTITSIYA SHARTNOMASI\n\"Sarvar Kapital\" MChJ (Investor) va \"Nurli Texnologiya\" MChJ (Jamiyat).\n\nJamiyatning majburiyatlari:\nmablag'lar sarflanishi to'g'risidagi ma'lumotlarni va moliyaviy hisobotlarni har chorakning 15-sanasiga qadar Investorga taqdim etish;\nInvestor har chorakning yakuni bo'yicha keyingi oyning 15-sanasida mablag'lar sarflanishi haqidagi ma'lumotlarni hamda Jamiyatning moliyaviy hisobotlarini olishga haqli.\n\nUSTUVOR HUQUQ\nBitim to'g'risidagi xabarnoma sotuvchi Taraf tomonidan barcha Taraflarga yuborilgan sanadan boshlab 20 (yigirma) kun ichida har bir Taraf ustuvor huquqni amalga oshirish to'g'risida xabarnoma yuborishi mumkin.\n\nTUGATISH IMTIYOZI\n\"Tugatish imtiyozi summasi\" — Investor kiritgan investitsiyalarning 1 (bir) baravari, unga Investorga e'lon qilingan, lekin to'lanmagan dividendlar qo'shiladi.\nImtiyoz summasi to'liq to'langanidan keyin qolgan summa barcha ishtirokchilar, jumladan Investor, o'rtasida ulushlariga mutanosib ravishda taqsimlanadi.",
+    "JAVOBGARLIK\nMablag'lardan maqsadli foydalanish shartlari bajarilmagan taqdirda, shartnoma Investor tashabbusi bilan bekor qilinadi. Bunday holda Investor Jamiyatdan sarflangan investitsiyalarni qaytarishni va Investor amalga oshirgan barcha xarajatlarni qoplashni talab qilish huquqiga ega. Bundan tashqari Jamiyat Investorga ajratilgan mablag'larning 30 foizi miqdorida jarima to'laydi. Jarima yetkazilgan zarar miqdoridan tashqari alohida hisoblanadi.\nKAFOLATLAR\nJamiyat qonunchilikni jiddiy buzmagan; bunda jiddiy buzilish deganda zarari ajratilgan mablag'lar miqdorining 15 foizidan ortiq bo'lgan buzilish tushuniladi.\nMOLIYALASHTIRISH\nInvestor 1-transhda jami mablag'larning 60 foizini, qolgan qismini 2-transhda ko'rsatkichlar bajarilganda 40 foizini ajratadi."
+  ],
+  "digest": "HUJJAT DAYJESTI (har bir qismdan qisqa ajratma; to'liq matn emas):\n\n[Qism 1/2]\n- Hisobot taqdim etish | Jamiyat → Investorga taqdim etadi | muddat: har chorakning 15-sanasiga qadar\n- Moliyaviy hisobotlar | Investor → olishga haqli | muddat: har chorak yakuni bo'yicha keyingi oyning 15-sanasida\n- Ustuvor huquq javobi | har bir Taraf → xabarnoma yuborishi mumkin | muddat: xabarnoma yuborilgan sanadan 20 kun ichida\n- Tugatish imtiyozi summasi (ta'rif) | Investor → investitsiyalarning 1 baravari + e'lon qilingan, lekin to'lanmagan dividendlar\n- Taqsimlanadigan summa | barcha ishtirokchilar (jumladan Investor) → qolgan summani ulushlariga mutanosib oladilar | shart: imtiyoz summasi to'liq to'langanidan keyin\n\n[Qism 2/2]\n- Maqsadli foydalanish buzilishi | Investor → shartnomani bekor qiladi | shart: maqsadli foydalanish shartlari bajarilmagan taqdirda | oqibat: investitsiyalarni qaytarish, barcha xarajatlarni qoplash va 30 foiz jarima (zarardan tashqari alohida)",
+  "answerWrong": "Jamiyat har chorak yakunida, keyingi oyning 15-sanasiga qadar moliyaviy hisobotlarni taqdim etishi kerak [Qism 1/2]. Ustuvor huquq: Taraflar xabarnoma olgan sanadan 20 kun ichida javob berishlari kerak [Qism 1/2]. Tugatishda Investor birinchi navbatda investitsiya summasini va to'lanmagan dividendlarni oladi; qolgan mablag'lar boshqa ishtirokchilar o'rtasida taqsimlanadi. Maqsadli foydalanish buzilsa, Investor shartnomani bekor qilishi, investitsiyalarni qaytarishni talab qilishi va 30% jarima undirishi mumkin [Qism 2/2].",
+  "answerFaithful": "Jamiyat moliyaviy hisobotlarni har chorakning 15-sanasiga qadar taqdim etadi; Investor esa har chorak yakuni bo'yicha keyingi oyning 15-sanasida ularni olishga haqli — hujjatda bu ikki muddat alohida yozilgan [Qism 1/2]. Ustuvor huquq: har bir Taraf xabarnoma yuborilgan sanadan boshlab 20 kun ichida o'z xabarnomasini yuborishi mumkin [Qism 1/2]. Tugatish imtiyozi summasi — investitsiyalarning 1 baravari va e'lon qilingan, lekin to'lanmagan dividendlar; qolgan summa barcha ishtirokchilar, jumladan Investor, o'rtasida mutanosib taqsimlanadi. Maqsadli foydalanish buzilsa, shartnoma bekor qilinadi; Investor investitsiyalarni qaytarishni va barcha xarajatlarni qoplashni talab qilishi mumkin, bundan tashqari Jamiyat 30 foiz jarima to'laydi, u zarardan tashqari alohida hisoblanadi [Qism 2/2].",
+  "keyPoints": [
+    {
+      "id": "two-periods",
+      "point": "Hisobot: Jamiyat majburiyati 15-sanagacha; Investor huquqi keyingi oyning 15-sanasida",
+      "anchor": "keyingi oyning 15-sanasida",
+      "page": 1
+    },
+    {
+      "id": "start-from-sending",
+      "point": "20 kun xabarnoma yuborilgan sanadan; yuborishi mumkin",
+      "anchor": "yuborilgan sanadan boshlab 20",
+      "page": 1
+    },
+    {
+      "id": "declared-unpaid",
+      "point": "E'lon qilingan, lekin to'lanmagan dividendlar",
+      "anchor": "e'lon qilingan, lekin to'lanmagan",
+      "page": 1
+    },
+    {
+      "id": "all-including",
+      "point": "Barcha ishtirokchilar, jumladan Investor",
+      "anchor": "barcha ishtirokchilar, jumladan Investor",
+      "page": 1
+    },
+    {
+      "id": "remedies",
+      "point": "Qaytarish + barcha xarajatlar + alohida 30% jarima",
+      "anchor": "barcha xarajatlarni qoplashni",
+      "page": 2
+    }
+  ],
+  "traps": [
+    {
+      "id": "declared-dropped",
+      "rule": "B",
+      "correct": "E'lon qilingan, lekin to'lanmagan dividendlar",
+      "wrong": "\"To'lanmagan dividendlar\""
+    },
+    {
+      "id": "all-including-changed",
+      "rule": "A",
+      "correct": "Barcha ishtirokchilar, jumladan Investor",
+      "wrong": "\"Boshqa ishtirokchilar\""
+    },
+    {
+      "id": "start-changed",
+      "rule": "B",
+      "correct": "Yuborilgan sanadan; yuborishi mumkin",
+      "wrong": "\"Olgan sanadan; javob berishi kerak\""
+    },
+    {
+      "id": "remedies-dropped",
+      "rule": "B",
+      "correct": "Qaytarish, barcha xarajatlar va alohida jarima",
+      "wrong": "Xarajatlar va 'alohida' tushib qolgan"
+    },
+    {
+      "id": "periods-blended",
+      "rule": "E",
+      "correct": "Ikki muddat alohida",
+      "wrong": "Bitta qo'shilgan muddat"
+    }
+  ],
+  "aiNoteCases": [
+    {
+      "note": "Taraflar xabarnoma olgan sanadan 20 kun ichida javob berishlari kerak.",
+      "expect": "flagged",
+      "why": "mumkin -> kerak"
+    },
+    {
+      "note": "Hujjatda hisobot uchun ikki muddat bor: 15-sanagacha taqdim etish va keyingi oyning 15-sanasida olish.",
+      "expect": "kept",
+      "why": "ikkala muddat"
+    },
+    {
+      "note": "Yo'q.",
+      "expect": "removed",
+      "why": "to'ldiruvchi"
+    }
+  ]
+}

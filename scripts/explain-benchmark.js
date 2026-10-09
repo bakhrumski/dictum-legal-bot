@@ -341,6 +341,66 @@ const fullRows = fullDocs.map(d => {
     ...Object.fromEntries(MODELS.map(m => [m, { b422: [bound({ calls: o.usual }, m).usd, bound({ calls: o.worst }, m).usd], b423: [bound({ calls: n.usual }, m).usd, bound({ calls: n.worst }, m).usd] }])) };
 });
 
+// ── #425 vs #424 (main at 07b8528): tables, prompts, re-read odds ──────────
+// What moves: (1) DOCX tables are read row by row with system markup (row
+// ids, column headers, merged/empty-cell marks) - never billed (the units
+// come from the server-measured text without it), but sent to the provider,
+// so it adds input and can add a digest part; (2) the digest prompt and the
+// final prompt are longer; (3) no new call, no cap raised. A re-read of a cut
+// part costs two calls; how often a part is cut is NOT known: p = 1/7 is a
+// SCENARIO taken from one production run (2026-10-08: 1 of 7 parts cut,
+// re-read in halves) - one observation, not a statistical probability. The
+// scenarios below are planning figures from the price table, not a measured
+// spend and not a guaranteed maximum (VoiceLab bills credits).
+const PROMPT_424 = { digestBytes: 4225, explainBytes: 5120 }; // UTF-8 bytes at 07b8528
+const { tableLines } = require('../src/ocr/docx-text');
+function syntheticTable(rows, cols, cellChars) {
+  const mk = (t, col) => ({ text: t, col, span: 1, mergedFromAbove: false });
+  const head = { header: true, cells: Array.from({ length: cols }, (_, c) => mk(`Ustun sarlavhasi ${c + 1}`, c)) };
+  const body = Array.from({ length: rows }, (_, r) => ({ header: false, cells: Array.from({ length: cols }, (_, c) => mk(`${'q'.repeat(Math.max(1, cellChars - 4))} ${r}${c}`, c)) }));
+  return { rows: [head, ...body], cols };
+}
+function tableDoc(totalChars, tables) {
+  // prose up to totalChars of the document's own text, then the tables
+  const tableText = tables.map((t, i) => tableLines(syntheticTable(t.rows, t.cols, t.cellChars), i + 1).join('\n')).join('\n\n');
+  const own = ex.contentChars(tableText);
+  const prose = Array.from({ length: Math.ceil(Math.max(0, totalChars - own) / 200) }, (_, i) => `${i + 1}. ${'matn '.repeat(38)}`).join('\n').slice(0, Math.max(0, totalChars - own));
+  return `${prose}\n\n${tableText}`;
+}
+const REREAD_P = [0, 1 / 7, 0.5];
+function plan425(text, which) {
+  const contentLen = ex.contentChars(text);
+  const sentLen = which === '424' ? contentLen : text.length; // #424 sent the cells without markup (mammoth)
+  const sent = 'x'.repeat(sentLen);
+  const full = contentLen <= ex.EXPLAIN_FULL_TEXT_MAX;
+  const chunks = full ? [] : ex.digestChunks(sent).chunks;
+  const sys = 'x'.repeat(which === '424' ? PROMPT_424.digestBytes : Buffer.byteLength(ex.DIGEST_SYSTEM));
+  const cap = ex.DIGEST_MAX_TOKENS;
+  const digestCalls = chunks.map(c => ({ maxTokens: cap, messages: [{ role: 'system', text: sys }, { role: 'user', text: c.text }] }));
+  const final = { maxTokens: ex.EXPLAIN_MAX_TOKENS, digestTokens: digestCalls.length * cap,
+    messages: [{ role: 'system', text: 'x'.repeat(which === '424' ? PROMPT_424.explainBytes : Buffer.byteLength(ex.explainSystem('Uzbek (Latin script)'))) }, { role: 'user', text: full ? sent : 'x'.repeat(6000) }] };
+  const biggest = chunks.length ? Math.max(...chunks.map(c => c.text.length)) : 0;
+  const reread = { maxTokens: cap, messages: [{ role: 'system', text: sys }, { role: 'user', text: 'x'.repeat(Math.ceil(biggest / 2)) }] };
+  return { parts: chunks.length, sentChars: sentLen, markupChars: text.length - contentLen, usual: [...digestCalls, final], reread, maxExtra: full ? 0 : ex.DIGEST_LIMITS.maxExtraCalls };
+}
+const docs425 = [
+  { label: 'prose only, 51 398 chars', text: tableDoc(51398, []) },
+  { label: '51 398 chars, 3 tables (34 rows x 4-6 cols)', text: tableDoc(51398, [{ rows: 7, cols: 4, cellChars: 90 }, { rows: 7, cols: 4, cellChars: 90 }, { rows: 20, cols: 6, cellChars: 40 }]) },
+  { label: '120 000 chars, 2 annex tables (80 rows x 6 cols)', text: tableDoc(120000, [{ rows: 40, cols: 6, cellChars: 35 }, { rows: 40, cols: 6, cellChars: 35 }]) },
+];
+const rows425 = docs425.map(d => {
+  const o = plan425(d.text, '424'), n = plan425(d.text, '425');
+  const cost = (pl, m) => {
+    const usual = bound({ calls: pl.usual }, m).usd;
+    const rr = bound({ calls: [pl.reread] }, m).usd || 0;
+    // the cost if each part were cut at the scenario rate p (two calls per re-read, within the extra-call limit) - a scenario, not an expectation
+    const expected = REREAD_P.map(pr => usual + Math.min(pl.maxExtra, 2 * pr * pl.parts) * rr);
+    return { usual, expected, worst: usual + pl.maxExtra * rr };
+  };
+  return { label: d.label, contentChars: ex.contentChars(d.text), markupChars: n.markupChars, parts424: o.parts, parts425: n.parts,
+    ...Object.fromEntries(MODELS.map(m => [m, { b424: cost(o, m), b425: cost(n, m) }])) };
+});
+
 const real = syntheticRealDoc(REAL_PAGES);
 const realNew = Object.fromEntries(MODELS.map(m => [m, bound(plan(real, 'new'), m).usd]));
 const realOld = Object.fromEntries(MODELS.map(m => [m, bound(plan(real, 'old'), m).usd]));
@@ -361,7 +421,8 @@ if (args.includes('--prompts')) {
 }
 
 if (args.includes('--json')) {
-  console.log(JSON.stringify({ rows, sizes, digest: { assumptions: ASSUME, rows: digestRows }, scopeCost: scopeRows, change423: { assumptions: LABELS, rows: rows423, cap: capRows423, fullBound: fullRows }, real: { pages: REAL_PAGES, old: realOld, new: realNew }, repeats: REPEATS, realDocs: REAL_DOCS, budget }, null, 2));
+  console.log(JSON.stringify({ rows, sizes, digest: { assumptions: ASSUME, rows: digestRows }, scopeCost: scopeRows, change423: { assumptions: LABELS, rows: rows423, cap: capRows423, fullBound: fullRows },
+    change425: { rereadScenarios: REREAD_P, note: 'scenarios, not probabilities (0.14 = one observed run); planning figures, not a guaranteed maximum', rows: rows425 }, real: { pages: REAL_PAGES, old: realOld, new: realNew }, repeats: REPEATS, realDocs: REAL_DOCS, budget }, null, 2));
 } else {
   const fmt = v => (typeof v === 'number' ? `$${v.toFixed(4)}` : v);
   console.log('DRY RUN - no AI call. Planning figures from src/ai/model-pricing.js (callCostBound): not measured spend, not a guaranteed maximum.\n');
@@ -397,6 +458,10 @@ if (args.includes('--json')) {
   console.log(['document', 'chars', 'predicted tokens per part', 'calls #422 usual / with re-reads', 'calls #423 usual / with re-reads', 'pre-split parts', ...MODELS.map(m => `${m} #422 usual / re-reads -> #423 usual / re-reads`)].join(' | '));
   for (const r of fullRows) console.log([r.label, r.chars, r.predictedTokensPerPart.join(','), r.calls422, r.calls423, r.preSplits,
     ...MODELS.map(m => `${fmt(r[m].b422[0])} / ${fmt(r[m].b422[1])} -> ${fmt(r[m].b423[0])} / ${fmt(r[m].b423[1])}`)].join(' | '));
+  console.log(`\n#425 vs #424: table markup (sent, never billed), longer prompts, re-read scenarios. Re-read scenarios per part p = ${REREAD_P.map(x => x.toFixed(2)).join(' / ')} (scenarios, not probabilities: 0.14 = one production run that cut 1 of 7 parts - a single observation). Planning figures from the price table - not measured spend, not a guaranteed maximum:`);
+  console.log(['document', 'own chars (billed)', 'markup chars (sent, not billed)', 'parts #424 -> #425', ...MODELS.map(m => `${m} #424 usual | scenario p=${REREAD_P.map(x => x.toFixed(2)).join('/')} | all extra calls -> #425 same`)].join(' | '));
+  for (const r of rows425) console.log([r.label, r.contentChars, r.markupChars, `${r.parts424} -> ${r.parts425}`,
+    ...MODELS.map(m => { const f = b => `${fmt(b.usual)} | ${b.expected.map(fmt).join('/')} | ${fmt(b.worst)}`; return `${f(r[m].b424)} -> ${f(r[m].b425)}`; })].join(' | '));
   console.log(`\nA ${REAL_PAGES}-page document (~${REAL_PAGES * 2500} chars), bound per run: old ${MODELS.map(m => `${m} ${fmt(realOld[m])}`).join(', ')}; new ${MODELS.map(m => `${m} ${fmt(realNew[m])}`).join(', ')}`);
   console.log(`\nBenchmark budget (old + new, ${REPEATS} repeats; eval set + ${REAL_DOCS} anonymised real documents of ${REAL_PAGES} pages):`);
   for (const m of MODELS) console.log(`  ${m}: eval set ${fmt(budget[m].evalSetUsd)} + real docs ${fmt(budget[m].realDocsUsd)} = ${fmt(budget[m].totalUsd)} (planning figure)`);

@@ -118,6 +118,8 @@ function cutChunks(text, { chunk, overlap, maxChunks, snap }) {
     if (end >= s.length) break;
     start = Math.max(end - overlap, start + 1);
   }
+  // a part that starts inside a table row: the row's id is given again with it
+  for (let i = 1; i < out.length; i++) if (out[i - 1].splitRowHead) out[i].continuesRow = out[i - 1].splitRowHead;
   const last = out[out.length - 1];
   return { chunks: out, covered: !!last && last.end >= s.length, totalChars: s.length };
 }
@@ -132,13 +134,16 @@ function cutChunks(text, { chunk, overlap, maxChunks, snap }) {
 function splitAt(s, end) {
   if (end >= s.length || end <= 0 || s[end - 1] === '\n' || s[end] === '\n') return { splitAtEnd: false };
   const lineStart = s.lastIndexOf('\n', end - 1) + 1;
-  const ref = (s.slice(lineStart, lineStart + 40).match(/^\s*(\d+(?:\.\d+)*)\.?\s/u) || [])[1] || null;
-  return { splitAtEnd: true, splitRef: ref };
+  const head = s.slice(lineStart, lineStart + 120);
+  const row = (head.match(/^⟦([^⟧]+)⟧/u) || [])[1];
+  const ref = row ? null : (head.match(/^\s*(\d+(?:\.\d+)*)\.?\s/u) || [])[1] || null;
+  // a table row cut between parts: the next part gets its id and headers again
+  return { splitAtEnd: true, splitRef: ref, splitRow: row || null, splitRowHead: row ? head.match(/^⟦[^⟧]+⟧/u)[0] : null };
 }
 
 /** The clauses a digest read in pieces, once each: "1.1-band", "3-qism oxiridagi gap". */
 function splitLabels(digest) {
-  return [...new Set((digest.splits || []).map(x => (x.ref ? `${x.ref}-band` : `${x.after}-qism oxiridagi gap`)))].join(', ');
+  return [...new Set((digest.splits || []).map(x => (x.row ? `«${x.row}» jadval qatori` : x.ref ? `${x.ref}-band` : `${x.after}-qism oxiridagi gap`)))].join(', ');
 }
 
 /** Pages a [start, end) slice of `text` belongs to (from the marks before and inside it). */
@@ -175,6 +180,8 @@ const DIGEST_SYSTEM = [
   '- the page: when the excerpt has "[Sahifa N]" lines, end each line with "(N-sahifa)"; never guess a page or a clause number.',
   'Leave out signatures, bank details, a definition that only repeats one already listed in this excerpt, and wording that creates no right or duty - but never the criteria of a defined term. A clause that repeats another word for word except its own clause number is one line naming all its clause numbers; if any amount, date, percentage, period, name or clause reference differs, they stay separate lines. Leave out <who> when it is the same as on the line above.',
   'Text under "[KONTEKST]" was digested with the previous excerpt: read it only to understand what follows, and list nothing from it.',
+  'Table rows start with "⟦Jadval N · M-qator …⟧" and each value follows its column header "⟨…⟩" (⟨↑ …⟩ is the value merged down from the row above, ⟨bo\'sh⟩ an empty cell). One line per row, beginning with the row id: keep every value, criterion and deadline with its own row and column - never move one to another row, never merge rows, and give a row "(qator davomi)" the id it continues.',
+  'In a condition or a period, keep who does each act and the exact event a period runs from (sent or received, signed or registered) and whether something "may" or "must" be done.',
   'Keep different acts and states apart: filing an application is not registration, and registration is not a right; a deadline to reply is not a deadline to conclude the deal; "no case or application was found" says nothing about financial health or anything not checked; "not identified" is not "does not exist"; damage that "may" occur is not damage caused; a threshold inside a definition is not a penalty; "and" is not "or". Keep which act must come first ("before", "after", "on condition that").',
   'Do not interpret, judge, add consequences or merge separate items. No preamble. Keep the digest compact - about a third of the excerpt\'s length - but a complete condition wins over a short line.',
 ].join('\n');
@@ -219,6 +226,9 @@ function explainSystem(langName) {
     '- A statement the document attributes to someone stays attributed ("according to X", "X stated"). A claim in the document is not a verified fact - say who claims it.',
     '- Keep every qualifier and time limit: "within the scope of the review", "was not identified", "as of the date of the document". "Not identified" never becomes "does not exist". A past state is not today\'s state. "No application was filed", "not registered" and "no right exists" are different things - do not merge them.',
     '- Do not draw conclusions the document does not draw (for example that something missing makes an activity unlawful or makes something mandatory).',
+    '- Where the digest (or the document) gives two different periods or terms for related duties or rights (for example a duty to submit and a right to receive), state both with whose they are; never choose one silently or blend them into one.',
+    '- Keep, as the digest or the document gives them: who acts (all parties a payment or distribution includes - "all participants, including X" is not "the other participants"), the event a period runs from (sent is not received), "may" versus "must", every condition joined by "and", every exception and every consequence of one breach. If you list only some items of a list or a table, say that the list is partial and where the whole is.',
+    '- A value, criterion or deadline from a table row stays with that row (⟦Jadval N · M-qator⟧ lines; ⟨header⟩ names the column).',
     '- Keep each period, date, condition, exception and consequence on the act the document attaches it to: a deadline to reply is not a deadline to conclude; what must happen before what stays in that order. "No case or application was found" says nothing about financial health or anything the document did not check. Damage or a risk the document says "may" arise stays possible, never caused. A threshold inside a definition is not a penalty. "And" is not "or".',
     '',
     'Fact, recommendation, interpretation:',
@@ -343,6 +353,11 @@ function verifyExplanation(answer, source, { allowed = [] } = {}) {
 
   const skip = []; // spans already judged (dates, page and clause refs, list numbers)
   const inSkip = i => skip.some(s => i >= s.start && i < s.end);
+  // the digest's own part labels ("[Qism 3/7 · 2–4-sahifa]", "Qism 7a/7") and
+  // the table reader's row ids (⟦Jadval 2 · 4-qator⟧) are the system's, not
+  // figures of the document; a real fraction in the text is still checked
+  for (const m of a.matchAll(/\bqism\s+\d+[a-z]{0,2}\s*\/\s*\d+/giu)) skip.push({ start: m.index, end: m.index + m[0].length });
+  for (const m of a.matchAll(/⟦[^⟧\n]*⟧|\bjadval\s+\d+\s*[·,]\s*\d+-qator/giu)) skip.push({ start: m.index, end: m.index + m[0].length });
   const dates = [];
   for (const dt of datesIn(a)) {
     skip.push(dt);
@@ -420,7 +435,7 @@ function cutToLastSentence(text) {
   return i > t.length * 0.5 ? t.slice(0, i + 1) : t;
 }
 
-const CHECK_SCOPE = "faqat raqam, sana, sahifa, band raqamlari, holat, oqibat, ustuvorlik va vaqt iboralari hamda muddat/sana qaysi harakatga bog'langani, inkor, tartib, «va/yoki», ehtimollik, ta'rif chegarasi va mezonlar hujjat matni bilan mexanik (so'z bo'yicha) solishtirildi — javobning barcha bo'limlarida bir xil. Belgilangan joy da'vo noto'g'ri degani emas: uni manba bilan qo'lda tekshirish kerak. Hech bir bo'lim, belgilanmaganlari ham, mazmunan yoki huquqiy jihatdan tasdiqlangan emas.";
+const CHECK_SCOPE = "faqat raqam, sana, sahifa, band raqamlari, holat, oqibat, ustuvorlik va vaqt iboralari hamda muddat/sana qaysi harakatga bog'langani, inkor, tartib, «va/yoki», ehtimollik, ta'rif chegarasi, mezonlar, jadval qatori va «mumkin/kerak» hujjat matni bilan, dayjestda bor qism esa javob bilan mexanik (so'z bo'yicha) solishtirildi — javobning barcha bo'limlarida bir xil. Belgilangan joy da'vo noto'g'ri degani emas: uni manba bilan qo'lda tekshirish kerak. Hech bir bo'lim, belgilanmaganlari ham, mazmunan yoki huquqiy jihatdan tasdiqlangan emas.";
 const partLabel = c => `${c.label || c.index + 1}-qism${c.pages ? ` (${c.pages.from === c.pages.to ? c.pages.from : `${c.pages.from}–${c.pages.to}`}-sahifa)` : ''}`;
 
 /** One section's mechanical flags: figures, dates, pages, clauses, phrases, relations. */
@@ -432,7 +447,9 @@ function reviewSection(text, source, allowed, srcRelations = null) {
   const uniq = phrases.filter(r => { const k = `${r.kind}|${r.phrase}`; if (seen.has(k)) return false; seen.add(k); return true; });
   // a period, status, order, "and/or", possibility, threshold or criterion
   // tied differently than in the source (src/rag/clause-relations.js)
-  const rel = String(text || '').trim() ? relations.relationFlags(text, srcRelations || relations.analyseText(source), { asserted, denied }) : [];
+  const srcRel = srcRelations || relations.analyseText(source);
+  const rel = String(text || '').trim() ? [...relations.relationFlags(text, srcRel, { asserted, denied }),
+    ...relations.permissionFlags(text, srcRel, { asserted }), ...relations.tableFlags(text, source)] : [];
   return { numbers: v.numbers, derived: v.derived, dates: v.dates, pages: v.pages, clauses: v.clauses, phrases: uniq, relations: rel };
 }
 
@@ -459,7 +476,7 @@ function sectionNote(name, r) {
  * removes nothing for a missing word: a flag is a reason to look, not proof
  * of an error, and no section is ever presented as verified.
  */
-function finishExplanation({ reply, truncated = false, source, digest = null, allowed = [], scope = [], scopeStats = null }) {
+function finishExplanation({ reply, truncated = false, source, digest = null, allowed = [], scope = [], scopeStats = null, tables = null }) {
   let text = String(reply || '').trim();
   const notes = [];
   const unread = digest ? digest.failed.concat(digest.truncated) : [];
@@ -483,21 +500,38 @@ function finishExplanation({ reply, truncated = false, source, digest = null, al
   if (scopeStats && scopeStats.dropped) {
     notes.push(`Saqlanadigan shartlar: ${scopeStats.candidates} ta nomzoddan ${scopeStats.selected} tasi modelga alohida berildi, ${scopeStats.dropped} tasi ro'yxat chegarasiga (${scopeStats.limits.max} qator / ${scopeStats.limits.maxChars} belgi) sig'madi — ular faqat hujjat matni yoki dayjest orqali berilgan; qo'lda tekshiring.`);
   }
+  // DOCX tables: never shown as kept when they were not; and reading rows is
+  // not a proof that every cell was read fully and correctly
+  if (tables && tables.count) {
+    notes.push(tables.structure === 'rows'
+      ? `Jadvallar: ${tables.count} ta jadval qatorlab, ustun sarlavhalari bilan o'qildi (mexanik; kataklar to'liq va to'g'ri o'qilgani tasdiqlanmagan) — muhim qiymatni asl jadval bilan tekshiring.`
+      : `Jadvallar — qo'lda tekshirish kerak: hujjatda ${tables.count} ta jadval bor, lekin ularning qator va ustun tuzilishi saqlanmadi (kataklar alohida qatorlar sifatida o'qildi) — qiymat, mezon yoki muddat qaysi qatorga tegishli ekanini asl hujjat bilan tekshiring.`);
+  }
+  // digest -> answer: parts of a digest line the answer, where it speaks of
+  // the same thing, does not hold word for word (a signal, not a verdict)
+  const digestSignals = digest && digest.text ? relations.digestAnswerSignals(digest.text, text) : [];
+  if (digestSignals.length) {
+    notes.push(`Dayjest → javob (mexanik, so'z bo'yicha; ma'no hukmi emas) — qo'lda tekshirish kerak: ${digestSignals.map(x => `«${x.topic}»: ${x.lost.map(l => `${l.part} — ${l.value}`).join('; ')}`).join(' | ')}. Javobda boshqa so'z bilan aytilgan bo'lishi ham mumkin.`);
+  }
+  // two periods for one matter, and the answer states one (or a blend)
+  const periodChoices = silentPeriodChoice(source, text);
+  if (periodChoices.length) notes.push(`Muddatlar — qo'lda tekshirish kerak: ${periodChoices.map(x => x.note).join('; ')}.`);
   if (digest && (digest.splits || []).length) {
     notes.push(`Qamrov — qo'lda tekshirish kerak: ${splitLabels(digest)} hujjat qismlari chegarasida bo'lingan va bo'laklarda o'qilgan (matn yo'qolmagan, lekin bu bandning shartlari bir butun holda o'qilmagan).`);
   }
   if (ai.removed) notes.push("«AI izohi» bo'sh yoki to'ldiruvchi edi — ko'rsatilmadi.");
-  if (!bodyNote && !aiNote && !scopeMissing.length && !(scopeStats && scopeStats.dropped) && !(digest && (digest.splits || []).length)) notes.push("Mexanik solishtirishda belgilanadigan joy topilmadi. Bu mazmun yoki huquqiy to'g'rilik tasdig'i emas.");
+  if (!bodyNote && !aiNote && !scopeMissing.length && !(scopeStats && scopeStats.dropped) && !(digest && (digest.splits || []).length) && !digestSignals.length && !periodChoices.length && !(tables && tables.count && tables.structure !== 'rows')) notes.push("Mexanik solishtirishda belgilanadigan joy topilmadi. Bu mazmun yoki huquqiy to'g'rilik tasdig'i emas.");
   if (partial.length) text = `⚠️ **Qisman natija — to'liq tahlil emas:** ${partial.join('; ')}.\n\n${text}`;
   text += `\n\n**Avtomatik tekshiruv (AI emas):** ${CHECK_SCOPE}\n${notes.map(n => `- ${n}`).join('\n')}`;
   const check = {
     numbers: v.numbers, derived: v.derived, dates: v.dates, pages: v.pages, clauses: v.clauses,
     phrases: [...sections.body.phrases, ...sections.aiNote.phrases],
     relations: [...sections.body.relations, ...sections.aiNote.relations],
+    digestSignals, periodChoices,
     sections, aiNote: { found: ai.found, removed: ai.removed }, scopeWordsMissing: scopeMissing,
     scope: v.scope, mode: 'flag_for_manual_review', verified: false,
   };
-  check.flagged = check.numbers.length + check.dates.length + check.pages.length + check.clauses.length + check.phrases.length + check.relations.length;
+  check.flagged = check.numbers.length + check.dates.length + check.pages.length + check.clauses.length + check.phrases.length + check.relations.length + digestSignals.length + periodChoices.length;
   return { reply: text, check, notes, partial: partial.length > 0 };
 }
 
@@ -720,14 +754,14 @@ function scopeSelection(text, { max = 40, maxLen = 320, maxChars = 6000, given =
       const head = f.p.replace(/^\s*\d+(?:\.\d+)*\.?\s*/u, '');
       const sp = head.lastIndexOf(' ', 70);
       line = `${ref ? `${ref}. ` : ''}${head.length > 80 ? `${head.slice(0, sp > 40 ? sp : 70)} …` : head} [${at}]`;
-      savedChars += Math.max(0, Math.min(f.p.length, maxLen) - line.length);
-      referenced++;
     } else if (line.length > maxLen) {
       const sp = line.lastIndexOf(' ', maxLen);
       line = `${line.slice(0, sp > maxLen * 0.6 ? sp : maxLen)} …`;
-      cut++;
     }
     if (chars + line.length > maxChars) { dropped.push(f); continue; }
+    // counted only for lines that are sent (a reference or a shortened line
+    // that did not fit is a line not fitted, not a reference)
+    if (at) { referenced++; savedChars += Math.max(0, Math.min(f.p.length, maxLen) - line.length); } else if (line !== f.p) cut++;
     chars += line.length;
     chosen.push({ ...f, line });
   }
@@ -790,35 +824,109 @@ const MEASURE = /(\d[\d\s.,]*)\s*(kalendar kun|ish kun|bank kun|kun|oy|yil|foiz|
 function contentStems(t) {
   return new Set(lowerNorm(t).split(/[^\p{L}']+/u).filter(w => w.length >= 5 && !STOP.has(w)).map(w => w.slice(0, 5)));
 }
+// 2026-10-08 (a production run): a different figure alone is not a
+// contradiction. A pair is a candidate only when the two sentences are about
+// the same matter AND the differing figure plays the same part in both:
+// the same role (sanction, ceiling, definition threshold, other), the same
+// calculation base ("…ning 25 foizi" of the same thing), the same act and the
+// same stage (avans / qolgan qismi / 2-transh, before / after a condition).
+// Shares that add up to 100% are not excluded for that alone - they are
+// excluded when their stage or base differs. Different periods of the same
+// matter (a duty "har chorakning 10-sanasiga qadar" and a right "keyingi
+// oyning 10-sanasida") are candidates too.
+const STAGE = /(\d+)\s*-\s*(?:transh|bosqich|to'lov)\p{L}*|avans\p{L}*|oldindan|qolgan\s+qism\p{L}*|yakuniy|birinchi|ikkinchi|uchinchi/gu;
+const TIME_WORD = /^(?:chorak\p{L}*|oy\p{L}*|yil\p{L}*|hafta\p{L}*|kun\p{L}*|sana\p{L}*|qadar|gacha|ichida|keyingi|yakun\p{L}*|davomida|boshlab)$/u;
+function stageOf(l) {
+  const st = [...l.matchAll(STAGE)].map(m => m[0].replace(/\s+/gu, ' '));
+  const cond = relations.slotsOf(l).condition;
+  return [...new Set([...st, ...cond])].sort().join('|');
+}
+// what a figure is about, when the sentence names it: a sanction (penya vs
+// jarima), a person or organisation (a name in capitals or in quotes)
+const SANCTION_WORD = /jarima|penya|neustoyka|штраф|пен[яи]|неустойк/gu;
+function objectOf(t, l) {
+  const names = [...String(t).matchAll(/[«"“]([^»"”]{2,40})[»"”]|\b([A-ZА-ЯЎҚҒҲ][A-ZА-ЯЎҚҒҲ'’ʻʼ-]{3,})\b/gu)].map(m => lowerNorm(m[1] || m[2]).trim());
+  return new Set([...names, ...(l.match(SANCTION_WORD) || [])]);
+}
+function baseOf(l, at) {
+  const m = l.slice(Math.max(0, at - 40), at).match(/([\p{L}'’]+?)(?:ning|ining|dan|idan)\s*$/u);
+  return m ? m[1].slice(0, 5) : null;
+}
+/** The time words of a sentence that carries a numbered period or day ("10-sanasiga", "30 kun"). */
+function timeSignature(l) {
+  // a period or a day of a period ("30 kun", "3 (uch) bank ish kuni", "10-sanasiga"), not a calendar date
+  if (!/\d+\s*(?:\([\p{L}' ]+\)\s*)?(?:kalendar |ish |bank |bank ish )?(?:kun|oy|hafta)\p{L}*|\d+\s*-\s*sana\p{L}*/u.test(l)) return null;
+  const words = l.replace(/^\s*\d+(?:\.\d+)*\.?\s*/u, '').split(/[^\p{L}\d'-]+/u).filter(w => TIME_WORD.test(w) || /^\d+(?:-\p{L}+)?$/u.test(w));
+  return words.length ? words.join(' ') : null;
+}
 function conflictCandidates(text, { max = 5, maxLen = 260 } = {}) {
   const sents = String(text || '').replace(/\[Sahifa \d+\]/gu, ' ')
     .split(/\n+|(?<=[\p{L})»"'][.;])\s+(?=\S)/u).map(x => x.trim()).filter(x => x.length > 20 && x.length < 900);
   const items = [];
   const seen = new Set();
   for (const t of sents) {
-    const ms = [...lowerNorm(t).matchAll(MEASURE)].map(m => `${m[1].replace(/[\s.,]/gu, '')} ${m[2].replace(/ (kun|kuni)$/u, '').replace(/^(kalendar|ish|bank) ?kun.*/u, 'kun')}`);
-    if (!ms.length) continue;
-    const key = lowerNorm(t);
-    if (seen.has(key)) continue; // a repeated sentence is not a contradiction
-    seen.add(key);
-    items.push({ t, ms: new Set(ms), units: new Set(ms.map(m => m.split(' ').slice(1).join(' '))), stems: contentStems(t) });
+    const l = lowerNorm(t);
+    const a = relations.analyseSentence(t);
+    const figs = a.figures.filter(f => f.kind !== 'date');
+    const time = timeSignature(l);
+    if (!figs.length && !time) continue;
+    // a repeated sentence (only its list number differs) is not a contradiction
+    if (seen.has(repeatKey(t))) continue;
+    seen.add(repeatKey(t));
+    items.push({ t, l, time, stage: stageOf(l), object: objectOf(t, l),
+      periodActs: new Set(a.figures.filter(f => f.kind === 'period' && f.act).map(f => f.act)), acts: new Set(a.acts.map(x => x.act)), stems: contentStems(t),
+      figs: figs.map(f => ({ key: f.key, unit: f.key.split('|')[1], role: f.role, act: f.act || null, base: baseOf(a.lower, f.at) })) });
   }
+  const sameMatter = (a, b, ratio, jaccard = 0) => {
+    let shared = 0;
+    for (const w of a.stems) if (b.stems.has(w)) shared++;
+    return shared >= 4 && shared / Math.max(1, Math.min(a.stems.size, b.stems.size)) >= ratio
+      && shared / Math.max(1, a.stems.size + b.stems.size - shared) >= jaccard;
+  };
   const out = [];
   for (let i = 0; i < items.length && out.length < max; i++) {
     for (let j = i + 1; j < items.length && out.length < max; j++) {
       const a = items[i], b = items[j];
-      const sharedUnit = [...a.units].some(u => b.units.has(u));
-      if (!sharedUnit) continue;
-      // one restating (part of) the other's figures is not a contradiction
-      if ([...a.ms].every(m => b.ms.has(m)) || [...b.ms].every(m => a.ms.has(m))) continue;
-      let shared = 0;
-      for (const w of a.stems) if (b.stems.has(w)) shared++;
-      const small = Math.min(a.stems.size, b.stems.size);
-      if (shared >= 4 && shared / Math.max(1, small) >= 0.6) {
-        const cut = x => (x.length > maxLen ? `${x.slice(0, maxLen)} …` : x);
-        out.push([cut(a.t), cut(b.t)]);
-      }
+      if (a.stage !== b.stage) continue; // another stage of the same thing
+      if (a.object.size && b.object.size && ![...a.object].some(x => b.object.has(x))) continue; // another object (person, sanction)
+      if (a.acts.size && b.acts.size && ![...a.acts].some(x => b.acts.has(x))) continue; // another act
+      // the same figure part (unit, role, base) with another value
+      const figurePair = a.figs.some(fa => b.figs.some(fb => fa.unit === fb.unit && fa.key !== fb.key && fa.role === fb.role
+        && (fa.act == null || fb.act == null || fa.act === fb.act)
+        && (fa.base == null || fb.base == null || fa.base === fb.base)
+        && !a.figs.some(x => x.key === fb.key) && !b.figs.some(x => x.key === fa.key)));
+      // periods of different acts (pay within 15 days, sign within 5) are not one matter
+      const timePair = a.time && b.time && a.time !== b.time
+        && !(a.periodActs.size && b.periodActs.size && ![...a.periodActs].some(x => b.periodActs.has(x)));
+      if (!(figurePair && sameMatter(a, b, 0.6)) && !(timePair && sameMatter(a, b, 0.5, 0.3))) continue;
+      const cut = x => (x.length > maxLen ? `${x.slice(0, maxLen)} …` : x);
+      out.push([cut(a.t), cut(b.t)]);
     }
+  }
+  return out;
+}
+
+/**
+ * Two periods for the same matter in the source (a candidate pair whose
+ * time words differ) while the answer, on that matter, carries the time
+ * words of only one of them, or a blend: a signal that one period may have
+ * been chosen silently. MECHANICAL: word presence only.
+ */
+function silentPeriodChoice(source, answer) {
+  const al = lowerNorm(answer);
+  const aStems = contentStems(answer);
+  const out = [];
+  for (const [x, y] of conflictCandidates(source, { max: 10, maxLen: 2000 })) {
+    const tx = timeSignature(lowerNorm(x)), ty = timeSignature(lowerNorm(y));
+    if (!tx || !ty || tx === ty) continue;
+    let shared = 0;
+    for (const w of contentStems(x)) if (aStems.has(w) && contentStems(y).has(w)) shared++;
+    if (shared < 3) continue; // the answer does not discuss this matter
+    const has = sig => sig.split(' ').every(w => al.includes(w));
+    if (has(tx) && has(ty)) continue; // both stated
+    // a candidate of a mismatch, never a confirmed contradiction: the two may
+    // be different clauses (one party's duty, another's right)
+    out.push({ kind: 'ikki_muddat', a: tx, b: ty, note: `nomuvofiqlik nomzodi (tasdiqlangan ziddiyat emas): hujjatda shu masala bo'yicha ikki xil muddat bor («${tx}» va «${ty}») — ular turli bandlar (masalan, bir tomonning majburiyati va boshqasining huquqi) bo'lishi mumkin; javobda ikkalasi to'liq uchramadi, biri tanlangan yoki ikkalasi qo'shilgan bo'lishi mumkin` });
   }
   return out;
 }
@@ -846,8 +954,27 @@ function traceStages({ source, digest = null, answer, checks = [] }) {
   });
 }
 
-/** Characters of the document itself: page marks are ours, never billed. */
+/**
+ * Characters of the document itself: page marks and the table reader's
+ * markup (row ids ⟦…⟧, column headers and cell marks ⟨…⟩, cell separators,
+ * src/ocr/docx-text.js) are ours. Used for thresholds and parts; billing
+ * uses the size the server measured at extraction and signed into the
+ * document ticket (billableChars), never a size the client sends.
+ */
 function contentChars(text) {
+  return String(text || '').replace(/^\[Sahifa \d+\]\n?/gmu, '')
+    .replace(/⟦[^⟧\n]*⟧ ?/gu, '').replace(/⟨[^⟩\n]*⟩ ?/gu, '').replace(/ ¦ /gu, ' ').length;
+}
+
+/**
+ * The size a document job is billed by: the characters the server measured
+ * when it extracted the text (signed in the ticket that matches this exact
+ * text); without such a ticket, the text as sent, less only its page-mark
+ * lines - table markup is then counted, so text sent around the extractor
+ * is never billed below what it holds.
+ */
+function billableChars(text, ticket = null) {
+  if (ticket && Number.isFinite(ticket.chars) && ticket.chars >= 0) return ticket.chars;
   return String(text || '').replace(/^\[Sahifa \d+\]\n?/gmu, '').length;
 }
 
@@ -936,7 +1063,8 @@ async function buildDigest(text, { callAI, userId = null, endpoint = '/api/draft
   // are not listed twice
   const withContext = (u) => {
     const ctx = u.context || 0;
-    return ctx > 0 && ctx < u.text.length ? `[KONTEKST]\n${u.text.slice(0, ctx)}\n[QISM]\n${u.text.slice(ctx)}` : u.text;
+    const row = u.continuesRow ? `${u.continuesRow} (qator davomi — qiymatlar shu qatorga tegishli)\n` : '';
+    return ctx > 0 && ctx < u.text.length ? `[KONTEKST]\n${row}${u.text.slice(0, ctx)}\n[QISM]\n${u.text.slice(ctx)}` : `${row ? `[KONTEKST]\n${row}[QISM]\n` : ''}${u.text}`;
   };
   const read = async (u) => {
     calls++;
@@ -987,7 +1115,7 @@ async function buildDigest(text, { callAI, userId = null, endpoint = '/api/draft
     (r.status === 'cut' ? truncated : failed).push(r.u);
     return `${head}\n(BU QISM O'QILMADI${r.status === 'cut' ? ' — dayjest uzunlik chegarasida kesildi, kesilgan parcha ishlatilmadi' : ''}. Undagi bandlar haqida xulosa chiqarilmaydi.)`;
   });
-  const splits = results.filter(r => r.u.splitAtEnd).map(r => ({ after: r.u.label, ref: r.u.splitRef || null }));
+  const splits = results.filter(r => r.u.splitAtEnd).map(r => ({ after: r.u.label, ref: r.u.splitRef || null, row: r.u.splitRow || null }));
   // a clause read in pieces is named in the digest itself, so the
   // explanation, the opinion and the chat analysis all see it
   const splitNote = splits.length ? `\n\n(DIQQAT: ${splitLabels({ splits })} qismlar chegarasida bo'lingan — boshi bir qismda, davomi keyingisida; uni bitta band sifatida o'qing, sharti va istisnosini ajratmang.)` : '';
@@ -1056,7 +1184,7 @@ const EXPLAIN_MAX_TOKENS = 3000;
  * the shared digest above it; one explanation call; the answer finished by
  * finishExplanation. `digest(text)` returns { text, chunks, failed, ... }.
  */
-async function explainDocument({ documentText, langName, callAI, digest, userId = null, endpoint = '/api/draft/explain-document' }) {
+async function explainDocument({ documentText, langName, callAI, digest, userId = null, endpoint = '/api/draft/explain-document', tables = null }) {
   // the document's own size decides (page marks are ours), as for units
   const chars = contentChars(documentText);
   const full = chars <= EXPLAIN_FULL_TEXT_MAX;
@@ -1097,7 +1225,7 @@ async function explainDocument({ documentText, langName, callAI, digest, userId 
   if (!raw) return { reply: '', provider: result && result.provider };
   // checked against what the model was given AND the full text: a figure in
   // the full text that the digest lost is not invented
-  const done = finishExplanation({ reply: raw, truncated: !!result.truncated, source: documentText, digest: d, scope, scopeStats: sel,
+  const done = finishExplanation({ reply: raw, truncated: !!result.truncated, source: documentText, digest: d, scope, scopeStats: sel, tables,
     allowed: [String(chars), String(documentText.length), String(pages.length), d ? String(d.chunks) : ''].filter(Boolean) });
   const unread = unreadParts(d);
   return {
@@ -1108,7 +1236,11 @@ async function explainDocument({ documentText, langName, callAI, digest, userId 
       scopeCounts: { candidates: sel.candidates, selected: sel.selected, dropped: sel.dropped, shortened: sel.shortened, referenced: sel.referenced, savedChars: sel.savedChars }, conflictCandidates: conflicts, answer: raw },
     coverage: { mode: full ? 'full_text' : 'digest', status: coverageStatus(d), meaning: COVERAGE_MEANING, chars, pages: pages.length || null, emptyPages: empty,
       chunks: d ? d.chunks : null, parts: d ? d.parts : null, unread, answerTruncated: !!result.truncated, clauseSplits: d ? (d.splits || []) : [],
-      placeholders: placeholders.count, finalRun: true, summary: coverageSummary(d, { finalRun: true }),
+      // DOCX tables: 'rows' read row by row (mechanical - cells not proven), 'lost' read as loose lines
+      tables: tables ? { count: tables.count, structure: tables.structure, meaning: COVERAGE_MEANING } : null,
+      placeholders: placeholders.count, finalRun: true,
+      // the ledger's doc_coverage carries the table reading too (master views)
+      summary: { ...coverageSummary(d, { finalRun: true }), ...(tables ? { tables: { count: tables.count, structure: tables.structure } } : {}) },
       scopeLines: { candidates: sel.candidates, selected: sel.selected, dropped: sel.dropped, shortened: sel.shortened, referenced: sel.referenced, limits: sel.limits },
       // the document was not read whole: not the service (released by the route)
       documentFullyRead: unread.length === 0 && (!d || d.covered !== false),
@@ -1118,7 +1250,7 @@ async function explainDocument({ documentText, langName, callAI, digest, userId 
 
 module.exports = {
   PAGE_MARK, CHUNK, OVERLAP, MAX_CHUNKS, DIGEST_SYSTEM, DIGEST_MAX_TOKENS, DIGEST_LIMITS, DIGEST_TOKENS_PER_ITEM, predictDigestTokens, EXPLAIN_FULL_TEXT_MAX, EXPLAIN_MAX_TOKENS,
-  markPages, pagesIn, emptyPages, contentChars, chunkSizeFor, digestChunks, pagesSpanned, buildDigest, digestUnusable, coverageSummary,
+  markPages, pagesIn, emptyPages, contentChars, billableChars, chunkSizeFor, digestChunks, pagesSpanned, buildDigest, digestUnusable, coverageSummary,
   placeholdersIn, coverageNote, coverageStatus, explainSystem,
-  unreadParts, splitLabels, scopeLines, scopeSelection, carriedIn, repeatKey, splitAt, scopeWordsMissing, SCOPE_GROUPS, conflictCandidates, traceStages, verifyExplanation, guardAiNote, unsupportedPhrases, datesIn, cutToLastSentence, finishExplanation, explainDocument, CHECK_SCOPE,
+  unreadParts, splitLabels, silentPeriodChoice, scopeLines, scopeSelection, carriedIn, repeatKey, splitAt, scopeWordsMissing, SCOPE_GROUPS, conflictCandidates, traceStages, verifyExplanation, guardAiNote, unsupportedPhrases, datesIn, cutToLastSentence, finishExplanation, explainDocument, CHECK_SCOPE,
 };

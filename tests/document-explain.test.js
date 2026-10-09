@@ -260,7 +260,7 @@ const digestWith = callAI => t => ex.buildDigest(t, { callAI });
   await test('the check says what it does NOT check, under every answer - also when it finds nothing', () => {
     const src = ex.markPages(byId('talabnoma').pages);
     const clean = ex.finishExplanation({ reply: 'Talabnomani "Mehr Logistika" MChJ yuborgan.', source: src });
-    assert.ok(clean.reply.endsWith("**Avtomatik tekshiruv (AI emas):** faqat raqam, sana, sahifa, band raqamlari, holat, oqibat, ustuvorlik va vaqt iboralari hamda muddat/sana qaysi harakatga bog'langani, inkor, tartib, «va/yoki», ehtimollik, ta'rif chegarasi va mezonlar hujjat matni bilan mexanik (so'z bo'yicha) solishtirildi — javobning barcha bo'limlarida bir xil. Belgilangan joy da'vo noto'g'ri degani emas: uni manba bilan qo'lda tekshirish kerak. Hech bir bo'lim, belgilanmaganlari ham, mazmunan yoki huquqiy jihatdan tasdiqlangan emas.\n- Mexanik solishtirishda belgilanadigan joy topilmadi. Bu mazmun yoki huquqiy to'g'rilik tasdig'i emas."), clean.reply);
+    assert.ok(clean.reply.endsWith("**Avtomatik tekshiruv (AI emas):** faqat raqam, sana, sahifa, band raqamlari, holat, oqibat, ustuvorlik va vaqt iboralari hamda muddat/sana qaysi harakatga bog'langani, inkor, tartib, «va/yoki», ehtimollik, ta'rif chegarasi, mezonlar, jadval qatori va «mumkin/kerak» hujjat matni bilan, dayjestda bor qism esa javob bilan mexanik (so'z bo'yicha) solishtirildi — javobning barcha bo'limlarida bir xil. Belgilangan joy da'vo noto'g'ri degani emas: uni manba bilan qo'lda tekshirish kerak. Hech bir bo'lim, belgilanmaganlari ham, mazmunan yoki huquqiy jihatdan tasdiqlangan emas.\n- Mexanik solishtirishda belgilanadigan joy topilmadi. Bu mazmun yoki huquqiy to'g'rilik tasdig'i emas."), clean.reply);
     assert.deepStrictEqual([clean.check.scope, clean.check.mode, clean.check.verified, clean.check.flagged], ['figures_dates_pages_clauses_only', 'flag_for_manual_review', false, 0]);
     assert.ok(!('ok' in clean.check), 'no field that could read as "verified"');
     // a wrong attribution in words outside the vocabulary passes: it is not a semantic check
@@ -390,7 +390,7 @@ const digestWith = callAI => t => ex.buildDigest(t, { callAI });
       assert.strictEqual(d.pageCount, 3);
       assert.strictEqual(d.charCount, ex.contentChars(d.text) - 2, 'charCount is the document text (pages joined by one line break)');
       assert.strictEqual(d.scanned, false);
-      assert.deepStrictEqual(ledger.readDocTicket(d.docTicket, d.text), { pages: 3, scanned: false }, 'the ticket is signed over the text the client sends back');
+      assert.deepStrictEqual(ledger.readDocTicket(d.docTicket, d.text), { pages: 3, scanned: false, chars: d.charCount }, 'the ticket is signed over the text the client sends back');
       assert.strictEqual(calls.ai, 0, 'extract calls no AI');
     } finally { server.close(); }
   });
