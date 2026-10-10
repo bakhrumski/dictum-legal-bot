@@ -165,7 +165,12 @@ Known state of the suites (Sept 2026):
   ticket/coverage; the words to a DB master only, `no-store`;
   `scripts/docx-table-check.js` runs locally). Digest -> answer and period
   checks compare only the answer sentence on the same clause; a weak match
-  is "mos band aniqlanmadi", never a change. Quality is unconfirmed until the lawyer-reviewed
+  is "mos band aniqlanmadi", never a change. Key lines carry a source id
+  bound to the document (`[S12·a3f9]`, src/rag/source-quotes.js): the server
+  quotes the document's own sentence (found verbatim, never a digest line)
+  under the model's sentence, refuses ids it did not issue, and runs the
+  mechanical checks on the model's words without the quotes - a quote is not
+  a check of the explanation; no extra AI call. Quality is unconfirmed until the lawyer-reviewed
   benchmark (`docs/quality/explain-benchmark.md`) runs.
   `src/rag/question-aspects.js` splits a question into deadline,
   compensation, evidence and remedy and runs a light corpus search for each
