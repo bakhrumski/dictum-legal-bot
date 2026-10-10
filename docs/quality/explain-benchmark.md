@@ -865,6 +865,32 @@ Javob 3 000 token chegarasida bo'lsa, har qatorga taxminan +$0.0009 va +27 s qo'
 - Manba bilan solishtirishda ham shunday: band raqami yoki harakat hisobga olinadi, muddat faqat shu banddagi muddat bilan solishtiriladi.
 - Sintetik eval to'plamida natija o'zgarmadi: to'g'ri parafrazlar 9/12 belgisiz, noto'g'ri jumlalar 12/12 belgilandi.
 
+## 4g. Muhim shartlar asl manba bilan bog'lanadi (`src/rag/source-quotes.js`)
+
+Ikki jonli sinovda bir xil shartlar dayjestda saqlangan, lekin yakuniy javobda buzilgan edi: «e'lon qilingan», «barcha ishtirokchilar, jumladan X», «barcha xarajatlar», «alohida». Prompt qoidalari buni to'xtatmadi.
+
+### Qanday ishlaydi
+- Yakuniy modelga beriladigan kalit qatorlar hujjatning o'zidan olinadi, dayjestdan emas. Har biriga identifikator beriladi: `[S12·a3f9]`. Bunda `a3f9` — hujjat sha256 xeshining birinchi 4 belgisi.
+- Identifikator faqat hujjatda so'zma-so'z topilgan jumlaga beriladi (bo'shliqlar hisobga olinmaydi). Topilmagan jumla manba bo'lmaydi va izohda sanaladi.
+- Model o'sha band haqidagi gapidan keyin identifikatorni ko'chiradi. Server uning ostiga hujjatning aynan jumlasini qo'yadi: `> «…» — hujjat matnidan aynan parcha (S12)`.
+- Server har bir identifikatorni tekshiradi. Quyidagilar rad etiladi va ochiq ko'rsatiladi («manba ko'rsatilmadi»):
+  - noma'lum raqam;
+  - boshqa hujjatning kaliti;
+  - kalitsiz yozilgan identifikator.
+- Qo'shimcha tuzatuvchi AI chaqiruvi yo'q. Chaqiruvlar: dayjest qismlari va bitta yakuniy chaqiruv.
+
+### Nima oldini oladi, nima faqat belgilaydi
+- **Oldini oladi:** foydalanuvchi muhim shartning aniq so'zlarini modelning qayta aytishisiz ham ko'radi. Javobda u shartning yagona ifodasi model parafrazi bo'lib qolmaydi.
+- **Oldini olmaydi:** model izohi baribir subyekt, shart yoki oqibatni o'zgartirishi mumkin. Iqtibos uni tuzatmaydi.
+- **Faqat belgilaydi:** mexanik tekshiruvlar iqtibossiz, modelning o'z matnida ishlaydi. To'g'ri iqtibos noto'g'ri izohni yashirmaydi. Bu `tests/explain-quotes.test.js` da sinalgan: to'g'ri iqtibos va noto'g'ri izoh, to'liq matn va dayjest rejimida.
+- Iqtibos «tekshirilgan» yoki «tuzatilgan» deb atalmaydi. Izohda «server parchani hujjatda belgilar bo'yicha topdi, xolos» deb yoziladi. `check.verified` doim `false`.
+- **Jonli modelda tasdiqlanmagan:** model identifikatorlarni to'g'ri ko'chiradimi va foydalanuvchiga iqtibos foydalimi.
+
+### Xarajat
+- Kirish: identifikatorlar va bitta qoida, taxminan 250–300 token.
+- Chiqish: ko'chirilgan identifikatorlar, taxminan 50–100 token.
+- Comet narxida bir tushuntirish uchun ≈ $0.0002 (taxmin, o'lchanmagan). Qo'shimcha chaqiruv yo'q.
+
 ## 5. Qisman natija: foydalanuvchiga ko'rinishi va limit
 
 | Holat | Foydalanuvchi ko'radi | Limit | Qaysi mavjud qoidaga mos |

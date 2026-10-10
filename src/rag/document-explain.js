@@ -26,6 +26,7 @@
  *     answer, without another AI call.
  */
 
+const quotes = require('./source-quotes');
 const relations = require('./clause-relations');
 
 const PAGE_MARK = /^\[Sahifa (\d+)\]$/gmu;
@@ -315,6 +316,7 @@ function explainSystem(langName) {
     '- Keep, when the document has them: payment terms (amount, currency, advance, schedule, deadline), exceptions, penalties with their caps, any cumulative or aggregate liability cap, clauses that contradict each other, and what annexes and tables list.',
     '- Keep the words that set a rule\'s scope exactly as the document uses them: "including" (jumladan), "only" (faqat), "except" (bundan tashqari, bundan mustasno), "in addition" / "separately" (alohida), "at least" / "no more than", "all" - and "and" versus "or" between conditions. Name every party a payment or distribution includes. Keep conditions precedent with what they unlock (what must happen before a payment, tranche or transfer), every criterion that defines a term or triggers a rule, and every remedy of one breach together, saying whether they add up.',
     '- The lines under SAQLANADIGAN SHARTLAR were picked from the document with no AI because they carry such words: each must be explained with its scope words, conditions, criteria and remedies intact.',
+    '- Each of those lines starts with a source id such as [S3·ab12]. Right after your sentence about that clause\'s subject, condition, period, exception or consequence, copy its id exactly as given; the server puts the document\'s exact wording under your sentence. Never invent an id or change its characters, and never put one on a sentence about another clause. The quote does not replace your explanation: your own sentence must still keep every scope word, condition and consequence.',
     '- Before writing, compare items from different parts that govern the same thing (the same payment, deadline, party, threshold or sanction); if they differ, report the contradiction with both clause references.',
     '- If the document is a template or has unfilled fields (blank lines, "____", "[...]"), say so; an unfilled field is not an agreed term.',
     '- Use only the headings this document needs; no fixed template. If the type is uncertain, say so rather than guess.',
@@ -1356,8 +1358,12 @@ async function explainDocument({ documentText, langName, callAI, digest, userId 
   // line that keeps all its parts) is a short reference, not a repeat
   const sel = scopeSelection(documentText, { given });
   const scope = sel.full;
+  // each key line carries an id bound to this document; the quote under the
+  // answer is the document's own sentence, never a digest line (no AI)
+  const sources = quotes.buildSources(documentText, sel.full);
+  const tagged = sel.lines.map((l, i) => (sources.items[i] ? `${sources.items[i].tag} ${l}` : l));
   const scopeBlock = sel.lines.length
-    ? `\n\nSAQLANADIGAN SHARTLAR (hujjatdan AI'siz tanlandi: ularda qamrov so'zlari yoki harakat bilan shart, muddat, istisno, oqibat yoki ta'rif bor; ${sel.candidates} ta nomzoddan ${sel.selected} tasi shu yerda${sel.dropped ? `, ${sel.dropped} tasi ro'yxat chegarasiga sig'madi - ular hujjat matnida yoki dayjestda, xuddi shu qoidalar ularga ham taalluqli` : ''}${sel.shortened ? `; "…" bilan tugaganlari qisqartirilgan` : ''}${sel.referenced ? `; [matnda] / [dayjestda] belgilisi yuqorida to'liq bor, bu yerda faqat havola - o'sha to'liq matn bo'yicha tushuntir` : ''}. Har birini shu so'zlari, shartlari, muddatlari (o'z harakati bilan), istisnolari, mezonlari va oqibatlari bilan tushuntir):\n${sel.lines.map(l => `- ${l}`).join('\n')}`
+    ? `\n\nSAQLANADIGAN SHARTLAR (hujjatdan AI'siz tanlandi: ularda qamrov so'zlari yoki harakat bilan shart, muddat, istisno, oqibat yoki ta'rif bor; ${sel.candidates} ta nomzoddan ${sel.selected} tasi shu yerda${sel.dropped ? `, ${sel.dropped} tasi ro'yxat chegarasiga sig'madi - ular hujjat matnida yoki dayjestda, xuddi shu qoidalar ularga ham taalluqli` : ''}${sel.shortened ? `; "…" bilan tugaganlari qisqartirilgan` : ''}${sel.referenced ? `; [matnda] / [dayjestda] belgilisi yuqorida to'liq bor, bu yerda faqat havola - o'sha to'liq matn bo'yicha tushuntir` : ''}. Har birini shu so'zlari, shartlari, muddatlari (o'z harakati bilan), istisnolari, mezonlari va oqibatlari bilan tushuntir; [S…·…] - manba identifikatori, uni o'sha band haqidagi gapingdan keyin aynan ko'chir):\n${tagged.map(l => `- ${l}`).join('\n')}`
     : '';
   // from the whole document, so a pair split across digest parts is seen
   const conflicts = conflictCandidates(documentText);
@@ -1372,15 +1378,27 @@ async function explainDocument({ documentText, langName, callAI, digest, userId 
   if (!raw) return { reply: '', provider: result && result.provider };
   // checked against what the model was given AND the full text: a figure in
   // the full text that the digest lost is not invented
-  const done = finishExplanation({ reply: raw, truncated: !!result.truncated, source: documentText, digest: d, scope, scopeStats: sel, tables,
+  // the ids become placeholders with no figure: the checks below run on the
+  // model's own words, so a correct quote never hides a changed explanation
+  const placed = quotes.placeQuotes(raw, sources);
+  const done = finishExplanation({ reply: placed.text, truncated: !!result.truncated, source: documentText, digest: d, scope, scopeStats: sel, tables,
     allowed: [String(chars), String(documentText.length), String(pages.length), d ? String(d.chunks) : ''].filter(Boolean) });
+  const qNote = quotes.quotesNote(placed.quotes, sources);
+  done.reply = quotes.renderQuotes(done.reply, placed.quotes) + (qNote ? `\n- ${qNote}` : '');
+  done.check.quotes = {
+    issued: sources.items.filter(Boolean).length, notInSource: sources.notInSource,
+    quoted: [...new Set(placed.quotes.filter(q => q.status === 'quoted').map(q => q.id))],
+    refused: placed.quotes.filter(q => q.status !== 'quoted').map(q => ({ id: q.id, status: q.status })),
+    meaning: "document text found verbatim by the server; the explanation beside it is not checked by the quote",
+  };
   const unread = unreadParts(d);
   return {
     reply: done.reply, provider: result.provider, check: done.check,
     // what each stage held, for a trace (src/rag/document-explain-route.js
     // returns it to a master only; nothing is stored)
     trace: { mode: full ? 'full_text' : 'digest', digest: d ? d.text : null, scopeLines: scope, scopeSent: sel.lines, scopeDropped: sel.droppedLines,
-      scopeCounts: { candidates: sel.candidates, selected: sel.selected, dropped: sel.dropped, shortened: sel.shortened, referenced: sel.referenced, savedChars: sel.savedChars }, conflictCandidates: conflicts, answer: raw },
+      scopeCounts: { candidates: sel.candidates, selected: sel.selected, dropped: sel.dropped, shortened: sel.shortened, referenced: sel.referenced, savedChars: sel.savedChars }, conflictCandidates: conflicts, answer: raw,
+      sources: sources.items.filter(Boolean).map(x => ({ id: x.id, tag: x.tag })), quotes: placed.quotes.map(q => ({ id: q.id, status: q.status })) },
     coverage: { mode: full ? 'full_text' : 'digest', status: coverageStatus(d), meaning: COVERAGE_MEANING, chars, pages: pages.length || null, emptyPages: empty,
       chunks: d ? d.chunks : null, parts: d ? d.parts : null, unread, answerTruncated: !!result.truncated, clauseSplits: d ? (d.splits || []) : [],
       // how parts were sized (uncalibrated prediction) and why each cut part was or was not re-read
