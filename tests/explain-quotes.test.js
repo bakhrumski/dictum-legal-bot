@@ -112,6 +112,46 @@ const digestOf = ai => t => ex.buildDigest(t, { callAI: ai });
     assert.ok(!/tuzatildi|tuzatilgan javob/u.test(r.reply));
   });
 
+  await test('the document\'s own "[S2]" text is left as written: never taken for a system id, never refused or quoted', async () => {
+    const own = `${doc}\n30.1. Hisob-kitob [S2] ilovasi va [S3·beef] jadvali bo'yicha olib boriladi.`;
+    const ai = stubAI(() => 'Hisob-kitob [S2] ilovasi va [S3·beef] jadvali bo\'yicha.');
+    const r = await ex.explainDocument({ documentText: own, langName: 'Uzbek', callAI: ai, digest: digestOf(ai) });
+    assert.ok(r.reply.includes("Hisob-kitob [S2] ilovasi va [S3·beef] jadvali bo'yicha."), r.reply.slice(0, 300));
+    assert.deepStrictEqual([r.check.quotes.quoted, r.check.quotes.refused], [[], []]);
+    assert.ok(!r.reply.includes("manba ko'rsatilmadi"));
+  });
+
+  await test('size: every quote is the whole sentence (even when the key line sent to the model was shortened), nothing is cut after the quotes, the notes stay at the end', async () => {
+    const longClause = `14.1. ${"Ijrochi har bir bosqich yakunida buyurtmachiga barcha hujjatlarni, jumladan dalolatnoma, hisob-faktura va texnik hisobotni, ".repeat(3)}yozma ravishda besh ish kuni ichida topshiradi, bundan tashqari elektron nusxasini alohida yuboradi.`;
+    const big = `${doc}\n${longClause}`;
+    const ai = stubAI(prompt => {
+      const ids = [...new Set(prompt.match(/\[S\d+·[0-9a-f]{4}\]/gu) || [])];
+      return ids.map((id, i) => `${i + 1}-band izohi ${id}.`).join('\n');
+    });
+    const r = await ex.explainDocument({ documentText: big, langName: 'Uzbek', callAI: ai, digest: digestOf(ai) });
+    const sent = ai.calls[ai.calls.length - 1].messages[1].text.split('\n').find(l => l.includes('14.1.') && /\[S\d+·/u.test(l));
+    assert.ok(sent && sent.includes('…'), 'the key line was shortened for the model');
+    assert.ok(r.reply.includes(`> «${longClause}»`), 'the quote is the whole sentence');
+    for (const id of r.check.quotes.quoted) assert.ok(r.reply.includes(`(${id})`), id);
+    assert.strictEqual(r.check.quotes.quoted.length, r.check.quotes.issued);
+    assert.ok(/\n- Iqtiboslar \(AI emas\): [^\n]+\.$/u.test(r.reply), r.reply.slice(-300));
+    assert.ok(r.reply.includes('**Avtomatik tekshiruv (AI emas):**'));
+    assert.ok(!r.coverage.partial, 'a long answer with quotes is not marked partial for its length');
+  });
+
+  await test('an answer cut at the cap: the cut is said, the quote of a kept sentence stays whole, an id in the dropped text quotes nothing', async () => {
+    let tags;
+    const ai = async (messages) => {
+      if (/^Excerpt /u.test(messages[1].text)) return { text: '- band', provider: 'stub' };
+      tags = [tagOf(messages[1].text, '9.1.'), tagOf(messages[1].text, '13.2.')];
+      return { text: `Qolgan mablag' barcha ishtirokchilar, jumladan Investor o'rtasida taqsimlanadi ${tags[0]}. Jarima alohida hisoblanadi ${tags[1]} va yana`, truncated: true, provider: 'stub' };
+    };
+    const r = await ex.explainDocument({ documentText: doc, langName: 'Uzbek', callAI: ai, digest: digestOf(ai) });
+    assert.ok(r.coverage.partial && r.reply.includes('javob uzunlik chegarasida to\'xtadi'), r.reply.slice(0, 300));
+    assert.ok(r.reply.includes(`> «${KEY[0]}»`));
+    assert.ok(!r.reply.includes(`> «${KEY[2]}»`), 'the dropped sentence\'s quote is not shown');
+  });
+
   await test('no id from the model: no quote, nothing invented; ids the model made up are refused', async () => {
     const plain = await ex.explainDocument({ documentText: doc, langName: 'Uzbek', callAI: stubAI(() => 'Oddiy izoh.'), digest: digestOf(stubAI(() => '')) });
     assert.ok(!plain.reply.includes('hujjat matnidan aynan parcha'));
