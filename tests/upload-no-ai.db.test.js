@@ -67,6 +67,8 @@ async function callAI(messages, opts = {}) {
 let explainAnswer = () => 'Bu hujjat 2 sahifadan iborat. Unda shartnoma shartlari bor.';
 let explainDigestPart = () => ({ text: '- band (1-sahifa)', provider: 'stub' });
 const explainPrompts = [];
+// a mammoth reading for one test (the table reader's fallback over HTTP)
+let docxMammoth = null;
 // priced like the cheap lane, so the ledger shows a calculated cost; it
 // reports finish_reason and truncated as the real adapters do
 async function explainAI(messages, opts = {}) {
@@ -113,7 +115,8 @@ async function startApp() {
   });
   app.use('/api/', usage.expressScope('web'));
   const requireAuth = (req, res, next) => (req.session.isAuthenticated ? next() : res.status(401).json({ error: 'Unauthorized' }));
-  mountAnalyzerRoutes(app, { requireAuth, callAI, tariffModule: tiers, digestLongDocument: async t => t, pool, ocr: ocrStub });
+  mountAnalyzerRoutes(app, { requireAuth, callAI, tariffModule: tiers, digestLongDocument: async t => t, pool, ocr: ocrStub,
+    readDocx: buf => require('../src/ocr/docx-text').docxText(buf, docxMammoth ? { mammoth: docxMammoth } : {}) });
   // the explanation as server.js mounts it, with the shared digest uncached
   mountExplainDocument(app, { requireAuth, requireServiceConfirm, resolveScanDocs: (q, r, n) => n(), tariffModule: tiers,
     callAI: explainAI, digest: t => explain.buildDigest(t, { callAI: explainAI }), lexLangForText: () => 'uz', logAudit: null,
@@ -284,6 +287,37 @@ async function docxOf(text) {
       assert.strictEqual(n.body.coverage.tables, null);
     });
 
+    await test('DOCX fallback over HTTP (no AI): the cause codes reach the ticket and the explanation\'s coverage; the missing words and where they stand go to a master in the database only, no-store', async () => {
+      const md = require('./helpers/mini-docx');
+      const buf = await md.docx(md.p('Ilova.') + md.table([md.row([md.cell('Ish'), md.cell('Muddat')], { header: true }),
+        `<w:tr><w:sdt><w:sdtContent>${md.cell('Hisobot topshirish')}</w:sdtContent></w:sdt>${md.cell('mart oyi')}</w:tr>`]));
+      // mammoth reads the content-control cell's word twice (a stand-in for a structure the reader misses)
+      docxMammoth = { extractRawText: async () => ({ value: 'Ilova.\n\nIsh\n\nMuddat\n\nHisobot topshirish\n\nHisobot\n\nmart oyi' }) };
+      const type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      try {
+        const u = await makeUser();
+        const c0 = calls.ai;
+        const x = await post('/api/analyze/extract', u, { file: buf, name: 'a.docx', type });
+        assert.deepStrictEqual([x.status, x.body.tableStructure, x.body.tableCauses], [200, 'lost', ['sdt_cell']], JSON.stringify(x.body));
+        assert.strictEqual(x.body.tableCheck, undefined, 'an ordinary user gets the codes, not the words');
+        const r = await post('/api/draft/explain-document', u, { json: { documentText: x.body.text, docTicket: x.body.docTicket, confirmed: true } });
+        assert.deepStrictEqual(r.body.coverage.tables, { count: 1, structure: 'lost', causes: ['sdt_cell'], meaning: 'technical' });
+        // a master in the database: the words and their places, in this response only
+        const m = await makeUser();
+        const forged = await post('/api/analyze/extract', m, { file: buf, name: 'a.docx', type, role: 'master' });
+        assert.strictEqual(forged.body.tableCheck, undefined, 'a session role alone is not enough');
+        await pool.query("UPDATE admins SET role = 'master' WHERE id = $1", [m]);
+        const fd = new FormData();
+        fd.append('file', new Blob([buf], { type }), 'a.docx');
+        const res = await realFetch(base + '/api/analyze/extract', { method: 'POST', headers: { 'x-user': String(m), 'x-role': 'master' }, body: fd });
+        const body = await res.json();
+        assert.strictEqual(res.headers.get('cache-control'), 'no-store');
+        assert.deepStrictEqual(body.tableCheck.missingWords.map(w => [w.word, w.structures, w.places.length > 0]), [['hisobot', ['sdt_cell'], true]]);
+        assert.ok(/mechanical/u.test(body.tableCheck.meaning));
+        assert.strictEqual(calls.ai - c0 - 1, 0, 'no AI for the extracts (one call: the explanation)');
+      } finally { docxMammoth = null; }
+    });
+
     await test('chat with a document: a question takes one chat unit and runs AI; asking for an analysis still goes to the cost card (409), no AI', async () => {
       const u = await makeUser();
       const doc = 'Shartnoma 5-bandi: ijarachi har oy to\'laydi. '.repeat(60);
@@ -363,6 +397,52 @@ async function docxOf(text) {
       assert.strictEqual(b.services.analysis.used, 0, 'released: the document was not read whole');
       const rows = (await pool.query("SELECT status FROM tariff_usage WHERE admin_id = $1 AND status IS NOT NULL", [u])).rows.map(x => x.status);
       assert.deepStrictEqual(rows, ['released']);
+    });
+
+    await test('partial result for an ordinary user over HTTP (2026-10-09 run): parts cut, two re-read by priority, one left out -> 200 partial; the unit released once (never twice, never below what was spent before), every AI call kept in the ledger with its cost', async () => {
+      const f = loadAll().find(x => x.id === 'long-lease');
+      const text = explain.markPages(f.pages);
+      const u = await makeUser();
+      // a paid period (Sinov has one analysis): room for two explanations
+      await ledger.grantPaidPeriod({ adminId: u, plan: 'silver', paymentRef: `test-partial-${u}-${rnd()}` });
+      // first a whole reading: delivered, one unit spent
+      const ok = await post('/api/draft/explain-document', u, { json: { documentText: text, confirmed: true } });
+      assert.strictEqual(ok.status, 200, JSON.stringify(ok.body));
+      await settle(300);
+      assert.strictEqual((await ledger.balance({ adminId: u })).services.analysis.used, 1);
+      // then the run: parts 1, 2 and 3 cut at the cap; halves read whole
+      const n = explain.digestChunks(text).chunks.length;
+      assert.ok(n >= 3);
+      const s0 = (await pool.query('SELECT count(*)::int AS n FROM llm_spend_log WHERE user_id = $1', [u])).rows[0].n;
+      explainDigestPart = user => (/^Excerpt [123]\//u.test(user) ? { text: '- band, kesilgan', truncated: true } : { text: '- band', provider: 'stub' });
+      let r;
+      try {
+        r = await post('/api/draft/explain-document', u, { json: { documentText: text, confirmed: true } });
+      } finally { explainDigestPart = () => ({ text: '- band (1-sahifa)', provider: 'stub' }); }
+      assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+      assert.deepStrictEqual([r.body.partial, r.body.quotaRefunded, r.body.coverage.documentFullyRead], [true, true, false]);
+      // each cut part: re-read or left out, and why
+      const rr = r.body.coverage.reread;
+      assert.deepStrictEqual(rr.map(x => x.decision).sort(), ['excluded', 'reread', 'reread']);
+      assert.strictEqual(rr.find(x => x.decision === 'excluded').why, 'extra_call_limit');
+      assert.strictEqual(r.body.coverage.summary.rereadPolicy, 'priority_uncalibrated');
+      await settle(400);
+      // released once: the earlier delivered unit stays spent, this one is back
+      const rows = (await pool.query("SELECT job_key, status, release_reason FROM tariff_usage WHERE admin_id = $1 AND status IS NOT NULL ORDER BY id", [u])).rows;
+      assert.deepStrictEqual(rows.map(x => [x.status, x.release_reason || null]), [['committed', null], ['released', 'explain_partial_read']]);
+      assert.strictEqual((await ledger.balance({ adminId: u })).services.analysis.used, 1);
+      // a second release or a late commit of the same job changes nothing
+      assert.strictEqual(await ledger.release(rows[1].job_key, 'again'), false);
+      assert.strictEqual(await ledger.commit(rows[1].job_key), false);
+      assert.strictEqual((await pool.query('SELECT status FROM tariff_usage WHERE job_key = $1', [rows[1].job_key])).rows[0].status, 'released');
+      assert.strictEqual((await ledger.balance({ adminId: u })).services.analysis.used, 1);
+      // the provider calls stay in the ledger with their cost: n parts, 4 re-read halves, the final call
+      const spent = (await pool.query(`SELECT stage, cost_usd::float AS cost, cost_source, call_detail FROM llm_spend_log WHERE user_id = $1 ORDER BY seq OFFSET $2`, [u, s0])).rows;
+      assert.strictEqual(spent.length, n + explain.DIGEST_LIMITS.maxExtraCalls + 1);
+      assert.ok(spent.every(x => x.cost > 0 && x.cost_source === 'calculated'), JSON.stringify(spent[0]));
+      assert.ok(spent.every(x => Number.isInteger(x.call_detail.predictedTokens) || x.call_detail.phase === 'final'));
+      const req = (await pool.query('SELECT doc_coverage FROM ai_requests WHERE user_id = $1 ORDER BY started_at DESC LIMIT 1', [u])).rows[0];
+      assert.deepStrictEqual([req.doc_coverage.fullyRead, req.doc_coverage.reread.length], [false, 3]);
     });
 
     await test('a long document none of whose parts is read whole (an ordinary user): no final call, 422, the unit released, every digest call kept in the ledger with its part, finish_reason and cost', async () => {
@@ -523,7 +603,7 @@ async function docxOf(text) {
       assert.ok(page.includes('var wantTrace = isMasterUi() && (explainDiagnostics === true || window.__JAI_TRACE === true);'));
       assert.ok(page.includes('confirmed: true, trace: wantTrace, traceTag: traceTag })'));
       assert.ok(page.includes('var traceOk = !!(wantTrace && d && d.trace && d.trace.tag === traceTag && traceEpoch === diagEpoch);'));
-      assert.ok(page.includes('lastExplainTrace = { tag: traceTag, epoch: diagEpoch, source: text || null, response: d };'));
+      assert.ok(page.includes('lastExplainTrace = { tag: traceTag, epoch: diagEpoch, source: text || null, response: d, extract: extract };'));
       assert.ok(page.includes("if (isMasterUi()) {\n                    html += '<label class=\"ai-diag-toggle'"));
       assert.ok(page.includes(`onclick="downloadExplainTrace(\\'' + escapeHtml(tag) + '\\')">JSON yuklab olish</button>`));
       // switching on, downloading and clearing call nothing (no server, no AI)

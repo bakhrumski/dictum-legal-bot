@@ -71,28 +71,88 @@ function chunkSizeFor(length, { chunk = CHUNK, overlap = OVERLAP, maxChunks = MA
  * knows its characters and the pages it spans. `covered` is false only when
  * the text is longer than MAX_CHUNKS can hold (the plan's job size refuses
  * that before here, src/rag/tariff-ledger.js jobFits).
+ *
+ * Size by density (2026-10-09, a 51 398-char DOCX: 7 parts of 8 000 chars,
+ * 3 cut at the cap and every other one within 15 % of it): each part ends
+ * where its predicted digest (predictDigestTokens - output tokens, no AI,
+ * uncalibrated) reaches DIGEST_TARGET of the cap, never longer than CHUNK
+ * nor shorter than minSplitChars; a part still predicted at the cap (very
+ * dense text at the shortest size) makes the plan 'over', never 'fits'.
+ * When that needs more than MAX_CHUNKS parts the document is too dense to
+ * fit: it is cut into MAX_CHUNKS equal parts (the smallest that cover it),
+ * and `density.fit` says 'over' - parts predicted at the cap are split or
+ * re-read within the same limits, and a part still cut is reported unread.
+ * The limits (cap, MAX_CHUNKS, extra calls, time) never grow to make it fit.
  */
 function digestChunks(text, { chunk, overlap = OVERLAP, maxChunks = MAX_CHUNKS } = {}) {
-  const size = chunk || chunkSizeFor(String(text || '').length, { overlap, maxChunks });
-  const fixed = cutChunks(text, { chunk: size, overlap, maxChunks, snap: false });
+  const str = String(text || '');
+  let size = chunk || chunkSizeFor(str.length, { overlap, maxChunks });
+  let density = null;
+  if (!chunk) {
+    const byDensity = densitySize(str);
+    const need = Math.ceil(Math.max(0, str.length - overlap) / maxChunks) + overlap;
+    const plan = cutChunks(str, { chunk: byDensity, overlap, maxChunks: maxChunks + 1, snap: false });
+    if (plan.chunks.length <= maxChunks && plan.covered) {
+      size = byDensity;
+      density = { fit: 'fits' };
+    } else {
+      // too dense for MAX_CHUNKS at the target: the smallest equal parts that cover it
+      size = Math.max(need, 1);
+      density = { fit: 'over' };
+    }
+  }
+  const fixed = cutChunks(str, { chunk: size, overlap, maxChunks, snap: false });
   // ending chunks at page, paragraph, clause or line breaks must never cost
   // coverage or an extra AI call: of the layouts that cover the text in no
   // more chunks than fixed lengths, the one that cuts the fewest lines wins
   // (2026-10-08: a clause cut in two is reported, coverage read_with_splits)
-  const ok = [cutChunks(text, { chunk: size, overlap, maxChunks, snap: true }), cutChunks(text, { chunk: size, overlap, maxChunks, snap: 'forward' }), fixed]
+  const ok = [cutChunks(str, { chunk: size, overlap, maxChunks, snap: true }), cutChunks(str, { chunk: size, overlap, maxChunks, snap: 'forward' }), fixed]
     .filter(v => v.covered && v.chunks.length <= fixed.chunks.length);
   const splits = v => v.chunks.filter(c => c.splitAtEnd).length;
-  return ok.reduce((best, v) => (splits(v) < splits(best) ? v : best), ok[0] || fixed);
+  const best = ok.reduce((b, v) => (splits(v) < splits(b) ? v : b), ok[0] || fixed);
+  if (density) {
+    const predicted = best.chunks.map(c => predictDigestTokens(c.text));
+    // 'fits' only when no part is predicted at the cap (a part at the floor
+    // size can still be too dense: it is then reported 'over', never 'fits')
+    if (predicted.some(t => t >= DIGEST_MAX_TOKENS)) density = { ...density, fit: 'over' };
+    density = { ...density, target: Math.round(DIGEST_TARGET * DIGEST_MAX_TOKENS), cap: DIGEST_MAX_TOKENS,
+      predictedMax: Math.max(0, ...predicted), overCap: predicted.filter(t => t >= DIGEST_MAX_TOKENS).length,
+      calibrated: false, model: DIGEST_DENSITY.source };
+  }
+  return { ...best, density };
+}
+
+/**
+ * The part length, from `start`, whose predicted digest reaches the target:
+ * a function of the start (dense stretches - table cells, schedules - get
+ * shorter parts), between minSplitChars and CHUNK.
+ */
+function densitySize(str) {
+  const starts = [];
+  for (const m of str.matchAll(/\S+/gu)) starts.push(m.index);
+  const maxWords = Math.max(1, Math.floor((DIGEST_TARGET * DIGEST_MAX_TOKENS - DIGEST_DENSITY.perCall) / DIGEST_DENSITY.perWord));
+  // never shorter than a part the re-read could still halve, never longer than CHUNK
+  const floor = DIGEST_LIMITS.minSplitChars;
+  return (start) => {
+    // the first word at or after start (binary search)
+    let lo = 0, hi = starts.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (starts[mid] < start) lo = mid + 1; else hi = mid; }
+    const at = lo + maxWords;
+    const len = at < starts.length ? starts[at] - start : str.length - start;
+    return Math.max(floor, Math.min(CHUNK, len));
+  };
 }
 
 // a chunk may run on to the end of its line, by at most this share of its size
 const LINE_END_SLACK = 0.05;
 
-function cutChunks(text, { chunk, overlap, maxChunks, snap }) {
+function cutChunks(text, { chunk: chunkArg, overlap, maxChunks, snap }) {
   const s = String(text || '');
   const out = [];
   let start = 0;
+  const sizeAt = typeof chunkArg === 'function' ? chunkArg : () => chunkArg;
   while (start < s.length && out.length < maxChunks) {
+    const chunk = sizeAt(start);
     let end = Math.min(s.length, start + chunk);
     if (snap === true && end < s.length) {
       // end at the last page mark or blank line in the last fifth of the chunk
@@ -509,7 +569,14 @@ function finishExplanation({ reply, truncated = false, source, digest = null, al
   }
   // digest -> answer: parts of a digest line the answer, where it speaks of
   // the same thing, does not hold word for word (a signal, not a verdict)
-  const digestSignals = digest && digest.text ? relations.digestAnswerSignals(digest.text, text) : [];
+  // (2026-10-09) compared only where the answer's sentence is about the same
+  // clause; a weaker match is named "mos band aniqlanmadi" and not compared
+  const allDigestSignals = digest && digest.text ? relations.digestAnswerSignals(digest.text, text) : [];
+  const digestSignals = allDigestSignals.filter(x => x.match !== 'uncertain');
+  const digestUnmatched = allDigestSignals.filter(x => x.match === 'uncertain');
+  if (digestUnmatched.length) {
+    notes.push(`Dayjest → javob — mos band aniqlanmadi (taqqoslanmadi, o'zgarish deb hisoblanmaydi): ${digestUnmatched.map(x => `«${x.topic}»`).join(', ')}. Javobning qaysi jumlasi shu bandga tegishli ekanini mexanik aniqlab bo'lmadi.`);
+  }
   if (digestSignals.length) {
     notes.push(`Dayjest → javob (mexanik, so'z bo'yicha; ma'no hukmi emas) — qo'lda tekshirish kerak: ${digestSignals.map(x => `«${x.topic}»: ${x.lost.map(l => `${l.part} — ${l.value}`).join('; ')}`).join(' | ')}. Javobda boshqa so'z bilan aytilgan bo'lishi ham mumkin.`);
   }
@@ -527,7 +594,7 @@ function finishExplanation({ reply, truncated = false, source, digest = null, al
     numbers: v.numbers, derived: v.derived, dates: v.dates, pages: v.pages, clauses: v.clauses,
     phrases: [...sections.body.phrases, ...sections.aiNote.phrases],
     relations: [...sections.body.relations, ...sections.aiNote.relations],
-    digestSignals, periodChoices,
+    digestSignals, digestUnmatched, periodChoices,
     sections, aiNote: { found: ai.found, removed: ai.removed }, scopeWordsMissing: scopeMissing,
     scope: v.scope, mode: 'flag_for_manual_review', verified: false,
   };
@@ -988,32 +1055,36 @@ const pageLabel = p => (p ? ` · ${p.from === p.to ? p.from : `${p.from}–${p.t
 // part not read, never an unbounded retry.
 const DIGEST_LIMITS = Object.freeze({ concurrency: 8, maxExtraCalls: 4, timeMs: 75000, minSplitChars: 2000, preSplitAt: 1 });
 
-// A part's digest size, predicted with no AI (2026-10-08, #423 review): one
-// line per distinct clause or key line (a clause repeated with only its
-// list number changed counts once), at DIGEST_TOKENS_PER_ITEM - an assumption
-// (about 30 words of Uzbek with the field labels), not a measurement. A part
-// predicted above preSplitAt x the cap is read as two halves from the start:
-// one extra call, instead of a cut call thrown away plus two re-reads. It
-// draws on the same maxExtraCalls as the re-reads, so the total stays bounded.
-// Uncalibrated, so it splits only a part predicted at or above the cap
-// itself; each call's ledger detail records the prediction, so the next live
-// run's output tokens can calibrate it.
-const DIGEST_TOKENS_PER_ITEM = 45; // one digest line per distinct clause, ~30 words with labels
+// A part's digest size in OUTPUT tokens, predicted with no AI. 2026-10-08
+// counted one line per distinct clause at 45 tokens; the first live run
+// (2026-10-09, 51 398-char DOCX) showed it 2-3.5x low (450-810 predicted,
+// 1 367-1 600 returned). The model now: a fixed share per call plus a share
+// per word of the part, fitted to that run's digest calls only - 8 calls that
+// ended on their own (output tokens as returned), with the 3 cut at the cap
+// used as lower bounds only (a cut call's 1 600 is not what it needed).
+// One document, one model, eleven calls: an uncalibrated estimate, never a
+// guaranteed maximum. Every call's ledger detail records the prediction
+// (predictedTokens) beside the returned output, so later runs calibrate it.
+const DIGEST_DENSITY = Object.freeze({
+  perCall: 500, perWord: 1.2,
+  source: 'one live run (2026-10-09): 8 uncut digest calls fitted, 3 cut calls as lower bounds; uncalibrated',
+});
+// a part is planned to this share of the cap, for the spread seen in that
+// run (uncut calls within about +-12 % of the model)
+const DIGEST_TARGET = 0.75;
+const DIGEST_TOKENS_PER_ITEM = 45; // the 2026-10-08 item count, kept for the benchmark's comparison
 function predictDigestTokens(text) {
+  // a clause repeated with only its list number changed is one digest line
+  // (repeatKey): its words count once
   const seen = new Set();
-  let items = 0;
+  let words = 0;
   for (const line of String(text || '').split(/\n+/u)) {
     const t = line.trim();
-    if (t.length < 15 || /^\[(?:Sahifa|KONTEKST)/u.test(t)) continue;
-    const numbered = /^\d+(?:\.\d+)*\.\s/u.test(t);
-    if (!numbered && (t.length > 600 || !/\s/u.test(t) || !relations.relationScore(t))) continue;
-    const key = repeatKey(t);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    // a long clause may need a second line
-    items += t.length > 400 ? 2 : 1;
+    if (!t) continue;
+    if (t.length >= 15) { const key = repeatKey(t); if (seen.has(key)) continue; seen.add(key); }
+    words += (t.match(/\S+/gu) || []).length;
   }
-  return items * DIGEST_TOKENS_PER_ITEM;
+  return words ? Math.round(DIGEST_DENSITY.perCall + DIGEST_DENSITY.perWord * words) : 0;
 }
 
 /** Did the call stop at its output cap? (a cut text, or an empty one at "length") */
@@ -1040,6 +1111,39 @@ function halvesOf(u, full) {
     { ...u, label: `${u.label}a`, end: u.start + cut, text: u.text.slice(0, cut), pages: pagesSpanned(full, u.start, u.start + cut), half: true, ...splitAt(full, u.start + cut) },
     { ...u, label: `${u.label}b`, start: u.start + cut, text: u.text.slice(cut), pages: pagesSpanned(full, u.start + cut, u.end), half: true, context: 0 },
   ];
+}
+
+/**
+ * Which cut part to re-read first when the extra calls do not reach all of
+ * them (no AI; an uncalibrated ordering, not a measure of legal weight):
+ *   - an annex, schedule or table referred to from another part (its
+ *     values - KPI, deadlines, amounts - are what the rest points to);
+ *   - table rows (row markup, or runs of short lines: a table read as loose cells);
+ *   - figures: amounts, percentages, periods, dates;
+ *   - relation lines (an act with its condition, period or sanction).
+ * Returns { score, reasons } - the reasons go to the diagnostics as they are.
+ */
+function rereadPriority(u, full, units) {
+  const t = String(u.text || '');
+  const lines = t.split(/\n+/u).map(l => l.trim()).filter(Boolean);
+  const reasons = [];
+  let score = 0;
+  // annexes / schedules / tables named in this part and referred to elsewhere
+  const names = new Set();
+  for (const m of t.matchAll(/(?:^|\n)\s*(\d+)\s*-\s*(ilova|jadval|ilovasi|appendix|schedule|annex)/giu)) names.add(`${m[1]}-${m[2].toLowerCase().replace(/si$/u, '')}`);
+  for (const m of t.matchAll(/⟦Jadval (\d+)/gu)) names.add(`${m[1]}-jadval`);
+  const elsewhere = units.filter(o => o !== u && o.label !== u.label).map(o => o.text).join('\n');
+  const referred = [...names].filter(n => { const [num, kind] = n.split('-'); return new RegExp(`${num}\\s*-\\s*${kind}`, 'iu').test(elsewhere); });
+  if (referred.length) { score += 3; reasons.push(`boshqa qismlardan havola qilingan: ${referred.slice(0, 3).join(', ')}`); }
+  const rowLines = lines.filter(l => /^⟦Jadval/u.test(l)).length;
+  const shortRun = lines.filter(l => l.length < 40).length;
+  const tableish = rowLines || (shortRun >= 20 && shortRun / lines.length > 0.4 ? shortRun : 0);
+  if (tableish) { score += Math.min(3, tableish / 10); reasons.push(rowLines ? `jadval qatorlari: ${rowLines}` : `jadval kataklari alohida qatorlarda: ${shortRun}`); }
+  const figures = (t.match(/\d+(?:[.,\s]\d{3})*(?:[.,]\d+)?\s*(?:%|foiz|kun|oy|yil|so'm|so‘m|dollar|AQSh|USD|sanasi)/giu) || []).length;
+  if (figures) { score += Math.min(3, figures / 10); reasons.push(`summa, foiz yoki muddat: ${figures}`); }
+  const rel = lines.filter(l => relations.relationScore(l)).length;
+  if (rel) { score += Math.min(2, rel / 10); reasons.push(`shart, muddat yoki oqibatli qatorlar: ${rel}`); }
+  return { score: Math.round(score * 100) / 100, reasons };
 }
 
 /**
@@ -1093,20 +1197,33 @@ async function buildDigest(text, { callAI, userId = null, endpoint = '/api/draft
   }
   const firstUnits = units.flatMap(u => (pre.has(u) ? halvesOf(u, full).map(h => ({ ...h, preSplit: true, context: 0 })) : [u]));
   const first = await inPool(firstUnits, read, L.concurrency);
-  // the re-reads: the first cut parts the extra-call limit allows, all at
-  // once, and only while the time limit has not passed (a half is not split again)
+  // the re-reads (2026-10-09: the first cut parts in document order took the
+  // budget and the annex with the KPI table, cut last, was left out): the cut
+  // parts are ranked by rereadPriority (no AI, uncalibrated) and the highest
+  // the extra-call limit allows are re-read, all at once, only while the time
+  // limit has not passed (a half is not split again). Every cut part's
+  // decision and its reasons are reported (`reread`).
   const split = new Set();
-  if (Date.now() - started < L.timeMs) {
-    for (const r of first) {
-      if (r.status === 'cut' && !r.u.half && extraCalls + 2 <= L.maxExtraCalls && r.u.text.length >= L.minSplitChars) { split.add(r); extraCalls += 2; }
-    }
+  const reread = [];
+  const inTime = Date.now() - started < L.timeMs;
+  const cut = first.filter(r => r.status === 'cut')
+    .map(r => ({ r, p: rereadPriority(r.u, full, units) }))
+    .sort((x, y) => y.p.score - x.p.score || x.r.u.start - y.r.u.start);
+  for (const { r, p } of cut) {
+    let why = null;
+    if (r.u.half) why = 'half_not_split_again';
+    else if (r.u.text.length < L.minSplitChars) why = 'too_short_to_split';
+    else if (!inTime) why = 'time_limit';
+    else if (extraCalls + 2 > L.maxExtraCalls) why = 'extra_call_limit';
+    if (!why) { split.add(r); extraCalls += 2; }
+    reread.push({ part: r.u.label, decision: why ? 'excluded' : 'reread', why, score: p.score, reasons: p.reasons });
   }
   const halves = [...split].flatMap(r => halvesOf(r.u, full));
-  const reread = await inPool(halves, read, L.concurrency);
+  const secondRead = await inPool(halves, read, L.concurrency);
   const results = [];
   for (const r of first) {
     if (!split.has(r)) { results.push(r); continue; }
-    for (const h of reread.filter(x => x.u.label === `${r.u.label}a` || x.u.label === `${r.u.label}b`)) results.push({ ...h, retried: true });
+    for (const h of secondRead.filter(x => x.u.label === `${r.u.label}a` || x.u.label === `${r.u.label}b`)) results.push({ ...h, retried: true });
   }
   const failed = [], truncated = [];
   const blocks = results.map(r => {
@@ -1126,6 +1243,11 @@ async function buildDigest(text, { callAI, userId = null, endpoint = '/api/draft
     parts: results.map(r => ({ part: r.u.label, pages: r.u.pages, chars: r.u.text.length, status: r.status, retried: !!r.retried, preSplit: !!r.u.preSplit, reason: r.reason || null })),
     readParts: results.filter(r => r.status === 'read').length,
     calls, extraCalls, preSplits: pre.size, elapsedMs: Date.now() - started, policy: 'cut_parts_not_used',
+    // how the parts were sized (density.fit 'over': too dense for MAX_CHUNKS
+    // at the target - never reported as fitting) and why each cut part was or
+    // was not re-read; both are uncalibrated, no-AI estimates
+    plan: { density: plan.density || null, predicted: units.map(u => ({ part: u.label, chars: u.text.length, predictedTokens: u.predicted })) },
+    reread, rereadPolicy: cut.length ? 'priority_uncalibrated' : null,
     // clauses read in two parts (a cut inside a line): no text lost, but not a whole-clause reading
     splits,
   };
@@ -1158,6 +1280,9 @@ function coverageSummary(digest, { finalRun, mode } = {}) {
     cut: digest.truncated.length, failed: digest.failed.length, covered: digest.covered,
     fullyRead: unreadParts(digest).length === 0, finalRun: !!finalRun,
     digestCalls: digest.calls, extraCalls: digest.extraCalls, preSplits: digest.preSplits || 0, clauseSplits: (digest.splits || []).length, elapsedMs: digest.elapsedMs, policy: digest.policy,
+    // part sizing and re-read choices (no document text: labels, codes, numbers)
+    ...(digest.plan && digest.plan.density ? { density: { fit: digest.plan.density.fit, predictedMax: digest.plan.density.predictedMax, overCap: digest.plan.density.overCap, calibrated: false } } : {}),
+    ...((digest.reread || []).length ? { reread: digest.reread.map(r => ({ part: r.part, decision: r.decision, why: r.why, score: r.score })), rereadPolicy: digest.rereadPolicy } : {}),
   };
 }
 
@@ -1195,7 +1320,7 @@ async function explainDocument({ documentText, langName, callAI, digest, userId 
   // the route answers with the parts and releases the units
   if (digestUnusable(d)) {
     return { reply: '', aborted: true,
-      coverage: { mode: 'digest', status: 'none_read', meaning: COVERAGE_MEANING, chars, pages: pages.length || null, chunks: d.chunks, parts: d.parts,
+      coverage: { mode: 'digest', status: 'none_read', meaning: COVERAGE_MEANING, chars, pages: pages.length || null, chunks: d.chunks, parts: d.parts, plan: d.plan || null, reread: d.reread || [],
         unread: unreadParts(d), documentFullyRead: false, finalRun: false, partial: true,
         summary: coverageSummary(d, { finalRun: false }) } };
   }
@@ -1236,11 +1361,13 @@ async function explainDocument({ documentText, langName, callAI, digest, userId 
       scopeCounts: { candidates: sel.candidates, selected: sel.selected, dropped: sel.dropped, shortened: sel.shortened, referenced: sel.referenced, savedChars: sel.savedChars }, conflictCandidates: conflicts, answer: raw },
     coverage: { mode: full ? 'full_text' : 'digest', status: coverageStatus(d), meaning: COVERAGE_MEANING, chars, pages: pages.length || null, emptyPages: empty,
       chunks: d ? d.chunks : null, parts: d ? d.parts : null, unread, answerTruncated: !!result.truncated, clauseSplits: d ? (d.splits || []) : [],
+      // how parts were sized (uncalibrated prediction) and why each cut part was or was not re-read
+      plan: d ? (d.plan || null) : null, reread: d ? (d.reread || []) : [],
       // DOCX tables: 'rows' read row by row (mechanical - cells not proven), 'lost' read as loose lines
-      tables: tables ? { count: tables.count, structure: tables.structure, meaning: COVERAGE_MEANING } : null,
+      tables: tables ? { count: tables.count, structure: tables.structure, ...(tables.causes ? { causes: tables.causes } : {}), meaning: COVERAGE_MEANING } : null,
       placeholders: placeholders.count, finalRun: true,
       // the ledger's doc_coverage carries the table reading too (master views)
-      summary: { ...coverageSummary(d, { finalRun: true }), ...(tables ? { tables: { count: tables.count, structure: tables.structure } } : {}) },
+      summary: { ...coverageSummary(d, { finalRun: true }), ...(tables ? { tables: { count: tables.count, structure: tables.structure, ...(tables.causes ? { causes: tables.causes } : {}) } } : {}) },
       scopeLines: { candidates: sel.candidates, selected: sel.selected, dropped: sel.dropped, shortened: sel.shortened, referenced: sel.referenced, limits: sel.limits },
       // the document was not read whole: not the service (released by the route)
       documentFullyRead: unread.length === 0 && (!d || d.covered !== false),
@@ -1249,7 +1376,7 @@ async function explainDocument({ documentText, langName, callAI, digest, userId 
 }
 
 module.exports = {
-  PAGE_MARK, CHUNK, OVERLAP, MAX_CHUNKS, DIGEST_SYSTEM, DIGEST_MAX_TOKENS, DIGEST_LIMITS, DIGEST_TOKENS_PER_ITEM, predictDigestTokens, EXPLAIN_FULL_TEXT_MAX, EXPLAIN_MAX_TOKENS,
+  PAGE_MARK, CHUNK, OVERLAP, MAX_CHUNKS, DIGEST_SYSTEM, DIGEST_MAX_TOKENS, DIGEST_LIMITS, DIGEST_TOKENS_PER_ITEM, DIGEST_DENSITY, DIGEST_TARGET, predictDigestTokens, rereadPriority, EXPLAIN_FULL_TEXT_MAX, EXPLAIN_MAX_TOKENS,
   markPages, pagesIn, emptyPages, contentChars, billableChars, chunkSizeFor, digestChunks, pagesSpanned, buildDigest, digestUnusable, coverageSummary,
   placeholdersIn, coverageNote, coverageStatus, explainSystem,
   unreadParts, splitLabels, silentPeriodChoice, scopeLines, scopeSelection, carriedIn, repeatKey, splitAt, scopeWordsMissing, SCOPE_GROUPS, conflictCandidates, traceStages, verifyExplanation, guardAiNote, unsupportedPhrases, datesIn, cutToLastSentence, finishExplanation, explainDocument, CHECK_SCOPE,

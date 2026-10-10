@@ -13444,6 +13444,11 @@
                     } else {
                         text = d.text;
                         att.docTicket = d.docTicket || null;
+                        // DOCX tables read as loose lines: the cause codes; for a
+                        // master also the missing words (tab memory only, for the trace JSON)
+                        att.tableStructure = d.tableStructure || null;
+                        att.tableCauses = d.tableCauses || null;
+                        att.tableCheck = d.tableCheck || null;
                     }
                 } else {
                     var sci = await scanFile(file, att.scanService);
@@ -13584,7 +13589,7 @@
                 showUpdateToast("Bu diagnostika eskirgan yoki o'chirilgan — yangi tushuntirishni Diagnostika yoqilgan holda ishga tushiring.", 'info');
                 return;
             }
-            var blob = new Blob([JSON.stringify({ source: lastExplainTrace.source, response: lastExplainTrace.response }, null, 2)], { type: 'application/json' });
+            var blob = new Blob([JSON.stringify({ source: lastExplainTrace.source, response: lastExplainTrace.response, extract: lastExplainTrace.extract || null }, null, 2)], { type: 'application/json' });
             var a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
             a.download = 'explain-trace-' + tag + '.json';
@@ -13596,6 +13601,20 @@
             invalidateExplainTrace();
             showUpdateToast("Diagnostika ma'lumoti xotiradan o'chirildi.", 'info');
         }
+        // parts sized by an uncalibrated prediction; each cut part re-read or
+        // left out, and why; DOCX tables kept or lost, and the cause codes
+        function explainPlanNote(cov) {
+            var out = '';
+            var dn = cov.plan && cov.plan.density;
+            if (dn) out += 'Qismlar: ' + escapeHtml(String(cov.chunks || 0)) + ' ta, bashorat bo\'yicha ' + (dn.fit === 'over' ? '13 qismga sig\'madi (' + escapeHtml(String(dn.overCap || 0)) + ' tasi chegaradan oshishi kutildi)' : 'har biri chegaradan past') + ' — bashorat kalibrlanmagan.';
+            var rr = cov.reread || [];
+            if (rr.length) out += ' Kesilgan qismlar (muhimlik bahosi kalibrlanmagan): ' + rr.map(function (r) {
+                return escapeHtml(r.part) + ' — ' + (r.decision === 'reread' ? 'qayta o\'qildi' : 'chiqarildi (' + escapeHtml(r.why || '') + ')') + (r.reasons && r.reasons.length ? ': ' + escapeHtml(r.reasons.join('; ')) : '');
+            }).join(' | ') + '.';
+            var tb = cov.tables;
+            if (tb && tb.structure === 'lost') out += ' Jadvallar tuzilishi saqlanmadi' + (tb.causes && tb.causes.length ? ', sabab kodlari: ' + escapeHtml(tb.causes.join(', ')) : '') + '.';
+            return out ? '<p class="ai-diag-note">' + out + '</p>' : '';
+        }
         function explainTraceCard(d, hasSource, tag) {
             var t = d.trace || {};
             var c = t.scopeCounts || {};
@@ -13603,6 +13622,7 @@
                 '<p class="ai-diag-note">Rejim: ' + escapeHtml(t.mode === 'digest' ? 'dayjest' : "to'liq matn") +
                 '; kalit qatorlar: ' + escapeHtml(String(c.candidates || 0)) + ' nomzoddan ' + escapeHtml(String(c.selected || 0)) + ' tasi' +
                 (c.dropped ? ', ' + escapeHtml(String(c.dropped)) + ' tasi sig\'madi' : '') + '.</p>' +
+                explainPlanNote(d.coverage || {}) +
                 '<p class="ai-diag-note">Faqat shu brauzer xotirasida; serverda saqlanmaydi. Ichida hujjat matni bor — uni repoga, chatga yoki boshqa joyga qo\'ymang. Tekshirish: <code>node scripts/explain-trace.js --bundle fayl.json</code> (so\'z bo\'yicha mexanik signal, ma\'no hukmi emas).' +
                 (hasSource ? '' : ' Skan hujjat: manba matni JSON\'da yo\'q — OCR matnini <code>--source</code> bilan bering.') + '</p>' +
                 '<div class="ai-diag-actions"><button class="ai-attach-suggest" type="button" onclick="downloadExplainTrace(\'' + escapeHtml(tag) + '\')">JSON yuklab olish</button>' +
@@ -13653,8 +13673,10 @@
                 // when it is this request's trace and nothing changed meanwhile
                 var traceOk = !!(wantTrace && d && d.trace && d.trace.tag === traceTag && traceEpoch === diagEpoch);
                 if (traceOk) {
-                    lastExplainTrace = { tag: traceTag, epoch: diagEpoch, source: text || null, response: d };
-                    window.__lastExplain = { source: text || null, response: d };
+                    var one = typed.length === 1 && !scans.length ? typed[0] : null;
+                    var extract = one && one.tableStructure ? { tableStructure: one.tableStructure, tableCauses: one.tableCauses || null, tableCheck: one.tableCheck || null } : null;
+                    lastExplainTrace = { tag: traceTag, epoch: diagEpoch, source: text || null, response: d, extract: extract };
+                    window.__lastExplain = { source: text || null, response: d, extract: extract };
                 }
                 var typing = document.getElementById('aiChatTyping'); if (typing) typing.remove();
                 if (!r.ok || !d.reply) { docInfoCard('❌ ' + escapeHtml(d.message || d.error || 'Tushuntirib bo\'lmadi')); return; }

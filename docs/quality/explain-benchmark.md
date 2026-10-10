@@ -779,6 +779,69 @@ Yangi AI chaqiruvi yo'q, cheklovlar o'zgarmagan. Narx jadvali chegarasi (aisha-c
 - `tests/explain-regression.test.js` (11 ta): anonim sintetik matn (fixture 10) va kod bilan yasalgan DOCX.
 - Model sifatini tasdiqlamaydi.
 
+## 4f. Ikkinchi jonli sinov (2026-10-09): qismlar hajmi, qayta o'qish, moslashtirish, jadval sababi
+
+Manba: master diagnostika JSON'i (51 398 belgi, 7 qism). JSON va hujjat repoda yo'q. Quyidagilar sintetik test va AI'siz hisob-kitob natijalari, model sifatining tasdig'i emas.
+
+### Nima topildi
+- 8 000 belgilik qismlarning 3 tasi (3, 4, 7) 1 600 token chegarasida kesildi. Qolganlari chegaraga yaqin chiqdi (1 367–1 588).
+- Eski bashorat (har band uchun 45 token) 2–3,5 marta kam chiqdi: 450–810 bashorat, 1 367–1 600 haqiqiy.
+- Qayta o'qish hujjat tartibida tanlandi. 3 va 4-qismlar 4 qo'shimcha chaqiruvni ishlatib bo'ldi, KPI jadvalli 7-qism chiqarildi.
+- 7 jadvalning hammasi mammoth fallback'iga tushdi. JSON'da sabab yo'q edi, asl DOCX ham yo'q.
+- Ikkita mexanik signal turli bandlarni solishtirgan:
+  - «10 ish kuni» va «30 kun» (keyingi ro'yxat bandi bilan);
+  - «imzolash» va «to'lash» (shart sifatidagi o'tgan zamon fe'li holat deb o'qilgan).
+
+### A. Qism hajmi bashorat qilingan chiqish bo'yicha
+- Model: chaqiruv boshiga 500 token va har so'zga 1,2 token (takrorlangan band bir marta sanaladi).
+- Faqat dayjest chaqiruvlarining chiqish tokenlariga moslangan: 8 ta kesilmagan chaqiruv. Kesilgan 3 tasi faqat quyi chegara sifatida olingan (1 600 talab emas).
+- Moslangan nuqtalarda xato −4…+18%. Kesilgan uchala qismni model past baholaydi (kamida 4–11%).
+- Shuning uchun qism chegaraning 75 foiziga (1 200 token) rejalanadi. Qism uzunligi `minSplitChars` (2 000) dan `CHUNK` (8 000) gacha.
+- Rejaga 13 tadan ko'p qism kerak bo'lsa yoki biror qism chegaraga yetsa, `density.fit = 'over'`. Hujjat 13 ta teng qismga bo'linadi. Chegaralar (1 600, 13, 4 qo'shimcha chaqiruv, 75 s) oshirilmaydi va hech qachon «sig'di» deyilmaydi.
+- Kalibrlanmagan: bitta hujjat, bitta model, 11 chaqiruv. Har chaqiruvning `predictedTokens` qiymati ledgerda turadi, keyingi sinovlar bilan solishtirish mumkin.
+
+### B. Qayta o'qish tanlovi
+- Kesilgan qismlar AI'siz muhimlik tartibida saralanadi. Mezonlar:
+  - boshqa qismdan havola qilingan ilova yoki jadval;
+  - jadval qatorlari yoki alohida qatordagi kataklar;
+  - summa, foiz va muddatlar;
+  - shart va oqibatli qatorlar.
+- Har bir kesilgan qism uchun `coverage.reread` yozuvi bor: qism, qaror, sabab (`extra_call_limit`, `time_limit`, `too_short_to_split`), ball va asoslar.
+- Bu tartib kalibrlanmagan: u huquqiy ahamiyat o'lchovi emas, faqat navbat.
+
+### Taqqoslash (`node scripts/digest-plan-sim.js`, AI'siz)
+Har qismning haqiqiy talabi = bashorat × koeffitsient (0,88 / 1,00 / 1,15 / 1,30). Bu bitta sinovdan olingan stsenariy, prognoz emas va kafolatlangan maksimum emas. Yakuniy chaqiruv chiqarilgan, u ikkala rejada bir xil.
+
+| Hujjat (sintetik) | Qismlar eski → yangi | ×1,00: eski | ×1,00: yangi | ×1,30: eski | ×1,30: yangi |
+|---|---|---|---|---|---|
+| long-lease, 37 888 | 5 → 9 | hammasi o'qildi, $0.0121, ~16 s | hammasi o'qildi, $0.0168, ~28 s | hammasi, $0.0129, ~21 s | hammasi, $0.0182, ~36 s |
+| long-service-docx, 53 538 | 7 → 12 | hammasi, $0.0169, ~17 s | hammasi, $0.0228, ~31 s | hammasi, $0.0180, ~22 s | hammasi, $0.0246, ~41 s |
+| band ro'yxati, 46 867 | 7 → 13 | 4 qism o'qilmadi, $0.0280, ~55 s | hammasi, $0.0276, ~47 s | 7 bo'lak o'qilmadi, $0.0292 | hammasi, $0.0344, ~83 s |
+| jadvalli ilova, 24 464 | 4 → 13 | 5 bo'lak o'qilmadi, $0.0203, ~62 s | hammasi, $0.0243, ~49 s | 5 bo'lak o'qilmadi, $0.0205 | 7 qism o'qilmadi, $0.0340, ~84 s |
+| juda zich, 120 000 | 13 → 13 (`over`) | 11 qism o'qilmadi | xuddi shunday | 15 bo'lak o'qilmadi | xuddi shunday |
+
+Xulosa:
+- Siyrak hujjatda yangi reja qimmatroq va sekinroq: 30–40% ko'p token, ikkinchi to'lqin. Uni hech nima o'qilmay qolmasligi uchun to'laymiz.
+- Zich hujjatda ko'proq qism to'liq o'qiladi.
+- Juda zich hujjat 13 qismga sig'maydi va bu ochiq ko'rsatiladi.
+- Qisman natijada birlik qaytariladi (5-band).
+
+### Jadval fallback sababi
+- O'quvchi endi mammoth o'qiydigan 6 ta tuzilmani ham o'qiydi: qator va katak atrofidagi content control, kuzatilgan qo'shimcha, bo'linmas va yumshoq defis, `w:sym`.
+- O'quvchi o'chirilgan qatorni va ko'chirilgan matnning eski joyini o'qimaydi.
+- Fallback bo'lsa, sabab XML'dan aniqlanadi: har bir topilmagan so'z atrofidagi tuzilma, topilmasa `unknown`.
+  - Kodlar: ticket, coverage va log'ga.
+  - So'zlar va ularning joyi: faqat bazada master bo'lgan hisobga, `no-store` bilan.
+- Lokal tekshiruv (yuklashsiz, AI'siz): `node scripts/docx-table-check.js fayl.docx`.
+- Bu sinovdagi hujjatning aniq sababi aniqlanmagan: asl fayl yo'q. Sintetik sabablar production sababi deb ko'rsatilmaydi.
+
+### Moslashtirish
+- Dayjest qatori javob jumlasiga faqat o'z mavzusidagi so'zlar bilan bog'lanadi; tomon nomlari bunga kirmaydi.
+- Muddat, qiymat va muddat boshlanishi faqat bir xil harakat tilga olingan jumlada solishtiriladi. Keyingi ro'yxat bandi solishtirilmaydi.
+- Ishonchsiz moslik «mos band aniqlanmadi» deb belgilanadi va o'zgarish deb hisoblanmaydi.
+- Manba bilan solishtirishda ham shunday: band raqami yoki harakat hisobga olinadi, muddat faqat shu banddagi muddat bilan solishtiriladi.
+- Sintetik eval to'plamida natija o'zgarmadi: to'g'ri parafrazlar 9/12 belgisiz, noto'g'ri jumlalar 12/12 belgilandi.
+
 ## 5. Qisman natija: foydalanuvchiga ko'rinishi va limit
 
 | Holat | Foydalanuvchi ko'radi | Limit | Qaysi mavjud qoidaga mos |

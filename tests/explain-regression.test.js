@@ -252,6 +252,130 @@ async function kpiDocx({ longRow = 0 } = {}) {
     assert.ok(out.includes('Two periods for one matter'), out.slice(-800));
   });
 
+  // ── 2026-10-09 run (second live diagnostics; anonymous synthetic text) ──
+
+  await test('DOCX: content controls around rows or cells, tracked insertions, special hyphens and symbols no longer drop the tables to loose lines', async () => {
+    const r = x => `<w:p><w:r>${x}</w:r></w:p>`;
+    const head = row([cell('Ish'), cell('Muddat')], { header: true });
+    const cases = {
+      sdt_row: table([head, `<w:sdt><w:sdtContent>${row([cell('Hisobot'), cell('5 kun')])}</w:sdtContent></w:sdt>`]),
+      sdt_cell: table([head, `<w:tr><w:sdt><w:sdtContent>${cell('Hisobot')}</w:sdtContent></w:sdt>${cell('5 kun')}</w:tr>`]),
+      tracked_insert: `<w:ins w:id="1" w:author="a"><w:p><w:r><w:t>Qo'shilgan band.</w:t></w:r></w:p></w:ins>${table([head, row([cell('Hisobot'), cell('5 kun')])])}`,
+      no_break_hyphen: table([head, row([cell('Hisobot'), `<w:tc>${r('<w:t>2027</w:t><w:noBreakHyphen/><w:t>yil mart</w:t>')}</w:tc>`])]),
+      soft_hyphen: table([head, row([`<w:tc>${r('<w:t>Hiso</w:t><w:softHyphen/><w:t>bot</w:t>')}</w:tc>`, cell('5 kun')])]),
+      symbol_char: table([head, row([`<w:tc>${r('<w:t>Hisobot</w:t><w:sym w:font="Symbol" w:char="F0B7"/><w:t>tahlil</w:t>')}</w:tc>`, cell('5 kun')])]),
+    };
+    for (const [k, xml] of Object.entries(cases)) {
+      const d = await docxText(await docx(p('Kirish.') + xml));
+      assert.deepStrictEqual([k, d.structure, d.wordCheck.missing], [k, 'rows', 0], d.text);
+    }
+  });
+
+  await test('DOCX fallback: the cause is read from the XML (structures around each missing word), codes go to the ticket, the words only to a master', async () => {
+    // a reading mammoth has and the table reader does not (a stub, so the
+    // diagnosis has something to find): the word sits in a content-control cell
+    const xml = p('Kirish.') + table([row([cell('Ish'), cell('Muddat')], { header: true }), `<w:tr><w:sdt><w:sdtContent>${cell('Hisobot')}</w:sdtContent></w:sdt>${cell('5 kun')}</w:tr>`]);
+    const stub = { extractRawText: async () => ({ value: 'Kirish.\nIsh\nMuddat\nHisobot\nHisobot\n5 kun' }) };
+    const d = await docxText(await docx(xml), { mammoth: stub });
+    assert.strictEqual(d.structure, 'lost');
+    assert.deepStrictEqual(d.diagnosis.missingWords.map(m => [m.word, m.expected, m.found, m.inTable, m.structures]), [['hisobot', 2, 1, true, ['sdt_cell']]]);
+    assert.deepStrictEqual(d.causes, ['sdt_cell']);
+    assert.strictEqual(d.diagnosis.census.sdt_cell, 1);
+    assert.ok(!d.fallbackReason.includes('hisobot'), 'the log line carries codes, never the words');
+    // a word in no structure: 'unknown', never a guessed cause
+    const none = await docxText(await docx(p('Kirish.') + table([row([cell('Ish'), cell('Muddat')], { header: true }), row([cell('Hisobot'), cell('5 kun')])])),
+      { mammoth: { extractRawText: async () => ({ value: 'Kirish Ish Muddat Hisobot 5 kun Izoh' }) } });
+    assert.deepStrictEqual(none.causes, ['unknown']);
+    // the ticket carries the codes only, bound to the text
+    const t = ledger.signDocTicket({ text: d.text, chars: 40, tables: { count: 1, structure: 'lost', causes: d.causes } });
+    assert.deepStrictEqual(ledger.readDocTicket(t, d.text).tables, { count: 1, structure: 'lost', causes: ['sdt_cell'] });
+    const body = JSON.parse(Buffer.from(t.split('.')[0], 'base64url').toString());
+    assert.ok(!JSON.stringify(body).includes('hisobot'));
+    // the local check script names the cause, and prints no words with --codes
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dx-'));
+    fs.writeFileSync(path.join(dir, 'a.docx'), await docx(xml));
+    const out = execFileSync(process.execPath, [path.join(__dirname, '../scripts/docx-table-check.js'), path.join(dir, 'a.docx'), '--codes'], { encoding: 'utf8' });
+    assert.ok(out.includes("tuzilish: rows"), out);
+  });
+
+  await test('parts are sized by predicted digest output: under the target when 13 parts allow it; a denser document is cut into 13 and reported "over", never as fitting', () => {
+    const clause = i => `${i}.1. Ijrochi ${String.fromCharCode(97 + (i % 26))}${String.fromCharCode(97 + ((i * 7) % 26))} ishini ${5 + (i % 9)} kun ichida bajaradi, kechiksa ${i % 5 + 1} foiz jarima to'laydi va buyurtmachiga yozma xabar beradi.`;
+    const doc = Array.from({ length: 250 }, (_, i) => clause(i + 1)).join('\n');
+    const plan = ex.digestChunks(doc);
+    assert.strictEqual(plan.density.fit, 'fits');
+    assert.ok(plan.chunks.every(c => ex.predictDigestTokens(c.text) <= ex.DIGEST_TARGET * ex.DIGEST_MAX_TOKENS * 1.06), JSON.stringify(plan.density));
+    assert.ok(plan.chunks.length > Math.ceil(doc.length / ex.CHUNK), 'smaller parts than the old 8 000-char cut');
+    assert.strictEqual(plan.density.calibrated, false);
+    const dense = Array.from({ length: 1200 }, (_, i) => clause(i + 1)).join('\n').slice(0, 120000);
+    const over = ex.digestChunks(dense);
+    assert.ok(over.covered && over.chunks.length === ex.MAX_CHUNKS);
+    assert.strictEqual(over.density.fit, 'over');
+    assert.ok(over.density.overCap > 0);
+    // the limits never grow to make it fit
+    assert.deepStrictEqual([ex.DIGEST_MAX_TOKENS, ex.MAX_CHUNKS, ex.DIGEST_LIMITS.maxExtraCalls, ex.DIGEST_LIMITS.timeMs], [1600, 13, 4, 75000]);
+  });
+
+  await test('re-reads go to the most important cut parts (an annex the rest refers to before earlier parts); every cut part has its decision and reasons', async () => {
+    const body = i => `${i}.1. Ijrochi ishni bajaradi va natijani topshiradi, 2-ilovadagi ko'rsatkichlarga muvofiq.`;
+    const annex = ["2-ilova. Ko'rsatkichlar", ...Array.from({ length: 160 }, (_, i) => `${i + 1}-ko'rsatkich ${10 + i} foiz ${i + 2} oy`)].join('\n');
+    const text = [...Array.from({ length: 200 }, (_, i) => body(i + 1)), annex].join('\n');
+    const n = ex.digestChunks(text).chunks.length;
+    // every part comes back cut: only two can be re-read (4 extra calls)
+    const calls = [];
+    const d = await ex.buildDigest(text, { callAI: async (m, o) => { calls.push(o.detail.part); return { text: '- band', truncated: !/[ab]$/u.test(o.detail.part), provider: 'stub' }; } });
+    assert.strictEqual(d.reread.length, n);
+    const chosen = d.reread.filter(r => r.decision === 'reread').map(r => r.part);
+    assert.strictEqual(chosen.length, 2);
+    // the annex parts win over the earlier body parts (document order took the budget before)
+    const annexParts = ex.digestChunks(text).chunks.filter(c => /\d+-ko'rsatkich \d+ foiz/u.test(c.text)).map(c => String(c.index + 1));
+    assert.ok(chosen.every(x => annexParts.includes(x)), `${chosen} within ${annexParts}: ${JSON.stringify(d.reread)}`);
+    assert.ok(d.reread.some(r => r.decision === 'reread' && r.reasons.some(x => x.includes('2-ilova'))), JSON.stringify(d.reread));
+    assert.ok(d.reread.filter(r => r.decision === 'excluded').every(r => ['extra_call_limit', 'too_short_to_split'].includes(r.why)), JSON.stringify(d.reread));
+    assert.ok(d.reread.some(r => r.why === 'extra_call_limit'));
+    assert.strictEqual(d.rereadPolicy, 'priority_uncalibrated');
+    const summary = ex.coverageSummary(d, { finalRun: true });
+    assert.ok(summary.reread.every(r => !('reasons' in r)), 'the ledger summary keeps decisions, not text');
+  });
+
+  await test('digest -> answer: a line is compared only with the answer sentence on the same clause - another clause\'s period is not "changed", a weak match is "mos band aniqlanmadi"', () => {
+    const dg = [
+      "- Ortiqcha mablag' | Ijrochi → ortiqcha mablag'ni buyurtmachiga qaytaradi | muddat: talab olingan kundan boshlab 10 ish kuni ichida | oqibat: barcha ishtirokchilar solidar javob beradi",
+      "- Xabarnoma | har bir Taraf → javob xabarnomasini yuboradi | muddat: xabarnoma yuborilgan sanadan boshlab 30 kun ichida",
+    ].join('\n');
+    // the answer: one bullet on assets ("ortiq" in another sense), the next on
+    // the notice period - the first line's period must not be compared with it
+    const answer = "Aktivlar: Ijrochi balans qiymatining 50 foizidan ortiq mol-mulkni o'tkazsa, buyurtmachi roziligi kerak.\nXabarnoma: har bir Taraf xabarnoma yuborilgan sanadan boshlab 30 kun ichida javob xabarnomasini yuboradi.";
+    const sig = rel.digestAnswerSignals(dg, answer);
+    assert.ok(!sig.some(x => x.lost.some(l => l.part === 'boshqa qiymat' || l.part === 'muddat boshlanishi')), JSON.stringify(sig));
+    // a real change on the same clause is still named
+    const wrong = rel.digestAnswerSignals(dg, "Xabarnoma: har bir Taraf xabarnomani olgan sanadan boshlab 30 kun ichida javob xabarnomasini yuboradi.");
+    assert.ok(wrong.some(x => x.match === 'same_clause' && x.lost.some(l => l.part === 'muddat boshlanishi')), JSON.stringify(wrong));
+    // a weak match (party words and one shared word) is not compared: no claimed change
+    const weak = rel.digestAnswerSignals(dg, "Ijrochi buyurtmachiga mablag' bo'yicha hisobot beradi, Taraflar 5 kun ichida kelishadi.");
+    assert.ok(weak.every(x => x.match === 'uncertain' ? x.lost.length === 0 && x.note === 'mos band aniqlanmadi' : true), JSON.stringify(weak));
+    const done = ex.finishExplanation({ reply: "Ijrochi buyurtmachiga mablag' bo'yicha hisobot beradi, Taraflar 5 kun ichida kelishadi.", source: dg, digest: { text: dg, chunks: 1, failed: [], truncated: [], covered: true, splits: [] } });
+    assert.ok(done.check.digestSignals.every(x => x.match === 'same_clause'));
+    if (done.check.digestUnmatched.length) assert.ok(done.reply.includes("mos band aniqlanmadi (taqqoslanmadi, o'zgarish deb hisoblanmaydi)"), done.reply);
+  });
+
+  await test('an act joined by "va" to an event a period runs from is a precondition, not a status ("signed and registered, then paid within 3 days")', () => {
+    const source = "4.1. Birinchi to'lov Taraflar Shartnomani imzolagandan so'ng hamda ishtirokchi davlat ro'yxatidan o'tkazilgan paytdan boshlab 3 bank kuni ichida to'lanadi.";
+    const flags = rel.relationFlags("Birinchi to'lov Shartnoma imzolangan va ishtirokchi ro'yxatdan o'tkazilganidan keyin 3 bank kuni ichida to'lanadi.", rel.analyseText(source));
+    assert.deepStrictEqual(flags.filter(f => f.kind === 'holat'), []);
+    // a plain status claim is still compared
+    assert.ok(rel.relationFlags("4.1. Birinchi to'lov to'langan.", rel.analyseText("4.1. Birinchi to'lov to'lanmagan.")).some(f => f.kind === 'holat'));
+  });
+
+  await test('a period is compared with the clause on the same matter only: the same figure in another clause is named as another act\'s period, a clause with no match is not compared', () => {
+    const source = "2.1. Ijrochi taklifga taklif olingan kundan boshlab 10 ish kuni ichida javob beradi.\n2.2. Asosiy bitim taklif qabul qilingan kundan boshlab 60 kalendar kun ichida tuziladi.\n2.3. Ijrochi hisobotni 10 ish kuni ichida topshiradi.";
+    const s2 = rel.analyseText(source);
+    // the clause on concluding states 60 days: 10 days on concluding is named
+    const f = rel.relationFlags('Asosiy bitim 10 ish kuni ichida tuzilishi kerak.', s2);
+    assert.ok(f.some(x => x.kind === "bog'lanish" && x.note.includes('«60 kalendar kun»')), JSON.stringify(f));
+    // the report clause states 10 days on its own act: no flag from the reply clause
+    assert.deepStrictEqual(rel.relationFlags('Ijrochi hisobotni 10 ish kuni ichida topshiradi.', s2).filter(x => x.kind === "bog'lanish"), []);
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);
 })();

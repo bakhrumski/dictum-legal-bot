@@ -82,7 +82,7 @@ const kinds = text => ex.finishExplanation({ reply: text, source: doc }).check;
     const text = 'Asosiy bitim 10 ish kuni ichida tuzilishi kerak.';
     const done = ex.finishExplanation({ reply: text, source: doc });
     assert.ok(done.reply.startsWith(text));
-    assert.ok(done.reply.includes("Asosiy matn — manba bilan qo'lda tekshirish kerak: hujjatdagidan boshqacha bog'langan bo'lishi mumkin: «10 ish kuni» javobda «bitim tuzish» bilan, hujjatda «javob berish» bilan (bog'lanish)"), done.reply);
+    assert.ok(done.reply.includes("Asosiy matn — manba bilan qo'lda tekshirish kerak: hujjatdagidan boshqacha bog'langan bo'lishi mumkin: «10 ish kuni» javobda «bitim tuzish» bilan; hujjatning shu bandida «bitim tuzish» uchun «60 kalendar kun», «10 ish kuni» esa «javob berish» uchun (bog'lanish)"), done.reply);
     assert.ok(!/noto'g'ri\b(?! degani)|olib tashlandi/u.test(done.notes.join(' ')));
     const inNote = ex.finishExplanation({ reply: `Matn.\n\n**AI izohi:** ${text}`, source: doc }).check.sections.aiNote;
     const inBody = ex.finishExplanation({ reply: `**Izoh**\n${text}`, source: doc }).check.sections.body;
@@ -110,7 +110,7 @@ const kinds = text => ex.finishExplanation({ reply: text, source: doc }).check;
     for (const id of ['5.3', '3.1', '4.2', '1.1']) assert.deepStrictEqual(kept[id].notFound.digest, {}, id);
     // a digest in the new line format that ties a period to another act is flagged like an answer
     const flags = rel.relationFlags('- 2.1 | Investor → bitim tuzish | muddat: 10 ish kuni', src, { stage: 'dayjest' });
-    assert.deepStrictEqual(flags.map(f => f.note), ['«10 ish kuni» dayjestda «bitim tuzish» bilan, hujjatda «javob berish» bilan']);
+    assert.deepStrictEqual(flags.map(f => f.note), ['«10 ish kuni» dayjestda «bitim tuzish» bilan, hujjatning shu bandida «javob berish» bilan']);
     assert.deepStrictEqual(rel.relationFlags("- 3.1 | Investor → to'lov | shart: dalolatnoma imzolanganidan keyin | muddat: 5 bank kuni", src, { stage: 'dayjest' }), []);
   });
 
@@ -215,8 +215,14 @@ const kinds = text => ex.finishExplanation({ reply: text, source: doc }).check;
     assert.ok(ex.DIGEST_SYSTEM.includes('Text under "[KONTEKST]" was digested with the previous excerpt'));
     // these parts are under the cap: no pre-split
     assert.strictEqual(d.preSplits, 0);
-    // a dense part: predicted over the cap -> halves from the start, one extra call each, never past maxExtraCalls
-    const dense = Array.from({ length: 400 }, (_, i) => `${i + 1}.1. Tomon ${i.toString(26).split('').map(x => String.fromCharCode(97 + parseInt(x, 26))).join('')}lik majburiyatini bajaradi.`).join('\n');
+    // a document too dense for 13 parts at the target (2026-10-09): cut into
+    // 13 equal parts, reported 'over' (never 'fits'); a part predicted over
+    // the cap -> halves from the start, one extra call each, never past maxExtraCalls
+    const dense = Array.from({ length: 2700 }, (_, i) => `${i + 1}.1. Tomon ${i.toString(26).split('').map(x => String.fromCharCode(97 + parseInt(x, 26))).join('')}lik majburiyatini bajaradi.`).join('\n');
+    const densePlan = ex.digestChunks(dense);
+    assert.ok(dense.length <= 120000 && densePlan.covered && densePlan.chunks.length === ex.MAX_CHUNKS, String(densePlan.chunks.length));
+    assert.strictEqual(densePlan.density.fit, 'over');
+    assert.ok(densePlan.density.overCap > 0 && densePlan.density.calibrated === false);
     const calls2 = [];
     const d2 = await ex.buildDigest(dense, { callAI: async (m, o) => { calls2.push(o.detail); return { text: '- band', provider: 'stub' }; } });
     const n = ex.digestChunks(dense).chunks.length;
@@ -227,6 +233,7 @@ const kinds = text => ex.finishExplanation({ reply: text, source: doc }).check;
     assert.ok(d2.extraCalls <= ex.DIGEST_LIMITS.maxExtraCalls);
     assert.strictEqual(calls2.filter(x => x.preSplit).length, 2 * d2.preSplits);
     assert.ok(d2.parts.filter(p => p.preSplit).every(p => /^\d+[ab]$/u.test(p.part)));
+    assert.strictEqual(d2.plan.density.fit, 'over');
   });
 
   await test('the trace script refuses a bundle whose source is not the document the trace was made for', () => {
@@ -260,8 +267,8 @@ const kinds = text => ex.finishExplanation({ reply: text, source: doc }).check;
     for (const k of ['12 000 000', '10-sanasigacha', '0,2 foiz', '15 kun', '4.3-bandga', '«Beta»']) assert.ok(sel.full.some(l => l.includes(k)), k);
     assert.strictEqual(ex.repeatKey('1.1. Tomon 5 kun ichida.'), ex.repeatKey('27.4. Tomon 5 kun ichida.'));
     assert.notStrictEqual(ex.repeatKey('1.1. Tomon 5 kun ichida.'), ex.repeatKey('1.1. Tomon 6 kun ichida.'));
-    // the digest size estimate counts them the same way
-    assert.strictEqual(ex.predictDigestTokens(text), 7 * ex.DIGEST_TOKENS_PER_ITEM);
+    // the digest size estimate counts them the same way: the repeat adds nothing
+    assert.strictEqual(ex.predictDigestTokens(text), ex.predictDigestTokens(text.split('\n').slice(0, -1).join('\n')));
     // the trace keeps both clauses of a pair that differs in a figure
     const refs = rel.relationTrace({ source: text, answer: 'x' }).map(r => r.ref);
     assert.ok(refs.includes('1.1') && refs.includes('2.1') && !refs.includes('9.1'), refs.join(','));
