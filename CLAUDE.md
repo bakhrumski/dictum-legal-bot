@@ -154,7 +154,18 @@ Known state of the suites (Sept 2026):
   `lost` (extract `tableStructure`, ticket, `coverage.tables`, a note under
   the answer); a row reading is never called proof of correct cells;
   contradiction candidates need the same object, role,
-  base, act and stage; `[Qism n/m]` labels are not figures. Quality is unconfirmed until the lawyer-reviewed
+  base, act and stage; `[Qism n/m]` labels are not figures.
+  Second live run (2026-10-09): digest parts are sized by predicted OUTPUT
+  tokens (500 + 1.2 per word, fitted to that run's uncut calls, cut calls as
+  lower bounds only; uncalibrated) to 75 % of the cap; a document that needs
+  more than 13 parts, or a part still at the cap, is `density.fit 'over'` -
+  limits never grow to fit. Cut parts are re-read by an uncalibrated
+  priority (referred annex/table, rows, figures), each decision in
+  `coverage.reread`. DOCX fallback causes are read from the XML (codes to
+  ticket/coverage; the words to a DB master only, `no-store`;
+  `scripts/docx-table-check.js` runs locally). Digest -> answer and period
+  checks compare only the answer sentence on the same clause; a weak match
+  is "mos band aniqlanmadi", never a change. Quality is unconfirmed until the lawyer-reviewed
   benchmark (`docs/quality/explain-benchmark.md`) runs.
   `src/rag/question-aspects.js` splits a question into deadline,
   compensation, evidence and remedy and runs a light corpus search for each

@@ -483,6 +483,11 @@ function attachRefundOnFailure(res) {
       if (res.statusCode < 400 && body && typeof body === 'object' && typeof body.reply === 'string') res.locals.deliveredText = body.reply;
       if (res.statusCode >= 400 && body && typeof body === 'object' && !Array.isArray(body)) {
         body = Object.assign({}, body, refundUsage(res, 'status ' + res.statusCode));
+      } else if (body && typeof body === 'object' && !Array.isArray(body) && body.quotaRefunded === undefined
+        && jobsOf(res).some(t => t && t.refunded)) {
+        // a delivered but partial result (a document not read whole) whose
+        // units were already released: the client is told too (2026-10-10)
+        body = Object.assign({}, body, { quotaRefunded: true, refundNotice: REFUND_NOTICE });
       }
       return json(body);
     };
