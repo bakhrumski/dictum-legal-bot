@@ -52,17 +52,22 @@ const letters = n => { let s = ''; n += 1; while (n > 0) { const r = (n - 1) % 2
 
 /**
  * The answer with each id replaced by a placeholder the mechanical checks
- * ignore (letters only, no figure), and what each placeholder stands for:
+ * ignore (letters only, no figure), and what each placeholder stands for
+ * (text the document itself contains, e.g. "[S2]", is left as it is):
  * { text, quotes: [{ mark, id, status, text? }] } where status is
  *   'quoted'          - an id this document issued: its sentence is quoted;
  *   'unknown_id'      - this document has no such line;
  *   'other_document'  - the key is not this document's;
  *   'no_key'          - written without the document key.
  */
-function placeQuotes(answer, sources) {
+function placeQuotes(answer, sources, { sourceText = '' } = {}) {
   const byId = new Map(sources.items.filter(Boolean).map(x => [x.id, x]));
   const quotes = [];
+  const src = String(sourceText || '');
   const text = String(answer || '').replace(TAG, (m, num, key) => {
+    // the document's own text that looks like an id ("[S2]" in a contract) is
+    // the document's, not ours: left as written, never quoted or refused
+    if (src && src.includes(m)) return m;
     const id = `S${Number(num)}`;
     const mark = `⟪iqtibos ${letters(quotes.length)}⟫`;
     let status;

@@ -886,10 +886,18 @@ Ikki jonli sinovda bir xil shartlar dayjestda saqlangan, lekin yakuniy javobda b
 - Iqtibos «tekshirilgan» yoki «tuzatilgan» deb atalmaydi. Izohda «server parchani hujjatda belgilar bo'yicha topdi, xolos» deb yoziladi. `check.verified` doim `false`.
 - **Jonli modelda tasdiqlanmagan:** model identifikatorlarni to'g'ri ko'chiradimi va foydalanuvchiga iqtibos foydalimi.
 
-### Xarajat
-- Kirish: identifikatorlar va bitta qoida, taxminan 250–300 token.
-- Chiqish: ko'chirilgan identifikatorlar, taxminan 50–100 token.
-- Comet narxida bir tushuntirish uchun ≈ $0.0002 (taxmin, o'lchanmagan). Qo'shimcha chaqiruv yo'q.
+### Xarajat va javob hajmi (`node scripts/digest-plan-sim.js`, AI'siz)
+- **Model xarajati.** Identifikatorlar yakuniy promptga, ko'chirilganlari esa chiqishga qo'shiladi; iqtibos matnining o'zini server qo'yadi, u AI tokeni emas.
+  - Production hujjatida (lokal hisob) 26 ta identifikator berildi. Hammasi ko'chirilsa: kirish +292, chiqish +156 token, ≈ +$0.0003, ~+3 s.
+  - Qisqa shartnomada (9 ta identifikator): +228 kirish, +54 chiqish token.
+  - Bu simulyatsiya; model identifikatorni qancha ko'chirishi o'lchanmagan.
+- **Javob hajmi.** Har bir iqtibos — hujjatning to'liq jumlasi. Modelga qisqartirilgan («…») qator borgan bo'lsa ham iqtibos to'liq qo'yiladi va hech qayerda kesilmaydi.
+  - Production hujjatida jumlalar 83–822 belgi (mediana 259), jami 7 784 belgi.
+  - Hamma 26 tasi iqtibos qilinsa, ~4 500 belgilik javob taxminan 2,7 baravar uzayadi.
+  - Har bir jumla bir marta iqtibos qilinadi.
+- **Kesilgan javob.** Model javobi chegarada kesilsa, bu tepada aytiladi. Saqlangan gapning iqtibosi to'liq qoladi; tushib qolgan gapdagi identifikator iqtibos bermaydi.
+- **Hujjatning o'z matni.** Hujjatda uchragan `[S2]` yoki `[S3·beef]` kabi matn tizim identifikatori deb olinmaydi: u o'zgartirilmaydi, rad etilmaydi, iqtibos qilinmaydi.
+- Barcha holatlar `tests/explain-quotes.test.js` (9 ta) da tekshirilgan.
 
 ## 5. Qisman natija: foydalanuvchiga ko'rinishi va limit
 

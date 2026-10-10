@@ -1380,7 +1380,7 @@ async function explainDocument({ documentText, langName, callAI, digest, userId 
   // the full text that the digest lost is not invented
   // the ids become placeholders with no figure: the checks below run on the
   // model's own words, so a correct quote never hides a changed explanation
-  const placed = quotes.placeQuotes(raw, sources);
+  const placed = quotes.placeQuotes(raw, sources, { sourceText: documentText });
   const done = finishExplanation({ reply: placed.text, truncated: !!result.truncated, source: documentText, digest: d, scope, scopeStats: sel, tables,
     allowed: [String(chars), String(documentText.length), String(pages.length), d ? String(d.chunks) : ''].filter(Boolean) });
   const qNote = quotes.quotesNote(placed.quotes, sources);
