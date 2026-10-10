@@ -13711,7 +13711,9 @@
         // ready ones are promoted into the session so they survive the action.
         function collectSessionDocs() {
             var ready = aiAttachments.filter(function (a) { return a.status === 'ready'; });
-            ready.forEach(function (a) { sessionDocs.push({ name: a.name, text: a.text, docTicket: a.docTicket || null, scanId: a.scanId || null, pages: a.pages || null, chars: a.chars || null, held: !!a.held }); });
+            ready.forEach(function (a) { sessionDocs.push({ name: a.name, text: a.text, docTicket: a.docTicket || null, scanId: a.scanId || null, pages: a.pages || null, chars: a.chars || null, held: !!a.held,
+                // the extract's table reading (codes; for a master the missing words) for the trace JSON
+                tableStructure: a.tableStructure || null, tableCauses: a.tableCauses || null, tableCheck: a.tableCheck || null }); });
             if (ready.length) {
                 aiAttachments = aiAttachments.filter(function (a) { return a.status !== 'ready'; });
             }
