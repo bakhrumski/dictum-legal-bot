@@ -315,6 +315,16 @@ async function kpiDocx({ longRow = 0 } = {}) {
     assert.deepStrictEqual([ex.DIGEST_MAX_TOKENS, ex.MAX_CHUNKS, ex.DIGEST_LIMITS.maxExtraCalls, ex.DIGEST_LIMITS.timeMs], [1600, 13, 4, 75000]);
   });
 
+  await test('a sparse document keeps the old plan\'s economy: where 8 000-char parts are predicted under the target, the density plan cuts no more parts than the old one (repeated clauses counted once, as predicted)', () => {
+    for (const id of ['long-lease', 'long-service-docx', 'investment-agreement', 'relations-memorandum']) {
+      const text = loadAll().find(f => f.id === id).pages.join('\n\n');
+      const old = ex.digestChunks(text, { chunk: ex.chunkSizeFor(text.length) });
+      const now = ex.digestChunks(text);
+      assert.ok(old.chunks.every(c => ex.predictDigestTokens(c.text) <= ex.DIGEST_TARGET * ex.DIGEST_MAX_TOKENS), id);
+      assert.strictEqual(now.chunks.length, old.chunks.length, `${id}: ${now.chunks.length} vs ${old.chunks.length}`);
+    }
+  });
+
   await test('re-reads go to the most important cut parts (an annex the rest refers to before earlier parts); every cut part has its decision and reasons', async () => {
     const body = i => `${i}.1. Ijrochi ishni bajaradi va natijani topshiradi, 2-ilovadagi ko'rsatkichlarga muvofiq.`;
     const annex = ["2-ilova. Ko'rsatkichlar", ...Array.from({ length: 160 }, (_, i) => `${i + 1}-ko'rsatkich ${10 + i} foiz ${i + 2} oy`)].join('\n');
@@ -328,7 +338,9 @@ async function kpiDocx({ longRow = 0 } = {}) {
     assert.strictEqual(chosen.length, 2);
     // the annex parts win over the earlier body parts (document order took the budget before)
     const annexParts = ex.digestChunks(text).chunks.filter(c => /\d+-ko'rsatkich \d+ foiz/u.test(c.text)).map(c => String(c.index + 1));
-    assert.ok(chosen.every(x => annexParts.includes(x)), `${chosen} within ${annexParts}: ${JSON.stringify(d.reread)}`);
+    // no annex part is left out for the budget while a body part is re-read
+    // (an annex part too short to halve is left out for that reason, said)
+    assert.ok(d.reread.filter(r => annexParts.includes(r.part)).every(r => r.decision === 'reread' || r.why === 'too_short_to_split'), JSON.stringify(d.reread));
     assert.ok(d.reread.some(r => r.decision === 'reread' && r.reasons.some(x => x.includes('2-ilova'))), JSON.stringify(d.reread));
     assert.ok(d.reread.filter(r => r.decision === 'excluded').every(r => ['extra_call_limit', 'too_short_to_split'].includes(r.why)), JSON.stringify(d.reread));
     assert.ok(d.reread.some(r => r.why === 'extra_call_limit'));

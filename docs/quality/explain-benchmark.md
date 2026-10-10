@@ -809,22 +809,45 @@ Manba: master diagnostika JSON'i (51 398 belgi, 7 qism). JSON va hujjat repoda y
 - Har bir kesilgan qism uchun `coverage.reread` yozuvi bor: qism, qaror, sabab (`extra_call_limit`, `time_limit`, `too_short_to_split`), ball va asoslar.
 - Bu tartib kalibrlanmagan: u huquqiy ahamiyat o'lchovi emas, faqat navbat.
 
-### Taqqoslash (`node scripts/digest-plan-sim.js`, AI'siz)
-Har qismning haqiqiy talabi = bashorat × koeffitsient (0,88 / 1,00 / 1,15 / 1,30). Bu bitta sinovdan olingan stsenariy, prognoz emas va kafolatlangan maksimum emas. Yakuniy chaqiruv chiqarilgan, u ikkala rejada bir xil.
+### Butun xizmat bo'yicha taqqoslash (`node scripts/digest-plan-sim.js`, AI'siz)
+Hisob haqiqiy pipeline'dan stub model bilan o'tkaziladi: `buildDigest` va `explainDocument`. Unga dayjest qismlari, oldindan bo'lish, qayta o'qishlar va yakuniy chaqiruv kiradi. Yakuniy chaqiruvning kirishi haqiqiy prompt bilan sanaladi: qoidalar, dayjest, kalit qatorlar, ziddiyat nomzodlari va #427 da manba identifikatorlari.
 
-| Hujjat (sintetik) | Qismlar eski → yangi | ×1,00: eski | ×1,00: yangi | ×1,30: eski | ×1,30: yangi |
-|---|---|---|---|---|---|
-| long-lease, 37 888 | 5 → 9 | hammasi o'qildi, $0.0121, ~16 s | hammasi o'qildi, $0.0168, ~28 s | hammasi, $0.0129, ~21 s | hammasi, $0.0182, ~36 s |
-| long-service-docx, 53 538 | 7 → 12 | hammasi, $0.0169, ~17 s | hammasi, $0.0228, ~31 s | hammasi, $0.0180, ~22 s | hammasi, $0.0246, ~41 s |
-| band ro'yxati, 46 867 | 7 → 13 | 4 qism o'qilmadi, $0.0280, ~55 s | hammasi, $0.0276, ~47 s | 7 bo'lak o'qilmadi, $0.0292 | hammasi, $0.0344, ~83 s |
-| jadvalli ilova, 24 464 | 4 → 13 | 5 bo'lak o'qilmadi, $0.0203, ~62 s | hammasi, $0.0243, ~49 s | 5 bo'lak o'qilmadi, $0.0205 | 7 qism o'qilmadi, $0.0340, ~84 s |
-| juda zich, 120 000 | 13 → 13 (`over`) | 11 qism o'qilmadi | xuddi shunday | 15 bo'lak o'qilmadi | xuddi shunday |
+**O'lchangan** (bitta jonli sinov, 2026-10-09, bitta 51 398 belgili DOCX, aisha-comet):
+- kirish: 0,345 token/belgi (dayjest va yakuniy chaqiruvda bir xil);
+- dayjest chiqishi: 2,82 belgi/token;
+- yakuniy javob: 1 737 token, 37,5 s;
+- dayjest: ≈52 token/s.
 
-Xulosa:
-- Siyrak hujjatda yangi reja qimmatroq va sekinroq: 30–40% ko'p token, ikkinchi to'lqin. Uni hech nima o'qilmay qolmasligi uchun to'laymiz.
-- Zich hujjatda ko'proq qism to'liq o'qiladi.
-- Juda zich hujjat 13 qismga sig'maydi va bu ochiq ko'rsatiladi.
-- Qisman natijada birlik qaytariladi (5-band).
+**Simulyatsiya** (kalibrlanmagan stsenariy):
+- qism talabi = bashorat × 0,88 / 1,00 / 1,15 / 1,30;
+- yakuniy javob: o'lchangan 1 737 token va 3 000 token chegarasi.
+
+Bu prognoz emas va kafolatlangan maksimum emas.
+
+**Tekshiruv nuqtasi.** Production hujjatida eski reja ×1,15 bilan $0.0363 va ~96 s chiqdi; jonli sinovda $0.0356 va 90,9 s edi. Bu o'sha hujjat, mustaqil tekshiruv emas.
+
+| Hujjat (sintetik) | ×1,00, javob 1 737: eski | ×1,00: yangi | ×1,30: eski | ×1,30: yangi |
+|---|---|---|---|---|
+| long-lease, 37 888 | 5 qism, hammasi o'qildi, $0.0168 | bir xil (5 qism) | $0.0182 | bir xil |
+| long-service-docx, 53 538 | 7 qism, hammasi, $0.0224 | bir xil | $0.0242 | bir xil |
+| investment-agreement, 21 934 | 3 qism, $0.0108 | bir xil | $0.0116 | bir xil |
+| band ro'yxati, 46 867 | 4 qism o'qilmadi, birlik qaytarildi, $0.0347 | 13 qism, hammasi, $0.0388 | 6 bo'lak o'qilmadi, $0.0351 | hammasi, $0.0482, ~122 s |
+| jadvalli ilova, 24 464 | 5 bo'lak o'qilmadi, $0.0237 | 13 qism, hammasi, $0.0347 | 5 bo'lak o'qilmadi, $0.0240 | 7 qism o'qilmadi, $0.0426 |
+| juda zich, 120 000 (`over`) | 11 qism o'qilmadi, $0.0592 | 9 qism o'qilmadi, $0.0580 | hech biri o'qilmadi, 422, yakuniy chaqiruv yo'q | xuddi shunday |
+
+Javob 3 000 token chegarasida bo'lsa, har qatorga taxminan +$0.0009 va +27 s qo'shiladi.
+
+**Siyrak hujjat.** Bashorat takrorlangan bandni bir marta sanaydi. Shuning uchun 8 000 belgilik qism maqsaddan past bo'lsa, yangi reja eskisi bilan aynan bir xil bo'ladi. Siyrak hujjatlarda eski rejaning tejamkorligi saqlanadi (`tests/explain-regression.test.js`).
+
+**Moslashda ishlatilmagan hujjat.** Bunday hujjat bo'yicha o'lchangan natija **yo'q**. Ikkala diagnostika JSON'i ham bitta hujjatdan: sha256 bir xil. `scripts/digest-calibration.js` bashoratni allaqachon bo'lib o'tgan so'rov bilan AI'siz solishtiradi. Unga master'ning diagnostika JSON'i va `/api/admin/ai-usage/requests/<id>` eksporti beriladi; kesilgan chaqiruv faqat quyi chegara sifatida olinadi. Moslashda ishlatilgan sinovda xato −4…+18% (o'rtacha +4%). Kesilgan 3-qism kamida 4%, jadvalli 7-qism kamida 17% past baholangan.
+
+### «Over» holatida foydalanuvchi nima oladi
+- Bashorat chegaradan oshgan qismlar boshidan ikkiga bo'lib o'qiladi, 4 qo'shimcha chaqiruv doirasida.
+- Kesilgan qismlar muhimlik tartibida qayta o'qiladi. Qolganlari o'qilmaydi.
+- Javob tepasida: «Qisman natija — to'liq tahlil emas», o'qilmagan qismlar nomi bilan va «hujjat belgilangan chegaralar uchun juda zich … o'qishdan oldin taxmin qilingan (kalibrlanmagan baho)».
+- Javob oxirida: «limit qaytarildi». Dashboard'da ham xabar chiqadi: 200 javobdagi `quotaRefunded` endi ko'rsatiladi.
+- Birlik bir marta qaytariladi, AI xarajati ledgerda qoladi. Bu HTTP va Postgres testida sinalgan (`upload-no-ai.db`).
+- Hech bir qism o'qilmasa: 422 `DOCUMENT_NOT_READ`, yakuniy chaqiruv yo'q, birlik qaytariladi.
 
 ### Jadval fallback sababi
 - O'quvchi endi mammoth o'qiydigan 6 ta tuzilmani ham o'qiydi: qator va katak atrofidagi content control, kuzatilgan qo'shimcha, bo'linmas va yumshoq defis, `w:sym`.

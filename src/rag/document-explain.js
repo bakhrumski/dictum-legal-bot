@@ -128,18 +128,32 @@ function digestChunks(text, { chunk, overlap = OVERLAP, maxChunks = MAX_CHUNKS }
  * shorter parts), between minSplitChars and CHUNK.
  */
 function densitySize(str) {
-  const starts = [];
-  for (const m of str.matchAll(/\S+/gu)) starts.push(m.index);
+  // lines with their words; a line repeated with only its list number
+  // changed counts once per part, as predictDigestTokens counts it
+  const lines = [];
+  for (const m of str.matchAll(/[^\n]+/gu)) {
+    const t = m[0].trim();
+    const words = [...m[0].matchAll(/\S+/gu)].map(w => m.index + w.index);
+    lines.push({ start: m.index, end: m.index + m[0].length, key: t.length >= 15 ? repeatKey(t) : null, words });
+  }
   const maxWords = Math.max(1, Math.floor((DIGEST_TARGET * DIGEST_MAX_TOKENS - DIGEST_DENSITY.perCall) / DIGEST_DENSITY.perWord));
   // never shorter than a part the re-read could still halve, never longer than CHUNK
   const floor = DIGEST_LIMITS.minSplitChars;
   return (start) => {
-    // the first word at or after start (binary search)
-    let lo = 0, hi = starts.length;
-    while (lo < hi) { const mid = (lo + hi) >> 1; if (starts[mid] < start) lo = mid + 1; else hi = mid; }
-    const at = lo + maxWords;
-    const len = at < starts.length ? starts[at] - start : str.length - start;
-    return Math.max(floor, Math.min(CHUNK, len));
+    let lo = 0, hi = lines.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (lines[mid].end <= start) lo = mid + 1; else hi = mid; }
+    const seen = new Set();
+    let n = 0, end = str.length;
+    for (let i = lo; i < lines.length; i++) {
+      const l = lines[i];
+      if (l.start - start >= CHUNK) { end = l.start; break; }
+      const whole = l.start >= start;
+      if (whole && l.key) { if (seen.has(l.key)) continue; seen.add(l.key); }
+      const ws = whole ? l.words : l.words.filter(w => w >= start);
+      if (n + ws.length > maxWords) { end = ws[maxWords - n]; break; }
+      n += ws.length;
+    }
+    return Math.max(floor, Math.min(CHUNK, end - start));
   };
 }
 
@@ -542,6 +556,11 @@ function finishExplanation({ reply, truncated = false, source, digest = null, al
   const unread = digest ? digest.failed.concat(digest.truncated) : [];
   const partial = [];
   if (unread.length) partial.push(`hujjatning ${unread.map(partLabel).join(', ')} o'qilmadi yoki to'liq o'qilmadi — u qismlar tushuntirishga kirmagan`);
+  // too dense for the limits (13 parts of at most 1 600 output tokens): said
+  // plainly, as a prediction made before the reading (uncalibrated)
+  if (unread.length && digest && digest.plan && digest.plan.density && digest.plan.density.fit === 'over') {
+    partial.push("hujjat belgilangan chegaralar (13 qism, har birining qisqa mazmuni 1 600 tokengacha) uchun juda zich: uni to'liq o'qib bo'lmasligi o'qishdan oldin taxmin qilingan (kalibrlanmagan baho)");
+  }
   if (truncated) {
     text = cutToLastSentence(text);
     partial.push("javob uzunlik chegarasida to'xtadi va oxirgi to'liq gapgacha ko'rsatildi — hujjatning oxirgi qismlari tushuntirilmagan bo'lishi mumkin");
@@ -1156,11 +1175,13 @@ function rereadPriority(u, full, units) {
  * `truncated` and in `parts`. `callAI(messages, opts)` is the server's cheap
  * router; opts.detail tells the ledger which part a call read.
  */
-async function buildDigest(text, { callAI, userId = null, endpoint = '/api/draft/doc-digest', limits = {} } = {}) {
+async function buildDigest(text, { callAI, userId = null, endpoint = '/api/draft/doc-digest', limits = {}, compare = null } = {}) {
   const L = { ...DIGEST_LIMITS, ...limits };
   const full = String(text || '');
   const started = Date.now();
-  const plan = digestChunks(full);
+  // `compare` (scripts/digest-plan-sim.js only, no AI there): { chunk } runs
+  // the old fixed-size parts, { rereadOrder: 'document' } the old re-read order
+  const plan = compare && compare.chunk ? digestChunks(full, { chunk: compare.chunk }) : digestChunks(full);
   const n = plan.chunks.length;
   let calls = 0;
   // the overlap with the previous part is marked as context, so its clauses
@@ -1192,7 +1213,8 @@ async function buildDigest(text, { callAI, userId = null, endpoint = '/api/draft
   let extraCalls = 0;
   const pre = new Set();
   for (const u of [...units].sort((a, b) => b.predicted - a.predicted)) {
-    if (u.predicted < L.preSplitAt * DIGEST_MAX_TOKENS || extraCalls + 1 > L.maxExtraCalls || u.text.length < 2 * L.minSplitChars) continue;
+    // (the old plan's item count never predicted a part over the cap: no pre-split there)
+    if ((compare && compare.chunk) || u.predicted < L.preSplitAt * DIGEST_MAX_TOKENS || extraCalls + 1 > L.maxExtraCalls || u.text.length < 2 * L.minSplitChars) continue;
     pre.add(u); extraCalls += 1;
   }
   const firstUnits = units.flatMap(u => (pre.has(u) ? halvesOf(u, full).map(h => ({ ...h, preSplit: true, context: 0 })) : [u]));
@@ -1208,7 +1230,7 @@ async function buildDigest(text, { callAI, userId = null, endpoint = '/api/draft
   const inTime = Date.now() - started < L.timeMs;
   const cut = first.filter(r => r.status === 'cut')
     .map(r => ({ r, p: rereadPriority(r.u, full, units) }))
-    .sort((x, y) => y.p.score - x.p.score || x.r.u.start - y.r.u.start);
+    .sort((x, y) => (compare && compare.rereadOrder === 'document' ? 0 : y.p.score - x.p.score) || x.r.u.start - y.r.u.start);
   for (const { r, p } of cut) {
     let why = null;
     if (r.u.half) why = 'half_not_split_again';

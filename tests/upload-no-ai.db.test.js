@@ -445,6 +445,40 @@ async function docxOf(text) {
       assert.deepStrictEqual([req.doc_coverage.fullyRead, req.doc_coverage.reread.length], [false, 3]);
     });
 
+    await test('"over" (too dense for 13 parts) for an ordinary user over HTTP: the parts the model could not finish are named, the answer says the document is too dense and that the unit came back; released once, AI cost kept', async () => {
+      const clause = i => `${i}.1. Ijrochi ${String.fromCharCode(97 + (i % 26))}${String.fromCharCode(97 + ((i * 7) % 26))} ishini ${5 + (i % 9)} kun ichida bajaradi, kechiksa ${i % 5 + 1} foiz jarima to'laydi va buyurtmachiga yozma xabar beradi.`;
+      const text = Array.from({ length: 1200 }, (_, i) => clause(i + 1)).join('\n').slice(0, 119000);
+      const plan = explain.digestChunks(text);
+      assert.strictEqual(plan.density.fit, 'over');
+      const u = await makeUser();
+      await ledger.grantPaidPeriod({ adminId: u, plan: 'silver', paymentRef: `test-over-${u}-${rnd()}` });
+      const s0 = (await pool.query('SELECT count(*)::int AS n FROM llm_spend_log WHERE user_id = $1', [u])).rows[0].n;
+      // the stub model stops at the cap wherever the part needs more than it (by the same prediction)
+      explainDigestPart = user => {
+        const part = user.replace(/^Excerpt [^\n]*\n\n/u, '');
+        return explain.predictDigestTokens(part) >= explain.DIGEST_MAX_TOKENS ? { text: '- band, kesilgan', truncated: true } : { text: '- band', provider: 'stub' };
+      };
+      let r;
+      try {
+        r = await post('/api/draft/explain-document', u, { json: { documentText: text, confirmed: true } });
+      } finally { explainDigestPart = () => ({ text: '- band (1-sahifa)', provider: 'stub' }); }
+      assert.strictEqual(r.status, 200, JSON.stringify(r.body).slice(0, 400));
+      assert.deepStrictEqual([r.body.partial, r.body.quotaRefunded, r.body.coverage.summary.density.fit], [true, true, 'over']);
+      // what the user reads: which parts were left out, why, and that the unit came back
+      assert.ok(/^⚠️ \*\*Qisman natija — to'liq tahlil emas:\*\* hujjatning \d+-qism/u.test(r.body.reply), r.body.reply.slice(0, 300));
+      for (const p of r.body.coverage.unread) assert.ok(r.body.reply.includes(p), p);
+      assert.ok(r.body.reply.includes("uchun juda zich: uni to'liq o'qib bo'lmasligi o'qishdan oldin taxmin qilingan (kalibrlanmagan baho)"));
+      assert.ok(r.body.reply.includes("limit qaytarildi"));
+      assert.ok(r.body.coverage.reread.every(x => x.decision === 'reread' || x.why));
+      await settle(400);
+      const rows = (await pool.query("SELECT job_key, status, release_reason FROM tariff_usage WHERE admin_id = $1 AND status IS NOT NULL", [u])).rows;
+      assert.deepStrictEqual(rows.map(x => [x.status, x.release_reason]), [['released', 'explain_partial_read']]);
+      assert.strictEqual(await ledger.release(rows[0].job_key, 'again'), false);
+      assert.strictEqual((await ledger.balance({ adminId: u })).services.analysis.used, 0);
+      const spent = (await pool.query('SELECT cost_usd::float AS cost FROM llm_spend_log WHERE user_id = $1 ORDER BY seq OFFSET $2', [u, s0])).rows;
+      assert.ok(spent.length > plan.chunks.length && spent.every(x => x.cost > 0), String(spent.length));
+    });
+
     await test('a long document none of whose parts is read whole (an ordinary user): no final call, 422, the unit released, every digest call kept in the ledger with its part, finish_reason and cost', async () => {
       const f = loadAll().find(x => x.id === 'long-lease');
       const text = explain.markPages(f.pages);

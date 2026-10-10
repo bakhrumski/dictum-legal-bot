@@ -11669,7 +11669,11 @@
                     try {
                         var url = typeof input === 'string' ? input : (input && input.url) || '';
                         var type = response.headers.get('Content-Type') || '';
-                        if (!response.ok && /\/api\//.test(url) && type.indexOf('application/json') !== -1) {
+                        // a partial explanation (document not read whole) is delivered
+                        // (200) with its units released: say so too (the opinion's
+                        // handler already calls showRefundNotice itself)
+                        var partialService = /\/api\/draft\/explain-document(?:\?|$)/.test(url);
+                        if ((!response.ok || partialService) && /\/api\//.test(url) && type.indexOf('application/json') !== -1) {
                             response.clone().json().then(showRefundNotice).catch(function() {});
                         }
                     } catch (_) {}
