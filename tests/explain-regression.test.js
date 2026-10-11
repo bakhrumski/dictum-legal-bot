@@ -16,7 +16,7 @@ const os = require('os');
 const path = require('path');
 const ex = require('../src/rag/document-explain');
 const rel = require('../src/rag/clause-relations');
-const { docxText, withoutMarkup } = require('../src/ocr/docx-text');
+const { docxText, withoutMarkup, compareWords } = require('../src/ocr/docx-text');
 const ledger = require('../src/rag/tariff-ledger');
 const { docx, p, cell, row, table } = require('./helpers/mini-docx');
 const { loadAll } = require('./fixtures/explain-eval/load');
@@ -386,6 +386,51 @@ async function kpiDocx({ longRow = 0 } = {}) {
     assert.ok(f.some(x => x.kind === "bog'lanish" && x.note.includes('«60 kalendar kun»')), JSON.stringify(f));
     // the report clause states 10 days on its own act: no flag from the reply clause
     assert.deepStrictEqual(rel.relationFlags('Ijrochi hisobotni 10 ish kuni ichida topshiradi.', s2).filter(x => x.kind === "bog'lanish"), []);
+  });
+
+  // ── 2026-10-11: annex headings with a line break (production extract) ──
+
+  await test('annex headings broken by a line break ("...shartnomaga<br/>1-ilova"): mammoth joins the words, the reader keeps them apart - a separator difference, not lost text; the tables stay in rows', async () => {
+    const head = n => `<w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>Xizmat ko'rsatish shartnomaga</w:t><w:br/><w:t>${n}-ilova</w:t></w:r></w:p>`;
+    const kpi = table([row([cell("Ko'rsatkich"), cell('Muddat')], { header: true }), row([cell('Hisobot'), cell('mart')])]);
+    const d = await docxText(await docx(p('Kirish.') + head(1) + kpi + head(2) + kpi + head(3) + kpi));
+    assert.deepStrictEqual([d.structure, d.wordCheck.missing, d.wordCheck.separatorOnly], ['rows', 0, 3], JSON.stringify(d.wordCheck));
+    assert.deepStrictEqual(d.separatorOnly.map(e => [e.word, e.parts, e.separator, e.side]), [
+      ['shartnomaga1', ['shartnomaga', '1'], 'line_break', 'mammoth_joined'],
+      ['shartnomaga2', ['shartnomaga', '2'], 'line_break', 'mammoth_joined'],
+      ['shartnomaga3', ['shartnomaga', '3'], 'line_break', 'mammoth_joined'],
+    ]);
+    assert.ok(d.text.includes('shartnomaga\n1-ilova'), 'the reader keeps the line break');
+  });
+
+  await test('real losses are still found: a word, a number, a repetition, and a join whose parts the reader needs elsewhere', () => {
+    // a word
+    assert.strictEqual(compareWords('Shartnoma imzolandi va kuchga kirdi', 'Shartnoma imzolandi kuchga kirdi').missing, 1);
+    // a number (digits are compared like letters, never dropped)
+    assert.strictEqual(compareWords("Jarima 100 000 so'm", "Jarima 100 so'm").missing, 1);
+    assert.strictEqual(compareWords('2027-yil mart', '2026-yil mart').missing, 1);
+    // a repetition
+    assert.strictEqual(compareWords('band band band', 'band band').missing, 1);
+    // a joined word whose parts the reader does not have to spare: still lost
+    const r = compareWords('shartnomaga1 shartnomaga 1', 'shartnomaga 1');
+    assert.deepStrictEqual([r.missing, r.separatorOnly], [1, 0]);
+    // the same letters split by punctuation are not "only a separator"
+    assert.strictEqual(compareWords('shartnomaga1', 'shartnomaga.1').missing, 1);
+    // only a space or a line break, both ways, each explanation used once
+    assert.deepStrictEqual(pick(compareWords('ilova1 ilova1', 'ilova\n1 ilova 1')), [0, 2]);
+    assert.deepStrictEqual(pick(compareWords('ilova1 ilova1', 'ilova\n1')), [1, 1]);
+    assert.deepStrictEqual(pick(compareWords('Shartnoma ga 1', 'Shartnomaga 1')), [0, 1]);
+    function pick(x) { return [x.missing, x.separatorOnly]; }
+  });
+
+  await test('a real loss in a document with a line-break heading still sends it to mammoth, and the diagnosis names only the lost word', async () => {
+    const xml = p('Kirish.') + '<w:p><w:r><w:t>Shartnomaga</w:t><w:br/><w:t>1-ilova</w:t></w:r></w:p>' + table([row([cell('Ish'), cell('Muddat')], { header: true }), row([cell('Hisobot'), cell('mart')])]);
+    const stub = { extractRawText: async () => ({ value: "Kirish.\n\nShartnomaga1-ilova\n\nIsh\n\nMuddat\n\nHisobot\n\nmart\n\nQoshimcha" }) };
+    const d = await docxText(await docx(xml), { mammoth: stub });
+    assert.deepStrictEqual([d.structure, d.wordCheck.missing, d.wordCheck.separatorOnly], ['lost', 1, 1]);
+    assert.ok(!d.diagnosis.missingWords.some(m => m.word === 'shartnomaga1'), JSON.stringify(d.diagnosis.missingWords));
+    assert.deepStrictEqual(d.diagnosis.missingWords.map(m => m.word), ['qoshimcha']);
+    assert.deepStrictEqual(d.diagnosis.separatorOnly.map(e => e.word), ['shartnomaga1']);
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

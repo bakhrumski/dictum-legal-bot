@@ -163,7 +163,11 @@ Known state of the suites (Sept 2026):
   priority (referred annex/table, rows, figures), each decision in
   `coverage.reread`. DOCX fallback causes are read from the XML (codes to
   ticket/coverage; the words to a DB master only, `no-store`;
-  `scripts/docx-table-check.js` runs locally). Digest -> answer and period
+  `scripts/docx-table-check.js` runs locally). The word check counts a
+  word that differs only by a space or a line break (mammoth drops `w:br`:
+  "shartnomaga1-ilova") as `separatorOnly`, not lost - only when the other
+  side holds the same letters and digits as neighbouring spare words; any
+  other word, number or repetition missing still sends the text to mammoth. Digest -> answer and period
   checks compare only the answer sentence on the same clause; a weak match
   is "mos band aniqlanmadi", never a change. Quality is unconfirmed until the lawyer-reviewed
   benchmark (`docs/quality/explain-benchmark.md`) runs.

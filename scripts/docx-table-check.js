@@ -28,6 +28,13 @@ async function main() {
   const d = await docxText(fs.readFileSync(file));
   console.log(`jadvallar: ${d.tables} · o'quvchi: ${d.reader} · tuzilish: ${d.structure}`);
   if (d.wordCheck) console.log(`so'z tekshiruvi: ${d.wordCheck.missing} / ${d.wordCheck.words} so'z jadval o'quvchisida topilmadi`);
+  // words that differ only where a space or a line break falls (e.g. mammoth
+  // drops a w:br: "shartnomaga<br/>1-ilova" -> "shartnomaga1-ilova"): not lost
+  const sepOnly = d.separatorOnly || (d.diagnosis && d.diagnosis.separatorOnly) || [];
+  if (sepOnly.length) {
+    console.log(`\nfaqat ajratgich farqi (matn yo'qolishi emas): ${sepOnly.reduce((n, e) => n + e.count, 0)} ta`);
+    if (!codesOnly) for (const e of sepOnly) console.log(`  ${e.side === 'mammoth_joined' ? 'mammoth' : "jadval o'quvchisi"}: «${e.word}» = ${e.parts.map(x => `«${x}»`).join(` + ${e.separator === 'line_break' ? 'qator chegarasi' : e.separator === 'tab' ? 'tab' : "bo'shliq"} + `)}${e.count > 1 ? ` (${e.count} marta)` : ''}`);
+  }
   if (d.structure !== 'lost') { console.log(d.structure === 'rows' ? "Jadvallar qatorlab o'qildi (fallback yo'q)." : "Hujjatda jadval yo'q."); return; }
   console.log('\nsabablar (topilmagan so\'zlar atrofidagi tuzilmalar):');
   for (const c of d.causes) console.log(`  ${c}: ${STRUCTURE_CODES[c] || "noma'lum tuzilma"}`);
