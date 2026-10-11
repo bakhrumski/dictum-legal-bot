@@ -82,6 +82,10 @@ function mountExplainDocument(app, deps) {
       if (!result.coverage.documentFullyRead && typeof tariffModule.refundUsage === 'function') {
         refund = tariffModule.refundUsage(res, 'explain_partial_read');
       }
+      // the user is told in the answer too, not only by a notice
+      const reply = refund.quotaRefunded
+        ? `${result.reply}\n\n↩ Hujjat to'liq o'qilmagani uchun bu tushuntirish limitdan hisoblanmadi — limit qaytarildi.`
+        : result.reply;
       // The stage trace (digest, scope lines, raw answer of THIS request)
       // goes back only when asked for explicitly (body.trace === true) by an
       // account whose role is master in the database, not only in the
@@ -99,7 +103,7 @@ function mountExplainDocument(app, deps) {
           createdAt: new Date().toISOString() };
         res.set('Cache-Control', 'no-store');
       }
-      res.json({ reply: result.reply, provider: result.provider, coverage: result.coverage, check: result.check,
+      res.json({ reply, provider: result.provider, coverage: result.coverage, check: result.check,
         partial: result.coverage.partial, trace, ...refund });
     } catch (e) {
       console.error('[Explain Doc] error:', e.message);

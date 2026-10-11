@@ -171,8 +171,23 @@ function polarityAt(toks, k) {
   if (k > 0 && /^(?:не|нет)$/u.test(toks[k - 1].w)) return 'neg';
   if (win.some(w => /^aniqlanma/u.test(w))) return 'not_found';
   if (win.some((w, i) => NEG_WORD.test(w) && (i > 0 || /ma(?:gan|di|ydi)/u.test(w)))) return 'neg';
-  if (win.some((w, i) => i > 0 && DONE_WORD.test(w)) || DONE_WORD.test(win[0] || '') && /gan$/u.test(win[0])) return 'done';
+  if (win.some((w, i) => i > 0 && DONE_WORD.test(w)) || DONE_WORD.test(win[0] || '') && /gan$/u.test(win[0])) {
+    // "A imzolangan va B o'tkazilganidan keyin ... to'lanadi": A is one of the
+    // events the period runs from (a precondition), not a status (2026-10-09)
+    return precondition(toks, k) ? 'other' : 'done';
+  }
   return 'other';
+}
+function precondition(toks, k) {
+  let joined = false;
+  for (let j = k + 1; j < toks.length && j <= k + 15; j++) {
+    const w = toks[j].w;
+    if (toks[j].punct) return false;
+    if (/^(?:va|hamda|и)$/u.test(w)) { joined = true; continue; }
+    if (/^(?:keyin|so'ng|boshlab|после)$/u.test(w)) return true;
+    if (joined && SINCE_WORD.test(w)) return true;
+  }
+  return false;
 }
 const POLARITY_LABEL = { neg: 'inkor', done: 'bajarilgan', not_found: 'aniqlanmagan', other: 'boshqa' };
 
@@ -291,17 +306,29 @@ function analyseText(text) {
 
 /** Source sentences on the same matter as `a`: the same quoted name, else the most shared words. */
 function matching(a, src) {
+  // a clause named by its number ("2.1 | ...", "4.5-band") is that clause
+  const refs = [...a.text.matchAll(/(?:^|[\s(|-])(\d+\.\d+(?:\.\d+)*)(?:\.|-band|\s*\||\s)/gu)].map(m => m[1]);
+  if (refs.length) {
+    const byRef = src.sentences.filter(s => refs.some(r => s.text.startsWith(`${r}.`) || s.text.startsWith(`${r} `)));
+    if (byRef.length) return [...new Set(byRef.flatMap(s => (s.next ? [s, s.next] : [s])))];
+  }
   if (a.quoted.length) {
     const byName = src.sentences.filter(s => a.quoted.some(q => s.quoted.includes(q)));
     if (byName.length) return [...new Set(byName.flatMap(s => (s.next ? [s, s.next] : [s])))];
   }
   // the best match and those close to it: a long answer sentence may speak
   // of two neighbouring source sentences
+  // party words ("Taraf", "Investor") do not make two sentences one matter
+  // (2026-10-09): at least two shared words must be the matter's own
+  // the act itself ("tuziladi" / "tuzilishi") counts as one shared word
+  const actsA = new Set((a.acts || []).map(x => x.act));
   const scored = [];
   for (const s of src.sentences) {
-    let shared = 0;
-    for (const w of a.stems) if (s.stems.has(w)) shared++;
-    if (shared < 2 || shared / Math.max(1, a.stems.size) < 0.4) continue;
+    let shared = 0, own = 0;
+    for (const w of a.stems) if (s.stems.has(w)) { shared++; if (!PARTY_STEMS.has(w)) own++; }
+    const actShared = [...new Set((s.acts || []).map(x => x.act))].filter(x => actsA.has(x)).length;
+    shared += actShared; own += actShared;
+    if (shared < 2 || own < 2 || shared / Math.max(1, a.stems.size + actsA.size) < 0.4) continue;
     scored.push({ s, shared });
   }
   const best = Math.max(0, ...scored.map(x => x.shared));
@@ -355,12 +382,28 @@ function relationFlags(answer, src, { asserted = () => true, denied = () => fals
       // "... bitim tuzish muddati emas": a bare "emas" right after the claim, in its clause
       || /^\s*(?:[\p{L}'-]+\s+){0,2}(?:emas|не является)(?![\p{L}'])/u.test(a.lower.slice(to).split(/[,;:]/u)[0]);
     // periods and dates on another act
+    // a period is compared with the same figure in the source sentences on
+    // the same matter only (2026-10-09): the same "30 kun" in another clause
+    // is another clause's period, not this one moved
+    let matched = null;
+    const matchedFigs = () => { if (!matched) matched = matching(a, src).flatMap(x => x.figures); return matched; };
     for (const f of a.figures) {
       const same = (srcBy.get(f.key) || []).filter(x => f.kind !== 'date' || x.year == null || f.year == null || x.year === f.year);
-      if (f.act && f.kind !== 'percent' && f.kind !== 'amount') {
-        const acts = new Set(same.map(x => x.act).filter(Boolean));
-        if (acts.size && !acts.has(f.act) && !claimDenied(Math.min(f.at, f.actAt), Math.max(f.end, f.actEnd))) {
-          add("bog'lanish", `«${f.raw}» ${where} «${ACT_LABEL[f.act]}» bilan, hujjatda «${[...acts].map(x => ACT_LABEL[x]).join('», «')}» bilan`);
+      if (f.act && f.kind !== 'percent' && f.kind !== 'amount' && same.length && !claimDenied(Math.min(f.at, f.actAt), Math.max(f.end, f.actEnd))) {
+        const here = matchedFigs();
+        const inClause = same.filter(x => here.includes(x));
+        const acts = new Set(inClause.map(x => x.act).filter(Boolean));
+        if (acts.size && !acts.has(f.act)) {
+          // the clause on this matter has this period, on another act
+          add("bog'lanish", `«${f.raw}» ${where} «${ACT_LABEL[f.act]}» bilan, hujjatning shu bandida «${[...acts].map(x => ACT_LABEL[x]).join('», «')}» bilan`);
+        } else if (!inClause.length) {
+          // the clause on this matter states its own period for this act, and
+          // this one is the period of another act elsewhere: named as such
+          const own = here.filter(x => x.act === f.act && x.kind === f.kind && x.key !== f.key);
+          const elsewhere = new Set(same.map(x => x.act).filter(Boolean));
+          if (own.length && elsewhere.size && !elsewhere.has(f.act)) {
+            add("bog'lanish", `«${f.raw}» ${where} «${ACT_LABEL[f.act]}» bilan; hujjatning shu bandida «${ACT_LABEL[f.act]}» uchun «${own[0].raw}», «${f.raw}» esa «${[...elsewhere].map(x => ACT_LABEL[x]).join('», «')}» uchun`);
+          }
         }
       }
       // a definition's threshold as a sanction
@@ -572,7 +615,9 @@ const KEEP_WORDS = [
   { label: 'birinchi navbatda', re: /birinchi navbatda|в первую очередь/u },
   { label: 'solidar', re: /solidar|солидарн/u },
 ];
-const START = /([\p{L}'-]+)\s+(?:sana|kun|payt)\p{L}*\s+(?:boshlab|dan)?/u;
+// the event a period counts from: "<event> sanadan / kundan / paytdan (boshlab)";
+// "ish kuni", "bank kuni", "kalendar kun" are units, not events (2026-10-09)
+const START = /(?<![\p{L}'-])(?!(?:ish|bank|kalendar|ishchi)\s)([\p{L}'-]+)\s+(?:sana|kun|payt)\p{L}*?(?:dan|idan)(?:\s+boshlab)?(?![\p{L}])/u;
 const PERMIT = /mumkin|haqli|huquqiga ega|вправе|может/u;
 const OBLIGE = /kerak|shart(?! bilan)|majbur|lozim|обязан|должн/u;
 
@@ -600,19 +645,38 @@ const covered = (item, text) => { const st = [...stemsOf(item)]; if (!st.length)
 // line are not listed (an answer rephrases them; scope words, periods and
 // exceptions inside them are checked through their own parts)
 const PART_WEIGHT = { 'qamrov so\'zi': 5, 'muddat boshlanishi': 5, oqibat: 4, istisno: 4, 'boshqa qiymat': 4, subyekt: 3 };
-const GENERIC_WHO = /^(?:taraflar|tomonlar|har bir taraf|taraf|стороны)$/u;
-function digestAnswerSignals(digestText, answer, { max = 6 } = {}) {
+// the parties in general, or a document rather than a person ("Shartnoma → bekor qilinadi")
+const GENERIC_WHO = /^(?:taraflar|tomonlar|har bir taraf|taraf|стороны|shartnoma|bitim|hujjat|ilova|договор)$/u;
+// party words name who acts, not the matter: two lines about different
+// clauses share them all the time ("Taraf", "Investor", "Jamiyat")
+const PARTY_STEMS = new Set(['taraf', 'tomon', 'ishti', 'inves', 'jamiy', 'sotuv', 'xarid', 'ijara', 'pudra', 'buyur', 'storo']);
+/**
+ * Digest -> answer (2026-10-08; matching tightened 2026-10-09): a digest
+ * line is compared with the answer only where the answer speaks of the SAME
+ * clause. The match must share words of the line's own topic (not only party
+ * words), and a period, a value or the event a period runs from is compared
+ * only where the matched sentence also names the line's act - two clauses
+ * that share "Taraf" and "30 kun" are not one clause. A weaker match is not
+ * compared at all: it is returned as { match: 'uncertain', note: 'mos band
+ * aniqlanmadi' } with no claimed change. Returns [{ kind, topic, weight,
+ * lost, match }], confident ones first (at most `max`), then at most
+ * `maxUncertain` uncertain ones.
+ */
+function digestAnswerSignals(digestText, answer, { max = 6, maxUncertain = 3 } = {}) {
   const ans = sentencesOf(answer).map(x => ({ text: x, lower: lower(x), stems: stemsOf(x) }));
   // the actors the digest names (not "the parties")
   // named actors only: a capitalised party ("Investor", "Jamiyat"), not "shaxs" or "-"
   const actors = [...new Set(String(digestText || '').split('\n').map(parseDigestLine).filter(Boolean)
     .map(d => d.who.replace(/\([^)]*\)/gu, '').trim()).filter(w => /^[«"“]?\p{Lu}/u.test(w) && !GENERIC_WHO.test(lower(w)) && w.split(/\s+/u).length <= 3))];
-  const out = [];
+  const actorStems = new Set([...PARTY_STEMS, ...actors.flatMap(x => [...stemsOf(x)])]);
+  const own = set => new Set([...set].filter(w => !actorStems.has(w)));
+  const out = [], uncertain = [];
   for (const raw of String(digestText || '').split('\n')) {
     const d = parseDigestLine(raw);
     if (!d || !(d.act || Object.keys(d.fields).length)) continue;
     const key = stemsOf(`${d.topic} ${d.who} ${d.act}`);
     if (key.size < 2) continue;
+    const keyOwn = own(key), topicOwn = own(stemsOf(d.topic)), actOwn = own(stemsOf(d.act));
     // the answer's sentences on the same thing (and the one after each)
     let best = 0, idx = [];
     ans.forEach((a, i) => {
@@ -623,38 +687,57 @@ function digestAnswerSignals(digestText, answer, { max = 6 } = {}) {
     if (!idx.length) continue; // the answer does not speak of it: coverage, not a change
     const near = idx.flatMap(i => [ans[i], ans[i + 1]]).filter(Boolean);
     const nl = near.map(x => x.lower).join(' ');
+    const matched = idx.map(i => ans[i]);
+    const ownShared = Math.max(...matched.map(a => [...keyOwn].filter(w => a.stems.has(w)).length));
+    const topicHit = !topicOwn.size || matched.some(a => [...topicOwn].some(w => a.stems.has(w)));
+    // the same clause: words of its own matter, not only party words
+    const sure = ownShared >= 2 && topicHit;
+    // the same act: needed before a period, value or start is compared
+    const sameAct = !actOwn.size || matched.some(a => [...actOwn].some(w => a.stems.has(w)));
     const lineL = lower(d.raw);
     const lost = [];
     for (const w of KEEP_WORDS) if (w.re.test(lineL) && !w.re.test(nl)) lost.push({ part: 'qamrov so\'zi', value: w.label });
+    // a value, a start or an actor is compared in the matched sentences
+    // themselves, never in the sentence after them (often the next item of a
+    // list, another clause)
+    const ml = matched.map(x => x.lower).join(' ');
     // the same kind of figure with another value where the answer speaks of it
-    const nearFigs = figuresIn(nl);
+    const nearFigs = figuresIn(ml);
+    let compared = false;
     for (const f of figuresIn(lineL)) {
       if (nearFigs.some(g => g.key === f.key)) continue;
       // only where the answer states one value of that kind (a list of values is not one claim)
       const same = nearFigs.filter(g => g.key.split('|')[1] === f.key.split('|')[1] && g.kind === f.kind);
       const other = same.length === 1 ? same[0] : null;
-      if (other) lost.push({ part: 'boshqa qiymat', value: `dayjestda «${f.raw}», javobda «${other.raw}»` });
+      if (other) { compared = true; if (sameAct) lost.push({ part: 'boshqa qiymat', value: `dayjestda «${f.raw}», javobda «${other.raw}»` }); }
     }
     for (const k of ['oqibat', 'istisno']) for (const item of listItems(d.fields[k])) if (!covered(item, nl)) lost.push({ part: k, value: item });
     // the event a period counts from ("yuborilgan sanadan" vs "olgan sanadan")
     const ds = (lower(d.fields.muddat || '').match(START) || [])[1];
-    const as = (nl.match(START) || [])[1];
-    if (ds && as && stem(ds) !== stem(as)) lost.push({ part: 'muddat boshlanishi', value: `dayjestda «${ds} …dan», javobda «${as} …dan»` });
+    const as = (ml.match(START) || [])[1];
+    if (ds && as && stem(ds) !== stem(as)) { compared = true; if (sameAct) lost.push({ part: 'muddat boshlanishi', value: `dayjestda «${ds} …dan», javobda «${as} …dan»` }); }
     // who acts: the answer, on this act, names another actor the digest knows
     const who = d.who.replace(/\([^)]*\)/gu, '').trim();
-    const nearRaw = near.map(x => x.text).join(' ');
-    if (actors.includes(who) && !nearRaw.includes(who)) {
+    const nearRaw = matched.map(x => x.text).join(' ');
+    if (actors.includes(who) && !near.map(x => x.text).join(' ').includes(who)) {
       const otherActor = actors.find(x => x !== who && !who.includes(x) && !x.includes(who) && nearRaw.includes(x));
-      if (otherActor) lost.push({ part: 'subyekt', value: `dayjestda «${who}», javobda «${otherActor}»` });
+      if (otherActor && sameAct) lost.push({ part: 'subyekt', value: `dayjestda «${who}», javobda «${otherActor}»` });
+    }
+    if (!sure) {
+      // a weak match is not compared: nothing is claimed changed
+      if (lost.length || compared) uncertain.push({ kind: 'dayjest_javob', match: 'uncertain', topic: d.topic.slice(0, 80), weight: 0, lost: [], note: 'mos band aniqlanmadi' });
+      continue;
     }
     if (!lost.length) continue;
     lost.sort((x, y) => PART_WEIGHT[y.part] - PART_WEIGHT[x.part]);
     // how surely the answer's sentence is about this line, and how much is missing
     const strength = best / key.size;
     const weight = lost.reduce((t, l) => t + PART_WEIGHT[l.part], 0) * strength;
-    out.push({ kind: 'dayjest_javob', topic: d.topic.slice(0, 80), weight, lost: lost.slice(0, 4) });
+    out.push({ kind: 'dayjest_javob', match: 'same_clause', topic: d.topic.slice(0, 80), weight, lost: lost.slice(0, 4) });
   }
-  return out.sort((x, y) => y.weight - x.weight).slice(0, max);
+  const seen = new Set();
+  const unc = uncertain.filter(u => !seen.has(u.topic) && seen.add(u.topic)).slice(0, maxUncertain);
+  return [...out.sort((x, y) => y.weight - x.weight).slice(0, max), ...unc];
 }
 
 /**
@@ -730,5 +813,5 @@ module.exports = {
   tableRows, tableFlags,
   digestAnswerSignals, parseDigestLine, permissionFlags,
   POLARITY_LABEL, ACTS, ACT_LABEL, actOf, sentencesOf, figuresIn, analyseSentence, analyseText, relationFlags, relationTrace, relationScore, slotsOf,
-  definitionsIn, partiesOf, DEFINITION,
+  definitionsIn, partiesOf, DEFINITION, matching,
 };

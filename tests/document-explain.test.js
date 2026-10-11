@@ -160,20 +160,24 @@ const digestWith = callAI => t => ex.buildDigest(t, { callAI });
     assert.deepStrictEqual(ai.calls[ai.calls.length - 1].opts.detail, { phase: 'final', mode: 'digest' });
   });
 
-  await test('a long DOCX (no page marks, ~50 000 chars, annex table at the end): 7 compact parts, every key clause reaches a part, no page numbers asked for, a substituted status flagged', async () => {
+  await test('a long DOCX (no page marks, ~50 000 chars, annex table at the end): parts sized by predicted digest (each under the target), every key clause reaches a part, no page numbers asked for, a substituted status flagged', async () => {
     const f = byId('long-service-docx');
     const text = f.pages.join('\n\n');
     assert.ok(text.length > 50000 && ex.pagesIn(text).length === 0);
     const ai = recorder((m) => /^Excerpt /u.test(m[1].text) ? { text: '- band', provider: 'stub' } : { text: 'Izoh.', provider: 'stub' });
     const r = await ex.explainDocument({ documentText: text, langName: 'Uzbek', callAI: ai, digest: digestWith(ai) });
     const parts = ai.calls.filter(c => /^Excerpt /u.test(c.messages[1].text));
-    assert.strictEqual(parts.length, 7);
+    const plan = ex.digestChunks(text);
+    assert.strictEqual(parts.length, plan.chunks.length);
+    assert.strictEqual(plan.density.fit, 'fits');
+    assert.ok(plan.chunks.every(c => ex.predictDigestTokens(c.text) <= Math.round(ex.DIGEST_TARGET * ex.DIGEST_MAX_TOKENS) * 1.06), JSON.stringify(plan.density));
     assert.ok(parts.every(c => c.messages[1].text.length < 8200 && c.opts.maxTokens === 1600));
     const all = parts.map(c => c.messages[1].text).join('\n');
     for (const k of f.keyPoints) assert.ok(all.includes(k.anchor), `${k.id} reaches a digest part`);
     assert.ok(parts[parts.length - 1].messages[1].text.includes('Jami: 48 000 000'), 'the annex table is in the last part');
     assert.ok(ai.calls[ai.calls.length - 1].messages[1].text.includes("Sahifa belgilari yo'q: sahifa raqamini keltirma"));
-    assert.deepStrictEqual([r.coverage.mode, r.coverage.chunks, r.coverage.documentFullyRead], ['digest', 7, true]);
+    assert.deepStrictEqual([r.coverage.mode, r.coverage.chunks, r.coverage.documentFullyRead], ['digest', plan.chunks.length, true]);
+    assert.strictEqual(r.coverage.summary.density.fit, 'fits');
     // "application filed" is not "registered": a substitution is flagged for a manual check
     const sub = ex.finishExplanation({ reply: "Tovar belgisi ro'yxatdan o'tmagan.", source: text });
     assert.deepStrictEqual(sub.check.phrases.map(p => p.phrase), ["ro'yxatdan o'tmagan"]);
@@ -512,7 +516,10 @@ const digestWith = callAI => t => ex.buildDigest(t, { callAI });
     const src = ex.markPages(byId('due-diligence').pages);
     const done = ex.finishExplanation({ reply: "**Intellektual mulk**\nBelgi ro'yxatdan o'tmagan. Bu eng katta xatar.", source: src });
     assert.ok(done.reply.includes("Belgi ro'yxatdan o'tmagan. Bu eng katta xatar."), 'not removed');
-    assert.ok(done.reply.includes("- Asosiy matn — manba bilan qo'lda tekshirish kerak: «ro'yxatdan o'tmagan» (holat), «eng katta» (ustuvorlik) — hujjat matnida bu ibora yoki uning sinonimi uchramadi."), done.reply);
+    assert.ok(done.reply.includes("- Asosiy matn — manba bilan qo'lda tekshirish kerak: «ro'yxatdan o'tmagan» (holat), «eng katta» (ustuvorlik) — hujjat matnida bu ibora yoki uning sinonimi uchramadi"), done.reply);
+    // the act itself now counts toward matching the clause (2026-10-09): the
+    // document denies the filing, the answer the registration - named too
+    assert.ok(done.reply.includes("javobda «ro'yxatdan o'tkazish» inkor; hujjatning shu bandida inkor — «ariza topshirish» (holat)"), done.reply);
     const ok = ex.finishExplanation({ reply: "Ariza berilmagan. Reklama faoliyati uchun litsenziya mavjud emas. Qarz va majburiy ijro aniqlanmadi (2026-yil 12-avgust holatiga).", source: src });
     assert.deepStrictEqual(ok.check.phrases, []);
     assert.ok(ok.reply.includes("Mexanik solishtirishda belgilanadigan joy topilmadi. Bu mazmun yoki huquqiy to'g'rilik tasdig'i emas."), ok.reply);

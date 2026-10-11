@@ -40,12 +40,15 @@ let digest = read(arg('--digest'));
 let answer = read(arg('--answer'));
 let checks = arg('--checks') ? JSON.parse(read(arg('--checks'))) : null;
 let bundleTrace = null;
+let bundleCoverage = null, bundleExtract = null;
 
 if (arg('--bundle')) {
   const b = JSON.parse(read(arg('--bundle')));
   source = source || b.source || null;
   const t = (b.response && b.response.trace) || {};
   bundleTrace = t;
+  bundleCoverage = (b.response && b.response.coverage) || null;
+  bundleExtract = b.extract || null;
   // the bundle must be one request's: its document hash against the source it carries
   if (t.documentSha256 && b.source) {
     const h = require('crypto').createHash('sha256').update(String(b.source).replace(/\u0000/gu, '').trim()).digest('hex'); // as the server reads it
@@ -119,7 +122,9 @@ for (const [stage, text] of [['dayjest', digest], ['javob', answer]]) {
 if (digest != null) {
   const sig = rel.digestAnswerSignals(digest, answer, { max: 40 });
   console.log(`\nDIGEST -> ANSWER - MECHANICAL, word for word (a reason to check by hand, never a verdict; the answer may say it in other words) (${sig.length}):`);
-  for (const x of sig) console.log(`  «${x.topic}»: ${x.lost.map(l => `${l.part} — ${l.value}`).join('; ')}`);
+  for (const x of sig.filter(y => y.match !== 'uncertain')) console.log(`  «${x.topic}»: ${x.lost.map(l => `${l.part} — ${l.value}`).join('; ')}`);
+  const unc = sig.filter(y => y.match === 'uncertain');
+  if (unc.length) console.log(`  no matching clause found in the answer (not compared, not a change): ${unc.map(x => `«${x.topic}»`).join(', ')}`);
   const tf = rel.tableFlags(digest, source, { stage: 'dayjest' });
   if (tf.length) { console.log('\nTable rows - digest:'); for (const f of tf) console.log(`  [${f.kind}] ${f.note}`); }
 }
@@ -132,4 +137,22 @@ if (bundleTrace && bundleTrace.scopeCounts) {
   const c = bundleTrace.scopeCounts;
   console.log(`\nKey-line list given to the final model: ${c.candidates} candidates, ${c.selected} selected (${c.referenced || 0} as references to text the model already had), ${c.dropped} not fitted, ${c.shortened} shortened.`);
   for (const l of bundleTrace.scopeDropped || []) console.log(`  not fitted: ${l}`);
+}
+// ── How parts were sized and re-read, and why DOCX tables were lost (no AI) ──
+if (bundleCoverage && bundleCoverage.plan && bundleCoverage.plan.density) {
+  const d = bundleCoverage.plan.density;
+  console.log(`\nParts: ${bundleCoverage.chunks}, sized by predicted digest output (uncalibrated): ${d.fit === 'over' ? `too dense for ${bundleCoverage.chunks} parts at the target, ${d.overCap} predicted at or over the cap` : `each predicted under the cap (max ${d.predictedMax})`}.`);
+  for (const p of bundleCoverage.plan.predicted || []) console.log(`  part ${p.part}: ${p.chars} chars, predicted ${p.predictedTokens} output tokens`);
+}
+if (bundleCoverage && (bundleCoverage.reread || []).length) {
+  console.log('\nCut parts - re-read or left out (priority uncalibrated: an ordering, not a measure of legal weight):');
+  for (const r of bundleCoverage.reread) console.log(`  part ${r.part}: ${r.decision}${r.why ? ` (${r.why})` : ''}, score ${r.score}${r.reasons.length ? ` - ${r.reasons.join('; ')}` : ''}`);
+}
+if (bundleExtract && bundleExtract.tableStructure === 'lost') {
+  console.log(`\nDOCX tables read as loose lines - causes (structures around the missing words; likely, not proven): ${(bundleExtract.tableCauses || []).join(', ') || 'not recorded'}`);
+  const tc = bundleExtract.tableCheck;
+  if (tc) {
+    console.log(`  ${tc.wordCheck.missing} of ${tc.wordCheck.words} words missing; structures in the document: ${JSON.stringify(tc.census)}`);
+    for (const m of tc.missingWords) console.log(`  «${m.word}» expected ${m.expected}, found ${m.found}${m.inTable ? ', in a table' : ''} - ${m.structures.join(', ')}${m.places.length ? `\n      … ${m.places.join(' …\n      … ')} …` : ''}`);
+  } else console.log('  (the missing words are given to a master only: re-attach the file with the master account to see them)');
 }

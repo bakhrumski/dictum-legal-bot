@@ -46,7 +46,14 @@ function paragraphText(p) {
         if (c.localName === 't') { out += c.textContent; continue; }
         if (c.localName === 'tab') { out += '\t'; continue; }
         if (c.localName === 'br' || c.localName === 'cr') { out += '\n'; continue; }
-        if (c.localName === 'delText' || c.localName === 'del' || c.localName === 'instrText') continue;
+        // as mammoth reads them: a non-breaking hyphen splits words, a soft
+        // hyphen is invisible (wordCounts drops it on both sides), a symbol
+        // character (w:sym, e.g. a bullet) is not a letter
+        if (c.localName === 'noBreakHyphen') { out += '-'; continue; }
+        if (c.localName === 'softHyphen') continue;
+        if (c.localName === 'sym') { out += ' '; continue; }
+        // deleted text and the old place of moved text are not the document (mammoth leaves them out too)
+        if (c.localName === 'delText' || c.localName === 'del' || c.localName === 'moveFrom' || c.localName === 'instrText') continue;
       }
       walk(c);
     }
@@ -69,6 +76,20 @@ function cellText(tc) {
   return parts.join('; ');
 }
 
+// rows and cells may sit inside a content control (w:sdt), a custom XML
+// element or a tracked insertion: Word templates wrap form rows that way, and
+// mammoth reads them
+const WRAPPERS = new Set(['sdt', 'sdtContent', 'customXml', 'ins', 'smartTag']);
+function wrapped(el, name) {
+  const out = [];
+  for (const c of Array.from(el.childNodes || [])) {
+    if (c.nodeType !== 1 || c.namespaceURI !== W) continue;
+    if (c.localName === name) out.push(c);
+    else if (WRAPPERS.has(c.localName)) out.push(...wrapped(c, name));
+  }
+  return out;
+}
+
 const clean = s => String(s || '').replace(/[⟦⟧⟨⟩¦]/gu, ' ').replace(/\s+/gu, ' ').trim();
 
 /**
@@ -80,14 +101,16 @@ function tableGrid(tbl) {
   const rows = [];
   const above = []; // per grid column: the cell above (for vMerge continue)
   let cols = 0;
-  for (const tr of kids(tbl, 'tr')) {
+  for (const tr of wrapped(tbl, 'tr')) {
     const trPr = kid(tr, 'trPr');
+    // a row deleted with tracked changes is not in the document
+    if (trPr && kid(trPr, 'del')) continue;
     const header = !!(trPr && kid(trPr, 'tblHeader'));
     const cells = [];
     let col = 0;
     // w:gridBefore: empty grid columns at the row's start
     if (trPr && kid(trPr, 'gridBefore')) col += Number(attr(kid(trPr, 'gridBefore'), 'val')) || 0;
-    for (const tc of kids(tr, 'tc')) {
+    for (const tc of wrapped(tr, 'tc')) {
       const tcPr = kid(tc, 'tcPr');
       const span = Math.max(1, Number(attr(tcPr && kid(tcPr, 'gridSpan'), 'val')) || 1);
       const vm = tcPr && kid(tcPr, 'vMerge');
@@ -169,7 +192,7 @@ function bodyBlocks(body) {
       if (c.nodeType !== 1 || c.namespaceURI !== W) continue;
       if (c.localName === 'p' || c.localName === 'tbl') out.push(c);
       else if (c.localName === 'sdt') { const content = kid(c, 'sdtContent'); if (content) walk(content); }
-      else if (c.localName === 'customXml' || c.localName === 'smartTag') walk(c);
+      else if (c.localName === 'customXml' || c.localName === 'smartTag' || c.localName === 'ins') walk(c);
     }
   };
   walk(body);
@@ -179,8 +202,129 @@ function bodyBlocks(body) {
 /** Words of a text (letters and digits), counted - to compare two readings word by word. */
 function wordCounts(text) {
   const m = new Map();
-  for (const w of String(text || '').toLowerCase().match(/[\p{L}\p{N}]+/gu) || []) m.set(w, (m.get(w) || 0) + 1);
+  for (const w of String(text || '').replace(/\u00ad/gu, '').toLowerCase().match(/[\p{L}\p{N}]+/gu) || []) m.set(w, (m.get(w) || 0) + 1);
   return m;
+}
+
+/**
+ * Where a word sits in the document's XML, for the fallback diagnosis: the
+ * structures around each w:t (no AI, read from word/document.xml). Codes,
+ * not text: they say which Word structure the table reader may have missed.
+ */
+const STRUCTURE_CODES = Object.freeze({
+  sdt_row: 'jadval qatori content control (w:sdt) ichida',
+  sdt_cell: 'jadval katagi content control (w:sdt) ichida',
+  sdt_block: 'paragraf yoki jadval content control ichida',
+  custom_xml: 'custom XML (w:customXml) ichida',
+  tracked_insert: 'kuzatilgan qo\'shimcha (w:ins)',
+  tracked_move: 'kuzatilgan ko\'chirish (w:moveTo / w:moveFrom)',
+  no_break_hyphen: 'bo\'linmas defis (w:noBreakHyphen)',
+  soft_hyphen: 'yumshoq defis (w:softHyphen)',
+  symbol_char: 'belgi (w:sym)',
+  text_box: 'matn qutisi (w:txbxContent)',
+  nested_table: 'jadval ichidagi jadval',
+  field: 'maydon (w:fldSimple / w:fldChar)',
+  alt_chunk: 'import qilingan bo\'lak (w:altChunk)',
+  hyperlink: 'havola (w:hyperlink)',
+});
+
+function structureOf(t) {
+  const codes = new Set();
+  let tables = 0;
+  for (let a = t.parentNode, child = t; a && a.nodeType === 1; child = a, a = a.parentNode) {
+    if (a.namespaceURI !== W) { if (a.localName === 'AlternateContent') codes.add('text_box'); continue; }
+    const n = a.localName;
+    if (n === 'sdt' || n === 'sdtContent') {
+      const inner = wrapped(a, 'tr').length ? 'sdt_row' : wrapped(a, 'tc').length ? 'sdt_cell' : 'sdt_block';
+      codes.add(inner);
+    } else if (n === 'customXml') codes.add('custom_xml');
+    else if (n === 'ins') codes.add('tracked_insert');
+    else if (n === 'moveTo' || n === 'moveFrom') codes.add('tracked_move');
+    else if (n === 'txbxContent') codes.add('text_box');
+    else if (n === 'fldSimple') codes.add('field');
+    else if (n === 'hyperlink') codes.add('hyperlink');
+    else if (n === 'tbl') tables++;
+    else if (n === 'r') {
+      for (const sib of Array.from(a.childNodes || [])) {
+        if (sib.nodeType !== 1 || sib.namespaceURI !== W) continue;
+        if (sib.localName === 'noBreakHyphen') codes.add('no_break_hyphen');
+        if (sib.localName === 'softHyphen') codes.add('soft_hyphen');
+        if (sib.localName === 'sym') codes.add('symbol_char');
+        if (sib.localName === 'fldChar' || sib.localName === 'instrText') codes.add('field');
+      }
+    }
+    void child;
+  }
+  if (tables > 1) codes.add('nested_table');
+  return { codes: [...codes], inTable: tables > 0 };
+}
+
+/**
+ * Why the table reader missed words: the document's structures (counted
+ * over the whole body) and, for each missing word, the structures around its
+ * occurrences in the XML. Mechanical: a structure found around a missing
+ * word is the likely cause, not a proof; 'unknown' when none is found.
+ * Returns { census: {code: count}, missingWords: [{ word, expected, found,
+ * inTable, structures }] } - words of the customer's own document, so this
+ * goes to a master's diagnostics only (never a log, the ledger or a ticket).
+ */
+function diagnoseMissing(doc, mammothCounts, ours, { max = 20 } = {}) {
+  const census = {};
+  const add = (code) => { census[code] = (census[code] || 0) + 1; };
+  const all = doc.getElementsByTagNameNS(W, '*');
+  for (let i = 0; i < all.length; i++) {
+    const el = all[i];
+    const n = el.localName;
+    if (n === 'sdt') add(wrapped(el, 'tr').length ? 'sdt_row' : wrapped(el, 'tc').length ? 'sdt_cell' : 'sdt_block');
+    else if (n === 'customXml') add('custom_xml');
+    else if (n === 'ins') add('tracked_insert');
+    else if (n === 'moveTo' || n === 'moveFrom') add('tracked_move');
+    else if (n === 'noBreakHyphen') add('no_break_hyphen');
+    else if (n === 'softHyphen') add('soft_hyphen');
+    else if (n === 'sym') add('symbol_char');
+    else if (n === 'txbxContent') add('text_box');
+    else if (n === 'altChunk') add('alt_chunk');
+    else if (n === 'fldSimple' || (n === 'fldChar' && el.getAttributeNS(W, 'fldCharType') === 'begin')) add('field');
+    else if (n === 'tbl' && el.parentNode && el.parentNode.localName === 'tc') add('nested_table');
+  }
+  const missing = [];
+  for (const [w, c] of mammothCounts) { const f = ours.get(w) || 0; if (c > f) missing.push({ word: w, expected: c, found: f }); }
+  missing.sort((a, b) => (b.expected - b.found) - (a.expected - a.found));
+  const wanted = new Map(missing.slice(0, max).map(m => [m.word, { ...m, inTable: false, structures: new Set() }]));
+  const ts = doc.getElementsByTagNameNS(W, 't');
+  for (let i = 0; i < ts.length; i++) {
+    const words = String(ts[i].textContent || '').replace(/\u00ad/gu, '').toLowerCase().match(/[\p{L}\p{N}]+/gu) || [];
+    const hits = words.filter(x => wanted.has(x));
+    if (!hits.length) continue;
+    const at = structureOf(ts[i]);
+    for (const h of hits) {
+      const m = wanted.get(h);
+      if (at.inTable) m.inTable = true;
+      for (const code of at.codes) m.structures.add(code);
+    }
+  }
+  return {
+    census,
+    missingWords: [...wanted.values()].map(m => ({ ...m, structures: m.structures.size ? [...m.structures] : ['unknown'] })),
+    more: Math.max(0, missing.length - max),
+  };
+}
+
+/** Where `words` occur in `text` (at most `per` places each, +-`around` chars): for a master's diagnostics only. */
+function missingPlaces(text, words, { per = 3, around = 40 } = {}) {
+  const s = String(text || '');
+  const lower = s.toLowerCase();
+  const out = {};
+  for (const w of words) {
+    const re = new RegExp(`(?<![\\p{L}\\p{N}])${w.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}(?![\\p{L}\\p{N}])`, 'gu');
+    const places = [];
+    for (const m of lower.matchAll(re)) {
+      places.push(s.slice(Math.max(0, m.index - around), m.index + w.length + around).replace(/\s+/gu, ' '));
+      if (places.length >= per) break;
+    }
+    out[w] = places;
+  }
+  return out;
 }
 
 /**
@@ -225,10 +369,14 @@ async function docxText(buffer, { mammoth = require('mammoth') } = {}) {
   for (const [w, c] of wordCounts(mammothText)) { total += c; missing += Math.max(0, c - (ours.get(w) || 0)); }
   const wordCheck = { words: total, missing };
   if (missing > 0) {
-    return { text: mammothText, tables: n, reader: 'mammoth', structure: 'lost', wordCheck,
-      fallbackReason: `the table reader missed ${missing} of ${total} words; mammoth's text is used and the tables' rows and columns are not kept` };
+    // why: the structures around the missing words (codes for the log and
+    // the ticket; the words themselves only for a master's diagnostics)
+    const diagnosis = diagnoseMissing(doc, wordCounts(mammothText), ours);
+    const causes = [...new Set(diagnosis.missingWords.flatMap(m => m.structures))];
+    return { text: mammothText, tables: n, reader: 'mammoth', structure: 'lost', wordCheck, causes, diagnosis,
+      fallbackReason: `the table reader missed ${missing} of ${total} words (${causes.join(', ')}); mammoth's text is used and the tables' rows and columns are not kept` };
   }
   return { text, tables: n, reader: 'tables', structure: 'rows', wordCheck };
 }
 
-module.exports = { docxText, tableGrid, tableLines, withoutMarkup, paragraphText, wordCounts };
+module.exports = { docxText, tableGrid, tableLines, withoutMarkup, paragraphText, wordCounts, diagnoseMissing, missingPlaces, STRUCTURE_CODES };

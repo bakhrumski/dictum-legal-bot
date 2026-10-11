@@ -366,6 +366,10 @@ function mountAnalyzerRoutes(app, deps) {
   const { requireAuth, callAI, tariffModule, digestLongDocument } = deps;
   if (!deps.pool) throw new TypeError('mountAnalyzerRoutes needs deps.pool (scan cache)');
   const ledger = tariffModule && tariffModule.ledger;
+  // the DOCX reader (tests pass one with a stub mammoth; no AI either way)
+  const readDocx = typeof deps.readDocx === 'function' ? deps.readDocx : (buf) => require('./docx-text').docxText(buf);
+  // the one database check for master-only diagnostics
+  const verifyMaster = typeof deps.verifyMaster === 'function' ? deps.verifyMaster : require('../rag/document-explain-route').createVerifyMaster(deps.pool);
 
   // OCR (tariffs v2, 2026-10-06): a paid OCR call is a step of a document
   // service, never a free service of its own. /api/analyze/scan-quote counts
@@ -400,11 +404,12 @@ function mountAnalyzerRoutes(app, deps) {
         }
         // tables keep their rows, columns and headers (src/ocr/docx-text.js);
         // a document with no table reads exactly as before (mammoth)
-        const docx = await require('./docx-text').docxText(fs.readFileSync(filePath));
+        const docx = await readDocx(fs.readFileSync(filePath));
         // the table reader missed words: mammoth's text is used - the text is
         // kept, the tables' rows and columns are not, and the answer says so
-        if (docx.fallbackReason) console.warn('[ANALYZE] docx table reader not used:', docx.fallbackReason);
-        const tables = docx.tables ? { count: docx.tables, structure: docx.structure } : null;
+        // (the log gets counts and structure codes only, never the words)
+        if (docx.fallbackReason) console.warn('[ANALYZE] docx table reader not used:', `${docx.wordCheck.missing}/${docx.wordCheck.words} words`, (docx.causes || []).join(','));
+        const tables = docx.tables ? { count: docx.tables, structure: docx.structure, ...(docx.causes ? { causes: docx.causes } : {}) } : null;
         const text = docx.text;
         // the billable size is the document's own text, measured here: the
         // markup the table reader adds (row ids, column headers, merged and
@@ -413,8 +418,24 @@ function mountAnalyzerRoutes(app, deps) {
         // DOCX has no fixed pages: the standard page (4 000 characters) is used
         const chars = contentChars(text);
         const size = ledger ? ledger.docUnits({ chars }) : null;
+        // the fallback's diagnosis (2026-10-09): to a master in the database
+        // only, in this response alone (no-store; never logged or stored) -
+        // the structures around each missing word and where it stands in the
+        // text the master has just uploaded. No AI: read from the DOCX's XML.
+        let tableCheck;
+        if (docx.structure === 'lost' && req.session && req.session.role === 'master'
+          && await verifyMaster(req.session.adminId).catch(() => false)) {
+          const words = docx.diagnosis.missingWords.map(m => m.word);
+          const places = require('./docx-text').missingPlaces(text, words);
+          tableCheck = { reader: docx.reader, structure: docx.structure, wordCheck: docx.wordCheck, causes: docx.causes,
+            census: docx.diagnosis.census, more: docx.diagnosis.more,
+            missingWords: docx.diagnosis.missingWords.map(m => ({ ...m, places: places[m.word] || [] })),
+            meaning: 'mechanical: structures found around the missing words are the likely cause, not a proof' };
+          res.set('Cache-Control', 'no-store');
+        }
         return res.json({ text, pageCount: size ? size.pages : 1, scanned: false, charCount: chars, tables: docx.tables,
-          tableStructure: tables ? tables.structure : 'none',
+          tableStructure: tables ? tables.structure : 'none', ...(tables && tables.causes ? { tableCauses: tables.causes } : {}),
+          ...(tableCheck ? { tableCheck } : {}),
           units: size ? size.units : null, docTicket: ledger ? ledger.signDocTicket({ text, chars, tables }) : null });
       }
       const pdfParse = require('pdf-parse/lib/pdf-parse.js');
