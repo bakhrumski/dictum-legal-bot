@@ -429,6 +429,8 @@ function mountAnalyzerRoutes(app, deps) {
           const places = require('./docx-text').missingPlaces(text, words);
           tableCheck = { reader: docx.reader, structure: docx.structure, wordCheck: docx.wordCheck, causes: docx.causes,
             census: docx.diagnosis.census, more: docx.diagnosis.more,
+            // words that differ only by a space or a line break: shown, not counted as lost
+            separatorOnly: docx.diagnosis.separatorOnly || [],
             missingWords: docx.diagnosis.missingWords.map(m => ({ ...m, places: places[m.word] || [] })),
             meaning: 'mechanical: structures found around the missing words are the likely cause, not a proof' };
           res.set('Cache-Control', 'no-store');

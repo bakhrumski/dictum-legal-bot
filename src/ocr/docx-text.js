@@ -206,6 +206,75 @@ function wordCounts(text) {
   return m;
 }
 
+/** The words of a text in order, each with the text between it and the word before. */
+function tokenStream(text) {
+  const s = String(text || '').replace(/\u00ad/gu, '').toLowerCase();
+  const out = [];
+  let last = 0;
+  for (const m of s.matchAll(/[\p{L}\p{N}]+/gu)) { out.push({ w: m[0], sep: s.slice(last, m.index) }); last = m.index + m[0].length; }
+  return out;
+}
+const SPACE_ONLY = /^\s+$/u;
+const sepKind = sep => (/\n/u.test(sep) ? 'line_break' : /\t/u.test(sep) ? 'tab' : 'space');
+
+/**
+ * Mammoth's words against the table reader's (2026-10-11, a production
+ * DOCX: mammoth drops a line break inside a paragraph, w:br, with no space -
+ * "shartnomasiga<br/>1-ilova" reads "shartnomasiga1-ilova" - and three annex
+ * headings sent all the tables to the fallback though no text was lost).
+ *
+ * A word one side has and the other lacks counts as LOST unless the other
+ * side holds the same letters and digits as 2-4 neighbouring words split by
+ * spaces or line breaks only, and those words are spare there (more of them
+ * than the first side has, so a part needed elsewhere is never used to
+ * explain a join). Each explanation uses its words once. Anything else - a
+ * word, a number, a repetition - is still missing; nothing is dropped from
+ * the comparison and digits are compared like letters.
+ * Returns { words, missing, separatorOnly, explained, oursAdjusted }.
+ */
+function compareWords(mammothText, oursText) {
+  const mt = tokenStream(mammothText), ot = tokenStream(oursText);
+  const count = list => { const m = new Map(); for (const t of list) m.set(t.w, (m.get(t.w) || 0) + 1); return m; };
+  const mc = count(mt), oc = count(ot);
+  const deficit = new Map(), surplus = new Map();
+  for (const [w, c] of mc) if (c > (oc.get(w) || 0)) deficit.set(w, c - (oc.get(w) || 0));
+  for (const [w, c] of oc) if (c > (mc.get(w) || 0)) surplus.set(w, c - (mc.get(w) || 0));
+  const explained = [];
+  const note = (word, parts, sep, side) => {
+    const e = explained.find(x => x.word === word && x.side === side);
+    if (e) e.count++; else explained.push({ word, parts, separator: sepKind(sep), side, count: 1 });
+  };
+  // (a) mammoth joined what the reader keeps apart: "shartnomasiga1" vs "shartnomasiga" + "1"
+  // (b) the reader joined what mammoth keeps apart
+  for (const [side, stream, short, spare] of [['mammoth_joined', ot, deficit, surplus], ['reader_joined', mt, surplus, deficit]]) {
+    const used = new Set();
+    for (let i = 0; i < stream.length; i++) {
+      for (let k = 2; k <= 4 && i + k <= stream.length; k++) {
+        const run = stream.slice(i, i + k);
+        if (run.slice(1).some(t => !SPACE_ONLY.test(t.sep))) break;
+        if (run.some((t, j) => used.has(i + j))) break;
+        const word = run.map(t => t.w).join('');
+        if (!(short.get(word) > 0)) continue;
+        // the parts must be spare on this side (never needed for its own words)
+        const need = new Map();
+        for (const t of run) need.set(t.w, (need.get(t.w) || 0) + 1);
+        if ([...need].some(([w, c]) => (spare.get(w) || 0) < c)) continue;
+        for (const [w, c] of need) spare.set(w, spare.get(w) - c);
+        short.set(word, short.get(word) - 1);
+        for (let j = 0; j < k; j++) used.add(i + j);
+        note(word, run.map(t => t.w), run[1].sep, side);
+        break;
+      }
+    }
+  }
+  let missing = 0;
+  for (const c of deficit.values()) missing += c;
+  // the reader's counts as the diagnosis should see them: a join explained is not missing
+  const oursAdjusted = new Map(oc);
+  for (const [w, c] of mc) { const d = deficit.get(w) || 0; oursAdjusted.set(w, Math.max(oc.get(w) || 0, c - d)); }
+  return { words: mt.length, missing, separatorOnly: explained.reduce((n, e) => n + e.count, 0), explained, oursAdjusted };
+}
+
 /**
  * Where a word sits in the document's XML, for the fallback diagnosis: the
  * structures around each w:t (no AI, read from word/document.xml). Codes,
@@ -362,21 +431,22 @@ async function docxText(buffer, { mammoth = require('mammoth') } = {}) {
     lines.push('', ...tableLines(tableGrid(b), n), '');
   }
   const text = lines.join('\n').replace(/\n{3,}/gu, '\n\n').trim();
-  // never lose text to this reader: every word mammoth reads must be here
+  // never lose text to this reader: every word mammoth reads must be here -
+  // a word that differs only where a space or a line break falls is not lost
   const mammothText = await raw();
-  const ours = wordCounts(withoutMarkup(text));
-  let total = 0, missing = 0;
-  for (const [w, c] of wordCounts(mammothText)) { total += c; missing += Math.max(0, c - (ours.get(w) || 0)); }
-  const wordCheck = { words: total, missing };
+  const cmp = compareWords(mammothText, withoutMarkup(text));
+  const { words: total, missing } = cmp;
+  const wordCheck = { words: total, missing, separatorOnly: cmp.separatorOnly };
   if (missing > 0) {
     // why: the structures around the missing words (codes for the log and
     // the ticket; the words themselves only for a master's diagnostics)
-    const diagnosis = diagnoseMissing(doc, wordCounts(mammothText), ours);
+    const diagnosis = diagnoseMissing(doc, wordCounts(mammothText), cmp.oursAdjusted);
+    diagnosis.separatorOnly = cmp.explained;
     const causes = [...new Set(diagnosis.missingWords.flatMap(m => m.structures))];
     return { text: mammothText, tables: n, reader: 'mammoth', structure: 'lost', wordCheck, causes, diagnosis,
       fallbackReason: `the table reader missed ${missing} of ${total} words (${causes.join(', ')}); mammoth's text is used and the tables' rows and columns are not kept` };
   }
-  return { text, tables: n, reader: 'tables', structure: 'rows', wordCheck };
+  return { text, tables: n, reader: 'tables', structure: 'rows', wordCheck, ...(cmp.explained.length ? { separatorOnly: cmp.explained } : {}) };
 }
 
-module.exports = { docxText, tableGrid, tableLines, withoutMarkup, paragraphText, wordCounts, diagnoseMissing, missingPlaces, STRUCTURE_CODES };
+module.exports = { docxText, tableGrid, tableLines, withoutMarkup, paragraphText, wordCounts, compareWords, diagnoseMissing, missingPlaces, STRUCTURE_CODES };

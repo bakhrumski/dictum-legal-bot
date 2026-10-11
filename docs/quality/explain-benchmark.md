@@ -865,6 +865,29 @@ Javob 3 000 token chegarasida bo'lsa, har qatorga taxminan +$0.0009 va +27 s qo'
 - Manba bilan solishtirishda ham shunday: band raqami yoki harakat hisobga olinadi, muddat faqat shu banddagi muddat bilan solishtiriladi.
 - Sintetik eval to'plamida natija o'zgarmadi: to'g'ri parafrazlar 9/12 belgisiz, noto'g'ri jumlalar 12/12 belgilandi.
 
+## 4h. DOCX: faqat ajratgich farqi matn yo'qolishi emas (2026-10-11)
+
+**Production'da topilgan.** #426 dan keyingi extract'da fallback'ga uchta so'z sabab bo'ldi: `shartnomasiga1`, `shartnomasiga2`, `shartnomasiga3`.
+- Uchalasi `inTable: false`, joyi ilova sarlavhalari.
+- Sintetik DOCX'da qayta hosil qilindi. Mammoth paragraf ichidagi qator uzilishini (`w:br`, sahifa yoki ustun uzilishi, `w:cr`) hech qanday ajratgichsiz tashlaydi: «…shartnomaga↵1-ilova» → `shartnomaga1-ilova`.
+- Jadval o'quvchisi uzilishni saqlaydi va `shartnomaga` + `1` deb o'qiydi. Ya'ni matn yo'qolmagan, farq faqat ajratgichda.
+- `w:tab` bilan farq yo'q. `w:ptab` va `lastRenderedPageBreak` da ikkala o'quvchi ham so'zlarni birlashtiradi.
+
+**Tuzatish (`compareWords`, `src/ocr/docx-text.js`).**
+- Bir tomonda yo'q so'z faqat ajratgich farqi deb sanaladi, agar ikki shart bajarilsa:
+  - ikkinchi tomonda xuddi shu harf va raqamlar 2–4 ta qo'shni so'z bo'lib turgan va ular orasida faqat bo'shliq yoki qator uzilishi bor;
+  - bu qismlar o'sha tomonda ortiqcha, ya'ni o'z so'zlari uchun kerak emas.
+- Har bir izoh qismlarni faqat bir marta ishlatadi.
+- Qolgan hamma narsa yo'qolish bo'lib qoladi: so'z, raqam, takrorlanish, tinish belgisi bilan ajratilgan bo'laklar.
+- Raqamlar chiqarilmaydi va tekshiruv umuman yumshatilmaydi.
+
+**Ko'rinishi.** Topilgan farqlar `wordCheck.separatorOnly` (soni) va `separatorOnly` (so'z, qismlar, ajratgich turi) da qaytadi. Ular master diagnostikasida (`tableCheck.separatorOnly`) va `scripts/docx-table-check.js` chiqishida ko'rinadi.
+
+**Testlar** (`tests/explain-regression.test.js`, anonim sintetik):
+- uchta ilova sarlavhasi: jadvallar qatorlab qoladi, 3 ta ajratgich farqi;
+- haqiqiy yo'qolishlar baribir aniqlanadi: so'z, raqam (`100 000` → `100`, `2027` → `2026`), takrorlanish, qismlari boshqa joyda kerak bo'lgan birlashma va tinish belgisi bilan ajratilgan bo'laklar;
+- haqiqiy yo'qolish va ajratgich farqi bir hujjatda: fallback saqlanadi, diagnoz faqat yo'qolgan so'zni ko'rsatadi.
+
 ## 5. Qisman natija: foydalanuvchiga ko'rinishi va limit
 
 | Holat | Foydalanuvchi ko'radi | Limit | Qaysi mavjud qoidaga mos |
