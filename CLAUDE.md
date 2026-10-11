@@ -181,6 +181,12 @@ Known state of the suites (Sept 2026):
   `check.quotes.usage` lists issued / used / repeated / refused /
   unprocessed / unused ids and the page adds `quotesOpened` to the trace. Quality is unconfirmed until the lawyer-reviewed
   benchmark (`docs/quality/explain-benchmark.md`) runs.
+  Evaluation-only runners (never loaded by the server; dry run, no network
+  by default): `scripts/explain-ab.js` (#430, digest vs full text) and
+  `scripts/provider-eval.js` (2026-10-11: comet + DeepSeek, GLM, Kimi, Qwen
+  on 3 synthetic documents, `docs/quality/provider-eval-plan.md`); both
+  share one budget module (`scripts/lib/eval-budget.js`). Live needs the
+  owner's confirmation file and approval of the run sha.
   `src/rag/question-aspects.js` splits a question into deadline,
   compensation, evidence and remedy and runs a light corpus search for each
   (Telegram, web chat, Workspace).

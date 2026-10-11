@@ -51,6 +51,7 @@ const path = require('path');
 const crypto = require('crypto');
 const ex = require('../src/rag/document-explain');
 const pricing = require('../src/ai/model-pricing');
+const evalBudget = require('./lib/eval-budget');
 
 const args = process.argv.slice(2);
 const arg = (n, d = null) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : d; };
@@ -148,12 +149,11 @@ function liveCaller(model, budget, log, temperature, { provider = null, priceCon
     // 1. no reliable bound: never called
     if (b.usd == null) refuse({ reason: `no cost bound: ${b.reason}` }, `${model}: no cost bound (${b.reason})`);
     for (let attempt = 1; attempt <= 1 + RETRIES; attempt++) {
-      // 3. a cost above its reserve stopped the budget: nothing new starts
-      if (budget.halted) refuse({ attempt, reason: 'halted: a cost went above its reserve' }, 'budget halted');
-      // check and take in one step (no await in between)
-      if (budget.left < b.usd) refuse({ attempt, reason: 'budget' }, `budget: ${budget.left.toFixed(4)} left, call needs ${b.usd.toFixed(4)}`);
-      budget.left -= b.usd;
-      budget.reservedNow += b.usd;
+      // check and take in one step (no await in between); 3. a cost above
+      // its reserve stopped the budget: nothing new starts
+      const taken = evalBudget.take(budget, b.usd);
+      if (!taken.ok && taken.reason === 'halted') refuse({ attempt, reason: 'halted: a cost went above its reserve' }, 'budget halted');
+      if (!taken.ok) refuse({ attempt, reason: 'budget' }, `budget: ${budget.left.toFixed(4)} left, call needs ${b.usd.toFixed(4)}`);
       const t0 = Date.now();
       let r, err;
       try { r = await call(model, messages, { temperature: temperature == null ? undefined : temperature, maxTokens }); } catch (e) { err = e; }
@@ -163,24 +163,9 @@ function liveCaller(model, budget, log, temperature, { provider = null, priceCon
       const listUsd = tokens > 0 ? pricing.calculateTokenCost(model, usage) : null;
       const rate = pricing.voicelabCreditUsd();
       const creditUsd = credits == null || !rate || !Number.isFinite(Number(rate.usdPerCredit)) ? null : credits * Number(rate.usdPerCredit);
-      const known = [listUsd, creditUsd].filter(x => x != null && Number.isFinite(x));
-      budget.reservedNow -= b.usd;
-      let costStatus, settled = null;
-      if (!known.length) {
-        // 2. no usage, no cost: the reserve stays held, the cost is unknown
-        costStatus = 'unknown';
-        budget.heldUnknown += b.usd;
-        budget.unknownCalls += 1;
-      } else {
-        settled = Math.max(...known);
-        budget.left += b.usd - settled;
-        budget.spent += settled;
-        costStatus = settled > b.usd ? 'over_reserve' : 'known';
-        // 3. above its reserve: stop everything new
-        if (settled > b.usd) { budget.halted = true; budget.haltedBy = { model, attempt, reservedUsd: b.usd, settledUsd: settled }; }
-      }
-      budget.listUsd += listUsd || 0;
-      budget.credits += credits || 0;
+      // 2. no usage, no cost: the reserve stays held, the cost is unknown;
+      // 3. above its reserve: stop everything new (scripts/lib/eval-budget.js)
+      const { costStatus, settledUsd: settled } = evalBudget.settle(budget, b.usd, { listUsd, creditUsd, credits }, { model, attempt });
       log.push({ model, attempt, status: err ? 'error' : 'answered', costStatus, ms: Date.now() - t0, usage, listUsd, credits, creditUsd, settledUsd: settled, reservedUsd: b.usd, finish: r ? r.finishReason : null, error: err ? String(err.code || err.message).slice(0, 120) : null, promptSha: sha(messages.map(m => m.text).join('\n')) });
       const cut = r && r.finishReason === 'length';
       if (r && !cut) return { text: r.text, provider: r.provider };
@@ -192,7 +177,7 @@ function liveCaller(model, budget, log, temperature, { provider = null, priceCon
     return null;
   };
 }
-const newBudget = usd => ({ left: usd, spent: 0, listUsd: 0, credits: 0, reservedNow: 0, heldUnknown: 0, unknownCalls: 0, halted: false, haltedBy: null });
+const { newBudget } = evalBudget;
 
 async function main() {
   const docs = String(arg('--docs', '')).split(',').filter(Boolean);
