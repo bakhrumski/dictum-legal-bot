@@ -865,6 +865,46 @@ Javob 3 000 token chegarasida bo'lsa, har qatorga taxminan +$0.0009 va +27 s qo'
 - Manba bilan solishtirishda ham shunday: band raqami yoki harakat hisobga olinadi, muddat faqat shu banddagi muddat bilan solishtiriladi.
 - Sintetik eval to'plamida natija o'zgarmadi: to'g'ri parafrazlar 9/12 belgisiz, noto'g'ri jumlalar 12/12 belgilandi.
 
+## 4g. Muhim shartlar asl manba bilan bog'lanadi (`src/rag/source-quotes.js`)
+
+Ikki jonli sinovda bir xil shartlar dayjestda saqlangan, lekin yakuniy javobda buzilgan edi: «e'lon qilingan», «barcha ishtirokchilar, jumladan X», «barcha xarajatlar», «alohida». Prompt qoidalari buni to'xtatmadi.
+
+### Qanday ishlaydi
+- Yakuniy modelga beriladigan kalit qatorlar hujjatning o'zidan olinadi, dayjestdan emas. Har biriga identifikator beriladi: `[S12·a3f9]`. Bunda `a3f9` — hujjat sha256 xeshining birinchi 4 belgisi.
+- Identifikator faqat hujjatda so'zma-so'z topilgan jumlaga beriladi (bo'shliqlar hisobga olinmaydi). Topilmagan jumla manba bo'lmaydi va izohda sanaladi.
+- Model o'sha band haqidagi gapidan keyin identifikatorni ko'chiradi. Server uning ostiga hujjatning aynan jumlasini qo'yadi: `> «…» — hujjat matnidan aynan parcha (S12)`.
+- Server har bir identifikatorni tekshiradi. Quyidagilar rad etiladi va ochiq ko'rsatiladi («manba ko'rsatilmadi»):
+  - noma'lum raqam;
+  - boshqa hujjatning kaliti;
+  - kalitsiz yozilgan identifikator.
+- Qo'shimcha tuzatuvchi AI chaqiruvi yo'q. Chaqiruvlar: dayjest qismlari va bitta yakuniy chaqiruv.
+
+### Nima oldini oladi, nima faqat belgilaydi
+- **Oldini oladi:** foydalanuvchi muhim shartning aniq so'zlarini modelning qayta aytishisiz ham ko'radi. Javobda u shartning yagona ifodasi model parafrazi bo'lib qolmaydi.
+- **Oldini olmaydi:** model izohi baribir subyekt, shart yoki oqibatni o'zgartirishi mumkin. Iqtibos uni tuzatmaydi.
+- **Faqat belgilaydi:** mexanik tekshiruvlar iqtibossiz, modelning o'z matnida ishlaydi. To'g'ri iqtibos noto'g'ri izohni yashirmaydi. Bu `tests/explain-quotes.test.js` da sinalgan: to'g'ri iqtibos va noto'g'ri izoh, to'liq matn va dayjest rejimida.
+- Iqtibos «tekshirilgan» yoki «tuzatilgan» deb atalmaydi. Izohda «server parchani hujjatda belgilar bo'yicha topdi, xolos» deb yoziladi. `check.verified` doim `false`.
+- **Jonli modelda tasdiqlanmagan:** model identifikatorlarni to'g'ri ko'chiradimi va foydalanuvchiga iqtibos foydalimi.
+
+### Xarajat va javob hajmi (`node scripts/digest-plan-sim.js`, AI'siz)
+- **Model xarajati.** Identifikatorlar yakuniy promptga, ko'chirilganlari esa chiqishga qo'shiladi; iqtibos matnining o'zini server qo'yadi, u AI tokeni emas.
+  - Production hujjatida (lokal hisob) 26 ta identifikator berildi. Hammasi ko'chirilsa: kirish +292, chiqish +156 token, ≈ +$0.0003, ~+3 s.
+  - Qisqa shartnomada (9 ta identifikator): +228 kirish, +54 chiqish token.
+  - Bu simulyatsiya; model identifikatorni qancha ko'chirishi o'lchanmagan.
+- **Javob hajmi.** Har bir iqtibos — hujjatning to'liq jumlasi. Modelga qisqartirilgan («…») qator borgan bo'lsa ham iqtibos to'liq qo'yiladi va hech qayerda kesilmaydi.
+  - Production hujjatida jumlalar 83–822 belgi (mediana 259), jami 7 784 belgi.
+  - Hamma 26 tasi iqtibos qilinsa, ~4 500 belgilik javob taxminan 2,7 baravar uzayadi.
+  - Har bir jumla bir marta iqtibos qilinadi.
+- **Kesilgan javob.** Model javobi chegarada kesilsa, bu tepada aytiladi. Saqlangan gapning iqtibosi to'liq qoladi; tushib qolgan gapdagi identifikator iqtibos bermaydi.
+- **Hujjatning o'z matni.** Hujjatda uchragan `[S2]` yoki `[S3·beef]` kabi matn tizim identifikatori deb olinmaydi: u o'zgartirilmaydi, rad etilmaydi, iqtibos qilinmaydi.
+- **Ko'rinish (dashboard).** Har bir iqtibos yopiq blok bo'lib chiqadi: «Manbadan iqtibos — ochish», ochilganda «… — yopish».
+  - Ichida «Hujjat matni, so'zma-so'z (S…) — AI izohi emas» yozuvi va hujjatning to'liq jumlasi turadi.
+  - Iqtibos markdown'dan o'tkazilmaydi: hujjatdagi `*` yoki `**` formatlashga aylanmaydi, havolaga ham aylanmaydi.
+  - Model izohi blok tashqarisida, `[S…]` belgisi bilan qoladi.
+  - To'liq matnlar diagnostika JSON'ida ham saqlanadi: `response.check.quotes.items`.
+  - Brauzerda tekshirildi (Chromium, stub AI): 1280 va 390 px da ochish va yopish; matn javobdagi to'liq jumla bilan aynan bir xil; toshish yo'q.
+- Barcha holatlar `tests/explain-quotes.test.js` (10 ta) da tekshirilgan.
+
 ## 4h. DOCX: faqat ajratgich farqi matn yo'qolishi emas (2026-10-11)
 
 **Production'da topilgan.** #426 dan keyingi extract'da fallback'ga uchta so'z sabab bo'ldi: `shartnomasiga1`, `shartnomasiga2`, `shartnomasiga3`.

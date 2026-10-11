@@ -1610,6 +1610,31 @@
             border-left-color: rgba(59,130,246,0.4);
             background: rgba(59,130,246,0.06);
         }
+        /* a document explanation's source quote: closed by default, the
+           document's own words set apart from the model's explanation */
+        .ai-analysis-content .ai-src-quote {
+            margin: 8px 0 12px;
+            border: 1px solid rgba(30,64,175,0.18);
+            border-radius: 8px;
+            background: rgba(30,64,175,0.03);
+        }
+        .ai-analysis-content .ai-src-quote-sum {
+            display: flex; align-items: center; gap: 8px;
+            min-height: 36px; padding: 6px 12px;
+            cursor: pointer; list-style: none;
+            font-size: 13px; font-weight: 600; color: var(--text-secondary);
+        }
+        .ai-analysis-content .ai-src-quote-sum::-webkit-details-marker { display: none; }
+        .ai-analysis-content .ai-src-quote-sum::before { content: '▸'; font-size: 11px; }
+        .ai-analysis-content .ai-src-quote[open] > .ai-src-quote-sum::before { content: '▾'; }
+        .ai-analysis-content .ai-src-quote-close { display: none; }
+        .ai-analysis-content .ai-src-quote[open] .ai-src-quote-open { display: none; }
+        .ai-analysis-content .ai-src-quote[open] .ai-src-quote-close { display: inline; }
+        .ai-analysis-content .ai-src-quote-id { margin-left: auto; font-variant-numeric: tabular-nums; opacity: .7; }
+        .ai-analysis-content .ai-src-quote-body { padding: 0 12px 12px; border-top: 1px dashed rgba(30,64,175,0.18); }
+        .ai-analysis-content .ai-src-quote-label { margin-top: 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-secondary); }
+        .ai-analysis-content .ai-src-quote-text { margin-top: 6px; font-size: 13px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+        [data-theme="dark"] .ai-analysis-content .ai-src-quote { border-color: rgba(59,130,246,0.3); background: rgba(59,130,246,0.06); }
         /* Mentor feedback form */
         .feedback-form { margin-top: 16px; }
         .feedback-type-btns { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
@@ -10934,7 +10959,31 @@
             return autoLinkCitations(html);
         }
 
+        // A document explanation's source quotes (server line:
+        // "> «…» — hujjat matnidan aynan parcha (S12)") are taken out before the
+        // markdown pass, so no part of the document's wording is reformatted,
+        // linked or cut, and come back as closed blocks set apart from the
+        // model's own words: the full text, verbatim, behind "ochish".
+        var SOURCE_QUOTE_LINE = /^> «(.+)» — hujjat matnidan aynan parcha \((S\d{1,3})\)$/gm;
+        function sourceQuoteBlock(id, quote) {
+            return '<details class="ai-src-quote" data-src-id="' + escapeHtml(id) + '">' +
+                '<summary class="ai-src-quote-sum"><span class="ai-src-quote-open">Manbadan iqtibos — ochish</span><span class="ai-src-quote-close">Manbadan iqtibos — yopish</span><span class="ai-src-quote-id">' + escapeHtml(id) + '</span></summary>' +
+                '<div class="ai-src-quote-body"><div class="ai-src-quote-label">Hujjat matni, so\'zma-so\'z (' + escapeHtml(id) + ') — AI izohi emas</div>' +
+                '<div class="ai-src-quote-text">«' + escapeHtml(quote) + '»</div></div></details>';
+        }
         function simpleMarkdown(text) {
+            var quotes = [];
+            var marked = String(text || '').replace(SOURCE_QUOTE_LINE, function (m, quote, id) {
+                quotes.push(sourceQuoteBlock(id, quote));
+                return '\uE100' + (quotes.length - 1) + '\uE101';
+            });
+            var html = simpleMarkdownBase(marked);
+            if (!quotes.length) return html;
+            return html
+                .replace(/<p>\s*\uE100(\d+)\uE101\s*<\/p>/g, function (m, i) { return quotes[+i]; })
+                .replace(/(?:<br>)?\uE100(\d+)\uE101/g, function (m, i) { return quotes[+i]; });
+        }
+        function simpleMarkdownBase(text) {
             // Strip hidden reasoning blocks that may have leaked through (old archived results)
             text = text.replace(/<!--REASONING-->[\s\S]*?<!--\/REASONING-->\s*/g, '');
             text = text.replace(/<!--YURXIZMAT-->[\s\S]*?<!--\/YURXIZMAT-->\s*/g, '');
