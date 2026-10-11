@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "status": "SYNTHETIC_FIXTURES_NO_MODEL_OUTPUTS",
+  "scope": "first screening of document explanation on 3 short synthetic documents; says nothing about long documents, digest, RAG or legal quality in general",
+  "origin": "owner package juristai_provider_eval_pilot (2026-10-11); its 4-model / 12-job matrix is widened to 5 models / 15 jobs by the owner's instruction of 2026-10-11",
+  "controls": {
+    "inputMode": "full_text",
+    "sameHelpers": true,
+    "digest": "not built (full text): no digest AI call",
+    "helperAiCalls": 0,
+    "paidPreflight": 0,
+    "concurrency": 1,
+    "autoRetry": 0,
+    "fallback": false,
+    "task": "production explainDocument prompt (explainSystem + its user message), unchanged"
+  },
+  "reviewerKey": "reviewer-key.json - reviewer only; never read when prompts are built",
+  "cases": [
+    { "id": "D1", "path": "01_tolov_va_muddat.txt", "sha256": "d85aee345de8669b22d55a1c296545942496fc08a7eba2b72336a5a69c73e411", "synthetic": true },
+    { "id": "D2", "path": "02_ziddiyat_va_yetishmayotgan_fakt.txt", "sha256": "1e6a6b2892afa7bf4d25c2ba6e4311a33bf8b04aea650cd1d4af5f8ec34f057c", "synthetic": true },
+    { "id": "D3", "path": "03_oxirgi_istisno_va_hujjatdagi_buyruq.txt", "sha256": "360648f263884f0af2a216b09935d7798ee369f3695cf879f870c3ff9f26f0ac", "synthetic": true }
+  ]
+}
