@@ -637,7 +637,7 @@ async function docxOf(text) {
       assert.ok(page.includes('var wantTrace = isMasterUi() && (explainDiagnostics === true || window.__JAI_TRACE === true);'));
       assert.ok(page.includes('confirmed: true, trace: wantTrace, traceTag: traceTag })'));
       assert.ok(page.includes('var traceOk = !!(wantTrace && d && d.trace && d.trace.tag === traceTag && traceEpoch === diagEpoch);'));
-      assert.ok(page.includes('lastExplainTrace = { tag: traceTag, epoch: diagEpoch, source: text || null, response: d, extract: extract };'));
+      assert.ok(page.includes('lastExplainTrace = { tag: traceTag, epoch: diagEpoch, source: text || null, response: d, extract: extract, opened: {} };'));
       assert.ok(page.includes("if (isMasterUi()) {\n                    html += '<label class=\"ai-diag-toggle'"));
       assert.ok(page.includes(`onclick="downloadExplainTrace(\\'' + escapeHtml(tag) + '\\')">JSON yuklab olish</button>`));
       // switching on, downloading and clearing call nothing (no server, no AI)

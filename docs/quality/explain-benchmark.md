@@ -928,6 +928,39 @@ Ikki jonli sinovda bir xil shartlar dayjestda saqlangan, lekin yakuniy javobda b
 - haqiqiy yo'qolishlar baribir aniqlanadi: so'z, raqam (`100 000` → `100`, `2027` → `2026`), takrorlanish, qismlari boshqa joyda kerak bo'lgan birlashma va tinish belgisi bilan ajratilgan bo'laklar;
 - haqiqiy yo'qolish va ajratgich farqi bir hujjatda: fallback saqlanadi, diagnoz faqat yo'qolgan so'zni ko'rsatadi.
 
+## 4i. Iqtibos havolalari: ro'yxat, oraliq, jadval qatori, diagnostika (2026-10-11)
+
+Uchinchi jonli sinovda (JSON repoda yo'q) uchta mexanik nosozlik topildi:
+- model qavs ichida ro'yxat `[S14·k, S15·k]` va oraliq `[S30·k – S39·k]` yozgan, server ularni tanimagan;
+- xom qolgan identifikatordagi «14» hisoblangan raqam deb belgilangan;
+- jadval qatoridan olingan iqtibos katak ichidagi nuqtada kesilib, qator o'rtasidan boshlangan.
+
+**Tuzatish** (`src/rag/source-quotes.js`, AI'siz):
+- **Ro'yxat va oraliq.** Qavs ichidagi ro'yxat va oraliq identifikatorma-identifikator ochiladi. Har biri hujjat kaliti va berilgan ro'yxat bilan alohida tekshiriladi.
+  - Oraliq chegarasi ochiq yozilgan: `RANGE_MAX` = 12. Undan uzun oraliq ochilmaydi, lekin nomi bilan ko'rsatiladi («oraliq 12 tadan uzun»); jimgina tashlab yuborilmaydi.
+- **Raqam tekshiruvi.** Undan faqat tizim identifikatorlari olib qo'yiladi. Hujjatdagi haqiqiy raqam, kasr va qavs ichidagi boshqa matn tekshiruvda qoladi.
+  - Identifikatorga o'xshab boshlanib, boshqa so'z ham bo'lgan qavs (`[S5 band 77]`) «noto'g'ri yoki tanilmagan havola» deb qayd etiladi. Undan faqat identifikator qismi olinadi.
+- **Jadval qatori.** Qatordan olingan iqtibos doim to'liq qator bo'ladi: jadval raqami, qator, bo'lim va har bir katak o'z ustun sarlavhasi bilan.
+  - Bo'sh katak «(bo'sh)» deb, birlashtirilgan katak belgisi bilan ko'rsatiladi.
+  - Dashboard'da kataklar ro'yxat bo'lib chiqadi, sarlavhasi «Hujjat jadvali, to'liq qator, ustun sarlavhalari bilan».
+- **Diagnostika** (`check.quotes.usage`): berilgan, ishlatilgan (necha marta), takror ishlatilgan, rad etilgan (sababi va xom yozuvi bilan), qayta ishlanmagan va ishlatilmagan identifikatorlar.
+  - Dashboard'da ochilgan iqtiboslar shu so'rovning trace tegiga bog'lanadi va JSON'ga tushadi: `quotesOpened`.
+- **Ochiq aytiladi.** Identifikator to'g'ri ochilgani yonidagi izoh aynan shu bandga tegishli ekanini ham, to'g'ri ekanini ham tasdiqlamaydi.
+
+**Production javobida lokal qayta tekshiruv** (AI'siz): 33 ta havolaning hammasi ochildi, 11 ta jadval qatori to'liq, «14» endi belgilanmaydi.
+
+**Testlar.** `tests/explain-quotes.test.js` (anonim sintetik):
+- ro'yxat va oraliq;
+- noto'g'ri kalit;
+- uzun oraliq;
+- tizim identifikatori va haqiqiy raqam (kasr, qavs ichidagi matn);
+- tanilmagan havola;
+- katak ichidagi nuqta, bo'sh va birlashtirilgan katak bilan to'liq qator;
+- foydalanish hisobi;
+- dashboard bog'lanishi.
+
+Brauzerda (Chromium, stub AI) 1280 va 390 px da tekshirildi.
+
 ## 5. Qisman natija: foydalanuvchiga ko'rinishi va limit
 
 | Holat | Foydalanuvchi ko'radi | Limit | Qaysi mavjud qoidaga mos |
