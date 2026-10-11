@@ -58,9 +58,24 @@ const BASE = arg('--base', 'voicelab/aisha-comet');
 const STRONG = arg('--strong', 'voicelab/aisha-halo');
 const CAP = ex.EXPLAIN_MAX_TOKENS;
 const RETRIES = Number(arg('--retries', 1));
-// MEASURED (one live run, 2026-10-09, aisha-comet): tokens per prompt
-// character, the final answer's length and speed, the digest speed
-const MEASURED = { inPerChar: 0.345, answerTokens: 1737, finalTokPerS: 1737 / 37.5, digestTokPerS: 52, digestCharsPerOut: 2.82 };
+// MEASURED, per request - never merged into one figure (each from ONE
+// document's live run on aisha-comet; not an independent calibration):
+//   R1 5c3c052e-0571-4c70-a6e6-361982965679 (2026-10-09, 51 398-char DOCX):
+//      final call 14 475 in / 1 737 out, 37.5 s; prompt rebuilt from that
+//      run's trace = 41 919 chars -> 0.345 in-token/char; digest part 1:
+//      1 540 out in 30.0 s (~52 tok/s); 12 calls, 90.9 s in all.
+//   R2 504b2e59-5fe4-4727-a88e-7fd000f77b1d (2026-10-11, 54 260-char DOCX):
+//      final call 20 047 in / 1 947 out, 47.7 s; prompt rebuilt from that
+//      run's trace (code at 731d28d) = 54 576 chars -> 0.367 in-token/char;
+//      13 calls, 95.8 s in all.
+// The plan uses R2 (the latest, the same prompt shape as now); R1 is shown
+// for reference. Digest speed is known from R1 only.
+const RUNS = {
+  R1: { id: '5c3c052e-0571-4c70-a6e6-361982965679', inPerChar: 0.345, answerTokens: 1737, answerSeconds: 37.5, digestTokPerS: 52, serviceCalls: 12, serviceSeconds: 90.9 },
+  R2: { id: '504b2e59-5fe4-4727-a88e-7fd000f77b1d', inPerChar: 0.367, answerTokens: 1947, answerSeconds: 47.7, digestTokPerS: null, serviceCalls: 13, serviceSeconds: 95.8 },
+};
+const RUN = RUNS[arg('--run', 'R2')] || RUNS.R2;
+const MEASURED = { inPerChar: RUN.inPerChar, answerTokens: RUN.answerTokens, finalTokPerS: RUN.answerTokens / RUN.answerSeconds, digestTokPerS: RUNS.R1.digestTokPerS, digestCharsPerOut: 2.82 };
 // what a model is known to take; not forced equal
 const PARAMS = {
   'voicelab/aisha-comet': { temperature: 0.2, context: '258k (kod izohi; tekshirilmagan)' },
@@ -96,25 +111,50 @@ function recorder(answerTokens) {
   return fn;
 }
 
-/** A live VoiceLab caller under the budget: reserve the bound, call, settle at the actual cost. */
-function liveCaller(model, budget, log, temperature) {
-  const voicelab = require('../src/ai/voicelab');
+/**
+ * A live caller under ONE shared budget (digest parts, pre-splits, re-reads,
+ * every final answer and every retry go through the same object):
+ *  - before each attempt its bound (price table: UTF-8 input bound + the
+ *    output cap) is taken from what is left in the same synchronous step as
+ *    the check, so parallel calls cannot both pass on the same money;
+ *  - a call with no bound (no price, credit-only billing) is not started;
+ *  - after the call the reserve is replaced by the actual cost. The list-
+ *    price dollars (from the returned tokens) and the VoiceLab credits (as
+ *    returned, and their dollar value at VOICELAB_CREDIT_USD) are recorded
+ *    APART; the budget is settled at the larger known one, and at the whole
+ *    reserve when neither is known. A settled cost above its reserve is
+ *    flagged - the reserve is a planning bound, not a guaranteed maximum.
+ *  - VoiceLab ids called by name never fall back to another provider; a
+ *    retry here is another attempt of the same call, reserved again.
+ * `provider` defaults to src/ai/voicelab.js chatCompletion (tests pass a stub).
+ */
+function liveCaller(model, budget, log, temperature, { provider = null } = {}) {
+  const call = provider || ((m, msgs, o) => require('../src/ai/voicelab').chatCompletion(m, msgs, o));
   return async (messages, opts = {}) => {
     const maxTokens = opts.maxTokens || CAP;
     const b = bound(model, messages, maxTokens);
-    if (b.usd == null) throw new Error(`${model}: no cost bound (${b.reason}) - not called`);
+    if (b.usd == null) { log.push({ model, status: 'not_called', reason: `no cost bound: ${b.reason}` }); throw new Error(`${model}: no cost bound (${b.reason}) - not called`); }
     for (let attempt = 1; attempt <= 1 + RETRIES; attempt++) {
-      if (budget.left < b.usd) throw new Error(`budget: ${budget.left.toFixed(4)} left, call needs ${b.usd.toFixed(4)} - not called`);
+      // check and take in one step (no await in between)
+      if (budget.left < b.usd) { log.push({ model, attempt, status: 'not_called', reason: 'budget' }); throw new Error(`budget: ${budget.left.toFixed(4)} left, call needs ${b.usd.toFixed(4)} - not called`); }
       budget.left -= b.usd;
+      budget.reservedNow += b.usd;
       const t0 = Date.now();
       let r, err;
-      try { r = await voicelab.chatCompletion(model, messages, { temperature: temperature == null ? undefined : temperature, maxTokens }); } catch (e) { err = e; }
+      try { r = await call(model, messages, { temperature: temperature == null ? undefined : temperature, maxTokens }); } catch (e) { err = e; }
       const usage = (r && r.usage) || (err && err.usage) || {};
-      const cost = pricing.costForUsage(model, usage);
-      const actual = cost && cost.costUsd != null ? cost.costUsd : b.usd; // unknown cost keeps the whole reserve
-      budget.left += b.usd - actual;
-      budget.spent += actual;
-      log.push({ model, attempt, ms: Date.now() - t0, usage, costUsd: cost ? cost.costUsd : null, costSource: cost ? cost.costSource : 'unknown', reserved: b.usd, finish: r ? r.finishReason : null, error: err ? String(err.code || err.message).slice(0, 120) : null, promptSha: sha(messages.map(m => m.text).join('\n')) });
+      const listUsd = usage.inTokens != null || usage.outTokens != null ? pricing.calculateTokenCost(model, usage) : null;
+      const credits = Number.isFinite(Number(usage.credits)) && usage.credits != null ? Number(usage.credits) : null;
+      const rate = pricing.voicelabCreditUsd();
+      const creditUsd = credits == null || !rate || !Number.isFinite(Number(rate.usdPerCredit)) ? null : credits * Number(rate.usdPerCredit);
+      const known = [listUsd, creditUsd].filter(x => x != null && Number.isFinite(x));
+      const settled = known.length ? Math.max(...known) : b.usd;
+      budget.reservedNow -= b.usd;
+      budget.left += b.usd - settled;
+      budget.spent += settled;
+      budget.listUsd += listUsd || 0;
+      budget.credits += credits || 0;
+      log.push({ model, attempt, status: err ? 'error' : 'answered', ms: Date.now() - t0, usage, listUsd, credits, creditUsd, settledUsd: settled, reservedUsd: b.usd, overReserve: settled > b.usd, finish: r ? r.finishReason : null, error: err ? String(err.code || err.message).slice(0, 120) : null, promptSha: sha(messages.map(m => m.text).join('\n')) });
       const cut = r && r.finishReason === 'length';
       if (r && !cut) return { text: r.text, provider: r.provider };
       if (attempt > RETRIES) { if (r) return { text: r.text, provider: r.provider, truncated: true }; throw err; }
@@ -122,6 +162,7 @@ function liveCaller(model, budget, log, temperature) {
     return null;
   };
 }
+const newBudget = usd => ({ left: usd, spent: 0, listUsd: 0, credits: 0, reservedNow: 0 });
 
 async function main() {
   const docs = String(arg('--docs', '')).split(',').filter(Boolean);
@@ -180,16 +221,17 @@ async function main() {
   if (has('--json')) { console.log(JSON.stringify({ base: BASE, strong: STRONG, cap: CAP, retries: RETRIES, plan, est, estCap, reserve, unknownReserve }, null, 2)); }
   else {
     console.log(`A/B dry run - NO AI CALL. Base ${BASE}, stronger ${STRONG}. Output cap ${CAP}, ${RETRIES} retry per answer in the reserve.`);
-    console.log('MEASURED: 0.345 token/char, a 1 737-token answer in 37.5 s (comet, one run). ESTIMATE: digest sizes from the prediction. UNKNOWN: the stronger model\'s speed, hidden reasoning and real credit rate.\n');
+    console.log(`MEASURED (request ${RUN.id}, one document, comet): ${RUN.inPerChar} in-token/char, a ${RUN.answerTokens}-token answer in ${RUN.answerSeconds} s, the service ${RUN.serviceCalls} calls in ${RUN.serviceSeconds} s. Other request (reference, not merged): ${Object.values(RUNS).filter(x => x !== RUN).map(x => `${x.id}: ${x.inPerChar}/char, ${x.answerTokens} tok in ${x.answerSeconds} s`).join('; ')}.`);
+    console.log("ESTIMATE: digest sizes from the prediction; answers at the measured length and at the 3 000 cap. UNKNOWN: the stronger model's speed, hidden reasoning, credit rate. Not an independent calibration.\n");
     for (const d of plan) {
       console.log(`${d.file} (sha ${d.sha}, ${d.contentChars} chars): digest ${d.digest.calls} calls (${d.digest.parts} parts, density ${d.digest.density}), ~${d.digest.inTok}+${d.digest.outTok} tok, ${fmt(d.digest.usd)}, reserve ${fmt(d.digest.reserve)}`);
-      for (const v of d.variants) console.log(`  ${v.id} ${v.input.padEnd(9)} ${v.model.padEnd(22)} prompt ${v.promptChars} chars ~${v.inTok} tok, ${v.ids} ids | answer 1737: ${fmt(v.usdAnswer)}, at cap: ${fmt(v.usdCap)} | reserve ${v.reserve == null ? `noma'lum (${v.reserveNote})` : fmt(v.reserve)} | ~${v.seconds == null ? "noma'lum" : `${v.seconds} s`} | temperature ${v.params.temperature == null ? 'provayder standarti' : v.params.temperature}`);
+      for (const v of d.variants) console.log(`  ${v.id} ${v.input.padEnd(9)} ${v.model.padEnd(22)} prompt ${v.promptChars} chars ~${v.inTok} tok, ${v.ids} ids | answer ${MEASURED.answerTokens}: ${fmt(v.usdAnswer)}, at cap: ${fmt(v.usdCap)} | reserve ${v.reserve == null ? `noma'lum (${v.reserveNote})` : fmt(v.reserve)} | ~${v.seconds == null ? "noma'lum" : `${v.seconds} s`} | temperature ${v.params.temperature == null ? 'provayder standarti' : v.params.temperature}`);
     }
-    console.log(`\nTotal, 12 answers + 3 digests: estimate ${fmt(est)} (answers at 1 737 tok), ${fmt(estCap)} (answers at the cap); reserve ${fmt(reserve)}${unknownReserve ? ' + calls with no bound (unknown)' : ''}. A reserve is a planning bound from the price table, not a guaranteed maximum.`);
+    console.log(`\nTotal, 12 answers + 3 digests: estimate ${fmt(est)} (answers at ${MEASURED.answerTokens} tok), ${fmt(estCap)} (answers at the cap); reserve ${fmt(reserve)}${unknownReserve ? ' + calls with no bound (unknown)' : ''}. A reserve is a planning bound from the price table, not a guaranteed maximum.`);
   }
   if (!live) return;
   // ── live: the owner's approval, the budget, outputs outside the repo ──
-  const budget = { left: Number(arg('--budget-usd')), spent: 0 };
+  const budget = newBudget(Number(arg('--budget-usd')));
   if (reserve > budget.left || unknownReserve) { console.error(`the reserve ${fmt(reserve)} does not fit the budget $${budget.left} (or a call has no bound): nothing called`); process.exit(3); }
   fs.mkdirSync(out, { recursive: true });
   const log = [];
@@ -212,7 +254,8 @@ async function main() {
   codes.forEach((c, i) => fs.writeFileSync(path.join(out, 'blind', `javob-${String(i + 1).padStart(2, '0')}-${c.a.doc}.md`), c.a.reply));
   fs.writeFileSync(path.join(out, 'key.json'), JSON.stringify(codes.map((c, i) => ({ file: `javob-${String(i + 1).padStart(2, '0')}-${c.a.doc}.md`, doc: c.a.doc, variant: c.a.variant, model: c.a.model, input: c.a.input })), null, 2));
   fs.writeFileSync(path.join(out, 'calls.jsonl'), log.map(l => JSON.stringify(l)).join('\n'));
-  console.log(`live: ${answers.length} answers, spent ${fmt(budget.spent)}, budget left ${fmt(budget.left)}; outputs in ${out} (blind/ for the lawyer, key.json kept apart).`);
+  console.log(`live: ${answers.length} answers; settled ${fmt(budget.spent)} of the budget; list price ${fmt(budget.listUsd)} and VoiceLab credits ${budget.credits} shown apart (credits per token unconfirmed); ${log.filter(l => l.overReserve).length} call(s) above their reserve; outputs in ${out} (blind/ for the lawyer, key.json kept apart).`);
 }
 
-main().catch((e) => { console.error(e.message); process.exit(1); });
+if (require.main === module) main().catch((e) => { console.error(e.message); process.exit(1); });
+module.exports = { liveCaller, newBudget, bound, RUNS, CAP };

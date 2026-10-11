@@ -24,17 +24,20 @@ Lug'at yoki ogohlantirish qo'shish asosiy yechim sifatida qaralmaydi. Reja ikki 
 | C | to'liq matn | aisha-comet |
 | D | to'liq matn | o'sha kuchliroq model |
 
-**Kuchliroq model — tavsiya: `voicelab/aisha-halo`.**
-- Provayder va adapter comet bilan bir xil, shuning uchun faqat model o'zgaradi.
-- Ro'yxat narxi 3.20 / 12.70 USD (1M token uchun), `model-pricing.js`, 2026-09-23.
-- Kontekst 1M — bu faqat kod izohida yozilgan, **tekshirilmagan**.
-- Muqobil — `gpt-6-sol` (2 / 10 USD). U `temperature` ni rad etishi mumkin, uzun kontekst ustamasi narx jadvalida yo'q. Jonli skript hozircha faqat VoiceLab modellari bilan ishlaydi.
+**Kuchliroq model — hozircha faqat nomzod: `voicelab/aisha-halo`.**
+Uni rasmiy manbadan tasdiqlab bo'lmadi: qidiruvda `aisha-halo` haqida provayder sahifasi topilmadi, `aisha.group` hujjatlariga bu muhitdan ulanib bo'lmadi. Kod izohi va ichki narx jadvali tasdiq sifatida olinmaydi. Har bir band bo'yicha holat:
 
-**Jonli sinovdan oldin tekshiriladi** (VoiceLab konsoli yoki hujjatlari orqali; token sarflamasdan):
-- model identifikatori haqiqatan mavjudligi;
-- joriy narx va kredit kursi;
-- kontekst va chiqish chegaralari;
-- yashirin reasoning bormi. Orbit ilgari butun chiqish chegarasini reasoning'ga sarflagan (2026-10-04). Halo uchun bu **noma'lum**. Shu sabab rezervga har bir javobga bitta qayta urinish kiritilgan.
+| Band | Holat | Sizdan aynan kerak |
+|---|---|---|
+| Model identifikatori va API'da mavjudligi | **noma'lum** | VoiceLab konsolidagi LLM modellari ro'yxati (`aisha-halo` aynan shu nom bilanmi, chat completions orqali chaqiriladimi) — skrinshot yoki eksport |
+| Kirish / chiqish / kesh narxi | **noma'lum**. Ichki jadvalda 3.20 / 12.70 USD (1M token uchun), kesh yo'q — bu tasdiq emas | Konsoldagi joriy tarif: 1M kirish, 1M chiqish va keshlangan kirish tokeni uchun narx (yoki kredit) |
+| VoiceLab kredit hisobi | **qisman**. Xarid kursi siz tasdiqlagan: 1 200 000 kredit = $90. Halo'ning bir tokeniga necha kredit ketishi noma'lum | Halo uchun kirish va chiqish tokeniga kredit stavkasi; javobda kredit qaytariladimi |
+| Kontekst va chiqish chegaralari | **noma'lum** (kod izohidagi «1M» tasdiq emas) | Maksimal kontekst va maksimal `max_tokens` |
+| Yashirin reasoning tokenlari va ularning hisoblanishi | **noma'lum** (Orbit chiqish chegarasini reasoning'ga sarflagan, 2026-10-04) | Halo reasoning qiladimi; u `max_tokens` ga kiradimi; alohida hisoblanadimi; o'chirish parametri bormi |
+
+Bu ma'lumotlarsiz jonli rejimda halo chaqirilmaydi. Narxni rezervlashga yetarli ma'lumot bo'lmasa, o'sha chaqiruv boshlanmaydi.
+
+Muqobil — `gpt-6-sol` (ichki jadvalda 2 / 10 USD). U `temperature` ni rad etishi mumkin, uzun kontekst ustamasi narx jadvalida yo'q. Jonli skript hozircha faqat VoiceLab modellari bilan ishlaydi.
 
 ## Nazoratlar
 - Har bir hujjat uchun dayjest **bir marta** olinadi va `digest-<sha>.json` ga saqlanadi. A va B aynan shu dayjestni o'zgartirmasdan ishlatadi.
@@ -79,33 +82,60 @@ Lug'at yoki ogohlantirish qo'shish asosiy yechim sifatida qaralmaydi. Reja ikki 
    12 javob faqat saralash beradi. Tanlangan variant keyin kengroq to'plamda tasdiqlanadi.
 
 ## Xarajat va vaqt (`node scripts/explain-ab.js --docs …`, AI'siz)
-**O'lchangan** (bitta jonli sinov, comet):
-- 0,345 token/belgi;
-- 1 737 tokenlik javob 37,5 s da;
-- dayjest tezligi ≈ 52 token/s.
+**O'lchovlar so'rov bo'yicha alohida.** Har biri bitta hujjatning comet'dagi jonli sinovidan olingan, birlashtirilmaydi va mustaqil kalibrlash emas.
 
-**Taxmin:** dayjest hajmi bashoratdan olinadi.
+| | R1 `5c3c052e-0571-4c70-a6e6-361982965679` (2026-10-09) | R2 `504b2e59-5fe4-4727-a88e-7fd000f77b1d` (2026-10-11) |
+|---|---|---|
+| Yakuniy chaqiruv | 14 475 kirish / 1 737 chiqish, 37,5 s | 20 047 kirish / 1 947 chiqish, 47,7 s |
+| Yakuniy prompt (trace'dan qayta tiklangan) | 41 919 belgi → 0,345 kirish-token/belgi | 54 576 belgi (kod 731d28d da) → 0,367 kirish-token/belgi |
+| Butun xizmat | 12 chaqiruv, 90,9 s | 13 chaqiruv, 95,8 s |
+| Dayjest tezligi | 1-qism: 1 540 token 30,0 s da (~52 token/s) | — |
+
+- Avvalgi rejada keltirilgan «1 737 token, 37,5 s» R1 dan olingan edi.
+- Dry-run endi R2 ni ishlatadi, chunki u eng so'nggi va hozirgi prompt shakliga mos. R1 faqat ma'lumot uchun ko'rsatiladi.
+
+**Taxmin:**
+- dayjest hajmi bashoratdan olinadi;
+- javoblar ikki ssenariyda hisoblanadi: R2 da o'lchangan 1 947 token va 3 000 tokenlik chegara.
 
 **Noma'lum:**
 - halo tezligi;
 - halo'da yashirin reasoning bormi;
-- VoiceLab kreditining haqiqiy kursi.
+- halo'ning kredit stavkasi.
 
-Dry-run (3 hujjat: uchinchi sinov hujjati ~51 ming belgi va ikki sintetik hajm o'rnini bosuvchi):
+Dry-run (3 hujjat: uchinchi sinov hujjati va ikki sintetik hajm o'rnini bosuvchi):
 
-| Qism | Taxmin (javob 1 737 token) | Taxmin (javob 3 000 token) | Rezerv |
+| Qism | Javob 1 947 token | Javob 3 000 token | Rezerv |
 |---|---|---|---|
-| 3 dayjest (bir martadan) | ≈ $0.053 | ≈ $0.053 | ≈ $0.21 |
-| 6 javob, comet (A, C) | ≈ $0.047 | ≈ $0.053 | ≈ $0.26 |
-| 6 javob, halo (B, D) | ≈ $0.42 | ≈ $0.51 | ≈ $2.15 |
-| **Jami** | **≈ $0.52** | **≈ $0.62** | **≈ $2.63** |
+| 3 dayjest (bir martadan) | ≈ $0.055 | ≈ $0.055 | ≈ $0.21 |
+| 6 javob, comet (A, C) | ≈ $0.051 | ≈ $0.055 | ≈ $0.26 |
+| 6 javob, halo (B, D) | ≈ $0.45 | ≈ $0.53 | ≈ $2.15 |
+| **Jami** | **≈ $0.56** | **≈ $0.64** | **≈ $2.63** |
 
-- Rezerv har bir chaqiruv uchun alohida hisoblanadi: kirish UTF-8 baytlari bilan chegaralanadi, chiqish chegarasi to'liq olinadi, har bir javobga bitta qayta urinish qo'shiladi, dayjest uchun 4 ta qayta o'qish qo'shiladi.
-- Rezerv narx jadvali bo'yicha **rejalash chegarasi**, kafolatlangan maksimum emas. VoiceLab kreditda hisoblaydi va kreditning token kursi tasdiqlanmagan.
+**Dollar va kredit alohida ko'rsatiladi.**
+- Rezerv ro'yxat narxidagi dollarda.
+- VoiceLab esa kreditda hisoblaydi. Halo'ning kredit stavkasi noma'lum, shuning uchun dollar rezervi bilan haqiqiy kredit sarfi bir xil ekanini tasdiqlab bo'lmaydi.
+- Jonli rejim har chaqiruvda ikkalasini alohida yozadi:
+  - qaytgan tokenlardan hisoblangan ro'yxat narxi;
+  - qaytgan kreditlar va ularning xarid kursidagi dollar qiymati.
+- Byudjet ikkalasining kattasi bilan yopiladi. Hech biri ma'lum bo'lmasa, butun rezerv sarflangan hisoblanadi. Rezervdan oshib ketgan chaqiruv belgilanadi.
+- $2.63 — rejalash chegarasi, **kafolatlangan maksimum emas**.
 
 **Vaqt:**
-- Mashina: 3 dayjest ≈ 1–1,5 daqiqadan, 6 ta comet javobi ≈ 40 s dan, 6 ta halo javobi — noma'lum. Jami taxminan 10–20 daqiqa.
+- Mashina: R2 bo'yicha bitta to'liq xizmat ≈ 96 s. 6 ta comet javobi ≈ 48 s dan. 6 ta halo javobi — noma'lum. Jami taxminan 10–20 daqiqa.
 - Yurist: kalit nuqtalar ≈ 3 × 45 daqiqa, 12 javobni baholash ≈ 12 × 10–12 daqiqa. Jami taxminan 4–4,5 soat.
+
+## Umumiy byudjet nazorati (kod va AI'siz test bilan tasdiqlangan)
+- Bitta byudjet obyekti hamma narsani qamraydi: dastlabki dayjest qismlari, oldindan bo'lish, qayta o'qishlar, barcha yakuniy javoblar va retry'lar. Hammasi bitta `liveCaller` orqali o'tadi.
+- **Rezerv atomar.** Har bir urinishdan oldin chegarasi tekshiriladi va qolgan byudjetdan ayiriladi. Tekshiruv va ayirish orasida `await` yo'q, shuning uchun parallel chaqiruvlar bir pulni ikki marta ishlata olmaydi.
+- Retry — alohida rezervlanadigan urinish. Joy bo'lmasa, provayderga yetib bormaydi.
+- Fallback yo'q: VoiceLab modeli nomi bilan chaqirilganda boshqa provayderga o'tmaydi.
+- Narx chegarasi bo'lmagan chaqiruv (narx noma'lum yoki faqat kredit bilan hisoblanadi) **boshlanmaydi**.
+- Testlar (`tests/explain-ab.test.js`, stub provayder, AI'siz):
+  - 10 ta parallel chaqiruvdan faqat 3 tasi sig'adi, qolgan 7 tasi provayderga bormaydi;
+  - retry uchun joy bo'lmasa, u qilinmaydi;
+  - narxsiz model chaqirilmaydi;
+  - butun xizmat (dayjest, qayta o'qishlar, yakuniy javob) bitta byudjetdan o'tadi, va ro'yxat narxi bilan kredit alohida yoziladi.
 
 ## Jonli ishga tushirish (faqat ruxsatdan keyin)
 ```
