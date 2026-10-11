@@ -57,7 +57,7 @@ const CONTROLS = Object.freeze({ concurrency: 1, autoRetry: 0, fallback: false, 
 const TIMEOUT_MS = 120000;
 // ESTIMATE only, never a bound: comet's request R2 (504b2e59-..., one
 // 54 260-char DOCX) gave 0.367 input tokens per character and a 1 947-token
-// answer. Not measured for any other model; the reserve uses the byte bound.
+// answer. Not measured for any other model; the reserve never uses it.
 const SCENARIO = Object.freeze({ inPerChar: 0.367, answerTokens: 1947, source: 'comet request 504b2e59-5fe4-4727-a88e-7fd000f77b1d (one document); an estimate for the others, not measured for them and never used as a maximum' });
 // a criterion marked distorted or missing makes the answer a critical error
 const CRITERIA = ['summa', 'subyekt', 'muddat_boshlanishi', 'inkor', 'rozilik', 'istisno', 'barcha_oqibatlar', 'iqtibos_tegishliligi'];
@@ -141,6 +141,8 @@ function missingFacts(m, e) {
   if (e.profileConfirmed !== true) out.push('generation profile (thinking switch, parameters, cap name) not confirmed');
   if (!prov.priceFor(m, e).rates) out.push('price (rates[].in/out with source and checkedAt) not confirmed');
   if (e.capCoversBilledOutput !== true) out.push(`not confirmed that ${m.profile.capParam} limits every billed output token (visible + reasoning)`);
+  const basisProblem = prov.inputBasisProblem(e.inputTokenBasis);
+  if (basisProblem) out.push(basisProblem);
   if (m.profile.reasoning !== 'off' && m.provider !== 'voicelab' && e.reasoningBilledInCompletion !== true) out.push('reasoning billing inside completion_tokens not confirmed');
   if (e.acceptedReturnedModels != null && !(Array.isArray(e.acceptedReturnedModels) && e.acceptedReturnedModels.every(x => typeof x === 'string' && x.trim()))) out.push('acceptedReturnedModels must be a list of exact model ids');
   return out;
@@ -161,7 +163,7 @@ function runSha(frozen, models, budgetUsd, confirmedSha) {
 /**
  * The dry-run plan, one row per job: state READY / BLOCKED with the exact
  * missing facts, the price used and its source and date, an ESTIMATE (comet
- * ratio, a scenario) and the RESERVE (byte bound x confirmed price x cap,
+ * ratio, a scenario) and the RESERVE (confirmed input basis x price + cap,
  * or UNKNOWN), and their difference.
  */
 function plan(frozen, models, confirmed = null) {
@@ -191,7 +193,7 @@ function plan(frozen, models, confirmed = null) {
         profile: { reasoning: m.profile.reasoning, params: m.profile.params, capParam: m.profile.capParam, cap: m.profile.cap },
         hashes: f.hashes, promptChars: f.promptChars,
         estimate: { inTokens: inTok, inMethod: `${SCENARIO.inPerChar} tokens/char (comet, one request) - an estimate`, visibleTokens: visible, visibleUsd: estimateVisibleUsd, atCapUsd: at(m.profile.cap), reasoningTokens: m.profile.reasoning === 'off' ? 'off if the switch works (unconfirmed)' : 'UNKNOWN', priceStatus: est.status, priceSource: est.source, priceDate: est.date },
-        reserve: { usd: b.usd, reason: b.usd == null ? b.reason : null, basis: b.basis || null, inputTokensBound: pricing.inputTokenBound(f.messages) },
+        reserve: { usd: b.usd, reason: b.usd == null ? b.reason : null, basis: b.basis || null, textBytes: f.messages.reduce((n, x) => n + Buffer.byteLength(x.text, 'utf8'), 0) },
         reserveMinusEstimateUsd: b.usd != null && estimateVisibleUsd != null ? b.usd - estimateVisibleUsd : null,
       });
     }
@@ -474,7 +476,7 @@ function printPlan(frozen, models, jobs, s, cfg) {
   console.log(`Provider evaluation - ${s.mode}. NO AI CALL, NO NETWORK. 3 synthetic documents x ${models.length} models = ${s.jobs} final answers; helper AI calls 0, digest calls 0, paid preflight 0; concurrency 1, auto-retry 0, fallback off.`);
   console.log(`Jobs READY ${s.ready}, BLOCKED ${s.blocked}. Prompt: production explainDocument (full text, sameHelpers), frozen per document.`);
   console.log(`ESTIMATE: ${s.scenario.inPerChar} tokens/char and a ${s.scenario.answerTokens}-token answer from ${s.scenario.source}.`);
-  console.log(`RESERVE: input bound = ${s.inputBoundMethod}; output = the profile cap, only once the owner confirms it limits every billed output token; price = the owner-confirmed rate (highest listed). Without them: UNKNOWN, live BLOCKED.\n`);
+  console.log(`RESERVE: input = ${s.inputBoundMethod}; output = the profile cap, only once the owner confirms it limits every billed output token; price = the owner-confirmed rate (highest listed). Without them: UNKNOWN, live BLOCKED.\n`);
   for (const a of cfg.officialDocsReadAttempts || []) console.log(`Official page ${a.url}: ${a.result} (${a.at})`);
   console.log('');
   for (const f of frozen) console.log(`${f.id} ${f.path}: ${f.chars} chars, prompt ${f.promptChars} chars, ${f.helpers.keyLines.length} key lines, ${f.helpers.conflicts.length} conflict candidates | source ${f.hashes.source.slice(0, 12)} messages ${f.hashes.messages.slice(0, 12)} helpers ${f.hashes.helpers.slice(0, 12)}`);
@@ -488,7 +490,7 @@ function printPlan(frozen, models, jobs, s, cfg) {
   for (const j of jobs) {
     console.log(`  ${j.job.padEnd(14)} ${j.state.padEnd(7)} ${j.provider}/${j.requestedModel} [${j.profile.reasoning}; ${j.profile.capParam}=${j.profile.cap}]`);
     console.log(`      estimate: ~${j.estimate.inTokens} in tok, visible ${usd(j.estimate.visibleUsd)}, at cap ${usd(j.estimate.atCapUsd)}, reasoning ${j.estimate.reasoningTokens} | price ${j.estimate.priceStatus}${j.estimate.priceDate ? ` ${j.estimate.priceDate}` : ''}`);
-    console.log(`      reserve: ${usd(j.reserve.usd)}${j.reserve.usd == null ? ` (${j.reserve.reason})` : ` = ${j.reserve.basis.input.tokensMax} in tok bound + ${j.reserve.basis.output.tokensMax} out at ${j.reserve.basis.priceStatus} ${j.reserve.basis.checkedAt || ''}`} | reserve - estimate: ${usd(j.reserveMinusEstimateUsd)}`);
+    console.log(`      reserve: ${usd(j.reserve.usd)}${j.reserve.usd == null ? ` (${j.reserve.reason})` : ` = ${j.reserve.basis.input.tokensMax} in tok (${j.reserve.basis.input.basis.method}) + ${j.reserve.basis.output.tokensMax} out at ${j.reserve.basis.priceStatus} ${j.reserve.basis.checkedAt || ''}`} | reserve - estimate: ${usd(j.reserveMinusEstimateUsd)}`);
     if (j.blockers.length) console.log(`      missing: ${j.blockers.join('; ')}`);
   }
   console.log(`\nTotal ${s.jobs} jobs: estimate ${usd(s.estimateVisibleUsd)} (visible answer only, reasoning not included) to ${usd(s.estimateAtCapUsd)} (every cap)${s.estimateUnpriced.length ? `, ${s.estimateUnpriced.length} unpriced` : ''}; reserve ${s.reserveUsd == null ? `UNKNOWN (${s.reserveUnknownFor.length} jobs without a reliable bound)` : usd(s.reserveUsd)}.`);

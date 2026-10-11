@@ -155,8 +155,43 @@ function priceFor(model, entry) {
   return { rates: null, status: 'UNKNOWN', source: null, checkedAt: null };
 }
 
-// how the input side of a reserve is bounded (no ratio from another model)
-const INPUT_BOUND_METHOD = 'UTF-8 bytes of every message + 64 per request + 16 per message (src/ai/model-pricing.js inputTokenBound): a text token covers at least one byte in byte-level BPE and SentencePiece tokenizers; no characters-per-token ratio is used';
+// The input side of a reserve. The UTF-8 byte count of the text is NOT a
+// guaranteed token bound on its own: it holds only for a tokenizer whose
+// every text token covers at least one byte, and the provider's chat
+// template and special tokens are not bytes of the text at all. So the
+// bound is built from a per-model basis the owner confirms (confirmation
+// entry inputTokenBasis), never from a ratio measured on another model:
+//   method            'tokenizer' (the model's own tokenizer and chat
+//                     template, counted locally) or 'provider_documented'
+//                     (a documented counting rule or count endpoint)
+//   source            where the tokenizer / documentation came from
+//   maxTokensPerByte  text tokens per UTF-8 byte at most (1 for byte-level BPE)
+//   overheadTokensMax chat template + special tokens of the whole request,
+//                     counted with that tokenizer or taken from the docs
+// Without it the reserve is UNKNOWN and the job BLOCKED.
+const INPUT_BOUND_METHOD = "ceil(UTF-8 bytes of the message texts x maxTokensPerByte) + overheadTokensMax, both from the model's confirmed inputTokenBasis (its tokenizer and chat template, or a documented rule); the byte count alone is not a token guarantee and no characters-per-token ratio is used";
+const INPUT_BASIS_METHODS = ['tokenizer', 'provider_documented'];
+
+/** The confirmed input basis, or the reason it is not usable. */
+function inputBasisProblem(b) {
+  if (!b || typeof b !== 'object') return 'input token basis (tokenizer or documented rule, with chat-template and special-token overhead) not confirmed';
+  if (!INPUT_BASIS_METHODS.includes(b.method)) return `input token basis method must be one of ${INPUT_BASIS_METHODS.join(' / ')}`;
+  if (!b.source || typeof b.source !== 'string') return 'input token basis has no source';
+  if (!(Number(b.maxTokensPerByte) > 0)) return 'input token basis needs maxTokensPerByte > 0';
+  if (!(Number.isFinite(Number(b.overheadTokensMax)) && Number(b.overheadTokensMax) >= 0) || b.overheadTokensMax === null || b.overheadTokensMax === '') return 'input token basis needs overheadTokensMax (chat template + special tokens) >= 0';
+  return null;
+}
+
+/** Input tokens at most, from the text bytes and the confirmed basis; null if any part is not text. */
+function inputTokensMax(messages, basis) {
+  let bytes = 0;
+  for (const m of messages || []) {
+    const c = m && (m.text != null ? m.text : m.content);
+    if (c != null && typeof c !== 'string') return null;
+    bytes += Buffer.byteLength(String(c || ''), 'utf8');
+  }
+  return { bytes, tokensMax: Math.ceil(bytes * Number(basis.maxTokensPerByte)) + Number(basis.overheadTokensMax) };
+}
 
 /**
  * The most one call can cost (before it is made), or { usd: null, reason }.
@@ -166,18 +201,21 @@ const INPUT_BOUND_METHOD = 'UTF-8 bytes of every message + 64 per request + 16 p
  *     cap sent (profile.capParam) limits EVERY billed output token, visible
  *     and reasoning alike - for every model, since a thinking switch that
  *     does not work, or hidden reasoning, would bill past a visible-only cap;
- *   - a text-only input (byte bound, INPUT_BOUND_METHOD).
+ *   - facts.inputTokenBasis (INPUT_BOUND_METHOD) and a text-only input.
  * Cached input is reserved at the full input rate (no discount assumed).
  */
 function callBound(model, messages, priceInfo, facts) {
   const rates = priceInfo && priceInfo.rates;
   if (!rates) return { usd: null, reason: 'no confirmed price' };
   if (!(facts && facts.capCoversBilledOutput === true)) return { usd: null, reason: `not confirmed that ${model.profile.capParam} limits every billed output token (visible + reasoning)` };
-  const inMax = pricing.inputTokenBound(messages);
-  if (inMax == null) return { usd: null, reason: 'input size has no upper bound' };
+  const basisProblem = inputBasisProblem(facts.inputTokenBasis);
+  if (basisProblem) return { usd: null, reason: basisProblem };
+  const inp = inputTokensMax(messages, facts.inputTokenBasis);
+  if (!inp) return { usd: null, reason: 'input is not text only: no bound' };
+  const inMax = inp.tokensMax;
   const usd = (inMax * Math.max(rates.in, rates.cachedIn || 0) + model.profile.cap * rates.out) / 1e6;
   return { usd, basis: {
-    input: { tokensMax: inMax, method: INPUT_BOUND_METHOD },
+    input: { tokensMax: inMax, textBytes: inp.bytes, method: INPUT_BOUND_METHOD, basis: { method: facts.inputTokenBasis.method, source: facts.inputTokenBasis.source, maxTokensPerByte: Number(facts.inputTokenBasis.maxTokensPerByte), overheadTokensMax: Number(facts.inputTokenBasis.overheadTokensMax) } },
     output: { tokensMax: model.profile.cap, method: `${model.profile.capParam}=${model.profile.cap}, owner-confirmed to cap visible and reasoning tokens` },
     rates, priceStatus: priceInfo.status, priceSource: priceInfo.source, checkedAt: priceInfo.checkedAt,
     ...(model.provider === 'voicelab' ? { note: 'VoiceLab credits are billed apart and not bounded by the list price' } : {}),
@@ -288,4 +326,4 @@ async function callVoiceLab(model, messages, timeoutMs) {
   }
 }
 
-module.exports = { PROVIDERS, ALL_SECRET_ENVS, INPUT_BOUND_METHOD, secretState, redact, guardNetwork, wireMessages, requestBody, usageOf, providerCostOf, worstRates, priceFor, callBound, modelMatch, listCost, callProvider };
+module.exports = { PROVIDERS, ALL_SECRET_ENVS, INPUT_BOUND_METHOD, INPUT_BASIS_METHODS, inputBasisProblem, inputTokensMax, secretState, redact, guardNetwork, wireMessages, requestBody, usageOf, providerCostOf, worstRates, priceFor, callBound, modelMatch, listCost, callProvider };
