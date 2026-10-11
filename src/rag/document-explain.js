@@ -1333,10 +1333,12 @@ const EXPLAIN_MAX_TOKENS = 3000;
  * the shared digest above it; one explanation call; the answer finished by
  * finishExplanation. `digest(text)` returns { text, chunks, failed, ... }.
  */
-async function explainDocument({ documentText, langName, callAI, digest, userId = null, endpoint = '/api/draft/explain-document', tables = null }) {
-  // the document's own size decides (page marks are ours), as for units
+async function explainDocument({ documentText, langName, callAI, digest, userId = null, endpoint = '/api/draft/explain-document', tables = null, inputMode = null, sameHelpers = false }) {
+  // the document's own size decides (page marks are ours), as for units;
+  // inputMode 'full_text' / 'digest' is for the A/B evaluation only
+  // (scripts/explain-ab.js) - the service never passes it
   const chars = contentChars(documentText);
-  const full = chars <= EXPLAIN_FULL_TEXT_MAX;
+  const full = inputMode === 'full_text' ? true : inputMode === 'digest' ? false : chars <= EXPLAIN_FULL_TEXT_MAX;
   const d = full ? null : await digest(documentText);
   const pages = pagesIn(documentText);
   const empty = emptyPages(documentText);
@@ -1356,7 +1358,9 @@ async function explainDocument({ documentText, langName, callAI, digest, userId 
   const given = full ? documentText : d.text;
   // a line the model already has word for word (the full text, or a digest
   // line that keeps all its parts) is a short reference, not a repeat
-  const sel = scopeSelection(documentText, { given });
+  // sameHelpers (A/B only): the key lines are picked and sent whole the same
+  // way whatever the input form, so every variant gets the same helpers
+  const sel = scopeSelection(documentText, { given: sameHelpers ? null : given });
   const scope = sel.full;
   // each key line carries an id bound to this document; the quote under the
   // answer is the document's own sentence, never a digest line (no AI)
