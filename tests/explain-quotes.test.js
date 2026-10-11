@@ -80,7 +80,7 @@ const digestOf = ai => t => ex.buildDigest(t, { callAI: ai });
     // no AI call besides the digest parts and the one explanation
     const digestCalls = ai.calls.filter(c => /^Excerpt /u.test(c.messages[1].text)).length;
     assert.strictEqual(ai.calls.length, digestCalls + 1);
-    assert.ok(r.reply.includes("server parchani hujjatda belgilar bo'yicha topdi, xolos — bu yonidagi izohning to'g'riligini tasdiqlamaydi"));
+    assert.ok(r.reply.includes("server parchani hujjatda belgilar bo'yicha topdi, xolos — identifikator to'g'ri ochilgani yonidagi izoh aynan shu bandga tegishli ekanini ham, to'g'ri ekanini ham tasdiqlamaydi"));
     assert.ok(!/tuzatildi|tasdiqlandi|tekshiruvdan o'tdi/u.test(r.reply));
   });
 
@@ -163,6 +163,93 @@ const digestOf = ai => t => ex.buildDigest(t, { callAI: ai });
     assert.deepStrictEqual(found.map(f => f[1]).sort(), [KEY[0], KEY[2]].sort(), 'the page reads every quote whole');
     assert.deepStrictEqual(r.check.quotes.items.map(x => x.text).sort(), [KEY[0], KEY[2]].sort());
     for (const s2 of ["Manbadan iqtibos — ochish", "Manbadan iqtibos — yopish", "— AI izohi emas", '<details class="ai-src-quote"']) assert.ok(page.includes(s2), s2);
+  });
+
+  // ── 2026-10-11: lists, ranges, system ids vs real figures, whole table rows, usage ──
+  const three = ["3.1. Birinchi shart uzun matni shu yerda yoziladi.", "3.2. Ikkinchi shart uzun matni shu yerda yoziladi.", "3.3. Uchinchi shart uzun matni shu yerda yoziladi."];
+  const small = three.join('\n');
+
+  await test('a list [S1·k, S2·k] and a range [S1·k – S3·k] are opened id by id, each checked against the key and the issued list', () => {
+    const s3 = q.buildSources(small, three);
+    const k = s3.key;
+    const p = q.placeQuotes(`A [S1·${k}, S2·${k}]. B [S1·${k} – S3·${k}]. C [S2·${k}; S3·beef].`, s3, { sourceText: small });
+    assert.deepStrictEqual(p.quotes.map(x => `${x.id}:${x.status}`), ['S1:quoted', 'S2:quoted', 'S1:quoted', 'S2:quoted', 'S3:quoted', 'S2:quoted', 'S3:other_document']);
+    const out = q.renderQuotes(p.text, p.quotes, p.refs);
+    assert.ok(out.includes('A [S1, S2].') && out.includes('B [S1, S2, S3].'), out);
+    assert.ok(out.includes("C [S2, S3: manba ko'rsatilmadi — identifikator bu hujjatga tegishli emas]."), out);
+    for (const t of three) assert.strictEqual(out.split(`> «${t}»`).length - 1, 1, 'each source quoted once');
+    // a key on one end of a range covers it; two different keys do not
+    assert.deepStrictEqual(q.placeQuotes(`[S1 – S2·${k}]`, s3).quotes.map(x => x.status), ['quoted', 'quoted']);
+    assert.deepStrictEqual(q.placeQuotes(`[S1·beef – S2·${k}]`, s3).quotes.map(x => x.status), ['other_document', 'other_document']);
+  });
+
+  await test('a range longer than the limit is named, not opened and not dropped; the limit is stated and can be set', () => {
+    const many = Array.from({ length: 15 }, (_, i) => `${i + 1}.1. Shart raqami ${i + 1} uchun yetarli uzun matn.`);
+    const doc15 = many.join('\n');
+    const s15 = q.buildSources(doc15, many);
+    const p = q.placeQuotes(`KPI [S1·${s15.key} – S15·${s15.key}].`, s15, { sourceText: doc15 });
+    assert.deepStrictEqual(p.quotes.map(x => [x.id, x.status, x.span]), [['S1–S15', 'range_too_long', 15]]);
+    const out = q.renderQuotes(p.text, p.quotes, p.refs);
+    assert.ok(out.includes(`KPI [S1–S15: manba ko'rsatilmadi — oraliq ${q.RANGE_MAX} tadan uzun — iqtiboslar ochilmadi].`), out);
+    assert.strictEqual(q.RANGE_MAX, 12);
+    assert.strictEqual(q.placeQuotes(`[S1·${s15.key} – S15·${s15.key}]`, s15, { rangeMax: 15 }).quotes.filter(x => x.status === 'quoted').length, 15);
+  });
+
+  await test('system ids are taken out of the figure check, and only they: real figures, fractions and other bracketed text are still checked; a wrong id is recorded as an unrecognised reference', async () => {
+    const doc2 = [...Array.from({ length: 60 }, (_, i) => filler(i + 20)), ...KEY, "40.1. Ulush 1/2 nisbatda bo'linadi [2-ilova]."].join('\n');
+    const ai = stubAI(prompt => {
+      const t1 = tagOf(prompt, '9.1.'), t2 = tagOf(prompt, '13.2.');
+      return `Taqsimot ${t1}. Jarima ${t2.replace(']', ', S14·' + t2.slice(-5, -1) + ']')}. Ulush 13/17 nisbatda [7-ilova]. Muddat [S5 band 9 731 kun].`;
+    });
+    const r = await ex.explainDocument({ documentText: doc2, langName: 'Uzbek', callAI: ai, digest: digestOf(ai) });
+    const flagged = JSON.stringify([r.check.numbers, r.check.derived]);
+    assert.ok(!/"14"|"5"|"0{0,1}1"/u.test(JSON.stringify(r.check.derived)), flagged);
+    assert.ok(!r.check.numbers.includes('14') && !r.check.numbers.includes('5'), flagged);
+    // real figures stay checked, in a bracket too: 13/17 and 9 731 are not in the document
+    assert.ok(/13\/17/u.test(flagged) && /9 ?731/u.test(flagged), flagged);
+    assert.ok(r.check.quotes.usage.unprocessed.some(u => /S5/u.test(u.written)), JSON.stringify(r.check.quotes.usage));
+    assert.ok(r.check.quotes.usage.refused.some(u => u.id === 'S14' && u.status === 'unknown_id'), JSON.stringify(r.check.quotes.usage.refused));
+    assert.ok(r.reply.includes("noto'g'ri yoki tanilmagan havola"));
+  });
+
+  await test('a table row is quoted whole - table, row, section, every column header and cell, empty and merged cells kept - even when a full stop inside a cell cut its sentence', async () => {
+    const row = "⟦Jadval 4 · 7-qator · Sotuv bosqichi⟧ ⟨№⟩ 7 ¦ ⟨Ish⟩ Oylik tushum. Kamida 4 500 AQSh dollari ¦ ⟨Mablag'⟩ ⟨bo'sh⟩ ¦ ⟨Muddat⟩ ⟨↑ 2027-yil, iyun⟩";
+    const docT = [...Array.from({ length: 60 }, (_, i) => filler(i + 20)), ...KEY, "⟦Jadval 4 · sarlavha⟧ № ¦ Ish ¦ Mablag' ¦ Muddat", row].join('\n');
+    const st = q.buildSources(docT, ['Kamida 4 500 AQSh dollari ¦ ⟨Mablag\'⟩ ⟨bo\'sh⟩ ¦ ⟨Muddat⟩ ⟨↑ 2027-yil, iyun⟩', '⟦Jadval 4 · 7-qator · Sotuv bosqichi⟧ ⟨№⟩ 7 ¦ ⟨Ish⟩ Oylik tushum.']);
+    const it = st.items[0];
+    assert.strictEqual(st.items[1], it, 'two pieces of one row are one source');
+    assert.strictEqual(it.kind, 'table_row');
+    assert.deepStrictEqual([it.row.table, it.row.row, it.row.section], [4, 7, 'Sotuv bosqichi']);
+    assert.deepStrictEqual(it.row.cells.map(c => [c.header, c.value, c.empty, c.merged]), [['№', '7', false, false], ['Ish', 'Oylik tushum. Kamida 4 500 AQSh dollari', false, false], ["Mablag'", '', true, false], ['Muddat', '2027-yil, iyun', false, true]]);
+    assert.strictEqual(it.text, "Jadval 4 · 7-qator · Sotuv bosqichi — №: 7 ¦ Ish: Oylik tushum. Kamida 4 500 AQSh dollari ¦ Mablag': (bo'sh) ¦ Muddat: 2027-yil, iyun (yuqoridagi katak bilan birlashtirilgan)");
+    const p = q.placeQuotes(`MRR ${it.tag}.`, st, { sourceText: docT });
+    const out = q.renderQuotes(p.text, p.quotes, p.refs);
+    assert.ok(out.includes(`> «${it.text}» — hujjat jadvalidan aynan qator (S1)`), out);
+    // the page reads the row line and shows its cells
+    const page = require('fs').readFileSync(require('path').join(__dirname, '../public/dashboard.html'), 'utf8');
+    const re = eval(page.match(/var SOURCE_QUOTE_LINE = (\/.+\/gm);/u)[1]);
+    const m = [...out.matchAll(re)][0];
+    assert.deepStrictEqual([m[1], m[2], m[3]], [it.text, 'jadvalidan aynan qator', 'S1']);
+    assert.ok(page.includes("Hujjat jadvali, to\\'liq qator, ustun sarlavhalari bilan ("));
+  });
+
+  await test('usage for the diagnostics: issued, used (and how often), used again, refused, not processed and never used - and what it does not show', () => {
+    const s3 = q.buildSources(small, three);
+    const k = s3.key;
+    const p = q.placeQuotes(`A [S1·${k}]. B [S1·${k}, S9·${k}]. C [S2]. D [S2 band 4].`, s3, { sourceText: small });
+    const u = q.quoteUsage(p, s3);
+    assert.deepStrictEqual(u.issued, ['S1', 'S2', 'S3']);
+    assert.deepStrictEqual(u.used, { S1: 2 });
+    assert.deepStrictEqual(u.repeated, ['S1']);
+    assert.deepStrictEqual(u.refused.map(x => `${x.id}:${x.status}`), ['S9:unknown_id', 'S2:no_key']);
+    assert.deepStrictEqual(u.unprocessed.map(x => x.written), ['S2']);
+    assert.deepStrictEqual(u.unused, ['S2', 'S3']);
+    assert.ok(/does not show that the explanation beside an id is about that clause or right/u.test(u.meaning));
+  });
+
+  await test('the page records which quotes were opened, bound to this request\'s trace, and puts them in the JSON', () => {
+    const page = require('fs').readFileSync(require('path').join(__dirname, '../public/dashboard.html'), 'utf8');
+    for (const s2 of ["document.addEventListener('toggle'", "lastExplainTrace.tag !== tag || lastExplainTrace.epoch !== diagEpoch", "el.setAttribute('data-trace-tag', traceTag)", 'quotesOpened: lastExplainTrace.opened || {}']) assert.ok(page.includes(s2), s2);
   });
 
   await test('no id from the model: no quote, nothing invented; ids the model made up are refused', async () => {

@@ -1384,13 +1384,15 @@ async function explainDocument({ documentText, langName, callAI, digest, userId 
   const done = finishExplanation({ reply: placed.text, truncated: !!result.truncated, source: documentText, digest: d, scope, scopeStats: sel, tables,
     allowed: [String(chars), String(documentText.length), String(pages.length), d ? String(d.chunks) : ''].filter(Boolean) });
   const qNote = quotes.quotesNote(placed.quotes, sources);
-  done.reply = quotes.renderQuotes(done.reply, placed.quotes) + (qNote ? `\n- ${qNote}` : '');
+  done.reply = quotes.renderQuotes(done.reply, placed.quotes, placed.refs) + (qNote ? `\n- ${qNote}` : '');
   done.check.quotes = {
     issued: sources.items.filter(Boolean).length, notInSource: sources.notInSource,
     quoted: [...new Set(placed.quotes.filter(q => q.status === 'quoted').map(q => q.id))],
     // the full quoted sentences, as the server found them in the document (for the diagnostics JSON)
-    items: [...new Map(placed.quotes.filter(q => q.status === 'quoted').map(q => [q.id, { id: q.id, text: q.text }])).values()],
-    refused: placed.quotes.filter(q => q.status !== 'quoted').map(q => ({ id: q.id, status: q.status })),
+    items: [...new Map(placed.quotes.filter(q => q.status === 'quoted').map(q => [q.id, { id: q.id, text: q.text, kind: q.kind, ...(q.row ? { row: q.row } : {}) }])).values()],
+    refused: placed.quotes.filter(q => q.status !== 'quoted').map(q => ({ id: q.id, status: q.status, written: q.written })),
+    // issued / used / used again / refused / not processed / never used (2026-10-11)
+    usage: quotes.quoteUsage(placed, sources),
     meaning: "document text found verbatim by the server; the explanation beside it is not checked by the quote",
   };
   const unread = unreadParts(d);
@@ -1400,7 +1402,7 @@ async function explainDocument({ documentText, langName, callAI, digest, userId 
     // returns it to a master only; nothing is stored)
     trace: { mode: full ? 'full_text' : 'digest', digest: d ? d.text : null, scopeLines: scope, scopeSent: sel.lines, scopeDropped: sel.droppedLines,
       scopeCounts: { candidates: sel.candidates, selected: sel.selected, dropped: sel.dropped, shortened: sel.shortened, referenced: sel.referenced, savedChars: sel.savedChars }, conflictCandidates: conflicts, answer: raw,
-      sources: sources.items.filter(Boolean).map(x => ({ id: x.id, tag: x.tag })), quotes: placed.quotes.map(q => ({ id: q.id, status: q.status })) },
+      sources: sources.items.filter(Boolean).map(x => ({ id: x.id, tag: x.tag })), quotes: placed.quotes.map(q => ({ id: q.id, status: q.status, written: q.written, ...(q.range ? { range: q.range } : {}) })) },
     coverage: { mode: full ? 'full_text' : 'digest', status: coverageStatus(d), meaning: COVERAGE_MEANING, chars, pages: pages.length || null, emptyPages: empty,
       chunks: d ? d.chunks : null, parts: d ? d.parts : null, unread, answerTruncated: !!result.truncated, clauseSplits: d ? (d.splits || []) : [],
       // how parts were sized (uncalibrated prediction) and why each cut part was or was not re-read

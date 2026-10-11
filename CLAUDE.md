@@ -174,7 +174,12 @@ Known state of the suites (Sept 2026):
   quotes the document's own sentence (found verbatim, never a digest line)
   under the model's sentence, refuses ids it did not issue, and runs the
   mechanical checks on the model's words without the quotes - a quote is not
-  a check of the explanation; no extra AI call. Quality is unconfirmed until the lawyer-reviewed
+  a check of the explanation; no extra AI call. A bracket may list ids or a
+  range (`[S1·k, S2·k]`, `[S3·k – S9·k]`, opened id by id, a range over
+  `RANGE_MAX` named, never dropped); only system ids leave the figure check;
+  a table-row source is the whole row with headers and empty/merged cells;
+  `check.quotes.usage` lists issued / used / repeated / refused /
+  unprocessed / unused ids and the page adds `quotesOpened` to the trace. Quality is unconfirmed until the lawyer-reviewed
   benchmark (`docs/quality/explain-benchmark.md`) runs.
   `src/rag/question-aspects.js` splits a question into deadline,
   compensation, evidence and remedy and runs a light corpus search for each
