@@ -43,9 +43,10 @@ const prov = require('../scripts/lib/eval-providers');
 const evalBudget = require('../scripts/lib/eval-budget');
 
 const confirmedAll = () => ({ models: Object.fromEntries(pe.loadConfig().models.map(m => [m.variant, {
-  requestedModel: m.requestedModel, profileConfirmed: true, accountAccess: true, capCoversReasoning: true, reasoningInCompletion: true,
-  rates: (m.candidatePrices.rates || []).map(r => ({ ...r })),
+  requestedModel: m.requestedModel, endpoint: prov.PROVIDERS[m.provider].url, profileConfirmed: true, accountAccess: true, capCoversBilledOutput: true, reasoningBilledInCompletion: true,
+  rates: (m.scenarioPrices.rates || []).map(r => ({ ...r })), source: 'test stub (not a real price)', checkedAt: '2026-10-11',
 }])) });
+const P = rates => ({ rates, status: 'owner_confirmed', source: 'test', checkedAt: '2026-10-11' });
 
 const okBody = (model, extra = {}) => ({ id: 'req-1', model, choices: [{ message: { content: 'Izoh: [D1-03] 15 000 000 so‘m.' }, finish_reason: 'stop' }], usage: { prompt_tokens: 3000, completion_tokens: 500, ...extra } });
 const response = (status, body, headers = {}) => ({ ok: status >= 200 && status < 300, status, headers: { get: k => headers[k.toLowerCase()] || null }, text: async () => (typeof body === 'string' ? body : JSON.stringify(body)) });
@@ -68,9 +69,33 @@ const response = (status, body, headers = {}) => ({ ok: status >= 200 && status 
     assert.ok(!fs.existsSync(spyFile), 'no fetch was attempted');
     for (const v of Object.values(KEYS)) assert.ok(!r.out.includes(v), 'no key value printed');
     assert.ok(j.jobs.every(x => x.secret.state === 'configured'));
-    // the plain plan names unknowns and never calls a reserve a maximum
+    // without the owner's confirmation every job is BLOCKED, its reserve UNKNOWN, its missing facts named
+    assert.ok(j.jobs.every(x => x.state === 'BLOCKED' && x.reserve.usd === null && x.blockers.length >= 5), JSON.stringify(j.jobs[0].blockers));
+    assert.strictEqual(j.summary.reserveUsd, null);
+    assert.strictEqual(j.summary.ready, 0);
+    const ds = j.jobs.find(x => x.job === 'D1__deepseek');
+    assert.deepStrictEqual([ds.estimate.priceStatus, ds.estimate.priceDate], ['SEARCH_SNIPPET', '2026-10-11'], 'a snippet is a scenario, shown as such');
+    assert.ok(ds.estimate.visibleUsd > 0 && ds.blockers.some(b => /price .* not confirmed/u.test(b)));
+    assert.ok(ds.blockers.some(b => /limits every billed output token/u.test(b)));
+    const base = j.jobs.find(x => x.job === 'D1__baseline');
+    assert.deepStrictEqual([base.estimate.priceStatus, base.estimate.priceDate], ['REPO_CONSOLE', '2026-09-23']);
+    // the plain plan: every job, its state, missing facts; never calls a reserve a maximum
     const plain = run([], KEYS);
-    assert.ok(/NO NETWORK/u.test(plain.out) && /UNKNOWN/u.test(plain.out) && /not a guaranteed maximum/u.test(plain.out));
+    assert.ok(/NO NETWORK/u.test(plain.out) && /not a guaranteed maximum/u.test(plain.out));
+    assert.strictEqual((plain.out.match(/BLOCKED [a-z]+\//gu) || []).length, 15);
+    assert.ok(/reserve: UNKNOWN/u.test(plain.out) && /missing: /u.test(plain.out) && /api-docs\.deepseek\.com\/quick_start\/pricing\/: not read/u.test(plain.out));
+  });
+
+  await test('dry run with a confirmation file: READY jobs, a reserve from the byte bound and the confirmed price, its gap to the estimate shown, and the run sha to approve', () => {
+    const conf = path.join(tmp('pe-conf0-'), 'confirmed.json');
+    fs.writeFileSync(conf, JSON.stringify(confirmedAll()));
+    const r = run(['--json', '--budget-usd', '2', '--confirmed', conf], KEYS);
+    assert.strictEqual(r.code, 0, r.out);
+    const j = JSON.parse(r.out.slice(r.out.indexOf('{')));
+    assert.ok(j.jobs.every(x => x.state === 'READY' && x.reserve.usd > 0 && x.reserveMinusEstimateUsd > 0));
+    assert.ok(j.jobs.every(x => x.reserve.basis.input.method.includes('UTF-8 bytes') && x.reserve.basis.priceStatus === 'owner_confirmed'));
+    assert.ok(j.summary.reserveUsd > j.summary.estimateAtCapUsd);
+    assert.ok(/^[0-9a-f]{64}$/u.test(j.summary.runSha) && /budget \$2/u.test(j.summary.runShaCovers));
   });
 
   await test('importing the runner starts no server, bot, scheduler or database, and leaves no handle open', () => {
@@ -129,13 +154,13 @@ const response = (status, body, headers = {}) => ({ ok: status >= 200 && status 
 
   await test('usage: cached and reasoning tokens are never added twice; partial or contradictory usage gives no cost (never zeros)', () => {
     const ds = cfg.models.find(m => m.variant === 'deepseek');
-    const prices = { rates: [{ in: 1, cachedIn: 0.1, out: 2 }] };
+    const prices = P({ in: 1, cachedIn: 0.1, out: 2 });
     const u = prov.usageOf({ usage: { prompt_tokens: 1000, completion_tokens: 200, prompt_cache_hit_tokens: 400, completion_tokens_details: { reasoning_tokens: 50 } } });
     assert.deepStrictEqual([u.inTokens, u.cachedTokens, u.outTokens, u.reasoningTokens, u.complete], [1000, 400, 200, 50, true]);
     // reasoning reported, billing rule not confirmed -> unknown
     assert.strictEqual(prov.listCost(ds, u, prices, {}), null);
     // confirmed inside completion_tokens: (600*1 + 400*0.1 + 200*2)/1e6, reasoning not added
-    assert.ok(Math.abs(prov.listCost(ds, u, prices, { reasoningInCompletion: true }) - (600 + 40 + 400) / 1e6) < 1e-15);
+    assert.ok(Math.abs(prov.listCost(ds, u, prices, { reasoningBilledInCompletion: true }) - (600 + 40 + 400) / 1e6) < 1e-15);
     assert.strictEqual(prov.usageOf({ usage: { prompt_tokens: 10 } }).complete, false, 'completion missing');
     assert.strictEqual(prov.usageOf({}).complete, false, 'no usage');
     assert.strictEqual(prov.usageOf({ usage: { prompt_tokens: 10, completion_tokens: 5, cached_tokens: 20 } }).complete, false, 'cached above prompt');
@@ -143,11 +168,42 @@ const response = (status, body, headers = {}) => ({ ok: status >= 200 && status 
     assert.strictEqual(prov.listCost(ds, prov.usageOf({ usage: { prompt_tokens: 10 } }), prices, {}), null);
     // the reserve uses the highest listed rate (time of day / tier): no discount assumed
     assert.deepStrictEqual(prov.worstRates({ rates: [{ in: 0.1, out: 0.2, cachedIn: 0.01 }, { in: 0.3, out: 0.15 }] }), { in: 0.3, cachedIn: 0.01, out: 0.2 });
-    // a reasoning model with the cap not confirmed to cover reasoning has no bound
-    const glm = cfg.models.find(m => m.variant === 'glm');
-    assert.strictEqual(prov.callBound(glm, frozen[0].messages, prices, {}).usd, null);
-    assert.ok(prov.callBound(glm, frozen[0].messages, prices, { capCoversReasoning: true }).usd > 0);
-    assert.strictEqual(prov.callBound(ds, frozen[0].messages, { rates: [] }, {}).usd, null, 'no price, no bound');
+  });
+
+  await test('reserve: a reliable bound needs a confirmed price AND a cap confirmed to limit every billed output token - for every model; the input side is the byte bound, never a comet ratio', () => {
+    const msgs = frozen[0].messages;
+    const prices = P({ in: 1, cachedIn: 0.1, out: 2 });
+    for (const m of cfg.models) {
+      // price known, cap not confirmed (even with thinking "off", even comet): UNKNOWN
+      assert.strictEqual(prov.callBound(m, msgs, prices, {}).usd, null, m.variant);
+      assert.strictEqual(prov.callBound(m, msgs, { rates: null }, { capCoversBilledOutput: true }).usd, null, `${m.variant}: no price`);
+      const b = prov.callBound(m, msgs, prices, { capCoversBilledOutput: true });
+      const bytes = msgs.reduce((n, x) => n + Buffer.byteLength(x.text, 'utf8') + 16, 64);
+      assert.strictEqual(b.basis.input.tokensMax, bytes, 'UTF-8 bytes + overhead');
+      assert.ok(b.basis.input.tokensMax > Math.round(frozen[0].promptChars * pe.SCENARIO.inPerChar) * 2, 'far above the comet-ratio estimate');
+      assert.ok(Math.abs(b.usd - (bytes * 1 + m.profile.cap * 2) / 1e6) < 1e-12, 'cached input reserved at the full rate');
+      assert.strictEqual(b.basis.output.tokensMax, m.profile.cap);
+    }
+    // a search snippet is never a price: without a confirmation entry only the repository's VoiceLab table counts
+    const ds = cfg.models.find(m => m.variant === 'deepseek');
+    assert.strictEqual(prov.priceFor(ds, null).rates, null);
+    assert.strictEqual(prov.priceFor(ds, null).status, 'UNKNOWN');
+    const comet = prov.priceFor(cfg.models[0], null);
+    assert.deepStrictEqual([comet.status, comet.checkedAt], ['provider_console', '2026-09-23']);
+  });
+
+  await test('returned model: the requested id, or an alias snapshot the owner listed beforehand; anything else is refused', () => {
+    assert.deepStrictEqual(prov.modelMatch('qwen-plus', 'qwen-plus', []), { ok: true, match: 'exact' });
+    assert.deepStrictEqual(prov.modelMatch('qwen-plus', 'qwen-plus-2026-09-01', ['qwen-plus-2026-09-01']), { ok: true, match: 'confirmed_snapshot' });
+    assert.deepStrictEqual(prov.modelMatch('qwen-plus', 'qwen-plus-2026-10-02', ['qwen-plus-2026-09-01']), { ok: false, match: 'mismatch' }, 'another snapshot');
+    assert.deepStrictEqual(prov.modelMatch('qwen-plus', 'qwen-max', ['qwen-plus-2026-09-01']), { ok: false, match: 'mismatch' });
+    assert.deepStrictEqual(prov.modelMatch('deepseek-flash', 'DeepSeek-Flash', []), { ok: false, match: 'mismatch' }, 'exact strings only');
+    assert.deepStrictEqual(prov.modelMatch('kimi-k3', null, ['kimi-k3']), { ok: false, match: 'not_reported' });
+    const qwen = cfg.models.find(m => m.variant === 'qwen');
+    const ans = returnedModel => ({ outcome: 'answered', returnedModel, text: 'ok', finishReason: 'stop' });
+    assert.strictEqual(pe.classify(ans('qwen-plus-2026-09-01'), qwen, ['qwen-plus-2026-09-01']), 'completed');
+    assert.strictEqual(pe.classify(ans('qwen-plus-2026-09-01'), qwen, []), 'model_mismatch');
+    assert.strictEqual(pe.classify(ans(''), qwen, []), 'model_not_reported');
   });
 
   await test('transport: fixed host, own key, no redirect; timeout, length, partial usage, wrong model and secret redaction', async () => {
@@ -285,7 +341,7 @@ const response = (status, body, headers = {}) => ({ ok: status >= 200 && status 
     assert.ok(budget.halted && /no HTTP answer/u.test(budget.haltedBy.reason));
   });
 
-  await test('an auth or balance error stops that provider (no retry); the others go on; cut, empty, refused and wrong-model answers are counted apart', async () => {
+  await test('an auth or balance error stops that provider (no retry); the others go on; cut, empty, refused and wrong-model answers are counted apart and all 15 stay in the blind set', async () => {
     const call = stubCall((m) => {
       if (m.variant === 'deepseek') return { outcome: 'http_error', status: 402, kind: 'quota', error: 'Insufficient Balance', usage: prov.usageOf(null) };
       if (m.variant === 'glm') return answered(m, { finishReason: 'length' });
@@ -302,7 +358,38 @@ const response = (status, body, headers = {}) => ({ ok: status >= 200 && status 
     assert.deepStrictEqual(st('kimi'), ['empty_capped', 'empty_capped', 'empty_capped']);
     assert.deepStrictEqual(st('qwen'), ['model_mismatch', 'skipped', 'skipped']);
     assert.deepStrictEqual(st('baseline'), ['refused', 'refused', 'refused']);
-    assert.strictEqual(fs.readdirSync(path.join(out, 'blind')).length, 0, 'only completed answers go to the reviewer');
+    // every planned job is in the blind set with its status, no model name, no error text
+    const blind = fs.readdirSync(path.join(out, 'blind'));
+    assert.strictEqual(blind.length, 15);
+    const statuses = blind.map(f => /Xizmat holati: (\S+)/u.exec(fs.readFileSync(path.join(out, 'blind', f), 'utf8'))[1]).sort();
+    assert.deepStrictEqual(statuses, ['empty_capped', 'empty_capped', 'empty_capped', 'error', 'model_mismatch', 'refused', 'refused', 'refused', 'skipped', 'skipped', 'skipped', 'skipped', 'truncated', 'truncated', 'truncated']);
+    for (const f of blind) {
+      const t = fs.readFileSync(path.join(out, 'blind', f), 'utf8');
+      assert.ok(!/comet|deepseek|glm|kimi|qwen|voicelab|moonshot|dashscope|Balance|cannot help|\$/iu.test(t), t);
+    }
+    const sheet = JSON.parse(fs.readFileSync(path.join(out, 'review-sheet.json'), 'utf8'));
+    assert.strictEqual(sheet.answers.length, 15);
+    assert.ok(sheet.answers.every(a => a.ratable === false), 'nothing completed: nothing rated for quality');
+    // the report keeps every failure: service apart from quality
+    const rep = pe.report(out).rows;
+    assert.deepStrictEqual([rep.deepseek.service.planned, rep.deepseek.service.error, rep.deepseek.service.skipped, rep.deepseek.service.completion], [3, 1, 2, '0/3']);
+    assert.deepStrictEqual([rep.glm.service.truncated, rep.glm.quality.ratable], [3, 0]);
+    assert.strictEqual(rep.qwen.service.model_mismatch, 1);
+  });
+
+  await test('an alias answered by a snapshot the owner confirmed beforehand is accepted; an unlisted one is refused and stops the provider', async () => {
+    const conf = confirmedAll();
+    conf.models.qwen.acceptedReturnedModels = ['qwen-plus-2026-09-01'];
+    const run1 = stubCall(m => answered(m, m.variant === 'qwen' ? { returnedModel: 'qwen-plus-2026-09-01' } : {}));
+    const out1 = tmp('pe-alias-');
+    await pe.runLive({ frozen, models: cfg.models, budgetUsd: 5, out: out1, confirmed: conf, sha: 'test-run', call: run1 });
+    const q1 = ledger(out1).filter(e => e.type === 'settle' && e.job.endsWith('__qwen'));
+    assert.deepStrictEqual(q1.map(e => [e.status, e.modelMatch]), [['completed', 'confirmed_snapshot'], ['completed', 'confirmed_snapshot'], ['completed', 'confirmed_snapshot']]);
+    const run2 = stubCall(m => answered(m, m.variant === 'qwen' ? { returnedModel: 'qwen-max' } : {}));
+    const out2 = tmp('pe-alias2-');
+    await pe.runLive({ frozen, models: cfg.models, budgetUsd: 5, out: out2, confirmed: conf, sha: 'test-run', call: run2 });
+    assert.strictEqual(run2.calls.filter(c => c.variant === 'qwen').length, 1, 'stopped after the substitution');
+    assert.deepStrictEqual(ledger(out2).filter(e => e.type === 'settle' && e.job.endsWith('__qwen')).map(e => [e.status, e.modelMatch]), [['model_mismatch', 'mismatch']]);
   });
 
   await test('restart: a finished run spends nothing again; an attempt with no outcome written keeps its reserve and halts', async () => {
@@ -351,10 +438,14 @@ const response = (status, body, headers = {}) => ({ ok: status >= 200 && status 
     assert.strictEqual(r1.code, 3); assert.ok(/not substituted/u.test(r1.out), r1.out);
     const noPrice = confirmedAll(); noPrice.models.qwen.rates = [];
     fs.writeFileSync(conf, JSON.stringify(noPrice));
-    assert.ok(/qwen: no confirmed price/u.test(run(['--live', '--budget-usd', '1', '--out', out, '--confirmed', conf, '--approve', 'x'], env, spy).out));
-    const noCap = confirmedAll(); noCap.models.kimi.capCoversReasoning = false;
+    assert.ok(/qwen: price .* not confirmed/u.test(run(['--live', '--budget-usd', '1', '--out', out, '--confirmed', conf, '--approve', 'x'], env, spy).out));
+    const noCap = confirmedAll(); noCap.models.kimi.capCoversBilledOutput = false; noCap.models.deepseek.capCoversBilledOutput = false;
     fs.writeFileSync(conf, JSON.stringify(noCap));
-    assert.ok(/kimi: the output cap is not confirmed/u.test(run(['--live', '--budget-usd', '1', '--out', out, '--confirmed', conf, '--approve', 'x'], env, spy).out));
+    const capOut = run(['--live', '--budget-usd', '1', '--out', out, '--confirmed', conf, '--approve', 'x'], env, spy).out;
+    assert.ok(/kimi: not confirmed that max_completion_tokens limits every billed output token/u.test(capOut) && /deepseek: not confirmed that max_tokens/u.test(capOut), capOut);
+    const otherHost = confirmedAll(); otherHost.models.glm.endpoint = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+    fs.writeFileSync(conf, JSON.stringify(otherHost));
+    assert.ok(/glm: endpoint: confirm exactly https:\/\/api\.z\.ai/u.test(run(['--live', '--budget-usd', '1', '--out', out, '--confirmed', conf, '--approve', 'x'], env, spy).out));
     // approved, but the reserve does not fit and a key is missing
     fs.writeFileSync(conf, JSON.stringify(confirmedAll()));
     const sha = /--approve ([0-9a-f]{64})/u.exec(run(['--live', '--budget-usd', '0.001', '--out', out, '--confirmed', conf], env, spy).out)[1];
@@ -394,11 +485,35 @@ const response = (status, body, headers = {}) => ({ ok: status >= 200 && status 
     const ratings = path.join(tmp('pe-rate-'), 'ratings.json');
     fs.writeFileSync(ratings, JSON.stringify(sheet));
     const r = pe.report(out, ratings).rows;
-    assert.strictEqual(r.kimi.critical, 3); assert.strictEqual(r.kimi.accepted, 0);
-    assert.strictEqual(r.qwen.critical, 3);
+    assert.strictEqual(r.kimi.quality.critical, 3); assert.strictEqual(r.kimi.quality.accepted, 0);
+    assert.strictEqual(r.qwen.quality.critical, 3);
     assert.strictEqual(r.deepseek.costPerAccepted, 'undefined (0 accepted)');
     assert.strictEqual(r.glm.costPerAccepted, 'UNKNOWN');
-    assert.ok(typeof r.baseline.costPerAccepted === 'number' && r.baseline.accepted === 3);
+    assert.ok(typeof r.baseline.costPerAccepted === 'number' && r.baseline.quality.accepted === 3);
+    assert.ok(Object.values(r).every(x => x.service.completion === '3/3'), 'service completion apart from quality');
+  });
+
+  await test('report: a cut answer is not rated as finished, a job never reached is "not_run", and the failed attempts stay in the cost per accepted answer', async () => {
+    // halted after the 3rd call: 12 jobs skipped
+    const call = stubCall((m, n) => answered(m, n === 2 ? { finishReason: 'length' } : n === 3 ? { usage: { inTokens: 90_000_000, outTokens: 0, cachedTokens: 0, complete: true } } : {}));
+    const { out } = await live(call, 60);
+    // and one planned job left without any record at all (as if the process stopped)
+    fs.unlinkSync(path.join(out, 'answers', 'D3__qwen.json'));
+    pe.writeBlind(out);
+    const key = JSON.parse(fs.readFileSync(path.join(out, 'key.json'), 'utf8'));
+    assert.strictEqual(key.length, 15);
+    assert.strictEqual(key.find(k => k.job === 'D3__qwen').status, 'not_run');
+    const sheet = JSON.parse(fs.readFileSync(path.join(out, 'review-sheet.json'), 'utf8'));
+    const cut = sheet.answers.find(a => a.answerId === key.find(k => k.job === 'D1__deepseek').answerId);
+    assert.deepStrictEqual([cut.serviceStatus, cut.ratable], ['truncated', false]);
+    for (const a of sheet.answers) if (a.ratable) { a.criteria = Object.fromEntries(pe.CRITERIA.map(c => [c, 'ok'])); a.acceptable_for_this_case = true; }
+    const ratings = path.join(tmp('pe-rate2-'), 'ratings.json');
+    fs.writeFileSync(ratings, JSON.stringify(sheet));
+    const r = pe.report(out, ratings).rows;
+    assert.deepStrictEqual([r.deepseek.service.truncated, r.deepseek.service.skipped, r.deepseek.quality.ratable], [1, 2, 0]);
+    assert.strictEqual(r.deepseek.costPerAccepted, 'undefined (0 accepted)');
+    assert.strictEqual(r.qwen.service.not_run, 1);
+    assert.strictEqual(Object.values(r).reduce((n, x) => n + x.service.planned, 0), 15);
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

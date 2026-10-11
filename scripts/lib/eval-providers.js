@@ -138,34 +138,72 @@ function worstRates(prices) {
 }
 
 /**
- * The most one call can cost (before it is made), or { usd: null, reason }.
- * Needs: a price for every billable part, an input bound (UTF-8 bytes), and
- * an output cap that also caps reasoning - for a model that can reason, that
- * last fact must be confirmed (capCoversReasoning === true).
+ * The price a call is reserved and costed at, with where it came from:
+ *   - the owner's confirmation entry (rates, source, checkedAt), else
+ *   - for VoiceLab only, the repository price table (console list price,
+ *     src/ai/model-pricing.js; credits are billed apart and not bounded), else
+ *   - none: { rates: null } - no reserve, live blocked.
+ * A search snippet is never a price here (it is only a dry-run scenario).
  */
-function callBound(model, messages, prices, facts) {
+function priceFor(model, entry) {
+  const r = entry && worstRates(entry);
+  if (r) return { rates: r, status: 'owner_confirmed', source: entry.source || null, checkedAt: entry.checkedAt || null };
   if (model.provider === 'voicelab') {
-    // the #430 bound: VoiceLab console list price (credits apart)
-    return pricing.callCostBound({ model: `voicelab/${model.requestedModel}`, inputTokensMax: pricing.inputTokenBound(messages), outputTokensMax: model.profile.cap });
+    const p = pricing.pricingSnapshot(`voicelab/${model.requestedModel}`);
+    if (p) return { rates: { in: p.in, cachedIn: p.cached, out: p.out }, status: p.confirmation, source: p.source, checkedAt: p.checkedAt };
   }
-  const rates = worstRates(prices);
+  return { rates: null, status: 'UNKNOWN', source: null, checkedAt: null };
+}
+
+// how the input side of a reserve is bounded (no ratio from another model)
+const INPUT_BOUND_METHOD = 'UTF-8 bytes of every message + 64 per request + 16 per message (src/ai/model-pricing.js inputTokenBound): a text token covers at least one byte in byte-level BPE and SentencePiece tokenizers; no characters-per-token ratio is used';
+
+/**
+ * The most one call can cost (before it is made), or { usd: null, reason }.
+ * Needs all of:
+ *   - a confirmed price (priceFor; the highest listed rate is used);
+ *   - facts.capCoversBilledOutput === true: the owner confirmed that the
+ *     cap sent (profile.capParam) limits EVERY billed output token, visible
+ *     and reasoning alike - for every model, since a thinking switch that
+ *     does not work, or hidden reasoning, would bill past a visible-only cap;
+ *   - a text-only input (byte bound, INPUT_BOUND_METHOD).
+ * Cached input is reserved at the full input rate (no discount assumed).
+ */
+function callBound(model, messages, priceInfo, facts) {
+  const rates = priceInfo && priceInfo.rates;
   if (!rates) return { usd: null, reason: 'no confirmed price' };
-  if (model.profile.reasoning !== 'off' && !(facts && facts.capCoversReasoning === true)) return { usd: null, reason: 'the output cap is not confirmed to cap reasoning' };
+  if (!(facts && facts.capCoversBilledOutput === true)) return { usd: null, reason: `not confirmed that ${model.profile.capParam} limits every billed output token (visible + reasoning)` };
   const inMax = pricing.inputTokenBound(messages);
   if (inMax == null) return { usd: null, reason: 'input size has no upper bound' };
   const usd = (inMax * Math.max(rates.in, rates.cachedIn || 0) + model.profile.cap * rates.out) / 1e6;
-  return { usd, basis: { inputTokensMax: inMax, outputTokensMax: model.profile.cap, rates } };
+  return { usd, basis: {
+    input: { tokensMax: inMax, method: INPUT_BOUND_METHOD },
+    output: { tokensMax: model.profile.cap, method: `${model.profile.capParam}=${model.profile.cap}, owner-confirmed to cap visible and reasoning tokens` },
+    rates, priceStatus: priceInfo.status, priceSource: priceInfo.source, checkedAt: priceInfo.checkedAt,
+    ...(model.provider === 'voicelab' ? { note: 'VoiceLab credits are billed apart and not bounded by the list price' } : {}),
+  } };
+}
+
+/**
+ * Requested vs returned model. Accepted only when the provider returns the
+ * requested id itself, or an id the owner confirmed beforehand as that
+ * alias's snapshot (confirmation entry acceptedReturnedModels, exact
+ * strings, no patterns). No id back is not a match; anything else is a
+ * substitution and is refused.
+ */
+function modelMatch(requested, returned, accepted = []) {
+  const ret = returned == null ? '' : String(returned).trim();
+  if (!ret) return { ok: false, match: 'not_reported' };
+  if (ret === requested) return { ok: true, match: 'exact' };
+  if (Array.isArray(accepted) && accepted.includes(ret)) return { ok: true, match: 'confirmed_snapshot' };
+  return { ok: false, match: 'mismatch' };
 }
 
 /** List-price dollars from complete usage at the highest listed rates, else null. */
-function listCost(model, usage, prices, facts) {
-  if (model.provider === 'voicelab') {
-    const tokens = (Number(usage.inTokens) || 0) + (Number(usage.outTokens) || 0);
-    return tokens > 0 ? pricing.calculateTokenCost(`voicelab/${model.requestedModel}`, usage) : null;
-  }
+function listCost(model, usage, priceInfo, facts) {
   if (!usage || !usage.complete) return null;
-  if (usage.reasoningTokens && !(facts && facts.reasoningInCompletion === true)) return null;
-  const rates = worstRates(prices);
+  if (usage.reasoningTokens && !(facts && facts.reasoningBilledInCompletion === true)) return null;
+  const rates = priceInfo && priceInfo.rates;
   if (!rates) return null;
   const cached = usage.cachedTokens || 0;
   return ((usage.inTokens - cached) * rates.in + cached * (rates.cachedIn != null ? rates.cachedIn : rates.in) + usage.outTokens * rates.out) / 1e6;
@@ -250,4 +288,4 @@ async function callVoiceLab(model, messages, timeoutMs) {
   }
 }
 
-module.exports = { PROVIDERS, ALL_SECRET_ENVS, secretState, redact, guardNetwork, wireMessages, requestBody, usageOf, providerCostOf, worstRates, callBound, listCost, callProvider };
+module.exports = { PROVIDERS, ALL_SECRET_ENVS, INPUT_BOUND_METHOD, secretState, redact, guardNetwork, wireMessages, requestBody, usageOf, providerCostOf, worstRates, priceFor, callBound, modelMatch, listCost, callProvider };
