@@ -35,6 +35,9 @@
  *
  * Live (only with the owner's approval): every one of these is needed -
  *   EXPLAIN_AB_LIVE=yes  --live  --budget-usd N  --out <dir outside the repo>
+ *   --prices-confirmed <every model called>  (the owner confirms each price
+ *   from the provider's console; a price only in the internal table counts
+ *   as unknown and that model is not called)
  * The whole reserve must fit N before the first call; each call then
  * reserves its own bound from what is left and is not made if it does not
  * fit; the actual cost replaces the bound after the call. Answers, prompts'
@@ -113,56 +116,83 @@ function recorder(answerTokens) {
 
 /**
  * A live caller under ONE shared budget (digest parts, pre-splits, re-reads,
- * every final answer and every retry go through the same object):
- *  - before each attempt its bound (price table: UTF-8 input bound + the
- *    output cap) is taken from what is left in the same synchronous step as
- *    the check, so parallel calls cannot both pass on the same money;
- *  - a call with no bound (no price, credit-only billing) is not started;
- *  - after the call the reserve is replaced by the actual cost. The list-
- *    price dollars (from the returned tokens) and the VoiceLab credits (as
- *    returned, and their dollar value at VOICELAB_CREDIT_USD) are recorded
- *    APART; the budget is settled at the larger known one, and at the whole
- *    reserve when neither is known. A settled cost above its reserve is
- *    flagged - the reserve is a planning bound, not a guaranteed maximum.
- *  - VoiceLab ids called by name never fall back to another provider; a
- *    retry here is another attempt of the same call, reserved again.
+ * every final answer and every retry go through the same object). Three
+ * states are kept apart:
+ *  1. BEFORE a call: no reliable price bound (no price in the table, billing
+ *     only in credits) -> the provider is not called.
+ *  2. AFTER a call with no usage and no cost back -> the reserve is NOT
+ *     released (it stays held) and the cost is recorded as "unknown", never
+ *     as a figure and never as $0.
+ *  3. AFTER a call whose known cost is above its reserve -> the budget is
+ *     halted: no new call, retry or re-read starts from then on. Calls that
+ *     had already started in parallel run to their end (they cannot be
+ *     recalled) and are recorded.
+ * Otherwise the reserve is replaced by the actual cost: the list-price
+ * dollars (from the returned tokens) and the VoiceLab credits (and their
+ * dollar value at VOICELAB_CREDIT_USD) are recorded APART and the budget is
+ * settled at the larger known one. Each attempt's bound is checked and taken
+ * in one synchronous step, so parallel calls cannot pass on the same money.
+ * VoiceLab ids called by name never fall back to another provider. A retry
+ * is another reserved attempt: a final answer cut at the cap or a failed
+ * call; a digest part cut at the cap is left to buildDigest's re-read.
  * `provider` defaults to src/ai/voicelab.js chatCompletion (tests pass a stub).
  */
-function liveCaller(model, budget, log, temperature, { provider = null } = {}) {
+function liveCaller(model, budget, log, temperature, { provider = null, priceConfirmed = true } = {}) {
   const call = provider || ((m, msgs, o) => require('../src/ai/voicelab').chatCompletion(m, msgs, o));
+  const refuse = (entry, msg) => { log.push({ model, status: 'not_called', ...entry }); throw new Error(`${msg} - not called`); };
   return async (messages, opts = {}) => {
     const maxTokens = opts.maxTokens || CAP;
+    // a price the owner has not confirmed is an unknown price (state 1)
+    if (!priceConfirmed) refuse({ reason: 'price not confirmed by the owner' }, `${model}: price not confirmed`);
     const b = bound(model, messages, maxTokens);
-    if (b.usd == null) { log.push({ model, status: 'not_called', reason: `no cost bound: ${b.reason}` }); throw new Error(`${model}: no cost bound (${b.reason}) - not called`); }
+    // 1. no reliable bound: never called
+    if (b.usd == null) refuse({ reason: `no cost bound: ${b.reason}` }, `${model}: no cost bound (${b.reason})`);
     for (let attempt = 1; attempt <= 1 + RETRIES; attempt++) {
+      // 3. a cost above its reserve stopped the budget: nothing new starts
+      if (budget.halted) refuse({ attempt, reason: 'halted: a cost went above its reserve' }, 'budget halted');
       // check and take in one step (no await in between)
-      if (budget.left < b.usd) { log.push({ model, attempt, status: 'not_called', reason: 'budget' }); throw new Error(`budget: ${budget.left.toFixed(4)} left, call needs ${b.usd.toFixed(4)} - not called`); }
+      if (budget.left < b.usd) refuse({ attempt, reason: 'budget' }, `budget: ${budget.left.toFixed(4)} left, call needs ${b.usd.toFixed(4)}`);
       budget.left -= b.usd;
       budget.reservedNow += b.usd;
       const t0 = Date.now();
       let r, err;
       try { r = await call(model, messages, { temperature: temperature == null ? undefined : temperature, maxTokens }); } catch (e) { err = e; }
-      const usage = (r && r.usage) || (err && err.usage) || {};
-      const listUsd = usage.inTokens != null || usage.outTokens != null ? pricing.calculateTokenCost(model, usage) : null;
-      const credits = Number.isFinite(Number(usage.credits)) && usage.credits != null ? Number(usage.credits) : null;
+      const usage = (r && r.usage) || (err && err.usage) || null;
+      const tokens = usage ? (Number(usage.inTokens) || 0) + (Number(usage.outTokens) || 0) : 0;
+      const credits = usage && Number.isFinite(Number(usage.credits)) && usage.credits != null ? Number(usage.credits) : null;
+      const listUsd = tokens > 0 ? pricing.calculateTokenCost(model, usage) : null;
       const rate = pricing.voicelabCreditUsd();
       const creditUsd = credits == null || !rate || !Number.isFinite(Number(rate.usdPerCredit)) ? null : credits * Number(rate.usdPerCredit);
       const known = [listUsd, creditUsd].filter(x => x != null && Number.isFinite(x));
-      const settled = known.length ? Math.max(...known) : b.usd;
       budget.reservedNow -= b.usd;
-      budget.left += b.usd - settled;
-      budget.spent += settled;
+      let costStatus, settled = null;
+      if (!known.length) {
+        // 2. no usage, no cost: the reserve stays held, the cost is unknown
+        costStatus = 'unknown';
+        budget.heldUnknown += b.usd;
+        budget.unknownCalls += 1;
+      } else {
+        settled = Math.max(...known);
+        budget.left += b.usd - settled;
+        budget.spent += settled;
+        costStatus = settled > b.usd ? 'over_reserve' : 'known';
+        // 3. above its reserve: stop everything new
+        if (settled > b.usd) { budget.halted = true; budget.haltedBy = { model, attempt, reservedUsd: b.usd, settledUsd: settled }; }
+      }
       budget.listUsd += listUsd || 0;
       budget.credits += credits || 0;
-      log.push({ model, attempt, status: err ? 'error' : 'answered', ms: Date.now() - t0, usage, listUsd, credits, creditUsd, settledUsd: settled, reservedUsd: b.usd, overReserve: settled > b.usd, finish: r ? r.finishReason : null, error: err ? String(err.code || err.message).slice(0, 120) : null, promptSha: sha(messages.map(m => m.text).join('\n')) });
+      log.push({ model, attempt, status: err ? 'error' : 'answered', costStatus, ms: Date.now() - t0, usage, listUsd, credits, creditUsd, settledUsd: settled, reservedUsd: b.usd, finish: r ? r.finishReason : null, error: err ? String(err.code || err.message).slice(0, 120) : null, promptSha: sha(messages.map(m => m.text).join('\n')) });
       const cut = r && r.finishReason === 'length';
       if (r && !cut) return { text: r.text, provider: r.provider };
+      // a digest part cut at the cap is not retried whole here: buildDigest
+      // re-reads it in halves within its own limit (maxExtraCalls)
+      if (r && cut && opts.detail && opts.detail.phase === 'digest') return { text: r.text, provider: r.provider, truncated: true };
       if (attempt > RETRIES) { if (r) return { text: r.text, provider: r.provider, truncated: true }; throw err; }
     }
     return null;
   };
 }
-const newBudget = usd => ({ left: usd, spent: 0, listUsd: 0, credits: 0, reservedNow: 0 });
+const newBudget = usd => ({ left: usd, spent: 0, listUsd: 0, credits: 0, reservedNow: 0, heldUnknown: 0, unknownCalls: 0, halted: false, haltedBy: null });
 
 async function main() {
   const docs = String(arg('--docs', '')).split(',').filter(Boolean);
@@ -173,6 +203,12 @@ async function main() {
   if (live) {
     if (process.env.EXPLAIN_AB_LIVE !== 'yes' || !(Number(arg('--budget-usd')) > 0) || !out) { console.error('live needs EXPLAIN_AB_LIVE=yes, --budget-usd N and --out <dir outside the repo>'); process.exit(2); }
     if (![BASE, STRONG].every(m => /^voicelab\//u.test(m))) { console.error('live calls are prepared for VoiceLab models only'); process.exit(2); }
+    // every model the run will call needs its price confirmed by the owner
+    // (from the provider's console) - a price only in the internal table is
+    // treated as unknown, and an unknown price is never called
+    const confirmed = String(arg('--prices-confirmed', '')).split(',').filter(Boolean);
+    const missing = [BASE, STRONG].filter(m => !confirmed.includes(m));
+    if (missing.length) { console.error(`live needs the price of ${missing.join(', ')} confirmed (--prices-confirmed ${[BASE, STRONG].join(',')}) after checking the provider's console: id, input/output/cached price or credits per token, context and output limits, hidden reasoning`); process.exit(2); }
   }
   const variants = [
     { id: 'A', input: 'digest', model: BASE }, { id: 'B', input: 'digest', model: STRONG },
@@ -227,7 +263,8 @@ async function main() {
       console.log(`${d.file} (sha ${d.sha}, ${d.contentChars} chars): digest ${d.digest.calls} calls (${d.digest.parts} parts, density ${d.digest.density}), ~${d.digest.inTok}+${d.digest.outTok} tok, ${fmt(d.digest.usd)}, reserve ${fmt(d.digest.reserve)}`);
       for (const v of d.variants) console.log(`  ${v.id} ${v.input.padEnd(9)} ${v.model.padEnd(22)} prompt ${v.promptChars} chars ~${v.inTok} tok, ${v.ids} ids | answer ${MEASURED.answerTokens}: ${fmt(v.usdAnswer)}, at cap: ${fmt(v.usdCap)} | reserve ${v.reserve == null ? `noma'lum (${v.reserveNote})` : fmt(v.reserve)} | ~${v.seconds == null ? "noma'lum" : `${v.seconds} s`} | temperature ${v.params.temperature == null ? 'provayder standarti' : v.params.temperature}`);
     }
-    console.log(`\nTotal, 12 answers + 3 digests: estimate ${fmt(est)} (answers at ${MEASURED.answerTokens} tok), ${fmt(estCap)} (answers at the cap); reserve ${fmt(reserve)}${unknownReserve ? ' + calls with no bound (unknown)' : ''}. A reserve is a planning bound from the price table, not a guaranteed maximum.`);
+    console.log(`\nTotal, 12 answers + 3 digests: estimate ${fmt(est)} (answers at ${MEASURED.answerTokens} tok), ${fmt(estCap)} (answers at the cap); reserve ${fmt(reserve)}${unknownReserve ? ' + calls with no bound (unknown)' : ''}.`);
+    console.log(`SCENARIO ON UNVERIFIED PRICES: the stronger model's price (${STRONG}) comes from the internal table, not an official page; these totals are not a forecast, and the reserve is a planning bound, not a guaranteed maximum. Live mode does not call a model whose price bound is unknown.`);
   }
   if (!live) return;
   // ── live: the owner's approval, the budget, outputs outside the repo ──
@@ -254,8 +291,9 @@ async function main() {
   codes.forEach((c, i) => fs.writeFileSync(path.join(out, 'blind', `javob-${String(i + 1).padStart(2, '0')}-${c.a.doc}.md`), c.a.reply));
   fs.writeFileSync(path.join(out, 'key.json'), JSON.stringify(codes.map((c, i) => ({ file: `javob-${String(i + 1).padStart(2, '0')}-${c.a.doc}.md`, doc: c.a.doc, variant: c.a.variant, model: c.a.model, input: c.a.input })), null, 2));
   fs.writeFileSync(path.join(out, 'calls.jsonl'), log.map(l => JSON.stringify(l)).join('\n'));
-  console.log(`live: ${answers.length} answers; settled ${fmt(budget.spent)} of the budget; list price ${fmt(budget.listUsd)} and VoiceLab credits ${budget.credits} shown apart (credits per token unconfirmed); ${log.filter(l => l.overReserve).length} call(s) above their reserve; outputs in ${out} (blind/ for the lawyer, key.json kept apart).`);
+  console.log(`live: ${answers.length} answers; known cost ${fmt(budget.spent)}; ${budget.unknownCalls} call(s) with cost UNKNOWN (reserve ${fmt(budget.heldUnknown)} kept held); list price ${fmt(budget.listUsd)} and VoiceLab credits ${budget.credits} shown apart (credits per token unconfirmed);`
+    + ` ${budget.halted ? `HALTED: a cost went above its reserve (${JSON.stringify(budget.haltedBy)}) - nothing new started after it; calls already running in parallel ran to their end` : 'not halted'}; outputs in ${out} (blind/ for the lawyer, key.json kept apart).`);
 }
 
 if (require.main === module) main().catch((e) => { console.error(e.message); process.exit(1); });
-module.exports = { liveCaller, newBudget, bound, RUNS, CAP };
+module.exports = { liveCaller, newBudget, bound, RUNS, CAP, RETRIES };

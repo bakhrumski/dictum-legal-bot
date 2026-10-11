@@ -35,7 +35,7 @@ Uni rasmiy manbadan tasdiqlab bo'lmadi: qidiruvda `aisha-halo` haqida provayder 
 | Kontekst va chiqish chegaralari | **noma'lum** (kod izohidagi «1M» tasdiq emas) | Maksimal kontekst va maksimal `max_tokens` |
 | Yashirin reasoning tokenlari va ularning hisoblanishi | **noma'lum** (Orbit chiqish chegarasini reasoning'ga sarflagan, 2026-10-04) | Halo reasoning qiladimi; u `max_tokens` ga kiradimi; alohida hisoblanadimi; o'chirish parametri bormi |
 
-Bu ma'lumotlarsiz jonli rejimda halo chaqirilmaydi. Narxni rezervlashga yetarli ma'lumot bo'lmasa, o'sha chaqiruv boshlanmaydi.
+Bu ma'lumotlarsiz jonli rejimda halo chaqirilmaydi. Jonli rejim chaqiriladigan har bir model narxini egasi `--prices-confirmed` orqali tasdiqlashini talab qiladi. Narx faqat ichki jadvalda bo'lsa, u noma'lum hisoblanadi va model chaqirilmaydi. Narxni rezervlashga yetarli ma'lumot bo'lmasa, o'sha chaqiruv boshlanmaydi.
 
 Muqobil — `gpt-6-sol` (ichki jadvalda 2 / 10 USD). U `temperature` ni rad etishi mumkin, uzun kontekst ustamasi narx jadvalida yo'q. Jonli skript hozircha faqat VoiceLab modellari bilan ishlaydi.
 
@@ -103,6 +103,8 @@ Muqobil — `gpt-6-sol` (ichki jadvalda 2 / 10 USD). U `temperature` ni rad etis
 - halo'da yashirin reasoning bormi;
 - halo'ning kredit stavkasi.
 
+**Tekshirilmagan narxlarga asoslangan ssenariy.** Halo narxi rasmiy manbadan tasdiqlanmagan: u ichki jadvaldan olingan. Shuning uchun quyidagi jami summalar ham, rezerv ham prognoz emas, faqat ssenariy. Jonli rejim narx chegarasi noma'lum modelni chaqirmaydi; shuning uchun halo ma'lumotini topish bu vositani tugatishga to'sqinlik qilmaydi, faqat halo bilan jonli sinovga to'sqinlik qiladi.
+
 Dry-run (3 hujjat: uchinchi sinov hujjati va ikki sintetik hajm o'rnini bosuvchi):
 
 | Qism | Javob 1 947 token | Javob 3 000 token | Rezerv |
@@ -126,21 +128,34 @@ Dry-run (3 hujjat: uchinchi sinov hujjati va ikki sintetik hajm o'rnini bosuvchi
 - Yurist: kalit nuqtalar ≈ 3 × 45 daqiqa, 12 javobni baholash ≈ 12 × 10–12 daqiqa. Jami taxminan 4–4,5 soat.
 
 ## Umumiy byudjet nazorati (kod va AI'siz test bilan tasdiqlangan)
-- Bitta byudjet obyekti hamma narsani qamraydi: dastlabki dayjest qismlari, oldindan bo'lish, qayta o'qishlar, barcha yakuniy javoblar va retry'lar. Hammasi bitta `liveCaller` orqali o'tadi.
-- **Rezerv atomar.** Har bir urinishdan oldin chegarasi tekshiriladi va qolgan byudjetdan ayiriladi. Tekshiruv va ayirish orasida `await` yo'q, shuning uchun parallel chaqiruvlar bir pulni ikki marta ishlata olmaydi.
-- Retry — alohida rezervlanadigan urinish. Joy bo'lmasa, provayderga yetib bormaydi.
+Bitta byudjet obyekti quyidagilarning hammasini qamraydi: dastlabki dayjest qismlari, oldindan bo'lish, qayta o'qishlar, barcha yakuniy javoblar va har bir retry. Hammasi bitta `liveCaller` orqali o'tadi.
+
+**Uch holat bir-biridan ajratilgan:**
+1. **Chaqiruvdan oldin ishonchli narx chegarasi yo'q bo'lsa** (narx jadvalda yo'q yoki hisob faqat kreditda) — provayder **chaqirilmaydi**.
+2. **Chaqiruvdan keyin usage ham, haqiqiy sarf ham kelmasa** — rezerv **bo'shatilmaydi**, band qolaveradi. Sarf «noma'lum» deb yoziladi, hech qachon raqam yoki $0 deb emas. Bu xatolik bilan tugagan chaqiruvlarga ham tegishli.
+3. **Haqiqiy sarf rezervdan oshsa** — byudjet to'xtatiladi: shundan keyin yangi chaqiruv, retry yoki qayta o'qish boshlanmaydi. Oldin parallel boshlangan chaqiruvlarni qaytarib bo'lmaydi: ular oxirigacha bajariladi va yoziladi. Hisobotda bu ochiq aytiladi.
+
+**Qolgan qoidalar:**
+- Har bir urinish oldidan uning chegarasi tekshiriladi va byudjetdan ayiriladi. Bu bitta sinxron qadam, orasida `await` yo'q, shuning uchun parallel chaqiruvlar bir pulni ikki marta ishlata olmaydi.
+- Retry — yana rezervlanadigan alohida urinish. U yakuniy javob chegarada kesilganda yoki xato bo'lganda qilinadi. Chegarada kesilgan dayjest qismi esa butunligicha qayta so'ralmaydi: uni `buildDigest` o'z limiti (`maxExtraCalls`) ichida ikki yarmiga bo'lib qayta o'qiydi.
 - Fallback yo'q: VoiceLab modeli nomi bilan chaqirilganda boshqa provayderga o'tmaydi.
-- Narx chegarasi bo'lmagan chaqiruv (narx noma'lum yoki faqat kredit bilan hisoblanadi) **boshlanmaydi**.
-- Testlar (`tests/explain-ab.test.js`, stub provayder, AI'siz):
-  - 10 ta parallel chaqiruvdan faqat 3 tasi sig'adi, qolgan 7 tasi provayderga bormaydi;
-  - retry uchun joy bo'lmasa, u qilinmaydi;
-  - narxsiz model chaqirilmaydi;
-  - butun xizmat (dayjest, qayta o'qishlar, yakuniy javob) bitta byudjetdan o'tadi, va ro'yxat narxi bilan kredit alohida yoziladi.
+- Ro'yxat narxidagi dollar va VoiceLab krediti alohida yoziladi. Byudjet ikkalasining kattasi bilan yopiladi.
+- Halo'ning kredit stavkasi noma'lum bo'lgani uchun dollar rezervi va haqiqiy kredit sarfi bir xil ekanini tasdiqlab bo'lmaydi.
+
+**Testlar** (`tests/explain-ab.test.js`, stub provayder, AI'siz; jami 9 ta):
+- 10 ta parallel chaqiruvdan faqat byudjetga sig'adigan 3 tasi provayderga boradi;
+- retry uchun joy bo'lmasa, u qilinmaydi;
+- narxsiz model chaqirilmaydi (1-holat);
+- usage'siz javobda rezerv band qoladi va sarf «noma'lum» deb yoziladi; usage'siz xato ham shunday (2-holat);
+- rezervdan oshgandan keyin yangi chaqiruv rad etiladi, oldin boshlangan parallel chaqiruv tugaydi va yoziladi (3-holat);
+- butun xizmat bitta byudjetdan o'tadi, kesilgan qism qayta o'qiladi, dollar va kredit alohida yoziladi;
+- dayjest o'rtasida to'xtatilsa, qayta o'qish ham, yakuniy javob ham boshlanmaydi.
 
 ## Jonli ishga tushirish (faqat ruxsatdan keyin)
 ```
 EXPLAIN_AB_LIVE=yes node scripts/explain-ab.js --docs a.docx,b.docx,c.docx \
-  --strong voicelab/aisha-halo --live --budget-usd 3 --out /xavfsiz/papka
+  --strong voicelab/aisha-halo --live --budget-usd 3 --out /xavfsiz/papka \
+  --prices-confirmed voicelab/aisha-comet,voicelab/aisha-halo
 ```
 - Butun rezerv byudjetga sig'masa, birorta ham chaqiruv qilinmaydi.
 - Har bir chaqiruv o'z chegarasini qolgan byudjetdan oldindan band qiladi. Sig'masa, chaqirilmaydi.

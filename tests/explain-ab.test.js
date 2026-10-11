@@ -70,8 +70,12 @@ const run = (extra = [], env = {}) => {
     assert.strictEqual(run(['--live', '--budget-usd', '5'], { EXPLAIN_AB_LIVE: 'yes' }).code, 2, 'no --out');
     assert.strictEqual(run(['--live', '--budget-usd', '5', '--out', out, '--strong', 'openai/gpt-6-sol'], { EXPLAIN_AB_LIVE: 'yes' }).code, 2, 'not a VoiceLab model');
     assert.strictEqual(run(['--out', path.join(__dirname, 'ab-out')]).code, 2, 'inside the repository');
+    // a price not confirmed by the owner counts as unknown: refused before any call
+    const noPrice = run(['--live', '--budget-usd', '5', '--out', out, '--prices-confirmed', 'voicelab/aisha-comet'], { EXPLAIN_AB_LIVE: 'yes' });
+    assert.strictEqual(noPrice.code, 2, noPrice.out);
+    assert.ok(/needs the price of voicelab\/aisha-halo confirmed/u.test(noPrice.out), noPrice.out);
     // a budget below the reserve: nothing is called (and no provider key is needed to find that out)
-    const small = run(['--live', '--budget-usd', '0.01', '--out', out], { EXPLAIN_AB_LIVE: 'yes', VOICELAB_API_KEY: '' });
+    const small = run(['--live', '--budget-usd', '0.01', '--out', out, '--prices-confirmed', 'voicelab/aisha-comet,voicelab/aisha-halo'], { EXPLAIN_AB_LIVE: 'yes', VOICELAB_API_KEY: '' });
     assert.strictEqual(small.code, 3, small.out);
     assert.ok(/does not fit the budget/u.test(small.out));
     assert.deepStrictEqual(fs.readdirSync(out), [], 'nothing written');
@@ -107,6 +111,10 @@ const run = (extra = [], env = {}) => {
     const tight = ab.newBudget(one * 1.2);
     await assert.rejects(ab.liveCaller('voicelab/aisha-comet', tight, [], 0.2, { provider: cutThenOk })(msgs(), { maxTokens: ab.CAP }), /not called/u);
     assert.strictEqual(n, 1, 'the retry did not reach the provider');
+    // a price the owner has not confirmed -> not started
+    let asked = false;
+    await assert.rejects(ab.liveCaller('voicelab/aisha-halo', ab.newBudget(100), [], 0.2, { provider: async () => { asked = true; return {}; }, priceConfirmed: false })(msgs(), { maxTokens: ab.CAP }), /price not confirmed - not called/u);
+    assert.strictEqual(asked, false);
     // no price -> no bound -> not started
     let touched = false;
     await assert.rejects(ab.liveCaller('voicelab/no-such-model', ab.newBudget(100), [], 0.2, { provider: async () => { touched = true; return {}; } })(msgs(), { maxTokens: ab.CAP }), /no cost bound/u);
@@ -135,6 +143,68 @@ const run = (extra = [], env = {}) => {
     assert.ok(Math.abs(budget.left + budget.spent - 5) < 1e-9 && Math.abs(budget.reservedNow) < 1e-9, JSON.stringify(budget));
     assert.ok(budget.credits > 0 && budget.listUsd > 0, 'both recorded');
     assert.ok(answered.every(l => l.settledUsd === Math.max(l.listUsd, l.creditUsd)), 'settled at the larger known cost');
+  });
+
+  await test('after a call with no usage and no cost: the reserve is not released and the cost is recorded as unknown, never as $0', async () => {
+    const budget = ab.newBudget(one * 5);
+    const log = [];
+    const caller = ab.liveCaller('voicelab/aisha-comet', budget, log, 0.2, { provider: async () => ({ text: 'ok', finishReason: 'stop' }) });
+    await caller(msgs(), { maxTokens: ab.CAP });
+    const l = log.find(x => x.status === 'answered');
+    assert.deepStrictEqual([l.costStatus, l.settledUsd, l.listUsd, l.credits], ['unknown', null, null, null]);
+    assert.ok(Math.abs(budget.left - one * 4) < 1e-9, 'the reserve stays held');
+    assert.ok(Math.abs(budget.heldUnknown - one) < 1e-9 && budget.unknownCalls === 1 && budget.spent === 0);
+    // an error with no usage is the same
+    const caller2 = ab.liveCaller('voicelab/aisha-comet', budget, log, 0.2, { provider: async () => { throw new Error('upstream 503'); } });
+    await assert.rejects(caller2(msgs(), { maxTokens: ab.CAP }));
+    assert.strictEqual(budget.unknownCalls, 1 + 1 + ab.RETRIES, 'each attempt that reached the provider keeps its reserve');
+  });
+
+  await test('a cost above its reserve halts the budget: no new call, retry or re-read starts; calls already running finish and are recorded', async () => {
+    const budget = ab.newBudget(one * 20);
+    const log = [];
+    let started = 0;
+    // the first call to finish reports far more tokens than the bound allows
+    const provider = async (model, messages) => {
+      started++;
+      const slow = /slow/u.test(messages[1].text);
+      await new Promise(r => setTimeout(r, slow ? 40 : 5));
+      return slow ? { text: 'ok', usage: { inTokens: 10, outTokens: 10 }, finishReason: 'stop' } : { text: 'ok', usage: { inTokens: 50_000_000, outTokens: 0 }, finishReason: 'stop' };
+    };
+    const caller = ab.liveCaller('voicelab/aisha-comet', budget, log, 0.2, { provider });
+    const slowMsgs = [{ role: 'system', text: 'Tizim.' }, { role: 'user', text: 'slow ' + 'x '.repeat(2000) }];
+    const running = caller(slowMsgs, { maxTokens: ab.CAP }); // starts before the overrun
+    await caller(msgs(), { maxTokens: ab.CAP });            // the overrun
+    assert.strictEqual(budget.halted, true);
+    assert.strictEqual(log.find(l => l.costStatus === 'over_reserve').model, 'voicelab/aisha-comet');
+    await assert.rejects(caller(msgs(), { maxTokens: ab.CAP }), /budget halted - not called/u);
+    assert.strictEqual((await running).text, 'ok', 'the call already running finished');
+    assert.strictEqual(started, 2, 'nothing new reached the provider after the halt');
+    assert.ok(log.some(l => l.reason === 'halted: a cost went above its reserve'));
+  });
+
+  await test('one budget over the whole service, halting mid-way: digest parts, pre-splits and re-reads share it, and after an overrun no re-read or final answer starts', async () => {
+    const text = loadAll().find(x => x.id === 'long-service-docx').pages.join('\n\n');
+    const budget = ab.newBudget(5);
+    const log = [];
+    let calls = 0;
+    const provider = async (model, messages) => {
+      calls++;
+      const user = messages[1].text;
+      // part 2 overruns its reserve; part 1 comes back cut (would be re-read)
+      if (/^Excerpt 2\//u.test(user)) return { text: '- band', usage: { inTokens: 50_000_000, outTokens: 0 }, finishReason: 'stop' };
+      if (/^Excerpt 1\//u.test(user)) return { text: '- band', usage: { inTokens: 100, outTokens: 1600 }, finishReason: 'length' };
+      return { text: /^Excerpt /u.test(user) ? '- band' : 'Izoh.', usage: { inTokens: 100, outTokens: 50 }, finishReason: 'stop' };
+    };
+    const caller = ab.liveCaller('voicelab/aisha-comet', budget, log, 0.2, { provider });
+    const digest = await ex.buildDigest(text, { callAI: caller });
+    assert.strictEqual(budget.halted, true);
+    const firstWave = digest.plan.predicted.length;
+    assert.ok(calls <= firstWave, `no re-read reached the provider after the overrun (${calls} calls, ${firstWave} parts)`);
+    assert.ok(!digest.parts.some(p => p.retried && p.status === 'read'));
+    // the final answer is refused too
+    await assert.rejects(caller([{ role: 'system', text: 'x' }, { role: 'user', text: 'yakuniy' }], { maxTokens: ab.CAP }), /halted/u);
+    assert.strictEqual(log.filter(l => l.status !== 'not_called').length, calls, 'every provider call recorded');
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);
