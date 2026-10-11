@@ -44,6 +44,7 @@ const evalBudget = require('../scripts/lib/eval-budget');
 
 const confirmedAll = () => ({ models: Object.fromEntries(pe.loadConfig().models.map(m => [m.variant, {
   requestedModel: m.requestedModel, endpoint: prov.PROVIDERS[m.provider].url, profileConfirmed: true, accountAccess: true, capCoversBilledOutput: true, reasoningBilledInCompletion: true,
+  inputTokenBasis: { method: 'tokenizer', source: 'test stub tokenizer', maxTokensPerByte: 1, overheadTokensMax: 200 },
   rates: (m.scenarioPrices.rates || []).map(r => ({ ...r })), source: 'test stub (not a real price)', checkedAt: '2026-10-11',
 }])) });
 const P = rates => ({ rates, status: 'owner_confirmed', source: 'test', checkedAt: '2026-10-11' });
@@ -93,7 +94,8 @@ const response = (status, body, headers = {}) => ({ ok: status >= 200 && status 
     assert.strictEqual(r.code, 0, r.out);
     const j = JSON.parse(r.out.slice(r.out.indexOf('{')));
     assert.ok(j.jobs.every(x => x.state === 'READY' && x.reserve.usd > 0 && x.reserveMinusEstimateUsd > 0));
-    assert.ok(j.jobs.every(x => x.reserve.basis.input.method.includes('UTF-8 bytes') && x.reserve.basis.priceStatus === 'owner_confirmed'));
+    assert.ok(j.jobs.every(x => x.reserve.basis.input.basis.method === 'tokenizer' && x.reserve.basis.priceStatus === 'owner_confirmed'));
+    assert.ok(!/guaranteed token bound|covers at least one byte/u.test(r.out.replace('is not a token guarantee', '')), 'bytes are not called a token guarantee');
     assert.ok(j.summary.reserveUsd > j.summary.estimateAtCapUsd);
     assert.ok(/^[0-9a-f]{64}$/u.test(j.summary.runSha) && /budget \$2/u.test(j.summary.runShaCovers));
   });
@@ -170,19 +172,30 @@ const response = (status, body, headers = {}) => ({ ok: status >= 200 && status 
     assert.deepStrictEqual(prov.worstRates({ rates: [{ in: 0.1, out: 0.2, cachedIn: 0.01 }, { in: 0.3, out: 0.15 }] }), { in: 0.3, cachedIn: 0.01, out: 0.2 });
   });
 
-  await test('reserve: a reliable bound needs a confirmed price AND a cap confirmed to limit every billed output token - for every model; the input side is the byte bound, never a comet ratio', () => {
+  await test('reserve: a reliable bound needs a confirmed price, a cap confirmed to limit every billed output token AND a confirmed input-token basis (tokenizer or documented rule with chat-template overhead) - for every model; bytes alone are no guarantee and no comet ratio is used', () => {
     const msgs = frozen[0].messages;
     const prices = P({ in: 1, cachedIn: 0.1, out: 2 });
+    const basis = { method: 'tokenizer', source: 'stub', maxTokensPerByte: 1, overheadTokensMax: 200 };
+    const bytes = msgs.reduce((n, x) => n + Buffer.byteLength(x.text, 'utf8'), 0);
     for (const m of cfg.models) {
       // price known, cap not confirmed (even with thinking "off", even comet): UNKNOWN
-      assert.strictEqual(prov.callBound(m, msgs, prices, {}).usd, null, m.variant);
-      assert.strictEqual(prov.callBound(m, msgs, { rates: null }, { capCoversBilledOutput: true }).usd, null, `${m.variant}: no price`);
-      const b = prov.callBound(m, msgs, prices, { capCoversBilledOutput: true });
-      const bytes = msgs.reduce((n, x) => n + Buffer.byteLength(x.text, 'utf8') + 16, 64);
-      assert.strictEqual(b.basis.input.tokensMax, bytes, 'UTF-8 bytes + overhead');
+      assert.strictEqual(prov.callBound(m, msgs, prices, { inputTokenBasis: basis }).usd, null, m.variant);
+      assert.strictEqual(prov.callBound(m, msgs, { rates: null }, { capCoversBilledOutput: true, inputTokenBasis: basis }).usd, null, `${m.variant}: no price`);
+      // cap and price confirmed, no input basis: the byte count alone gives no reserve
+      const noBasis = prov.callBound(m, msgs, prices, { capCoversBilledOutput: true });
+      assert.strictEqual(noBasis.usd, null);
+      assert.ok(/input token basis/u.test(noBasis.reason));
+      for (const bad of [{ ...basis, method: 'bytes' }, { ...basis, source: '' }, { ...basis, maxTokensPerByte: 0 }, { ...basis, overheadTokensMax: null }]) {
+        assert.strictEqual(prov.callBound(m, msgs, prices, { capCoversBilledOutput: true, inputTokenBasis: bad }).usd, null, JSON.stringify(bad));
+      }
+      const b = prov.callBound(m, msgs, prices, { capCoversBilledOutput: true, inputTokenBasis: basis });
+      assert.strictEqual(b.basis.input.textBytes, bytes);
+      assert.strictEqual(b.basis.input.tokensMax, bytes + 200, 'text bytes x tokens/byte + the counted template overhead');
       assert.ok(b.basis.input.tokensMax > Math.round(frozen[0].promptChars * pe.SCENARIO.inPerChar) * 2, 'far above the comet-ratio estimate');
-      assert.ok(Math.abs(b.usd - (bytes * 1 + m.profile.cap * 2) / 1e6) < 1e-12, 'cached input reserved at the full rate');
+      assert.ok(Math.abs(b.usd - ((bytes + 200) * 1 + m.profile.cap * 2) / 1e6) < 1e-12, 'cached input reserved at the full rate');
       assert.strictEqual(b.basis.output.tokensMax, m.profile.cap);
+      // a tokenizer that can emit more than one token per byte is scaled, not assumed away
+      assert.strictEqual(prov.callBound(m, msgs, prices, { capCoversBilledOutput: true, inputTokenBasis: { ...basis, maxTokensPerByte: 1.5 } }).basis.input.tokensMax, Math.ceil(bytes * 1.5) + 200);
     }
     // a search snippet is never a price: without a confirmation entry only the repository's VoiceLab table counts
     const ds = cfg.models.find(m => m.variant === 'deepseek');

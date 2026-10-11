@@ -4,11 +4,36 @@
   "checkedAt": "2026-10-11",
   "secretNames": "Implementation decision of this runner (which environment variable holds which key), not a provider fact.",
   "officialDocsReadAttempts": [
-    { "url": "https://api-docs.deepseek.com/quick_start/pricing/", "at": "2026-10-11", "result": "not read: this session's network policy denies the host (proxy 403 on CONNECT, DNS not resolved)" },
-    { "url": "https://api-docs.deepseek.com/api/create-chat-completion/", "at": "2026-10-11", "result": "not read: same" },
-    { "url": "https://docs.z.ai/guides/overview/pricing", "at": "2026-10-11", "result": "not read: host not resolved" },
-    { "url": "https://platform.kimi.ai/docs/overview", "at": "2026-10-11", "result": "not read: host not resolved" },
-    { "url": "https://www.alibabacloud.com/help/en/model-studio/models", "at": "2026-10-11", "result": "not read: host not resolved" }
+    {
+      "url": "https://api-docs.deepseek.com/quick_start/pricing/",
+      "at": "2026-10-11",
+      "result": "not read: this session's network policy denies the host (proxy 403 on CONNECT, DNS not resolved)"
+    },
+    {
+      "url": "https://api-docs.deepseek.com/api/create-chat-completion/",
+      "at": "2026-10-11",
+      "result": "not read: same"
+    },
+    {
+      "url": "https://docs.z.ai/guides/overview/pricing",
+      "at": "2026-10-11",
+      "result": "not read: host not resolved"
+    },
+    {
+      "url": "https://platform.kimi.ai/docs/overview",
+      "at": "2026-10-11",
+      "result": "not read: host not resolved"
+    },
+    {
+      "url": "https://www.alibabacloud.com/help/en/model-studio/models",
+      "at": "2026-10-11",
+      "result": "not read: host not resolved"
+    },
+    {
+      "url": "https://huggingface.co/{deepseek-ai,zai-org,moonshotai,Qwen}",
+      "at": "2026-10-11",
+      "result": "not read: hosts not reachable from this session (tokenizer files and chat templates could not be loaded)"
+    }
   ],
   "models": [
     {
@@ -21,21 +46,66 @@
       "profile": {
         "reasoning": "none sent",
         "reasoningNote": "No reasoning parameter is documented for VoiceLab; none is sent. On aisha-orbit (2026-10-04) completion_tokens = reasoning_tokens = max_tokens was observed (orbit, not comet; observed, not documented).",
-        "params": { "temperature": 0.2 },
+        "params": {
+          "temperature": 0.2
+        },
         "capParam": "max_tokens",
         "cap": 3000,
         "capNote": "EXPLAIN_MAX_TOKENS, as in production explainDocument"
       },
       "facts": {
-        "endpoint": { "value": "https://api.voicelab.uz/v1/chat/completions", "status": "REPO_ADAPTER", "source": "src/ai/voicelab.js (in production use)" },
-        "modelId": { "value": "aisha-comet", "status": "REPO_CONSOLE", "source": "VoiceLab console, 2026-09-23 (src/ai/voicelab.js)" },
-        "accountAccess": { "value": null, "status": "UNKNOWN", "source": "the key's access is not checked from here" },
-        "price": { "value": "0.45 in / 0.70 out USD per 1M (list); billed in credits", "status": "REPO_CONSOLE", "source": "src/ai/model-pricing.js voicelab_2026_09_23", "checkedAt": "2026-09-23" },
-        "capCoversBilledOutput": { "value": null, "status": "UNKNOWN" },
-        "reasoningBilledInCompletion": { "value": null, "status": "UNKNOWN" },
-        "returnedModel": { "value": null, "status": "UNKNOWN" }
+        "endpoint": {
+          "value": "https://api.voicelab.uz/v1/chat/completions",
+          "status": "REPO_ADAPTER",
+          "source": "src/ai/voicelab.js (in production use)"
+        },
+        "modelId": {
+          "value": "aisha-comet",
+          "status": "REPO_CONSOLE",
+          "source": "VoiceLab console, 2026-09-23 (src/ai/voicelab.js)"
+        },
+        "accountAccess": {
+          "value": null,
+          "status": "UNKNOWN",
+          "source": "the key's access is not checked from here"
+        },
+        "price": {
+          "value": "0.45 in / 0.70 out USD per 1M (list); billed in credits",
+          "status": "REPO_CONSOLE",
+          "source": "src/ai/model-pricing.js voicelab_2026_09_23",
+          "checkedAt": "2026-09-23"
+        },
+        "capCoversBilledOutput": {
+          "value": null,
+          "status": "UNKNOWN"
+        },
+        "reasoningBilledInCompletion": {
+          "value": null,
+          "status": "UNKNOWN"
+        },
+        "returnedModel": {
+          "value": null,
+          "status": "UNKNOWN"
+        },
+        "inputTokenBasis": {
+          "value": null,
+          "status": "UNKNOWN",
+          "source": "VoiceLab publishes no tokenizer here; aisha-comet's tokenizer and chat template are not known"
+        }
       },
-      "scenarioPrices": { "status": "REPO_CONSOLE", "source": "src/ai/model-pricing.js", "seenAt": "2026-09-23", "rates": [{ "label": "list", "in": 0.45, "cachedIn": null, "out": 0.70 }] }
+      "scenarioPrices": {
+        "status": "REPO_CONSOLE",
+        "source": "src/ai/model-pricing.js",
+        "seenAt": "2026-09-23",
+        "rates": [
+          {
+            "label": "list",
+            "in": 0.45,
+            "cachedIn": null,
+            "out": 0.7
+          }
+        ]
+      }
     },
     {
       "variant": "deepseek",
@@ -46,25 +116,84 @@
       "profile": {
         "reasoning": "off",
         "reasoningNote": "Non-thinking mode, written as thinking.type=disabled. The official API page (create-chat-completion) could not be read here: the switch is UNKNOWN until the owner confirms it (profileConfirmed); never sent blind in live.",
-        "params": { "thinking": { "type": "disabled" }, "temperature": 0.2 },
+        "params": {
+          "thinking": {
+            "type": "disabled"
+          },
+          "temperature": 0.2
+        },
         "capParam": "max_tokens",
         "cap": 3000,
         "capNote": "for the visible answer, valid only if thinking is really off and max_tokens caps all billed output (UNKNOWN)"
       },
       "facts": {
-        "endpoint": { "value": "https://api.deepseek.com/chat/completions", "status": "OWNER_PACKAGE", "source": "package: base https://api.deepseek.com; path per the create-chat-completion page (not read here)" },
-        "modelId": { "value": "deepseek-flash", "status": "OWNER_PACKAGE", "source": "package (official docs, 2026-10-11). Search snippets name deepseek-v4-flash - not a confirmation, not substituted." },
-        "accountAccess": { "value": null, "status": "UNKNOWN" },
-        "price": { "value": null, "status": "UNKNOWN", "source": "official pricing page not readable here" },
-        "timeOfDayPricing": { "value": null, "status": "UNKNOWN" },
-        "context": { "value": null, "status": "UNKNOWN" },
-        "maxOutput": { "value": null, "status": "UNKNOWN" },
-        "thinkingSwitch": { "value": "thinking.type=disabled", "status": "UNKNOWN" },
-        "capCoversBilledOutput": { "value": null, "status": "UNKNOWN" },
-        "reasoningBilledInCompletion": { "value": null, "status": "UNKNOWN" },
-        "returnedModel": { "value": null, "status": "UNKNOWN", "source": "whether the response names the alias or a dated snapshot" }
+        "endpoint": {
+          "value": "https://api.deepseek.com/chat/completions",
+          "status": "OWNER_PACKAGE",
+          "source": "package: base https://api.deepseek.com; path per the create-chat-completion page (not read here)"
+        },
+        "modelId": {
+          "value": "deepseek-flash",
+          "status": "OWNER_PACKAGE",
+          "source": "package (official docs, 2026-10-11). Search snippets name deepseek-v4-flash - not a confirmation, not substituted."
+        },
+        "accountAccess": {
+          "value": null,
+          "status": "UNKNOWN"
+        },
+        "price": {
+          "value": null,
+          "status": "UNKNOWN",
+          "source": "official pricing page not readable here"
+        },
+        "timeOfDayPricing": {
+          "value": null,
+          "status": "UNKNOWN"
+        },
+        "context": {
+          "value": null,
+          "status": "UNKNOWN"
+        },
+        "maxOutput": {
+          "value": null,
+          "status": "UNKNOWN"
+        },
+        "thinkingSwitch": {
+          "value": "thinking.type=disabled",
+          "status": "UNKNOWN"
+        },
+        "capCoversBilledOutput": {
+          "value": null,
+          "status": "UNKNOWN"
+        },
+        "reasoningBilledInCompletion": {
+          "value": null,
+          "status": "UNKNOWN"
+        },
+        "returnedModel": {
+          "value": null,
+          "status": "UNKNOWN",
+          "source": "whether the response names the alias or a dated snapshot"
+        },
+        "inputTokenBasis": {
+          "value": null,
+          "status": "UNKNOWN",
+          "source": "tokenizer and chat template not loaded (Hugging Face unreachable); no documented counting rule read"
+        }
       },
-      "scenarioPrices": { "status": "SEARCH_SNIPPET", "source": "puter.com, zenmux.ai, costbench.com (citing the official page); one snapshot listed at 0.10/0.20", "seenAt": "2026-10-11", "rates": [{ "label": "standard", "in": 0.14, "cachedIn": 0.0028, "out": 0.28 }] }
+      "scenarioPrices": {
+        "status": "SEARCH_SNIPPET",
+        "source": "puter.com, zenmux.ai, costbench.com (citing the official page); one snapshot listed at 0.10/0.20",
+        "seenAt": "2026-10-11",
+        "rates": [
+          {
+            "label": "standard",
+            "in": 0.14,
+            "cachedIn": 0.0028,
+            "out": 0.28
+          }
+        ]
+      }
     },
     {
       "variant": "glm",
@@ -75,22 +204,68 @@
       "profile": {
         "reasoning": "on (cannot be disabled)",
         "reasoningNote": "thinking.type=enabled sent explicitly (the only supported value per the package); 'disabled' is never sent. Temperature not sent: provider default (value UNKNOWN).",
-        "params": { "thinking": { "type": "enabled" } },
+        "params": {
+          "thinking": {
+            "type": "enabled"
+          }
+        },
         "capParam": "max_tokens",
         "cap": 8000,
         "capNote": "3 000 for the visible answer + 5 000 reasoning allowance, only IF max_tokens caps reasoning (UNKNOWN). Equal max_tokens is not an equal visible answer."
       },
       "facts": {
-        "endpoint": { "value": "https://api.z.ai/api/paas/v4/chat/completions", "status": "OWNER_PACKAGE", "source": "package: base https://api.z.ai/api/paas/v4 (general API, not the Coding Plan)" },
-        "modelId": { "value": "glm-5.3-flash", "status": "OWNER_PACKAGE" },
-        "accountAccess": { "value": null, "status": "UNKNOWN" },
-        "price": { "value": null, "status": "UNKNOWN" },
-        "thinkingSwitch": { "value": "enabled only", "status": "OWNER_PACKAGE" },
-        "capCoversBilledOutput": { "value": null, "status": "UNKNOWN" },
-        "reasoningBilledInCompletion": { "value": null, "status": "UNKNOWN" },
-        "returnedModel": { "value": null, "status": "UNKNOWN" }
+        "endpoint": {
+          "value": "https://api.z.ai/api/paas/v4/chat/completions",
+          "status": "OWNER_PACKAGE",
+          "source": "package: base https://api.z.ai/api/paas/v4 (general API, not the Coding Plan)"
+        },
+        "modelId": {
+          "value": "glm-5.3-flash",
+          "status": "OWNER_PACKAGE"
+        },
+        "accountAccess": {
+          "value": null,
+          "status": "UNKNOWN"
+        },
+        "price": {
+          "value": null,
+          "status": "UNKNOWN"
+        },
+        "thinkingSwitch": {
+          "value": "enabled only",
+          "status": "OWNER_PACKAGE"
+        },
+        "capCoversBilledOutput": {
+          "value": null,
+          "status": "UNKNOWN"
+        },
+        "reasoningBilledInCompletion": {
+          "value": null,
+          "status": "UNKNOWN"
+        },
+        "returnedModel": {
+          "value": null,
+          "status": "UNKNOWN"
+        },
+        "inputTokenBasis": {
+          "value": null,
+          "status": "UNKNOWN",
+          "source": "tokenizer and chat template not loaded; no documented counting rule read"
+        }
       },
-      "scenarioPrices": { "status": "SEARCH_SNIPPET", "source": "anotherwrapper/llmgateway citing Z.AI: 0.15/0.03/0.50; other aggregators 0.075/0.25 - the higher is used", "seenAt": "2026-10-11", "rates": [{ "label": "standard", "in": 0.15, "cachedIn": 0.03, "out": 0.50 }] }
+      "scenarioPrices": {
+        "status": "SEARCH_SNIPPET",
+        "source": "anotherwrapper/llmgateway citing Z.AI: 0.15/0.03/0.50; other aggregators 0.075/0.25 - the higher is used",
+        "seenAt": "2026-10-11",
+        "rates": [
+          {
+            "label": "standard",
+            "in": 0.15,
+            "cachedIn": 0.03,
+            "out": 0.5
+          }
+        ]
+      }
     },
     {
       "variant": "kimi",
@@ -101,23 +276,70 @@
       "profile": {
         "reasoning": "on, reasoning_effort=low",
         "reasoningNote": "Package: low/high/max supported, default max (a search snippet says max only at launch - not a confirmation). Temperature not sent (provider default; value UNKNOWN).",
-        "params": { "reasoning_effort": "low" },
+        "params": {
+          "reasoning_effort": "low"
+        },
         "capParam": "max_completion_tokens",
         "cap": 8000,
         "capNote": "3 000 visible + 5 000 reasoning allowance, only IF the cap covers reasoning (UNKNOWN). The parameter name is UNKNOWN (max_tokens or max_completion_tokens): the owner confirms it with the profile."
       },
       "facts": {
-        "endpoint": { "value": "https://api.moonshot.ai/v1/chat/completions", "status": "OWNER_PACKAGE", "source": "package: base https://api.moonshot.ai/v1" },
-        "modelId": { "value": "kimi-k3", "status": "OWNER_PACKAGE" },
-        "accountAccess": { "value": null, "status": "UNKNOWN" },
-        "price": { "value": null, "status": "UNKNOWN" },
-        "thinkingSwitch": { "value": "reasoning_effort low|high|max, default max", "status": "OWNER_PACKAGE" },
-        "capParam": { "value": "max_completion_tokens", "status": "UNKNOWN" },
-        "capCoversBilledOutput": { "value": null, "status": "UNKNOWN" },
-        "reasoningBilledInCompletion": { "value": null, "status": "UNKNOWN" },
-        "returnedModel": { "value": null, "status": "UNKNOWN" }
+        "endpoint": {
+          "value": "https://api.moonshot.ai/v1/chat/completions",
+          "status": "OWNER_PACKAGE",
+          "source": "package: base https://api.moonshot.ai/v1"
+        },
+        "modelId": {
+          "value": "kimi-k3",
+          "status": "OWNER_PACKAGE"
+        },
+        "accountAccess": {
+          "value": null,
+          "status": "UNKNOWN"
+        },
+        "price": {
+          "value": null,
+          "status": "UNKNOWN"
+        },
+        "thinkingSwitch": {
+          "value": "reasoning_effort low|high|max, default max",
+          "status": "OWNER_PACKAGE"
+        },
+        "capParam": {
+          "value": "max_completion_tokens",
+          "status": "UNKNOWN"
+        },
+        "capCoversBilledOutput": {
+          "value": null,
+          "status": "UNKNOWN"
+        },
+        "reasoningBilledInCompletion": {
+          "value": null,
+          "status": "UNKNOWN"
+        },
+        "returnedModel": {
+          "value": null,
+          "status": "UNKNOWN"
+        },
+        "inputTokenBasis": {
+          "value": null,
+          "status": "UNKNOWN",
+          "source": "tokenizer and chat template not loaded; no documented counting rule read"
+        }
       },
-      "scenarioPrices": { "status": "SEARCH_SNIPPET", "source": "morphllm, verdent guides: 3.00 in / 0.30 cache hit / 15.00 out", "seenAt": "2026-10-11", "rates": [{ "label": "standard", "in": 3.0, "cachedIn": 0.3, "out": 15.0 }] }
+      "scenarioPrices": {
+        "status": "SEARCH_SNIPPET",
+        "source": "morphllm, verdent guides: 3.00 in / 0.30 cache hit / 15.00 out",
+        "seenAt": "2026-10-11",
+        "rates": [
+          {
+            "label": "standard",
+            "in": 3.0,
+            "cachedIn": 0.3,
+            "out": 15.0
+          }
+        ]
+      }
     },
     {
       "variant": "qwen",
@@ -128,23 +350,71 @@
       "profile": {
         "reasoning": "off",
         "reasoningNote": "enable_thinking=false sent explicitly (name and default UNKNOWN until confirmed).",
-        "params": { "enable_thinking": false, "temperature": 0.2 },
+        "params": {
+          "enable_thinking": false,
+          "temperature": 0.2
+        },
         "capParam": "max_tokens",
         "cap": 3000,
         "capNote": "for the visible answer, valid only if thinking is really off and max_tokens caps all billed output (UNKNOWN)"
       },
       "facts": {
-        "endpoint": { "value": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions", "status": "UNKNOWN", "source": "International (Singapore) OpenAI-compatible endpoint as written in this runner; not confirmed from an official page" },
-        "modelId": { "value": "qwen-plus", "status": "UNKNOWN" },
-        "accountAccess": { "value": null, "status": "UNKNOWN" },
-        "price": { "value": null, "status": "UNKNOWN" },
-        "tieredPricing": { "value": null, "status": "UNKNOWN" },
-        "thinkingSwitch": { "value": "enable_thinking=false", "status": "UNKNOWN" },
-        "capCoversBilledOutput": { "value": null, "status": "UNKNOWN" },
-        "reasoningBilledInCompletion": { "value": null, "status": "UNKNOWN" },
-        "returnedModel": { "value": null, "status": "UNKNOWN" }
+        "endpoint": {
+          "value": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions",
+          "status": "UNKNOWN",
+          "source": "International (Singapore) OpenAI-compatible endpoint as written in this runner; not confirmed from an official page"
+        },
+        "modelId": {
+          "value": "qwen-plus",
+          "status": "UNKNOWN"
+        },
+        "accountAccess": {
+          "value": null,
+          "status": "UNKNOWN"
+        },
+        "price": {
+          "value": null,
+          "status": "UNKNOWN"
+        },
+        "tieredPricing": {
+          "value": null,
+          "status": "UNKNOWN"
+        },
+        "thinkingSwitch": {
+          "value": "enable_thinking=false",
+          "status": "UNKNOWN"
+        },
+        "capCoversBilledOutput": {
+          "value": null,
+          "status": "UNKNOWN"
+        },
+        "reasoningBilledInCompletion": {
+          "value": null,
+          "status": "UNKNOWN"
+        },
+        "returnedModel": {
+          "value": null,
+          "status": "UNKNOWN"
+        },
+        "inputTokenBasis": {
+          "value": null,
+          "status": "UNKNOWN",
+          "source": "tokenizer and chat template not loaded; no documented counting rule read"
+        }
       },
-      "scenarioPrices": { "status": "SEARCH_SNIPPET", "source": "aggregator: 0.40 in / 1.20 out non-thinking; cached unknown", "seenAt": "2026-10-11", "rates": [{ "label": "0-128K input, non-thinking", "in": 0.40, "cachedIn": null, "out": 1.20 }] }
+      "scenarioPrices": {
+        "status": "SEARCH_SNIPPET",
+        "source": "aggregator: 0.40 in / 1.20 out non-thinking; cached unknown",
+        "seenAt": "2026-10-11",
+        "rates": [
+          {
+            "label": "0-128K input, non-thinking",
+            "in": 0.4,
+            "cachedIn": null,
+            "out": 1.2
+          }
+        ]
+      }
     }
   ]
 }

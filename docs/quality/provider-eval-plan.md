@@ -53,13 +53,24 @@ Bu 3 ta qisqa sun'iy hujjatdagi dastlabki saralash. Uzun hujjat, dayjest, RAG yo
 | Chegara barcha billed output'ni cheklaydi | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN |
 | Reasoning `completion_tokens` ichida | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN |
 | Qaytadigan model ID | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN |
+| Kirish tokeni asosi (tokenizer + chat shabloni) | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN |
 
 ## Rezerv qanday "ishonchli chegara" bo'ladi
 Rezerv = kirish chegarasi × eng yuqori tasdiqlangan kirish narxi + chiqish chegarasi × chiqish narxi. Uchta asosdan biri yetishmasa, rezerv **UNKNOWN** va live **BLOCKED**:
 
-1. **Kirish chegarasi.** Har xabarning UTF-8 baytlari, ustiga so'rovga 64 va har xabarga 16 token qo'shiladi (`inputTokenBound`, production pilot byudjeti bilan bir xil). Byte-level BPE va SentencePiece tokenizerlarida bitta matn tokeni kamida bir baytni egallaydi, shuning uchun bu yuqori chegara bo'ladi.
+1. **Kirish chegarasi.** UTF-8 baytlar sonining o'zi **kafolatlangan token chegarasi emas**:
+   - u faqat har bir matn tokeni kamida bir baytni egallaydigan tokenizerda chegara bo'ladi;
+   - chat shabloni va maxsus tokenlar matn baytlariga umuman kirmaydi.
+
+   Shuning uchun har model uchun tasdiq faylida `inputTokenBasis` bo'lishi shart:
+   - `method` — `tokenizer` (modelning o'z tokenizeri va chat shabloni bilan lokal sanash) yoki `provider_documented` (hujjatlashtirilgan qoida yoki sanash endpoint'i);
+   - `source` — tokenizer yoki hujjat qayerdan olingani;
+   - `maxTokensPerByte` — bir baytga eng ko'p nechta matn tokeni to'g'ri kelishi (byte-level BPE uchun 1);
+   - `overheadTokensMax` — butun so'rovdagi chat shabloni va maxsus tokenlar soni, o'sha tokenizer bilan sanalgan yoki hujjatdan olingan.
+
+   Kirish chegarasi = ⌈matn baytlari × `maxTokensPerByte`⌉ + `overheadTokensMax`. Bu asos bo'lmasa, rezerv UNKNOWN va vazifa BLOCKED.
    - Comet'ning 0.367 token/belgi nisbati **faqat taxmin (estimate)** uchun ishlatiladi, hech qachon maksimum sifatida emas.
-   - D1 misoli: bayt chegarasi 10 249 token, taxmin ≈ 3 679 token.
+   - Tokenizer fayllari va chat shablonlari (Hugging Face) bu sessiyadan ochilmadi. Shuning uchun beshta modelning hech birida `inputTokenBasis` hozircha yo'q.
 2. **Chiqish chegarasi.** Profil chegarasi (`max_tokens` yoki `max_completion_tokens`) faqat egasi uning **barcha billed output tokenlarni** — ko'rinadigan va reasoning tokenlarini — cheklashini tasdiqlagandan keyin rezervga qo'shiladi (`capCoversBilledOutput`).
    - Bu talab har bir modelga qo'yiladi, thinking'i "o'chiq" modellarga ham: kalit ishlamasa yoki yashirin reasoning bo'lsa, faqat ko'rinadigan javobni cheklaydigan chegara oshib ketadi.
    - Reasoning yoqiq modellar uchun reasoning `completion_tokens` ichida hisoblanishi ham tasdiqlanadi.
@@ -120,7 +131,7 @@ Tasdiq fayli bo'lmagani uchun hozir **15 vazifaning 15 tasi BLOCKED**, rezerv es
 | **Jami** | | **$0.149 / $0.438** | **UNKNOWN** |
 
 - Estimate — taxminiy ssenariy, prognoz emas.
-- Faqat rejalashtirish uchun: agar ssenariy narxlari va chegara faktlari tasdiqlangan bo'lsa, bayt chegarasi bo'yicha rezerv ≈ $0.520 bo'lardi. Uning ≈ $0.453 qismi Kimi'ga to'g'ri keladi. Bu tasdiqlanmagan va kafolatlangan maksimum emas.
+- Rezerv uchun hech qanday raqam ko'rsatilmaydi: kirish tokeni asosi yo'q ekan, bayt soni token chegarasi o'rnida ishlatilmaydi.
 
 ## Jonli sinov (faqat egasining yozma ruxsati bilan)
 1. Egasi har model uchun konsol yoki rasmiy hujjatdan olingan ma'lumotlarni repo **tashqarisidagi** faylga yozadi:
@@ -128,6 +139,7 @@ Tasdiq fayli bo'lmagani uchun hozir **15 vazifaning 15 tasi BLOCKED**, rezerv es
    { "models": {
      "deepseek": { "requestedModel": "deepseek-flash", "endpoint": "https://api.deepseek.com/chat/completions",
                    "accountAccess": true, "profileConfirmed": true, "capCoversBilledOutput": true,
+                   "inputTokenBasis": { "method": "tokenizer", "source": "…", "maxTokensPerByte": 1, "overheadTokensMax": 0 },
                    "rates": [{ "label": "…", "in": 0, "cachedIn": 0, "out": 0 }], "source": "…", "checkedAt": "…",
                    "acceptedReturnedModels": [] },
      "glm": { "…": "…", "reasoningBilledInCompletion": true } } }
