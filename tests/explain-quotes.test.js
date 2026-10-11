@@ -152,6 +152,19 @@ const digestOf = ai => t => ex.buildDigest(t, { callAI: ai });
     assert.ok(!r.reply.includes(`> «${KEY[2]}»`), 'the dropped sentence\'s quote is not shown');
   });
 
+  await test('the page shows each quote as a closed block with the full sentence: the server line and the page\'s pattern agree; the full texts are in check.quotes.items for the diagnostics JSON', async () => {
+    const page = require('fs').readFileSync(require('path').join(__dirname, '../public/dashboard.html'), 'utf8');
+    const src = page.match(/var SOURCE_QUOTE_LINE = (\/.+\/gm);/u);
+    assert.ok(src, 'the page has the quote pattern');
+    const re = eval(src[1]); // the page's own regular expression literal
+    const ai = stubAI(prompt => `Taqsimot ${tagOf(prompt, '9.1.')}.\nJarima ${tagOf(prompt, '13.2.')}.`);
+    const r = await ex.explainDocument({ documentText: doc, langName: 'Uzbek', callAI: ai, digest: digestOf(ai) });
+    const found = [...r.reply.matchAll(re)].map(m => [m[2], m[1]]);
+    assert.deepStrictEqual(found.map(f => f[1]).sort(), [KEY[0], KEY[2]].sort(), 'the page reads every quote whole');
+    assert.deepStrictEqual(r.check.quotes.items.map(x => x.text).sort(), [KEY[0], KEY[2]].sort());
+    for (const s2 of ["Manbadan iqtibos — ochish", "Manbadan iqtibos — yopish", "— AI izohi emas", '<details class="ai-src-quote"']) assert.ok(page.includes(s2), s2);
+  });
+
   await test('no id from the model: no quote, nothing invented; ids the model made up are refused', async () => {
     const plain = await ex.explainDocument({ documentText: doc, langName: 'Uzbek', callAI: stubAI(() => 'Oddiy izoh.'), digest: digestOf(stubAI(() => '')) });
     assert.ok(!plain.reply.includes('hujjat matnidan aynan parcha'));

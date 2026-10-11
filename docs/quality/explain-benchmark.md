@@ -897,7 +897,13 @@ Ikki jonli sinovda bir xil shartlar dayjestda saqlangan, lekin yakuniy javobda b
   - Har bir jumla bir marta iqtibos qilinadi.
 - **Kesilgan javob.** Model javobi chegarada kesilsa, bu tepada aytiladi. Saqlangan gapning iqtibosi to'liq qoladi; tushib qolgan gapdagi identifikator iqtibos bermaydi.
 - **Hujjatning o'z matni.** Hujjatda uchragan `[S2]` yoki `[S3·beef]` kabi matn tizim identifikatori deb olinmaydi: u o'zgartirilmaydi, rad etilmaydi, iqtibos qilinmaydi.
-- Barcha holatlar `tests/explain-quotes.test.js` (9 ta) da tekshirilgan.
+- **Ko'rinish (dashboard).** Har bir iqtibos yopiq blok bo'lib chiqadi: «Manbadan iqtibos — ochish», ochilganda «… — yopish».
+  - Ichida «Hujjat matni, so'zma-so'z (S…) — AI izohi emas» yozuvi va hujjatning to'liq jumlasi turadi.
+  - Iqtibos markdown'dan o'tkazilmaydi: hujjatdagi `*` yoki `**` formatlashga aylanmaydi, havolaga ham aylanmaydi.
+  - Model izohi blok tashqarisida, `[S…]` belgisi bilan qoladi.
+  - To'liq matnlar diagnostika JSON'ida ham saqlanadi: `response.check.quotes.items`.
+  - Brauzerda tekshirildi (Chromium, stub AI): 1280 va 390 px da ochish va yopish; matn javobdagi to'liq jumla bilan aynan bir xil; toshish yo'q.
+- Barcha holatlar `tests/explain-quotes.test.js` (10 ta) da tekshirilgan.
 
 ## 4h. DOCX: faqat ajratgich farqi matn yo'qolishi emas (2026-10-11)
 

@@ -1388,6 +1388,8 @@ async function explainDocument({ documentText, langName, callAI, digest, userId 
   done.check.quotes = {
     issued: sources.items.filter(Boolean).length, notInSource: sources.notInSource,
     quoted: [...new Set(placed.quotes.filter(q => q.status === 'quoted').map(q => q.id))],
+    // the full quoted sentences, as the server found them in the document (for the diagnostics JSON)
+    items: [...new Map(placed.quotes.filter(q => q.status === 'quoted').map(q => [q.id, { id: q.id, text: q.text }])).values()],
     refused: placed.quotes.filter(q => q.status !== 'quoted').map(q => ({ id: q.id, status: q.status })),
     meaning: "document text found verbatim by the server; the explanation beside it is not checked by the quote",
   };
