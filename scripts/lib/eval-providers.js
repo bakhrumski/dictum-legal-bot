@@ -388,6 +388,23 @@ async function callProvider(model, messages, { timeoutMs = 120000, fetchImpl = n
 }
 
 /**
+ * A stream that opened (HTTP 200) but whose only event is the provider's own
+ * refusal to serve - no credits, no quota, a bad key - before any text: the
+ * provider produced nothing, so it is an http_error of that kind (the
+ * provider is stopped), not an unknown transport (which halts the run).
+ * 2026-10-12: OpenAI sent credit_balance_exhausted this way.
+ */
+const STREAM_REFUSAL = [
+  { re: /credit_balance_exhausted|insufficient_quota|insufficient[_ ]balance|billing|no credits|recharge/iu, status: 402, kind: 'quota' },
+  { re: /invalid_api_key|incorrect_api_key|authentication|unauthori[sz]ed/iu, status: 401, kind: 'auth' },
+];
+function streamRefusal(error, text) {
+  if (!error || String(text || '').length) return null;
+  const hit = STREAM_REFUSAL.find(x => x.re.test(error));
+  return hit ? { outcome: 'http_error', status: hit.status, kind: hit.kind, error, usage: usageOf(null), inStream: true } : null;
+}
+
+/**
  * A server-sent-event answer: content and reasoning deltas joined, the last
  * finish_reason, model and usage. A stream that breaks, carries an error
  * event, or ends with no finish_reason is a transport whose outcome (and
@@ -430,6 +447,8 @@ async function readStream(resp, p, timer) {
   clearTimeout(timer);
   const usage = usageOf(usageData);
   const billing = vl ? { credits: vl.creditsCharged, billingStatus: vl.billingStatus } : {};
+  const refused = streamRefusal(streamError, text);
+  if (refused) return { ...refused, requestId: headerId || id };
   if (streamError || !finishReason) {
     return { outcome: 'transport_unknown', status: resp.status, requestId: headerId || id, returnedModel: model, error: streamError || `stream ended with no finish_reason${done ? '' : ' and no [DONE]'}`, text, usage, ...billing };
   }
@@ -464,6 +483,7 @@ async function readResponsesStream(resp, timer) {
     if (ev.type === 'response.output_text.delta' && typeof ev.delta === 'string') text += ev.delta;
     else if (ev.type === 'response.completed' || ev.type === 'response.incomplete') final = ev.response;
     else if (ev.type === 'response.failed' || ev.type === 'error') streamError = redact(JSON.stringify(ev.error || (ev.response && ev.response.error) || ev).slice(0, 200));
+    else if (!ev.type && (ev.error || ev.code)) streamError = redact(JSON.stringify(ev.error || ev).slice(0, 200));
   };
   try {
     for await (const chunk of resp.body) {
@@ -477,6 +497,8 @@ async function readResponsesStream(resp, timer) {
     return { outcome: 'transport_unknown', status: resp.status, error: redact(e && e.name === 'AbortError' ? 'timed out while streaming' : `stream broke: ${e && e.message}`), text, usage: usageOf(null) };
   }
   clearTimeout(timer);
+  const refused = streamRefusal(streamError, text);
+  if (refused) return refused;
   if (streamError || !final) return { outcome: 'transport_unknown', status: resp.status, error: streamError || 'stream ended with no final response', text, usage: usageOf(final) };
   const o = responsesOutcome(final);
   // the final object carries the whole output; the deltas are the same text
