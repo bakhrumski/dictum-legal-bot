@@ -189,6 +189,10 @@ Known state of the suites (Sept 2026):
   `src/rag/legal-opinion.js` shared with the route, with an empty KONTEKST); both
   share one budget module (`scripts/lib/eval-budget.js`). Live needs the
   owner's confirmation file and approval of the run sha.
+  The explanation's final call goes to DeepSeek `deepseek-flash` with a
+  6 000-token cap, then GPT-6 Luna at 8 000, then Gemini
+  (`src/ai/explain-router.js`; `EXPLAIN_PROVIDER=default` for the lane
+  routing below).
   `src/rag/question-aspects.js` splits a question into deadline,
   compensation, evidence and remedy and runs a light corpus search for each
   (Telegram, web chat, Workspace).
@@ -220,6 +224,18 @@ Known state of the suites (Sept 2026):
   margins. The unit costs in `subscription-tiers.js` were measured on
   GPT-5.6 and need re-measuring on GPT-6. Routers pass an explicit `lane`
   to `callOpenAI`, because one id can serve two lanes (gpt-6-sol).
+- `src/ai/deepseek.js` — DeepSeek `deepseek-flash` is the FIRST choice for
+  every text call (2026-10-12, owner's decision after the provider
+  evaluation): chat (streamed too), Telegram, legal opinion, document
+  analysis, digests, helpers - hooked in `callOpenAI` / `callOpenAIStream`
+  (`tryDeepSeek`) and the hybrid pipeline's `callOpenAIModel`. Thinking off;
+  the cap sent is the caller's x2 (`DEEPSEEK_MAX_TOKENS_FACTOR`, at most
+  `DEEPSEEK_MAX_TOKENS_CAP` 16 000). A failure goes to the lane's GPT-6, then
+  Gemini; VoiceLab text lanes are skipped while DeepSeek routes them; explicit
+  `voicelab/` / `openai/` ids keep their provider. Not for images, OCR,
+  vision or embeddings. On when `DEEPSEEK_API_KEY` is set; `DEEPSEEK_ROUTING=off`
+  (env) turns it off. Each call is a ledger row with a bound (peak price,
+  `model-pricing.js`). Users' text and documents go to api.deepseek.com.
 - `src/ai/voicelab.js` — VoiceLab LLM switch (OpenAI-compatible Chat
   Completions at `api.voicelab.uz`). Off unless `LLM_PROVIDER=voicelab` and
   `VOICELAB_API_KEY` are set; turning it off is an env change, not a deploy.

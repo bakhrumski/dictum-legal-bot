@@ -8,16 +8,47 @@ can use them is decided by the provider, not by this file.
 
 | Router | Primary | Then | Last resort |
 |---|---|---|---|
-| `callAI` (standard lane) | VoiceLab `aisha-orbit`* | OpenAI `MODELS.standard` (`gpt-6-sol`) | Gemini `gemini-2.5-flash` |
-| `callAI` with `model: MODELS.chat` (Telegram/web answer) | VoiceLab `aisha-comet`* | OpenAI `gpt-6-luna` | Gemini `gemini-2.5-flash` |
-| `callCheapAI` | VoiceLab `aisha-comet`* | OpenAI `MODELS.cheap` (`gpt-6-luna`) | Gemini `gemini-2.5-flash` |
-| `callPremiumAI` | VoiceLab `aisha-halo`* | OpenAI `MODELS.premium` (`gpt-6-sol`), `premiumRetries` | Gemini `gemini-2.5-flash` |
-| Streaming answer (web) | VoiceLab (lane of the model)* | OpenAI stream | Gemini stream, then `callAI` |
+| `callAI` (standard lane) | DeepSeek `deepseek-flash`† | OpenAI `MODELS.standard` (`gpt-6-sol`) | Gemini `gemini-2.5-flash` |
+| `callAI` with `model: MODELS.chat` (Telegram/web answer) | DeepSeek `deepseek-flash`† | OpenAI `gpt-6-luna` | Gemini `gemini-2.5-flash` |
+| `callCheapAI` | DeepSeek `deepseek-flash`† | OpenAI `MODELS.cheap` (`gpt-6-luna`) | Gemini `gemini-2.5-flash` |
+| `callPremiumAI` (legal opinion, paid plans and staff) | OpenAI `gpt-6-sol` (explicit `openai/${MODELS.premium}`; DeepSeek and VoiceLab bypassed), `premiumRetries` — or DeepSeek `deepseek-v4-pro` with `OPINION_MODEL=deepseek/deepseek-v4-pro` | OpenAI `gpt-6-sol` after V4 Pro | Gemini `gemini-2.5-flash` |
+| `callPremiumAI` (legal opinion, Sinov) | DeepSeek `deepseek-flash`† | OpenAI `gpt-6-luna` | Gemini `gemini-2.5-flash` |
+| `callExplainAI` (document explanation, final call only; 2026-10-12) | DeepSeek `deepseek-flash`, thinking off, `max_tokens` 6000 | OpenAI `gpt-6-luna` (explicit `openai/`, never VoiceLab), `max_output_tokens` 8000 | Gemini `gemini-2.5-flash` |
+| Streaming answer (web) | DeepSeek stream† | OpenAI stream | Gemini stream, then `callAI` |
 | Embeddings | Gemini `gemini-embedding-001` / HF `multilingual-e5-large` / OpenAI `text-embedding-3-small` (`EMBED_PROVIDER`; not routed, the corpus is embedded with one) | — | — |
 | Rerank | HF `BAAI/bge-reranker-v2-m3` | — | keyword re-rank (no AI call), request marked `degraded` |
 
-\* only when `LLM_PROVIDER=voicelab` and `VOICELAB_API_KEY` are set, and the
-lane is in `VOICELAB_LANES`; `MODEL_TELEGRAM=voicelab/<id>` pins Telegram.
+† when `DEEPSEEK_API_KEY` is set and `DEEPSEEK_ROUTING` is not `off`
+(`src/ai/deepseek.js`; 2026-10-12, owner's decision after the provider
+evaluation). Thinking off; the cap sent is the caller's x2 (at most 16 000).
+While DeepSeek routes a lane, VoiceLab text lanes (comet, orbit, halo) are
+skipped: a DeepSeek failure goes to the lane's GPT-6. An explicit id picks its
+provider: `voicelab/<id>` (e.g. `MODEL_TELEGRAM=voicelab/aisha-comet`) still
+goes to VoiceLab, `openai/<id>` to OpenAI, `deepseek/<id>` to DeepSeek.
+Images, scanned documents (OCR, vision) and embeddings are not routed to
+DeepSeek. The hybrid pipeline's `callOpenAIModel` follows the same order.
+
+Legal opinion (2026-10-12): in the opinion test (`scripts/provider-eval.js
+--task opinion`, one 54 260-char agreement, empty legal context, read by
+hand, not by a lawyer) GPT-6 Sol kept every checked condition, DeepSeek V4
+Pro most of them at about a quarter of the cost, deepseek-flash the fewest.
+Paid opinions therefore stay on Sol; `OPINION_MODEL=deepseek/deepseek-v4-pro`
+(env, no deploy) moves them to V4 Pro (thinking off, cap 7 000 x 2, peak
+price 1.32 / 0.044 / 3.96 per 1M in `model-pricing.js`), Sol behind it.
+`deepseek/<model>` accepts only `deepseek-flash` and `deepseek-v4-pro`.
+
+Without DeepSeek (no key, or `DEEPSEEK_ROUTING=off`) the chains are as
+before: VoiceLab first only when `LLM_PROVIDER=voicelab` and
+`VOICELAB_API_KEY` are set, and the lane is in `VOICELAB_LANES`.
+
+Changed on 2026-10-12: DeepSeek `deepseek-flash` is the first choice for
+every text call (chat, Telegram, legal opinion, document analysis and
+explanation, digests, helpers) in place of VoiceLab comet, after the provider
+evaluation (`docs/quality/provider-eval-plan.md`): on the 54 260-char
+investment agreement it kept every condition of the evidence table (at a
+6 000-token cap; at 3 000 it was cut). Users' questions and documents are
+sent to DeepSeek (api.deepseek.com). Off everywhere: `DEEPSEEK_ROUTING=off`
+(env, no deploy); the explanation alone: `EXPLAIN_PROVIDER=default`.
 
 Changed on 2026-10-04: `callCheapAI` and `callPremiumAI` used to fall back to
 the whole `callAI` chain — Orbit and Sol again — before Gemini. They now go
@@ -36,7 +67,8 @@ straight to Gemini, so a failing helper call no longer costs three more calls.
 | cross_check | `*/lex-cross-check` | `callAI` with the chat model |
 | claim_check | `*/claim-check` | `callAI` with the chat model |
 | source_suggestion | `/rag/source-suggestions` | `callAI` (standard) |
-| document, legal opinion | `/api/draft/*` | `callPremiumAI` / `callCheapAI` |
+| document explanation (final answer) | `/api/draft/explain-document` | `callExplainAI` (`src/ai/explain-router.js`); with no `DEEPSEEK_API_KEY` or `EXPLAIN_PROVIDER=default`, `callCheapAI` as before |
+| explanation digest, legal opinion, other drafts | `/api/draft/*` | `callPremiumAI` / `callCheapAI` |
 
 ## Failure handling (src/ai/provider-health.js)
 

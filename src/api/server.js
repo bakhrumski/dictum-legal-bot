@@ -3523,9 +3523,11 @@ async function callGeminiOnce(messages, options, call) {
 // This restores the intended routing for streamed answers too.
 async function callOpenAIStream(messages, options = {}, onToken) {
   return usageLedger.withChain(async () => {
+    const viaDeepSeek = await tryDeepSeek(messages, options, options.model || MODELS.standard, onToken);
+    if (viaDeepSeek) return viaDeepSeek;
     const viaVoiceLab = await tryVoiceLab(messages, options, options.model || MODELS.standard, onToken);
     if (viaVoiceLab) return viaVoiceLab;
-    const model = voicelab.stripProviderPrefix(options.model || MODELS.standard);
+    const model = openaiModelFor(options);
     return usageLedger.track({ provider: 'openai', model, endpoint: options.endpoint || '/api/legal-chat/stream', userId: options.userId || null, retryTransient: 0,
       bound: modelPricing.callCostBound({ model, inputTokensMax: modelPricing.inputTokenBound(messages), outputTokensMax: Number(options.maxTokens) || 8192 }) },
       (call) => callOpenAIStreamOnce(messages, options, onToken, model, call));
@@ -3727,6 +3729,9 @@ const { calculateTokenCost } = require('../ai/model-pricing');
 // VoiceLab switch (LLM_PROVIDER=voicelab). Off by default; when off, every
 // router below runs exactly as before. See src/ai/voicelab.js.
 const voicelab = require('../ai/voicelab');
+// DeepSeek is the first choice for every text call (2026-10-12; images, OCR
+// and embeddings keep their providers): src/ai/deepseek.js
+const deepseek = require('../ai/deepseek');
 
 /** A paid provider is reachable: OpenAI as before, or VoiceLab when switched on. */
 function paidProviderConfigured() {
@@ -3746,6 +3751,9 @@ async function tryVoiceLab(messages, options, requestedModel, onToken) {
     ? requestedModel
     : (options.lane || requestedModel);
   if (!voicelab.routes(model)) return null;
+  // comet and the other VoiceLab text lanes are replaced by DeepSeek while it
+  // routes this lane (an explicit voicelab/ id still goes to VoiceLab)
+  if (deepseek.routes(model)) return null;
   try {
     const { temperature = 0.2, maxTokens = 8192 } = options;
     const opts = { temperature, maxTokens };
@@ -3785,6 +3793,48 @@ async function tryVoiceLab(messages, options, requestedModel, onToken) {
   }
 }
 
+/**
+ * DeepSeek first (src/ai/deepseek.js): one usage-ledger row with a cost
+ * bound; null on a failure, so the caller goes on to the OpenAI model of the
+ * lane. A stream that already showed tokens is not replayed elsewhere. The
+ * daily paid-spend ceiling applies as to every paid model.
+ */
+async function tryDeepSeek(messages, options, requestedModel, onToken) {
+  const explicit = /^(deepseek|voicelab|openai)\//i.test(String(requestedModel || ''));
+  const route = explicit ? requestedModel : (options.lane || requestedModel);
+  if (!deepseek.routes(route)) return null;
+  if (!(await paidModelsAllowed())) return null;
+  const maxTokens = deepseek.maxTokensFor(options.maxTokens || 8192);
+  // an explicit 'deepseek/deepseek-v4-pro' picks that model; anything else is deepseek-flash
+  const dsModel = deepseek.modelFor(explicit ? requestedModel : null);
+  const label = `deepseek/${dsModel}`;
+  try {
+    const r = await usageLedger.track({ provider: 'deepseek', model: label, endpoint: options.endpoint, userId: options.userId || null, detail: options.detail || null, ...(onToken ? { retryTransient: 0 } : {}),
+      bound: modelPricing.callCostBound({ model: label, inputTokensMax: modelPricing.inputTokenBound(messages), outputTokensMax: maxTokens }) },
+    (call) => (onToken
+      ? deepseek.chatCompletionStream(messages, { maxTokens, temperature: options.temperature, call, model: dsModel }, onToken)
+      : deepseek.chatCompletion(messages, { maxTokens, temperature: options.temperature, call, model: dsModel })));
+    return { text: r.text, provider: r.provider, truncated: r.truncated, usage: { ...r.usage, costUsd: calculateTokenCost(label, r.usage) || 0 } };
+  } catch (err) {
+    console.warn('[DeepSeek] failed, using the OpenAI model of the lane:', err.message);
+    if (onToken && err.partialStream) throw err;
+    return null;
+  }
+}
+
+/** Whether a provider's answer came from the model asked for ('openai/gpt-6-sol' and 'gpt-6-sol' are one). */
+function sameModelId(a, b) {
+  const n = x => String(x || '').trim().toLowerCase().replace(/^openai\//u, '');
+  return !!a && n(a) === n(b);
+}
+
+/** The OpenAI model behind a requested id: an explicit deepseek/ id falls back to the lane's GPT-6. */
+function openaiModelFor(options) {
+  const m = String(options.model || MODELS.standard);
+  if (/^deepseek\//i.test(m)) return MODELS[options.lane] || MODELS.chat || MODELS.cheap;
+  return voicelab.stripProviderPrefix(m);
+}
+
 // Every AI call is recorded by the usage ledger (src/ai/usage-ledger.js) into
 // llm_spend_log — failed and retried attempts included — and its cost feeds
 // the daily budget breaker below.
@@ -3817,15 +3867,17 @@ async function paidModelsAllowed() {
 
 async function callOpenAI(messages, options = {}) {
   return usageLedger.withChain(async () => {
+    const viaDeepSeek = await tryDeepSeek(messages, options, options.model || MODELS.standard);
+    if (viaDeepSeek) return viaDeepSeek;
     const viaVoiceLab = await tryVoiceLab(messages, options, options.model || MODELS.standard);
     if (viaVoiceLab) return viaVoiceLab;
-    const model = voicelab.stripProviderPrefix(options.model || MODELS.standard);
+    const model = openaiModelFor(options);
     return usageLedger.track({ provider: 'openai', model, endpoint: options.endpoint, userId: options.userId || null, detail: options.detail || null,
       // the most this call can cost (Responses: max_output_tokens caps
       // reasoning too); a web search tool makes it unbounded
       bound: modelPricing.callCostBound({ model, inputTokensMax: modelPricing.inputTokenBound(messages),
         outputTokensMax: Math.max(16, Number(options.maxTokens) || 8192), webSearch: webSearchAllowed(options.useSearch) }) },
-      (call) => callOpenAIOnce(messages, options, call));
+      (call) => callOpenAIOnce(messages, { ...options, model }, call));
   });
 }
 
@@ -7039,11 +7091,18 @@ app.post('/api/draft/legal-opinion', requireAuth, require('../ai/ai-trigger').re
     // reserved now, committed when the opinion is delivered and released if
     // it is not (tariffs v2, src/rag/tariff-ledger.js). Tiered quality: the
     // more expensive the plan, the stronger the model.
+    // Paid plans: the opinion is written by GPT-6 Sol, not DeepSeek first
+    // (owner, 2026-10-12: in the opinion test deepseek-flash scored lowest;
+    // docs/quality/provider-eval-plan.md). 'openai/' bypasses DeepSeek and
+    // VoiceLab. OPINION_MODEL=deepseek/deepseek-v4-pro (env, no deploy)
+    // switches every opinion to V4 Pro, GPT-6 Sol of the premium lane
+    // behind it.
+    const paidOpinionModel = `openai/${MODELS.premium}`;
     const OPINION_MODELS = {
-      sinov: MODELS.cheap,       // gpt-6-luna
-      silver: MODELS.premium,    // gpt-6-sol (MODEL_PREMIUM)
-      gold: MODELS.premium,
-      platinum: MODELS.premium,
+      sinov: MODELS.cheap,       // gpt-6-luna lane (DeepSeek first)
+      silver: paidOpinionModel,  // gpt-6-sol (MODEL_PREMIUM)
+      gold: paidOpinionModel,
+      platinum: paidOpinionModel,
     };
     let opinionMaxTokens = 7000;
     let opinionModel = process.env.OPINION_MODEL || null;
@@ -7051,7 +7110,7 @@ app.post('/api/draft/legal-opinion', requireAuth, require('../ai/ai-trigger').re
       const u = await tariffModule.getUserPlan(req.session.adminId);
       const isExempt = u && (u.plan === 'master' || u.staff || (u.role && u.role !== 'user'));
       if (isExempt) {
-        if (!opinionModel) opinionModel = process.env.OPINION_MODEL_STAFF || MODELS.premium;
+        if (!opinionModel) opinionModel = process.env.OPINION_MODEL_STAFF || paidOpinionModel;
       } else {
         const m = await tariffModule.meterDocument(req, res, {
           service: 'opinion', text: documentText, docTicket: req.body.docTicket, endpoint: '/api/draft/legal-opinion',
@@ -7068,7 +7127,7 @@ app.post('/api/draft/legal-opinion', requireAuth, require('../ai/ai-trigger').re
       if (!res.headersSent) return res.status(503).json(tariffModule.QUOTA_UNAVAILABLE);
       return;
     }
-    if (!opinionModel) opinionModel = MODELS.premium;
+    if (!opinionModel) opinionModel = paidOpinionModel;
 
     const lang = lexLangForText(documentText);
     // Relevance diagnostics: if an opinion ever comes out unrelated to the
@@ -7397,7 +7456,7 @@ Return ONLY the corrected HTML body — no fences, no commentary.` },
       // Sol → Terra → Gemini on error, and run 6 was billed at exactly Terra
       // rates while the intent line still said Sol.
       const actualModel = result.provider || 'unknown';
-      if (actualModel !== opinionModel) {
+      if (!sameModelId(actualModel, opinionModel)) {
         console.warn(`[Legal Opinion] FALLBACK: requested ${opinionModel}, answered by ${actualModel}`);
       }
       console.log(`[Legal Opinion] tokens in=${result.usage.inTokens} out=${result.usage.outTokens} cost=$${result.usage.costUsd.toFixed(4)} actual-model=${actualModel} (synthesis only; digest logged separately)`);
@@ -7416,7 +7475,7 @@ Return ONLY the corrected HTML body — no fences, no commentary.` },
       usage: (isMasterViewer && result.usage) ? result.usage : null,
       // Master-only: true when the synthesis was NOT produced by the model
       // this plan promises (e.g. Sol fell back to Terra even after retries).
-      modelDowngraded: isMasterViewer ? (result.provider || null) !== opinionModel : undefined,
+      modelDowngraded: isMasterViewer ? !sameModelId(result.provider, opinionModel) : undefined,
     });
   } catch (e) {
     console.error('[Legal Opinion] error:', e.message);
@@ -7443,9 +7502,18 @@ app.post('/api/draft/legal-opinion/rate', requireAuth, async (req, res) => {
 // Mounted from src/rag/document-explain-route.js (the confirm, scan and
 // quota steps are as before; the prompt, coverage and checks are in
 // src/rag/document-explain.js).
+// The explanation itself (not the digest) is written by DeepSeek
+// deepseek-flash, then GPT-6 Luna, then the last resort (src/ai/explain-router.js,
+// 2026-10-12; EXPLAIN_PROVIDER=default restores the cheap lane).
+const callExplainAI = require('../ai/explain-router').createExplainAI({
+  usageLedger, modelPricing, deepseek: require('../ai/deepseek'), callOpenAI,
+  paidAllowed: async () => paidProviderConfigured() && await paidModelsAllowed(),
+  spendAllowed: () => paidModelsAllowed(),
+  lastResort: callGeminiLastResort, callDefault: callCheapAI,
+});
 require('../rag/document-explain-route').mountExplainDocument(app, {
   requireAuth, requireServiceConfirm: require('../ai/ai-trigger').requireServiceConfirm, resolveScanDocs, tariffModule,
-  callAI: callCheapAI, digest: digestLongDocumentDetailed, lexLangForText, logAudit,
+  callAI: callExplainAI, digest: digestLongDocumentDetailed, lexLangForText, logAudit,
   // the stage trace goes to an account that is master in the database
   verifyMaster: require('../rag/document-explain-route').createVerifyMaster(pool),
 });
