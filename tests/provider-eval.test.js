@@ -697,6 +697,39 @@ const response = (status, body, headers = {}) => ({ ok: status >= 200 && status 
     assert.strictEqual(l.filter(e => e.type === 'settle' && /^L\d__deepseek$/u.test(e.job) && e.status === 'completed').length, 2, 'full text unaffected');
   });
 
+  await test('--stream: SSE for every provider (stream_options only where documented), deltas joined, usage from the last chunk; a broken or unfinished stream is an unknown outcome, never a finished answer', async () => {
+    const enc = new TextEncoder();
+    const sse = (events, { done = true } = {}) => ({ ok: true, status: 200, headers: { get: () => null },
+      body: (async function* () { for (const e of events) yield enc.encode(`data: ${JSON.stringify(e)}\n\n`); if (done) yield enc.encode('data: [DONE]\n\n'); })() });
+    const ev = (model, extra) => ({ id: 'x1', model, choices: [{ index: 0, delta: extra.delta || {}, finish_reason: extra.finish || null }], ...(extra.usage ? { usage: extra.usage } : {}) });
+    const msgs = frozen[0].messages;
+    const ds = cfg.models.find(m => m.variant === 'deepseek');
+    const glm = cfg.models.find(m => m.variant === 'glm');
+    let sent = null;
+    let r = await prov.callProvider(ds, msgs, { entry: { auth: 'network_secret' }, stream: true, fetchImpl: async (u, init) => { sent = JSON.parse(init.body); return sse([ev('deepseek-flash', { delta: { content: 'Izoh ' } }), ev('deepseek-flash', { delta: { content: 'tayyor.' } }), ev('deepseek-flash', { finish: 'stop', usage: { prompt_tokens: 100, completion_tokens: 20 } })]); } });
+    assert.deepStrictEqual([sent.stream, sent.stream_options], [true, { include_usage: true }]);
+    assert.deepStrictEqual([r.outcome, r.text, r.finishReason, r.returnedModel, r.usage.inTokens, r.usage.outTokens, r.streamed], ['answered', 'Izoh tayyor.', 'stop', 'deepseek-flash', 100, 20, true]);
+    // GLM: no stream_options (not documented); reasoning deltas counted, not joined to the answer
+    r = await prov.callProvider(glm, msgs, { entry: { auth: 'network_secret' }, stream: true, fetchImpl: async (u, init) => { sent = JSON.parse(init.body); return sse([ev('glm-5.3-flash', { delta: { reasoning_content: 'o‘ylayapman' } }), ev('glm-5.3-flash', { delta: { content: 'Javob.' } }), ev('glm-5.3-flash', { finish: 'stop', usage: { prompt_tokens: 50, completion_tokens: 30 } })]); } });
+    assert.ok(sent.stream === true && !('stream_options' in sent));
+    assert.deepStrictEqual([r.text, r.reasoningChars], ['Javob.', 'o‘ylayapman'.length]);
+    // a stream with no finish_reason, an error event, or one that breaks: unknown outcome
+    r = await prov.callProvider(ds, msgs, { entry: { auth: 'network_secret' }, stream: true, fetchImpl: async () => sse([ev('deepseek-flash', { delta: { content: 'yarim' } })], { done: false }) });
+    assert.strictEqual(r.outcome, 'transport_unknown');
+    r = await prov.callProvider(ds, msgs, { entry: { auth: 'network_secret' }, stream: true, fetchImpl: async () => sse([ev('deepseek-flash', { delta: { content: 'a' } }), { error: { code: 'llm_request_incomplete', message: 'upstream' } }]) });
+    assert.ok(r.outcome === 'transport_unknown' && /llm_request_incomplete/u.test(r.error));
+    r = await prov.callProvider(ds, msgs, { entry: { auth: 'network_secret' }, stream: true, fetchImpl: async () => ({ ok: true, status: 200, headers: { get: () => null }, body: (async function* () { yield enc.encode('data: {"choices":[{"delta":{"content":"a"}}]}\n\n'); throw new Error('socket hang up'); })() }) });
+    assert.ok(r.outcome === 'transport_unknown' && /stream broke/u.test(r.error));
+    // VoiceLab streamed: the generic transport even with the key in the environment; the key goes in its own header
+    process.env.VOICELAB_API_KEY = KEYS.VOICELAB_API_KEY;
+    const comet = cfg.models.find(m => m.variant === 'baseline');
+    let hdr = null;
+    r = await prov.callProvider(comet, msgs, { stream: true, fetchImpl: async (u, init) => { hdr = init.headers; sent = JSON.parse(init.body); return sse([ev('aisha-comet', { delta: { content: 'Ok.' } }), ev('aisha-comet', { finish: 'stop', usage: { prompt_tokens: 9, completion_tokens: 2 } })]); } });
+    assert.deepStrictEqual([r.outcome, hdr.Authorization, sent.stream_options], ['answered', `Bearer ${KEYS.VOICELAB_API_KEY}`, { include_usage: true }]);
+    // the stream flag is part of the run sha
+    assert.notStrictEqual(pe.runSha(frozen, cfg.models, 1, 'c', { stream: true }), pe.runSha(frozen, cfg.models, 1, 'c'));
+  });
+
   await test('restart: a finished run spends nothing again; an attempt with no outcome written keeps its reserve and halts', async () => {
     const call = stubCall(m => answered(m));
     const { out } = await live(call);

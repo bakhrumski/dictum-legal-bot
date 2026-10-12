@@ -226,6 +226,15 @@ Tasdiq fayli bo'lmagani uchun hozir **15 vazifaning 15 tasi BLOCKED**, rezerv es
   - har chaqiruv baribir run vaqtida o'zining aniq chegarasini oladi.
 - **Hisobot:** dayjest qurish xarajati alohida qatorda ("digest build, shared") — bu hamma modellar uchun umumiy yordamchi xarajat.
 
+## Streaming (`--stream`)
+2026-10-12 dagi uzun hujjat sinovida comet va GLM javoblari aynan ~30 soniyada `502: upstream request failed` bilan uzildi (DeepSeek javoblari 16 soniyada keldi). Sabab: bulut proxy'si jim turgan ulanishni ~30 soniyada uzsa kerak. Proxy hujjatlarida bu tasdiqlanmagan, ammo xatolar shuni ko'rsatadi.
+- `--stream` bilan javob SSE oqimida keladi, ya'ni tokenlar to'xtovsiz oqadi va ulanish jim qolmaydi.
+- `stream_options.include_usage` faqat uni hujjatlagan provayderlarga yuboriladi: DeepSeek, VoiceLab, Kimi va Qwen. Z.AI usage'ni oxirgi bo'lakda o'zi beradi.
+- Oqim uzilsa, ichida xato hodisasi kelsa yoki `finish_reason` siz tugasa, natija noma'lum hisoblanadi va run to'xtaydi. Bunday javob hech qachon yakunlangan deb sanalmaydi.
+- Butun javob uchun vaqt chegarasi 300 soniya.
+- Streaming'da VoiceLab `X-Credits-Charged` sarlavhasini bermaydi. Shuning uchun xarajat ro'yxat narxi bo'yicha USD'da yoziladi, kreditlarni esa konsoldan tekshirish kerak.
+- `--stream` run sha'siga kiradi.
+
 ## Keyingi bosqich: mustaqil uzun hujjat sinovi (reja, hali ruxsat yo'q)
 - **Hujjatlar.** Sozlashda ishlatilmagan, egasi rozilik bergan 6–10 ta uzun hujjat (30–60 ming belgi): jadvalli DOCX, ilovali, ziddiyatli. Kamida ikkitasi holdout bo'ladi.
 - **Kirish.** Har model bitta muzlatilgan dayjestni va to'liq matnni alohida oladi (#430 sxemasi).
