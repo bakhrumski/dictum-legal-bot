@@ -39,6 +39,7 @@ const fetchSpy = (file) => {
 };
 
 const pe = require('../scripts/provider-eval');
+const ex = require('../src/rag/document-explain');
 const prov = require('../scripts/lib/eval-providers');
 const evalBudget = require('../scripts/lib/eval-budget');
 
@@ -388,7 +389,7 @@ const response = (status, body, headers = {}) => ({ ok: status >= 200 && status 
       }
       assert.deepStrictEqual([...new Set(sent.map(s => new URL(s.url).host))].sort(), ['api.deepseek.com', 'api.moonshot.ai', 'api.voicelab.uz', 'api.z.ai', 'dashscope-intl.aliyuncs.com']);
       const settles = ledger(out).filter(e => e.type === 'settle');
-      assert.ok(settles.every(e => e.status === 'completed' && e.requestedModel === e.returnedModel && e.hashes.messages));
+      assert.ok(settles.every(e => e.status === 'completed' && e.requestedModel === e.returnedModel && e.promptSha === frozen.find(f => f.id === e.job.split('__')[0]).hashes.messages), 'each call sent the frozen prompt');
       for (const v of Object.values(KEYS)) assert.ok(!fs.readFileSync(path.join(out, 'ledger.jsonl'), 'utf8').includes(v));
     } finally { globalThis.fetch = original; }
   });
@@ -576,6 +577,124 @@ const response = (status, body, headers = {}) => ({ ok: status >= 200 && status 
     assert.strictEqual(noProxyUrl.code, 3, noProxyUrl.out);
     assert.deepStrictEqual(fs.readdirSync(out), [], 'nothing written');
     assert.ok(!fs.existsSync(spyFile), 'no network');
+  });
+
+  // ── digest input (the production digest, built once per document) ──
+  const longText = require('./fixtures/explain-eval/load').loadAll().find(x => x.id === 'long-service-docx').pages.join('\n\n');
+  const longDir = tmp('pe-long-');
+  fs.writeFileSync(path.join(longDir, 'b-shartnoma.txt'), longText);
+  fs.writeFileSync(path.join(longDir, 'a-qisqa.txt'), fs.readFileSync(path.join(REPO, 'tests/fixtures/provider-eval/01_tolov_va_muddat.txt'), 'utf8'));
+  const digestStub = (opts = {}) => stubCall((m, n, messages) => {
+    if (/^Excerpt /u.test(messages[1].text)) return answered(m, { text: '- 1-band | Ijrochi → xizmat | muddat: 10 kun', ...(opts.digest || {}) });
+    return answered(m, opts.final ? opts.final(m) : {});
+  });
+
+  await test('--input / --digest-by: full_text, digest or both; a model that reasons cannot build the digest at its 1 600-token cap', () => {
+    assert.deepStrictEqual(pe.selectInputs(null), ['full_text']);
+    assert.deepStrictEqual(pe.selectInputs('both'), ['full_text', 'digest']);
+    assert.throws(() => pe.selectInputs('summary'), /--input/u);
+    const b = pe.digestModel(cfg.models[0]);
+    assert.deepStrictEqual([b.profile.cap, b.profile.params.temperature], [ex.DIGEST_MAX_TOKENS, 0.1], 'the production digest cap and temperature');
+    assert.strictEqual(cfg.models[0].profile.cap, 3000, 'the config model is not changed');
+    for (const v of ['glm', 'kimi']) assert.throws(() => pe.digestModel(cfg.models.find(m => m.variant === v)), /cannot build the digest/u);
+    assert.ok(pe.digestModel(cfg.models.find(m => m.variant === 'deepseek')));
+  });
+
+  await test('owner documents: outside the repo only, ids L1..Ln, file names never in a prompt or a blind answer', async () => {
+    const docs = await pe.loadDocs(longDir);
+    assert.deepStrictEqual(docs.map(d => [d.id, d.path]), [['L1', 'a-qisqa.txt'], ['L2', 'b-shartnoma.txt']]);
+    await assert.rejects(pe.loadDocs(path.join(REPO, 'package.json')), /outside the repository/u);
+    const f = await pe.freeze(docs[1], []);
+    assert.ok(!f.messages.some(x => x.text.includes('b-shartnoma')));
+    // a reviewer key in any JSON shape: its strings are checked against the prompt
+    const kf = path.join(tmp('pe-key-'), 'key.json');
+    fs.writeFileSync(kf, JSON.stringify({ L2: { facts: ['Ijrochi ishni 45 kun ichida topshiradi va jarima 0,1 foiz'] } }));
+    assert.deepStrictEqual(pe.keyPhrasesFrom(kf), ['Ijrochi ishni 45 kun ichida topshiradi va jarima 0,1 foiz']);
+  });
+
+  await test('digest dry run: the predicted parts of each document, the digest stage reserved once per document, a planning reserve for the answers on it; the input changes the run sha', async () => {
+    const docs = await pe.loadDocs(longDir);
+    const fz = [];
+    for (const d of docs) fz.push(await pe.freeze(d, []));
+    const builder = pe.digestModel(cfg.models[0]);
+    const plans = {};
+    for (const f of fz) plans[f.id] = await pe.planDigest(f);
+    assert.ok(plans.L2.calls.length > 1 && plans.L2.finalMessages, 'a long document is read in parts');
+    assert.strictEqual(plans.L1.calls.length, 1, 'a short one in one part');
+    const conf = confirmedAll();
+    const pick = pe.selectModels(cfg.models, 'deepseek,glm');
+    const jobs = pe.plan(fz, pick, conf, { inputs: ['full_text', 'digest'], digestBy: builder, digestPlans: plans });
+    const stage = jobs.filter(j => j.stage === 'digest');
+    assert.deepStrictEqual(stage.map(j => j.job), ['L1__digest', 'L2__digest']);
+    assert.ok(stage.every(j => j.variant === 'baseline' && j.reserve.usd > 0 && /re-read allowance/u.test(j.reserve.kind)));
+    assert.deepStrictEqual(jobs.filter(j => j.stage === 'final').map(j => j.job), ['L1__deepseek', 'L1__deepseek__digest', 'L1__glm', 'L1__glm__digest', 'L2__deepseek', 'L2__deepseek__digest', 'L2__glm', 'L2__glm__digest']);
+    assert.ok(jobs.filter(j => j.input === 'digest' && j.stage === 'final').every(j => /planning/u.test(j.reserve.kind)));
+    const full = pe.runSha(fz, pick, 1, 'c');
+    assert.notStrictEqual(pe.runSha(fz, pick, 1, 'c', { inputs: ['full_text', 'digest'], digestBy: builder }), full);
+    assert.strictEqual(pe.runSha(fz, pick, 1, 'c', { inputs: ['full_text'] }), full, 'a full-text run keeps its old sha');
+    // the CLI shows it and gives the matching live command
+    const r = run(['--json', '--input', 'both', '--docs', longDir, '--variants', 'deepseek,glm'], KEYS);
+    assert.strictEqual(r.code, 0, r.out);
+    const j = JSON.parse(r.out.slice(r.out.indexOf('{')));
+    assert.ok(j.summary.digestCalls > 1 && j.summary.digestBy === 'baseline' && /leak check is off/u.test(j.summary.reviewerKeyCheck));
+    assert.ok(/--input both --docs /u.test(j.summary.liveCommand));
+  });
+
+  await test('digest live run: one digest per document under the same budget and ledger, the same final prompt for every model, the digest never rebuilt; its cost on its own row', async () => {
+    const docs = await pe.loadDocs(longDir);
+    const fz = [];
+    for (const d of docs) fz.push(await pe.freeze(d, []));
+    const builder = pe.digestModel(cfg.models[0]);
+    const pick = pe.selectModels(cfg.models, 'deepseek,glm');
+    const conf = confirmedAll();
+    const call = digestStub();
+    const out = tmp('pe-dg-');
+    const budget = await pe.runLive({ frozen: fz, models: pick, budgetUsd: 5, out, confirmed: conf, sha: 'dg', call, inputs: ['full_text', 'digest'], digestBy: builder });
+    const l = ledger(out);
+    const digestCalls = call.calls.filter(c => /^Excerpt /u.test(c.messages[1].text));
+    assert.ok(digestCalls.every(c => c.variant === 'baseline'), 'only the digest model builds it');
+    assert.strictEqual(l.filter(e => e.type === 'reserve' && /__digest$/u.test(e.job) && e.job.split('__').length === 2).length, digestCalls.length, 'every digest call reserved and ledgered');
+    for (const id of ['L1', 'L2']) {
+      const saved = JSON.parse(fs.readFileSync(path.join(out, 'digests', `${id}.json`), 'utf8'));
+      assert.strictEqual(saved.status, 'built');
+      const finals = l.filter(e => e.type === 'settle' && e.job.startsWith(`${id}__`) && e.job.endsWith('__digest') && e.job.split('__').length === 3);
+      assert.strictEqual(finals.length, 2);
+      assert.ok(finals.every(e => e.promptSha === saved.finalMessagesSha), 'the same digest prompt for both models');
+    }
+    assert.strictEqual(l.filter(e => e.type === 'settle' && e.status === 'completed' && e.job.split('__').length >= 2 && e.job.split('__')[1] !== 'digest').length, 8, '2 docs x 2 models x 2 inputs');
+    assert.ok(Math.abs(budget.left + budget.spent - 5) < 1e-9);
+    // blind: 8 answers, no file name, no input or model named
+    const blind = fs.readdirSync(path.join(out, 'blind'));
+    assert.strictEqual(blind.length, 8);
+    for (const b of blind) assert.ok(!/shartnoma\.txt|qisqa\.txt|digest|full_text|deepseek|glm/iu.test(fs.readFileSync(path.join(out, 'blind', b), 'utf8')));
+    assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(out, 'cases.json'), 'utf8')).map(c => c.file), ['a-qisqa.txt', 'b-shartnoma.txt']);
+    const rep = pe.report(out).rows;
+    assert.ok(rep['digest build (shared, by baseline)'] && rep['digest build (shared, by baseline)'].cost.settledUsd > 0);
+    assert.ok(rep['deepseek · digest'] && rep.deepseek && rep['deepseek · digest'].service.planned === 2);
+    // a restart: nothing called again, the digest not rebuilt
+    const again = digestStub();
+    await pe.runLive({ frozen: fz, models: pick, budgetUsd: 5, out, confirmed: conf, sha: 'dg', call: again, inputs: ['full_text', 'digest'], digestBy: builder });
+    assert.strictEqual(again.calls.length, 0);
+    // a digest attempted but not saved (the process stopped): never rebuilt, its answers skipped
+    fs.unlinkSync(path.join(out, 'digests', 'L2.json'));
+    const keepLines = fs.readFileSync(path.join(out, 'ledger.jsonl'), 'utf8').split('\n').filter(Boolean).filter(x => { const e = JSON.parse(x); return !(e.job && e.job.startsWith('L2__') && e.job.split('__').length === 3); });
+    fs.writeFileSync(path.join(out, 'ledger.jsonl'), keepLines.join('\n') + '\n');
+    const third = digestStub();
+    await pe.runLive({ frozen: fz, models: pick, budgetUsd: 5, out, confirmed: conf, sha: 'dg', call: third, inputs: ['full_text', 'digest'], digestBy: builder });
+    assert.strictEqual(third.calls.filter(c => /^Excerpt /u.test(c.messages[1].text)).length, 0, 'no second digest spend');
+    assert.ok(ledger(out).filter(e => e.type === 'skip' && /^L2__.*__digest$/u.test(e.job)).every(e => /not rebuilt/u.test(e.reason)));
+  });
+
+  await test('digest live run: a digest that cannot be used skips the answers on it (no final call), the full-text answers still run', async () => {
+    const docs = await pe.loadDocs(longDir);
+    const fz = [];
+    for (const d of docs) fz.push(await pe.freeze(d, []));
+    const call = stubCall((m, n, messages) => (/^Excerpt /u.test(messages[1].text) ? { outcome: 'http_error', status: 503, kind: 'transient', error: 'down', usage: prov.usageOf(null) } : answered(m)));
+    const out = tmp('pe-dg2-');
+    await pe.runLive({ frozen: fz, models: pe.selectModels(cfg.models, 'deepseek'), budgetUsd: 5, out, confirmed: confirmedAll(), sha: 'dg2', call, inputs: ['full_text', 'digest'], digestBy: pe.digestModel(cfg.models[0]) });
+    const l = ledger(out);
+    assert.ok(l.filter(e => e.type === 'skip' && /__digest$/u.test(e.job) && e.job.split('__').length === 3).every(e => /no usable digest/u.test(e.reason)));
+    assert.strictEqual(l.filter(e => e.type === 'settle' && /^L\d__deepseek$/u.test(e.job) && e.status === 'completed').length, 2, 'full text unaffected');
   });
 
   await test('restart: a finished run spends nothing again; an attempt with no outcome written keeps its reserve and halts', async () => {
