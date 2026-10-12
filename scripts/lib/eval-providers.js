@@ -84,14 +84,16 @@ const secretState = name => (String(process.env[name] || '').trim() ? 'configure
  *                    here, no placeholder key) - a missing proxy secret
  *                    then comes back as the provider's own 401;
  *   'missing'        neither: the call is not made.
- * The VoiceLab adapter needs its key in the environment.
+ * VoiceLab: with the key in the environment the existing adapter is used;
+ * with a network secret the call goes the same OpenAI-compatible way as the
+ * other providers, to the fixed VoiceLab URL (the production adapter is not
+ * changed) - its billing headers are read the same way.
  */
 function authFor(provider, entry = null) {
   const p = PROVIDERS[provider];
   if (!p) return { mode: 'missing', reason: `unknown provider ${provider}` };
   if (secretState(p.secretEnv) === 'configured') return { mode: 'env' };
   if (entry && entry.auth === 'network_secret') {
-    if (p.transport === 'voicelab-adapter') return { mode: 'missing', reason: `the VoiceLab adapter needs ${p.secretEnv} in the environment (a network secret is not supported for it)` };
     return { mode: 'network_secret' };
   }
   return { mode: 'missing', reason: `${p.secretEnv} not set and no confirmed network secret` };
@@ -319,7 +321,7 @@ async function callProvider(model, messages, { timeoutMs = 120000, fetchImpl = n
   if (!p) return { outcome: 'not_called', error: `unknown provider ${model.provider}` };
   const auth = authFor(model.provider, entry);
   if (auth.mode === 'missing') return { outcome: 'not_called', error: auth.reason };
-  if (p.transport === 'voicelab-adapter') return callVoiceLab(model, messages, timeoutMs);
+  if (p.transport === 'voicelab-adapter' && auth.mode === 'env') return callVoiceLab(model, messages, timeoutMs);
   const ep = endpointFor(model.provider, entry);
   if (ep.error) return { outcome: 'not_called', error: ep.error };
   const body = requestBody(model, messages);
@@ -342,10 +344,14 @@ async function callProvider(model, messages, { timeoutMs = 120000, fetchImpl = n
   clearTimeout(timer);
   let data = null;
   try { data = JSON.parse(raw); } catch { /* below */ }
-  const requestId = (resp.headers && typeof resp.headers.get === 'function' && (resp.headers.get('x-request-id') || resp.headers.get('request-id'))) || (data && data.id) || null;
+  // VoiceLab (network secret): credits debited, billing status and the
+  // billable request id from its headers (docs.voicelab.uz/api/llm)
+  const vl = p.transport === 'voicelab-adapter' ? voicelabAdapter()._internal.billingHeaders(resp) : null;
+  const requestId = (vl && vl.requestId) || (resp.headers && typeof resp.headers.get === 'function' && (resp.headers.get('x-request-id') || resp.headers.get('request-id'))) || (data && data.id) || null;
+  const billing = vl ? { credits: vl.creditsCharged, billingStatus: vl.billingStatus } : {};
   if (!resp.ok) {
     const parsed = health.parseProviderError(raw);
-    return { outcome: 'http_error', status: resp.status, requestId, usage: usageOf(data), providerCostUsd: providerCostOf(data),
+    return { outcome: 'http_error', status: resp.status, requestId, usage: usageOf(data), providerCostUsd: providerCostOf(data), ...billing,
       error: redact([resp.status, parsed.code, parsed.message].filter(Boolean).join(': ')),
       kind: health.classifyError({ status: resp.status, providerCode: parsed.code, providerMessage: parsed.message, message: raw }).kind };
   }
@@ -358,7 +364,7 @@ async function callProvider(model, messages, { timeoutMs = 120000, fetchImpl = n
     text, finishReason: (choice && choice.finish_reason) || null,
     refusal: typeof msg.refusal === 'string' && msg.refusal ? redact(msg.refusal) : null,
     reasoningChars: ['reasoning_content', 'reasoning'].map(k => (typeof msg[k] === 'string' ? msg[k].length : 0)).reduce((a, b) => a + b, 0),
-    usage: usageOf(data), providerCostUsd: providerCostOf(data),
+    usage: usageOf(data), providerCostUsd: providerCostOf(data), ...billing,
   };
 }
 
