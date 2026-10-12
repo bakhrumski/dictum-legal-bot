@@ -206,6 +206,26 @@ Tasdiq fayli bo'lmagani uchun hozir **15 vazifaning 15 tasi BLOCKED**, rezerv es
 - Bitta qabul qilingan javob tannarxi modelning barcha urinishlari xarajatini o'z ichiga oladi, xatolilarini ham. Qabul qilingan javob 0 ta bo'lsa, tannarx aniqlanmagan; biror xarajat noma'lum bo'lsa, UNKNOWN.
 - Comet javobi ground truth emas. Uchta hujjat bo'yicha reyting yoki "teng sifat" degan da'vo qilinmaydi.
 
+## Dayjest rejimi va egasining hujjatlari
+- `--input full_text | digest | both` — yakuniy javob to'liq matndan, production dayjestidan yoki ikkalasidan beriladi.
+- `--docs <papka yoki fayllar>` — egasining `.txt` va `.docx` hujjatlari, faqat repo tashqarisida (sun'iy fixture'lar bundan mustasno).
+  - Hujjatlarga L1…Ln ID beriladi.
+  - Fayl nomlari faqat `<out>/cases.json` da turadi: promptga, ko'r javobga va run sha'siga tushmaydi.
+  - `.docx` production'dagidek o'qiladi (jadvallar qatorma-qator).
+- `--reviewer-key <fayl>` (ixtiyoriy, repo tashqarisida) — kalitning istalgan JSON ko'rinishidagi matnlari promptda bormi, tekshiriladi. Kalit berilmasa, bu tekshiruv o'chiq va dry-run buni aytadi.
+- **Dayjest har hujjat uchun bir marta quriladi.** Uni `--digest-by` modeli (standart: baseline, production'dagi arzon lane) production `buildDigest` bilan, bitta-bittadan qismlab o'qib quradi.
+  - Uning har bir chaqirig'i — qism va qayta o'qish — umumiy byudjetdan rezerv oladi va ledger'ga `<case>__digest` deb yoziladi.
+  - Dayjest `<out>/digests` ga saqlanadi va barcha modellarga o'zgarishsiz beriladi.
+  - Shu dayjest asosidagi yakuniy prompt xeshi bitta, har model uchun tekshiriladi.
+  - Bir marta urinilgan dayjest qayta qurilmaydi, ya'ni ikkinchi marta pul sarflanmaydi.
+  - Ishlatib bo'lmaydigan dayjestda shu hujjatning dayjest javoblari `skipped` bo'ladi; to'liq matn javoblari baribir ishlaydi.
+- Reasoning qiladigan model (GLM, Kimi) dayjest qura olmaydi, chunki dayjest chegarasi 1 600 token.
+- **Rezerv:**
+  - dayjest bosqichi uchun — bashorat qilingan qismlar va qayta o'qish zaxirasi (rejalash qiymati);
+  - dayjest asosidagi javoblar uchun — bashorat qilingan dayjest bo'yicha rejalash qiymati;
+  - har chaqiruv baribir run vaqtida o'zining aniq chegarasini oladi.
+- **Hisobot:** dayjest qurish xarajati alohida qatorda ("digest build, shared") — bu hamma modellar uchun umumiy yordamchi xarajat.
+
 ## Keyingi bosqich: mustaqil uzun hujjat sinovi (reja, hali ruxsat yo'q)
 - **Hujjatlar.** Sozlashda ishlatilmagan, egasi rozilik bergan 6–10 ta uzun hujjat (30–60 ming belgi): jadvalli DOCX, ilovali, ziddiyatli. Kamida ikkitasi holdout bo'ladi.
 - **Kirish.** Har model bitta muzlatilgan dayjestni va to'liq matnni alohida oladi (#430 sxemasi).
