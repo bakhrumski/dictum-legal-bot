@@ -75,7 +75,7 @@ const response = (status, body, headers = {}) => ({ ok: status >= 200 && status 
     assert.strictEqual(j.summary.reserveUsd, null);
     assert.strictEqual(j.summary.ready, 0);
     const ds = j.jobs.find(x => x.job === 'D1__deepseek');
-    assert.deepStrictEqual([ds.estimate.priceStatus, ds.estimate.priceDate], ['SEARCH_SNIPPET', '2026-10-11'], 'a snippet is a scenario, shown as such');
+    assert.deepStrictEqual([ds.estimate.priceStatus, ds.estimate.priceDate], ['OFFICIAL_DOCS', '2026-10-12'], 'the estimate names its price source; live still needs the confirmation entry');
     assert.ok(ds.estimate.visibleUsd > 0 && ds.blockers.some(b => /price .* not confirmed/u.test(b)));
     assert.ok(ds.blockers.some(b => /limits every billed output token/u.test(b)));
     const base = j.jobs.find(x => x.job === 'D1__baseline');
@@ -84,7 +84,7 @@ const response = (status, body, headers = {}) => ({ ok: status >= 200 && status 
     const plain = run([], KEYS);
     assert.ok(/NO NETWORK/u.test(plain.out) && /not a guaranteed maximum/u.test(plain.out));
     assert.strictEqual((plain.out.match(/BLOCKED [a-z]+\//gu) || []).length, 15);
-    assert.ok(/reserve: UNKNOWN/u.test(plain.out) && /missing: /u.test(plain.out) && /api-docs\.deepseek\.com\/quick_start\/pricing\/: not read/u.test(plain.out));
+    assert.ok(/reserve: UNKNOWN/u.test(plain.out) && /missing: /u.test(plain.out) && /api-docs\.deepseek\.com\/quick_start\/pricing\/: read/u.test(plain.out));
   });
 
   await test('dry run with a confirmation file: READY jobs, a reserve from the byte bound and the confirmed price, its gap to the estimate shown, and the run sha to approve', () => {
@@ -150,7 +150,8 @@ const response = (status, body, headers = {}) => ({ ok: status >= 200 && status 
     assert.strictEqual(body('kimi').max_completion_tokens, 8000);
     assert.strictEqual(body('kimi').max_tokens, undefined);
     assert.strictEqual(body('qwen').enable_thinking, false);
-    assert.strictEqual(body('qwen').model, 'qwen-plus');
+    assert.strictEqual(body('qwen').model, 'qwen-plus-2025-12-01', 'the dated snapshot the docs equate with qwen-plus');
+    assert.strictEqual(body('glm').reasoning_effort, 'low', 'GLM-5.3-Flash: low is documented; the default would be max');
     for (const m of cfg.models) assert.deepStrictEqual(Object.keys(prov.requestBody(m, msgs)).sort(), ['messages', 'model', m.profile.capParam, ...Object.keys(m.profile.params)].sort());
   });
 
@@ -212,11 +213,84 @@ const response = (status, body, headers = {}) => ({ ok: status >= 200 && status 
     assert.deepStrictEqual(prov.modelMatch('qwen-plus', 'qwen-max', ['qwen-plus-2026-09-01']), { ok: false, match: 'mismatch' });
     assert.deepStrictEqual(prov.modelMatch('deepseek-flash', 'DeepSeek-Flash', []), { ok: false, match: 'mismatch' }, 'exact strings only');
     assert.deepStrictEqual(prov.modelMatch('kimi-k3', null, ['kimi-k3']), { ok: false, match: 'not_reported' });
-    const qwen = cfg.models.find(m => m.variant === 'qwen');
+    const qwen = { ...cfg.models.find(m => m.variant === 'qwen'), requestedModel: 'qwen-plus' };
     const ans = returnedModel => ({ outcome: 'answered', returnedModel, text: 'ok', finishReason: 'stop' });
     assert.strictEqual(pe.classify(ans('qwen-plus-2026-09-01'), qwen, ['qwen-plus-2026-09-01']), 'completed');
     assert.strictEqual(pe.classify(ans('qwen-plus-2026-09-01'), qwen, []), 'model_mismatch');
     assert.strictEqual(pe.classify(ans(''), qwen, []), 'model_not_reported');
+  });
+
+  await test('GLM finish_reason "sensitive" is a refusal, not a finished answer', () => {
+    const glm = cfg.models.find(m => m.variant === 'glm');
+    assert.strictEqual(pe.classify({ outcome: 'answered', returnedModel: 'glm-5.3-flash', text: 'qisman', finishReason: 'sensitive' }, glm), 'refused');
+    assert.strictEqual(pe.classify({ outcome: 'answered', returnedModel: 'glm-5.3-flash', text: '', finishReason: 'sensitive' }, glm), 'refused');
+  });
+
+  await test('Qwen endpoint: the workspace domain from a validated workspace id, else dashscope-intl - recorded, never free text', () => {
+    assert.deepStrictEqual(prov.endpointFor('dashscope', null).url, 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions');
+    assert.ok(/migrate/u.test(prov.endpointFor('dashscope', null).selected));
+    const ws = prov.endpointFor('dashscope', { workspaceId: 'ws-abc123' });
+    assert.deepStrictEqual([ws.url, ws.host], ['https://ws-abc123.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1/chat/completions', 'ws-abc123.ap-southeast-1.maas.aliyuncs.com']);
+    for (const bad of ['evil.com/x', 'a', 'WS', 'x.y', '../x']) assert.ok(prov.endpointFor('dashscope', { workspaceId: bad }).error, bad);
+    assert.ok(prov.endpointFor('deepseek', { workspaceId: 'ws-abc123' }).error, 'only Alibaba has a workspace domain');
+    const qwen = cfg.models.find(m => m.variant === 'qwen');
+    const entry = { ...confirmedAll().models.qwen, workspaceId: 'ws-abc123' };
+    assert.ok(pe.missingFacts(qwen, entry).some(x => /confirm exactly https:\/\/ws-abc123\.ap-southeast-1\.maas\.aliyuncs\.com/u.test(x)));
+    assert.ok(!pe.missingFacts(qwen, { ...entry, endpoint: ws.url }).some(x => /endpoint/u.test(x)));
+  });
+
+  await test('network secret: with no key in the environment, a confirmed network secret sends no Authorization header (the proxy adds it); an ordinary missing key is never passed over and no placeholder key is sent', async () => {
+    const keep = { ...process.env };
+    for (const k of Object.keys(KEYS)) delete process.env[k];
+    try {
+      const ds = cfg.models.find(m => m.variant === 'deepseek');
+      const seen = [];
+      const fetchImpl = async (url, init) => { seen.push({ url, init }); return response(200, okBody('deepseek-flash')); };
+      // missing and not confirmed: not called
+      let r = await prov.callProvider(ds, frozen[0].messages, { fetchImpl, entry: null });
+      assert.deepStrictEqual([r.outcome, seen.length], ['not_called', 0]);
+      assert.ok(/DEEPSEEK_API_KEY not set and no confirmed network secret/u.test(r.error));
+      // confirmed network secret: called with no Authorization header at all
+      r = await prov.callProvider(ds, frozen[0].messages, { fetchImpl, entry: { auth: 'network_secret' } });
+      assert.strictEqual(r.outcome, 'answered');
+      assert.strictEqual(seen.length, 1);
+      assert.ok(!Object.keys(seen[0].init.headers).some(h => /authorization/iu.test(h)), JSON.stringify(seen[0].init.headers));
+      // the proxy did not add it: the provider's 401 is an auth error, recorded, provider stopped by the runner
+      r = await prov.callProvider(ds, frozen[0].messages, { entry: { auth: 'network_secret' }, fetchImpl: async () => response(401, { error: { message: 'Authentication Fails' } }) });
+      assert.deepStrictEqual([r.outcome, r.status], ['http_error', 401]);
+      // VoiceLab's adapter needs its key in the environment
+      assert.strictEqual(prov.authFor('voicelab', { auth: 'network_secret' }).mode, 'missing');
+      // the plan: missing -> BLOCKED with the secret named; network secret -> no secret blocker
+      const plain = pe.plan(frozen.slice(0, 1), [ds], null)[0];
+      assert.ok(plain.blockers.some(b => /^secret: DEEPSEEK_API_KEY not set and no confirmed network secret/u.test(b)));
+      const conf = confirmedAll(); conf.models.deepseek.auth = 'network_secret';
+      const viaProxy = pe.plan(frozen.slice(0, 1), [ds], conf)[0];
+      assert.deepStrictEqual([viaProxy.secret.auth, viaProxy.state], ['network_secret', 'READY']);
+    } finally { Object.assign(process.env, keep); }
+  });
+
+  await test('VoiceLab: X-Credits-Charged is read as the credits debited and kept apart from the list-price USD; a pending billing keeps the cost unknown; the production usage is unchanged', async () => {
+    const original = globalThis.fetch;
+    process.env.VOICELAB_API_KEY = KEYS.VOICELAB_API_KEY;
+    delete process.env.VOICELAB_BASE_URL;
+    const comet = cfg.models.find(m => m.variant === 'baseline');
+    const body = { id: 'chatcmpl_1', model: 'aisha-comet', choices: [{ message: { content: 'Izoh.' }, finish_reason: 'stop' }], usage: { prompt_tokens: 3000, completion_tokens: 400 } };
+    try {
+      globalThis.fetch = async () => ({ ok: true, status: 200, headers: { get: k => ({ 'x-credits-charged': '57', 'x-llm-request-id': 'chatcmpl_1' })[k.toLowerCase()] || null }, json: async () => body });
+      const r = await prov.callProvider(comet, frozen[0].messages, {});
+      assert.deepStrictEqual([r.credits, r.requestId], [57, 'chatcmpl_1']);
+      const list = prov.listCost(comet, r.usage, prov.priceFor(comet, null), {});
+      assert.ok(Math.abs(list - (3000 * 0.45 + 400 * 0.70) / 1e6) < 1e-12, 'list USD from tokens, apart from the credits');
+      const vl = require('../src/ai/voicelab');
+      const direct = await vl.chatCompletion('voicelab/aisha-comet', frozen[0].messages, { maxTokens: 3000 });
+      assert.strictEqual(direct.usage.credits, null, 'the production usage (and ledger cost) is not changed by the header');
+      assert.strictEqual(direct.creditsCharged, 57);
+      // billing pending, usage null: no credits, no list cost -> unknown
+      globalThis.fetch = async () => ({ ok: true, status: 200, headers: { get: k => ({ 'x-llm-billing-status': 'pending' })[k.toLowerCase()] || null }, json: async () => ({ ...body, usage: null }) });
+      const p = await prov.callProvider(comet, frozen[0].messages, {});
+      assert.deepStrictEqual([p.credits, p.billingStatus, p.usage.complete], [null, 'pending', false]);
+      assert.strictEqual(prov.listCost(comet, p.usage, prov.priceFor(comet, null), {}), null);
+    } finally { globalThis.fetch = original; }
   });
 
   await test('transport: fixed host, own key, no redirect; timeout, length, partial usage, wrong model and secret redaction', async () => {

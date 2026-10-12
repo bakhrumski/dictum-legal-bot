@@ -7,9 +7,11 @@
  *
  * Isolation:
  *   - each provider's URL is fixed here (no *_BASE_URL override, nothing
- *     from the config file); a request goes only to its own host, with its
- *     own key, and never follows a redirect (`redirect: 'error'`), so a key
- *     cannot be carried to another host;
+ *     from the config file; Alibaba's workspace domain is built only from a
+ *     validated workspace id); a request goes only to its own host, with its
+ *     own key (or the cloud proxy's network secret, see authFor), and never
+ *     follows a redirect (`redirect: 'error'`), so a key cannot be carried
+ *     to another host;
  *   - VoiceLab goes through the existing adapter (src/ai/voicelab.js) by its
  *     explicit id (`voicelab/<model>`: never falls back to another
  *     provider), and only when VOICELAB_BASE_URL is unset or the default;
@@ -38,13 +40,62 @@ const PROVIDERS = Object.freeze({
   deepseek: Object.freeze({ host: 'api.deepseek.com', url: 'https://api.deepseek.com/chat/completions', secretEnv: 'DEEPSEEK_API_KEY', transport: 'openai-compatible' }),
   zai: Object.freeze({ host: 'api.z.ai', url: 'https://api.z.ai/api/paas/v4/chat/completions', secretEnv: 'ZAI_API_KEY', transport: 'openai-compatible' }),
   moonshot: Object.freeze({ host: 'api.moonshot.ai', url: 'https://api.moonshot.ai/v1/chat/completions', secretEnv: 'MOONSHOT_API_KEY', transport: 'openai-compatible' }),
-  dashscope: Object.freeze({ host: 'dashscope-intl.aliyuncs.com', url: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions', secretEnv: 'DASHSCOPE_API_KEY', transport: 'openai-compatible' }),
+  // Alibaba Model Studio, Singapore (ap-southeast-1). The docs (OpenAI
+  // compatibility page, 2026-10-12) give the workspace domain
+  // {WorkspaceId}.ap-southeast-1.maas.aliyuncs.com and ask to migrate from
+  // dashscope-intl.aliyuncs.com; they do not say the old domain stopped
+  // working. With a confirmed workspaceId the workspace domain is used, else
+  // the dashscope-intl one - the selected endpoint is recorded either way.
+  dashscope: Object.freeze({ host: 'dashscope-intl.aliyuncs.com', url: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions', secretEnv: 'DASHSCOPE_API_KEY', transport: 'openai-compatible',
+    workspace: Object.freeze({ region: 'ap-southeast-1', hostOf: id => `${id}.ap-southeast-1.maas.aliyuncs.com` }) }),
 });
 
 const ALL_SECRET_ENVS = Object.values(PROVIDERS).map(p => p.secretEnv);
+const WORKSPACE_ID = /^[a-z0-9][a-z0-9-]{2,62}$/u;
+
+/**
+ * The endpoint of one provider for one confirmation entry: { url, host,
+ * selected } or { error }. The host is never free text: only the
+ * provider's fixed URL, or (Alibaba) its workspace domain built from a
+ * workspace id of letters, digits and dashes.
+ */
+function endpointFor(provider, entry = null) {
+  const p = PROVIDERS[provider];
+  if (!p) return { error: `unknown provider ${provider}` };
+  const ws = entry && entry.workspaceId;
+  if (ws != null && ws !== '') {
+    if (!p.workspace) return { error: `${provider} has no workspace endpoint` };
+    if (!WORKSPACE_ID.test(String(ws))) return { error: 'workspaceId must be lowercase letters, digits and dashes' };
+    const host = p.workspace.hostOf(String(ws));
+    return { url: `https://${host}/compatible-mode/v1/chat/completions`, host, selected: `workspace domain (${p.workspace.region})` };
+  }
+  return { url: p.url, host: p.host, selected: p.workspace ? `dashscope-intl (${p.workspace.region}; docs ask to migrate to the workspace domain)` : 'fixed' };
+}
 
 /** 'configured' / 'missing' - never the value. */
 const secretState = name => (String(process.env[name] || '').trim() ? 'configured' : 'missing');
+
+/**
+ * How a call is authenticated:
+ *   'env'            the key is in the provider's environment variable;
+ *   'network_secret' the owner's confirmation entry says the cloud network
+ *                    proxy adds the Authorization header for this host (the
+ *                    key never reaches the process; nothing is sent from
+ *                    here, no placeholder key) - a missing proxy secret
+ *                    then comes back as the provider's own 401;
+ *   'missing'        neither: the call is not made.
+ * The VoiceLab adapter needs its key in the environment.
+ */
+function authFor(provider, entry = null) {
+  const p = PROVIDERS[provider];
+  if (!p) return { mode: 'missing', reason: `unknown provider ${provider}` };
+  if (secretState(p.secretEnv) === 'configured') return { mode: 'env' };
+  if (entry && entry.auth === 'network_secret') {
+    if (p.transport === 'voicelab-adapter') return { mode: 'missing', reason: `the VoiceLab adapter needs ${p.secretEnv} in the environment (a network secret is not supported for it)` };
+    return { mode: 'network_secret' };
+  }
+  return { mode: 'missing', reason: `${p.secretEnv} not set and no confirmed network secret` };
+}
 
 /** Removes every provider key value and the usual secret patterns. */
 function redact(text) {
@@ -255,20 +306,23 @@ function listCost(model, usage, priceInfo, facts) {
  * transport_unknown: no HTTP answer came back (timeout, network, redirect,
  * unreadable body) - whether the provider billed it is not known.
  */
-async function callProvider(model, messages, { timeoutMs = 120000, fetchImpl = null } = {}) {
+async function callProvider(model, messages, { timeoutMs = 120000, fetchImpl = null, entry = null } = {}) {
   const p = PROVIDERS[model.provider];
   if (!p) return { outcome: 'not_called', error: `unknown provider ${model.provider}` };
-  const key = String(process.env[p.secretEnv] || '').trim();
-  if (!key) return { outcome: 'not_called', error: `${p.secretEnv} missing` };
+  const auth = authFor(model.provider, entry);
+  if (auth.mode === 'missing') return { outcome: 'not_called', error: auth.reason };
   if (p.transport === 'voicelab-adapter') return callVoiceLab(model, messages, timeoutMs);
+  const ep = endpointFor(model.provider, entry);
+  if (ep.error) return { outcome: 'not_called', error: ep.error };
   const body = requestBody(model, messages);
+  const headers = { 'Content-Type': 'application/json', Accept: 'application/json' };
+  if (auth.mode === 'env') headers.Authorization = `Bearer ${String(process.env[p.secretEnv]).trim()}`;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   let resp;
   try {
-    resp = await (fetchImpl || globalThis.fetch)(p.url, {
-      method: 'POST', redirect: 'error', signal: controller.signal,
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: `Bearer ${key}` },
+    resp = await (fetchImpl || globalThis.fetch)(ep.url, {
+      method: 'POST', redirect: 'error', signal: controller.signal, headers,
       body: JSON.stringify(body),
     });
   } catch (e) {
@@ -310,14 +364,17 @@ async function callVoiceLab(model, messages, timeoutMs) {
   try {
     const r = await voicelabAdapter().chatCompletion(`voicelab/${model.requestedModel}`, messages, { temperature: params.temperature, maxTokens: model.profile.cap });
     const u = r.usage || {};
-    return { outcome: 'answered', status: 200, requestId: (r.raw && r.raw.id) || null, returnedModel: (r.raw && r.raw.model) || null,
+    // credits as VoiceLab debited them (X-Credits-Charged), kept apart from
+    // the list-price USD made from the tokens; none on a pending billing
+    const credits = r.creditsCharged != null ? r.creditsCharged : (u.credits == null ? null : u.credits);
+    return { outcome: 'answered', status: 200, requestId: r.requestId || (r.raw && r.raw.id) || null, returnedModel: (r.raw && r.raw.model) || null,
       text: r.text, finishReason: r.finishReason, refusal: null, reasoningChars: 0,
-      usage: { ...u, complete: (u.inTokens || 0) + (u.outTokens || 0) > 0, problem: null }, credits: u.credits == null ? null : u.credits, providerCostUsd: null };
+      usage: { ...u, complete: (u.inTokens || 0) + (u.outTokens || 0) > 0, problem: null }, credits, billingStatus: r.billingStatus || null, providerCostUsd: null };
   } catch (e) {
     const u = e && e.usage ? { ...e.usage, complete: (e.usage.inTokens || 0) + (e.usage.outTokens || 0) > 0, problem: null } : usageOf(null);
     // an empty answer the provider billed (EMPTY_RESPONSE) came back over HTTP
     if (e && (e.code === 'EMPTY_RESPONSE' || e.code === 'NO_CHOICES')) {
-      return { outcome: 'answered', status: 200, text: '', finishReason: e.providerCode || null, refusal: null, usage: u, credits: u.credits == null ? null : u.credits, providerCostUsd: null, error: redact(e.message) };
+      return { outcome: 'answered', status: 200, text: '', finishReason: e.providerCode || null, refusal: null, usage: u, credits: e.creditsCharged != null ? e.creditsCharged : (u.credits == null ? null : u.credits), billingStatus: e.billingStatus || null, providerCostUsd: null, error: redact(e.message) };
     }
     if (e && e.status && e.status !== 408) return { outcome: 'http_error', status: e.status, usage: u, credits: u.credits == null ? null : u.credits, error: redact(e.message), kind: health.classifyError(e).kind };
     return { outcome: 'transport_unknown', status: e && e.status, usage: u, error: redact(e && e.message) };
@@ -326,4 +383,4 @@ async function callVoiceLab(model, messages, timeoutMs) {
   }
 }
 
-module.exports = { PROVIDERS, ALL_SECRET_ENVS, INPUT_BOUND_METHOD, INPUT_BASIS_METHODS, inputBasisProblem, inputTokensMax, secretState, redact, guardNetwork, wireMessages, requestBody, usageOf, providerCostOf, worstRates, priceFor, callBound, modelMatch, listCost, callProvider };
+module.exports = { PROVIDERS, ALL_SECRET_ENVS, endpointFor, authFor, INPUT_BOUND_METHOD, INPUT_BASIS_METHODS, inputBasisProblem, inputTokensMax, secretState, redact, guardNetwork, wireMessages, requestBody, usageOf, providerCostOf, worstRates, priceFor, callBound, modelMatch, listCost, callProvider };
