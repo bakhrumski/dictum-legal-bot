@@ -4,6 +4,9 @@ const usageLedger = require('../ai/usage-ledger');
 
 const log = require('../utils/logger').createLogger('HYBRID');
 const voicelab = require('../ai/voicelab');
+// DeepSeek first for text (2026-10-12, src/ai/deepseek.js); VoiceLab text
+// lanes are skipped while it routes them
+const deepseek = require('../ai/deepseek');
 const { calculateTokenCost, MODEL_PRICING: PRICING } = require('../ai/model-pricing');
 
 /**
@@ -156,9 +159,32 @@ function estimateTokens(text) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function callOpenAIModel(model, messages, { temperature = 0.2, maxTokens = DEFAULT_MAX_OUTPUT_TOKENS, responseFormat = null } = {}) {
-  // VoiceLab when LLM_PROVIDER=voicelab routes this lane; otherwise, or on a
-  // failure with fallback allowed, the OpenAI request below runs as before.
-  if (voicelab.routes(model)) {
+  // DeepSeek first; on a failure the OpenAI request below runs (its failed
+  // attempt is a ledger row of its own)
+  if (deepseek.routes(model)) {
+    const started = Date.now();
+    const dsLabel = `deepseek/${deepseek.modelFor(model)}`;
+    try {
+      const r = await deepseek.chatCompletion(messages, { temperature, maxTokens: deepseek.maxTokensFor(maxTokens), responseFormat, model: deepseek.modelFor(model) });
+      const u = r.usage || {};
+      return {
+        text: r.text, provider: r.provider, model: r.provider, providerName: 'deepseek', billedModel: dsLabel,
+        modelReturned: r.provider, cachedTokens: u.cachedTokens || 0, reasoningTokens: u.reasoningTokens || null, usageEstimated: false,
+        inTokens: u.inTokens || 0, outTokens: u.outTokens || 0,
+        costUsd: calculateTokenCost(dsLabel, u) || 0,
+      };
+    } catch (err) {
+      const c = require('../ai/provider-health').classifyError(err);
+      require('../ai/provider-health').recordOutcome('deepseek', dsLabel, c);
+      usageLedger.record({ provider: 'deepseek', model: dsLabel, status: c.code === 'TIMEOUT' ? 'timeout' : 'error',
+        errorCode: c.code, errorKind: c.kind, errorReason: c.reason, startedAt: started, finishedAt: Date.now(), usage: err.usage || {} });
+      log.warn('deepseek failed, using the OpenAI model', { model, err: err.message });
+    }
+  }
+  // VoiceLab when LLM_PROVIDER=voicelab routes this lane (and DeepSeek does
+  // not); otherwise, or on a failure with fallback allowed, the OpenAI
+  // request below runs as before.
+  if (voicelab.routes(model) && !deepseek.routes(model)) {
     const started = Date.now();
     try {
       const r = await voicelab.chatCompletion(model, messages, { temperature, maxTokens, responseFormat });
@@ -330,7 +356,8 @@ async function callWithFallback(chain, messages, opts = {}) {
         { provider: isOpenAIModel(model) ? 'openai' : 'gemini', model, stage: opts.stage || 'generate', endpoint: opts.endpoint || null, userId: opts.userId || null,
           // no proven maximum: Chat Completions max_tokens is not shown to
           // cap reasoning, Gemini's thinking is uncapped, VoiceLab bills credits
-          bound: { usd: null, reason: voicelab.routes(model) ? 'billed in provider credits; credits per token not confirmed'
+          bound: { usd: null, reason: deepseek.routes(model) ? 'DeepSeek first, then the OpenAI model: no single bound for the pair'
+            : voicelab.routes(model) ? 'billed in provider credits; credits per token not confirmed'
             : isOpenAIModel(model) ? 'Chat Completions max_tokens is not shown to cap reasoning tokens' : 'thinking tokens are not capped by the output limit' } },
         async (call) => {
           const r = await callModel(model, messages, opts);
