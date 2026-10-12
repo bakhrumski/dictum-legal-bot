@@ -28,6 +28,7 @@
  *
  *   node scripts/provider-eval.js                       # dry run, 15 jobs
  *   node scripts/provider-eval.js --json
+ *   node scripts/provider-eval.js --variants deepseek,glm          # a subset of the models (3 x 2 = 6 jobs)
  *   node scripts/provider-eval.js --budget-usd N --confirmed <file>   # also prints the run sha
  *   node scripts/provider-eval.js --report <out> [--ratings <file>]   # offline summary
  *
@@ -77,6 +78,24 @@ function loadConfig(file = CONFIG) {
     if ('url' in m || 'baseUrl' in m) throw new Error(`${m.variant}: a URL in the config is refused (URLs are fixed in code)`);
   }
   return cfg;
+}
+
+/**
+ * The models of this run: all five by default, or the variants named in
+ * --variants (comma list, e.g. deepseek,glm). An unknown or repeated name
+ * is refused, never ignored; the order stays the config's. The selection is
+ * part of the run sha (runSha hashes the models), so approving a small run
+ * does not approve the full one.
+ */
+function selectModels(models, list) {
+  if (list == null) return models;
+  const names = String(list).split(',').map(x => x.trim()).filter(Boolean);
+  if (!names.length) throw Object.assign(new Error('--variants is empty'), { exit: 2 });
+  const known = new Set(models.map(m => m.variant));
+  const unknown = names.filter(n => !known.has(n));
+  if (unknown.length) throw Object.assign(new Error(`--variants: unknown ${unknown.join(', ')} (known: ${[...known].join(', ')})`), { exit: 2 });
+  if (new Set(names).size !== names.length) throw Object.assign(new Error('--variants: a name is repeated'), { exit: 2 });
+  return models.filter(m => names.includes(m.variant));
 }
 
 /** The cases, each read and checked against its manifest hash. */
@@ -429,7 +448,7 @@ async function main(argv = process.argv.slice(2)) {
   const restore = prov.guardNetwork([]);
   try {
     const cfg = loadConfig();
-    const models = cfg.models;
+    const models = selectModels(cfg.models, has('--variants') ? arg('--variants', '') : null);
     const phrases = keyPhrases();
     const frozen = [];
     for (const c of loadCases()) frozen.push(await freeze(c, phrases));
@@ -448,6 +467,9 @@ async function main(argv = process.argv.slice(2)) {
       reserveUsd: jobs.every(j => j.reserve.usd != null) ? sum(j => j.reserve.usd) : null, reserveUnknownFor: jobs.filter(j => j.reserve.usd == null).map(j => j.job),
       runSha: id, runShaCovers: budgetUsd && confFile ? `budget $${budgetUsd} + ${path.basename(confFile)}` : 'NOT approvable: needs --budget-usd and --confirmed',
     };
+    const subset = models.length < cfg.models.length ? ` --variants ${models.map(m => m.variant).join(',')}` : '';
+    summary.variants = models.map(m => m.variant);
+    summary.liveCommand = `PROVIDER_EVAL_LIVE=yes node scripts/provider-eval.js --live${subset} --budget-usd ${budgetUsd || 'N'} --out <dir outside the repo> --confirmed ${confFile || '<owner file>'} --approve ${budgetUsd && confFile ? id : '<run sha>'}`;
     if (has('--json')) console.log(JSON.stringify({ summary, officialDocsReadAttempts: cfg.officialDocsReadAttempts, cases: frozen.map(f => ({ id: f.id, chars: f.chars, promptChars: f.promptChars, hashes: f.hashes, keyLines: f.helpers.keyLines.length, conflicts: f.helpers.conflicts.length })), models: models.map(m => ({ variant: m.variant, label: m.label, why: m.why, profile: m.profile, facts: m.facts, scenarioPrices: m.scenarioPrices })), jobs }, null, 2));
     else printPlan(frozen, models, jobs, summary, cfg);
     if (!live) return 0;
@@ -502,9 +524,10 @@ function printPlan(frozen, models, jobs, s, cfg) {
   }
   console.log(`\nTotal ${s.jobs} jobs: estimate ${usd(s.estimateVisibleUsd)} (visible answer only, reasoning not included) to ${usd(s.estimateAtCapUsd)} (every cap)${s.estimateUnpriced.length ? `, ${s.estimateUnpriced.length} unpriced` : ''}; reserve ${s.reserveUsd == null ? `UNKNOWN (${s.reserveUnknownFor.length} jobs without a reliable bound)` : usd(s.reserveUsd)}.`);
   console.log(`Run sha: ${s.runSha} (${s.runShaCovers}). Live stays BLOCKED until every job is READY and the owner approves this sha.`);
+  console.log(`Variants: ${s.variants.join(', ')}. Live command (only after the owner's approval of this sha): ${s.liveCommand}`);
 }
 
 // exitCode, not process.exit(): a large --json plan piped to another
 // program must be written out whole before the process ends
 if (require.main === module) main().then((code) => { process.exitCode = code || 0; }).catch((e) => { console.error(prov.redact(e.message)); process.exitCode = e.exit || 1; });
-module.exports = { CONTROLS, CRITERIA, STATUSES, SCENARIO, loadConfig, loadCases, keyPhrases, keyLeak, freeze, missingFacts, checkConfirmed, runSha, plan, replay, classify, answerIds, runLive, writeBlind, report, main };
+module.exports = { CONTROLS, CRITERIA, STATUSES, SCENARIO, selectModels, loadConfig, loadCases, keyPhrases, keyLeak, freeze, missingFacts, checkConfirmed, runSha, plan, replay, classify, answerIds, runLive, writeBlind, report, main };

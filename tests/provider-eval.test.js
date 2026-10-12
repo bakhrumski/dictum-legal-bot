@@ -479,6 +479,41 @@ const response = (status, body, headers = {}) => ({ ok: status >= 200 && status 
     assert.deepStrictEqual(ledger(out2).filter(e => e.type === 'settle' && e.job.endsWith('__qwen')).map(e => [e.status, e.modelMatch]), [['model_mismatch', 'mismatch']]);
   });
 
+  await test('--variants: a small run of the named models only (deepseek,glm = 6 jobs); unknown, repeated or empty names refused; the selection changes the run sha; only the selected models need confirmation', async () => {
+    const pick = pe.selectModels(cfg.models, 'glm,deepseek');
+    assert.deepStrictEqual(pick.map(m => m.variant), ['deepseek', 'glm'], 'config order kept');
+    assert.strictEqual(pe.selectModels(cfg.models, null), cfg.models);
+    for (const bad of ['', 'deepseek,kimix', 'glm,glm', ' , ']) assert.throws(() => pe.selectModels(cfg.models, bad), /--variants/u, bad);
+    const r = run(['--json', '--variants', 'deepseek,glm'], KEYS);
+    assert.strictEqual(r.code, 0, r.out);
+    const j = JSON.parse(r.out.slice(r.out.indexOf('{')));
+    assert.strictEqual(j.jobs.length, 6);
+    assert.deepStrictEqual([...new Set(j.jobs.map(x => x.variant))], ['deepseek', 'glm']);
+    assert.deepStrictEqual(j.summary.variants, ['deepseek', 'glm']);
+    assert.ok(/--live --variants deepseek,glm /u.test(j.summary.liveCommand));
+    const full = JSON.parse(run(['--json'], KEYS).out);
+    assert.notStrictEqual(j.summary.runSha, full.summary.runSha, 'approving the small run is not approving the full one');
+    assert.strictEqual(run(['--variants', 'deepseek,nope'], KEYS).code, 2);
+    // the gate: a confirmation file with only deepseek and glm passes the fact check for this subset
+    const conf = path.join(tmp('pe-sub-'), 'confirmed.json');
+    const c = confirmedAll();
+    fs.writeFileSync(conf, JSON.stringify({ models: { deepseek: c.models.deepseek, glm: c.models.glm } }));
+    const out = tmp('pe-sub-out-');
+    const g = run(['--live', '--variants', 'deepseek,glm', '--budget-usd', '1', '--out', out, '--confirmed', conf], { ...KEYS, PROVIDER_EVAL_LIVE: 'yes' });
+    assert.strictEqual(g.code, 3, g.out);
+    assert.ok(/--approve [0-9a-f]{64}/u.test(g.out) && !/not confirmed - BLOCKED/u.test(g.out), g.out);
+    // the full run with the same file is blocked on the missing models
+    const gf = run(['--live', '--budget-usd', '1', '--out', out, '--confirmed', conf], { ...KEYS, PROVIDER_EVAL_LIVE: 'yes' });
+    assert.ok(/baseline: no entry in the confirmation file/u.test(gf.out), gf.out);
+    assert.deepStrictEqual(fs.readdirSync(out), [], 'nothing written');
+    // a run of the subset: 6 calls, 6 blind answers, the other models never called
+    const call = stubCall(m => answered(m));
+    const lo = tmp('pe-sub-live-');
+    await pe.runLive({ frozen, models: pick, budgetUsd: 5, out: lo, confirmed: { models: { deepseek: c.models.deepseek, glm: c.models.glm } }, sha: 'sub', call });
+    assert.deepStrictEqual([call.calls.length, [...new Set(call.calls.map(x => x.variant))].sort().join(',')], [6, 'deepseek,glm']);
+    assert.strictEqual(fs.readdirSync(path.join(lo, 'blind')).length, 6);
+  });
+
   await test('restart: a finished run spends nothing again; an attempt with no outcome written keeps its reserve and halts', async () => {
     const call = stubCall(m => answered(m));
     const { out } = await live(call);

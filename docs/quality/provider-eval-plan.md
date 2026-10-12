@@ -159,6 +159,12 @@ Tasdiq fayli bo'lmagani uchun hozir **15 vazifaning 15 tasi BLOCKED**, rezerv es
 - Rezerv uchun hech qanday raqam ko'rsatilmaydi: kirish tokeni asosi yo'q ekan, bayt soni token chegarasi o'rnida ishlatilmaydi.
 
 ## Jonli sinov (faqat egasining yozma ruxsati bilan)
+**Kichik sinov.** `--variants deepseek,glm` faqat nomlangan modellarni oladi: 3 hujjat × 2 model = 6 vazifa.
+- Tasdiq faylida faqat shu modellar bo'lishi yetarli.
+- Run sha'si to'liq run'nikidan farq qiladi, ya'ni kichik run'ni tasdiqlash to'liq run'ni tasdiqlash emas.
+- Noma'lum, takrorlangan yoki bo'sh nom rad etiladi.
+- Bazasiz (comet'siz) run modellarni bir-biri bilan solishtiradi, comet bilan emas.
+
 1. Egasi har model uchun konsol yoki rasmiy hujjatdan olingan ma'lumotlarni repo **tashqarisidagi** faylga yozadi:
    ```json
    { "models": {
