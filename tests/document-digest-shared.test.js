@@ -76,7 +76,11 @@ function contract() {
   await test('opinion route: a digest with parts not read releases the units, tells the model, and opens the opinion with it', () => {
     assert.ok(opinion.includes('const docDigest = await digestLongDocumentDetailed(documentText, req.session?.adminId || null);'));
     assert.ok(/if \(unreadParts\.length\) \{[\s\S]{0,200}tariffModule\.refundUsage\(res, 'digest_partial_read'\)/u.test(opinion));
-    assert.ok(opinion.includes("O'QILMAGAN QISMLAR: ${unreadParts.join(', ')}"));
+    // the prompt lives in src/rag/legal-opinion.js (shared with the offline evaluation)
+    assert.ok(/buildOpinionPrompt\(\{[^}]*unreadParts[^}]*\}\)/u.test(opinion));
+    const opinionPrompt = fs.readFileSync(path.join(__dirname, '../src/rag/legal-opinion.js'), 'utf8');
+    assert.ok(opinionPrompt.includes("O'QILMAGAN QISMLAR: ${unreadParts.join(', ')}"));
+    assert.ok(!opinionPrompt.includes("(yoki uning to'liq dayjesti)"), 'a digest is not called the full document');
     assert.ok(opinion.includes("<strong>⚠️ Qisman xulosa — to'liq emas:</strong>"));
     assert.ok(opinion.includes('partial: unreadParts.length > 0, unreadParts,'));
     assert.ok(!opinion.includes("(yoki uning to'liq dayjesti)"), 'a digest is not called the full document');

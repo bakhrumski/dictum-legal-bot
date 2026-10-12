@@ -33,6 +33,8 @@
  *        # owner documents (outside the repo), full text and/or the production digest
  *   node scripts/provider-eval.js --budget-usd N --confirmed <file>   # also prints the run sha
  *   node scripts/provider-eval.js --report <out> [--ratings <file>]   # offline summary
+ *   node scripts/provider-eval.js --task opinion --variants deepseek_v4_pro,gpt6_luna --docs <dir>
+ *        # the legal opinion (/api/draft/legal-opinion) instead of the explanation
  *
  * Live (only with the owner's written approval of THIS run):
  *   PROVIDER_EVAL_LIVE=yes node scripts/provider-eval.js --live \
@@ -46,6 +48,16 @@
  * on it is hashed after the first model and must be identical for the
  * others. A digest attempted earlier is never rebuilt. Its cost is a shared
  * helper cost, reported on its own row.
+ * Legal opinion (--task opinion): the production opinion prompt
+ * (src/rag/legal-opinion.js buildOpinionPrompt, shared with server.js) on
+ * the full text or the digest, each model at its opinion cap
+ * (profile.taskCaps.opinion). The legal context the route assembles (corpus
+ * search, live lex.uz) is not reachable from an offline run: the KONTEKST is
+ * empty and the source list says none was verified - the same for every
+ * model, so the run measures reading, analysis and restraint (no invented
+ * article), not grounding. The answer goes through the production tidy step
+ * and both citation audits; the correction call production makes when they
+ * find a problem is NOT made - the answer file says whether it would be.
  * Concurrency 1, no automatic retry, no fallback. Every call reserves its
  * bound from one run-wide budget before it starts (scripts/lib/eval-budget.js);
  * the ledger (<out>/ledger.jsonl) is written before and after each call, and
@@ -60,6 +72,7 @@ const ex = require('../src/rag/document-explain');
 const pricing = require('../src/ai/model-pricing');
 const evalBudget = require('./lib/eval-budget');
 const prov = require('./lib/eval-providers');
+const opinion = require('../src/rag/legal-opinion');
 
 const REPO = path.resolve(__dirname, '..');
 const FIXTURES = path.join(REPO, 'tests/fixtures/provider-eval');
@@ -79,6 +92,11 @@ const STREAM_TIMEOUT_MS = 300000;
 const SCENARIO = Object.freeze({ inPerChar: 0.367, answerTokens: 1947, source: 'comet request 504b2e59-5fe4-4727-a88e-7fd000f77b1d (one document); an estimate for the others, not measured for them and never used as a maximum' });
 // a criterion marked distorted or missing makes the answer a critical error
 const CRITERIA = ['summa', 'subyekt', 'muddat_boshlanishi', 'inkor', 'rozilik', 'istisno', 'barcha_oqibatlar', 'iqtibos_tegishliligi'];
+// the opinion's own: the five IRAC sections, facts kept, and no norm stated
+// without a source (the KONTEKST of an offline run is empty)
+const OPINION_CRITERIA = ['faktlar_toliq', 'summa', 'muddat_boshlanishi', 'subyekt', 'istisno', 'barcha_oqibatlar', 'tahlil_faktga_bogliq', 'xulosa_va_tavsiyalar', 'norma_oylab_topilmagan'];
+const TASKS = Object.freeze(['explain', 'opinion']);
+const criteriaFor = task => (task === 'opinion' ? OPINION_CRITERIA : CRITERIA);
 const COMPLETED = 'completed';
 // every service outcome a job can end in; only `completed` is rated for quality
 const STATUSES = ['completed', 'truncated', 'empty', 'empty_capped', 'refused', 'error', 'model_mismatch', 'model_not_reported', 'finish_unknown', 'skipped', 'not_run'];
@@ -123,6 +141,56 @@ function selectInputs(v) {
   if (v === 'both') return [...INPUTS];
   if (!INPUTS.includes(v)) throw Object.assign(new Error(`--input: full_text, digest or both (got ${v})`), { exit: 2 });
   return [v];
+}
+
+/** --task explain | opinion (default explain). */
+function selectTask(v) {
+  if (v == null) return 'explain';
+  if (!TASKS.includes(v)) throw Object.assign(new Error(`--task: ${TASKS.join(' or ')} (got ${v})`), { exit: 2 });
+  return v;
+}
+
+/**
+ * The models with the task's answer cap (profile.taskCaps[task]); a model
+ * with no cap for the task is refused for it, never run at the explanation
+ * cap.
+ */
+function applyTask(models, task) {
+  if (task === 'explain') return models;
+  return models.map((m) => {
+    const cap = m.profile.taskCaps && m.profile.taskCaps[task];
+    if (!(cap > 0)) throw Object.assign(new Error(`${m.variant}: no ${task} cap (profile.taskCaps.${task})`), { exit: 2 });
+    return { ...m, profile: { ...m.profile, cap } };
+  });
+}
+
+/**
+ * The production opinion messages for a document (or its digest), with the
+ * legal context an offline run has: none (see the header).
+ */
+function opinionMessages(f, digest = null) {
+  const p = opinion.buildOpinionPrompt({
+    lang: opinion.lexLangForText(f.text), ragContext: '', lexUnresolved: [], lexForeign: [], verifiedSourceDirectory: [],
+    unreadParts: digest ? ex.unreadParts(digest) : [], docForAnalysis: digest ? digest.text : f.text,
+  });
+  return [{ role: 'system', text: p.systemPrompt }, { role: 'user', text: p.userText }];
+}
+
+/**
+ * An opinion answer as the route keeps it (fences dropped, tidyDocumentHtml)
+ * and what the two production citation audits find in it against the
+ * context sent (empty here). The correction call is not made.
+ */
+function opinionResult(text, contextText = '') {
+  const html = opinion.tidyDocumentHtml(String(text || '').trim().replace(/```(?:html)?/giu, '').trim());
+  const audit = opinion.auditOpinionCitations(html, contextText);
+  const presentation = opinion.auditOpinionCitationPresentation(html);
+  return { reply: html, trace: { answer: text }, check: {
+    citations: { unverified: audit.unverified, count: audit.unverified.length },
+    presentation,
+    productionCorrectionCall: audit.unverified.length > 0 || presentation.invalid ? 'would run (not made here)' : 'not needed',
+    contextChars: contextText.length,
+  } };
 }
 
 /**
@@ -191,7 +259,18 @@ function keyLeak(text, phrases) {
  * The production prompt for one document, built once with a stub (no AI),
  * frozen with its hashes. Every model gets exactly these messages.
  */
-async function freeze(c, phrases) {
+async function freeze(c, phrases, task = 'explain') {
+  if (task === 'opinion') {
+    const messages = opinionMessages(c);
+    const leak = messages.map(m => keyLeak(m.text, phrases)).find(Boolean);
+    if (leak) throw new Error(`${c.id}: the reviewer key reached the prompt (${leak}) - nothing called`);
+    const helpers = { keyLines: [], sources: [], conflicts: [], legalContext: 'none (offline: no corpus, no lex.uz)' };
+    return {
+      id: c.id, path: c.path, file: c.file || null, text: c.text, tables: c.tables || null, messages, helpers,
+      hashes: { source: c.sha256, system: sha(messages[0].text), user: sha(messages[1].text), messages: sha(messages), helpers: sha(helpers), wire: sha(prov.wireMessages(messages)) },
+      chars: c.text.length, promptChars: messages.reduce((n, m) => n + m.text.length, 0),
+    };
+  }
   let messages = null;
   const r = await ex.explainDocument({
     documentText: c.text, langName: 'Uzbek', inputMode: 'full_text', sameHelpers: CONTROLS.sameHelpers, tables: c.tables,
@@ -227,7 +306,7 @@ function digestModel(m) {
  * service), and the final prompt on a digest of the predicted size - a
  * planning figure; the real digest exists only after the live build.
  */
-async function planDigest(f) {
+async function planDigest(f, task = 'explain') {
   const calls = [];
   const filler = n => '- band | Taraf → harakat | muddat: 10 kun\n'.repeat(Math.max(1, Math.ceil(n * 2.82 / 41))).slice(0, Math.round(n * 2.82));
   const digest = await ex.buildDigest(f.text, { limits: DIGEST_LIMITS, callAI: async (messages) => {
@@ -236,7 +315,8 @@ async function planDigest(f) {
     return need >= ex.DIGEST_MAX_TOKENS ? { text: filler(ex.DIGEST_MAX_TOKENS), truncated: true } : { text: filler(need) };
   } });
   let finalMessages = null;
-  await ex.explainDocument({ documentText: f.text, langName: 'Uzbek', inputMode: 'digest', sameHelpers: CONTROLS.sameHelpers, tables: f.tables, digest: async () => digest,
+  if (task === 'opinion') finalMessages = opinionMessages(f, digest);
+  else await ex.explainDocument({ documentText: f.text, langName: 'Uzbek', inputMode: 'digest', sameHelpers: CONTROLS.sameHelpers, tables: f.tables, digest: async () => digest,
     callAI: async (m) => { finalMessages = m.map(x => ({ role: x.role, text: x.text })); return { text: 'Izoh.', provider: 'stub' }; } });
   return { calls, parts: digest.chunks, density: digest.plan && digest.plan.density ? digest.plan.density.fit : null, finalMessages,
     finalPromptChars: finalMessages ? finalMessages.reduce((n, m) => n + m.text.length, 0) : null };
@@ -270,7 +350,7 @@ function checkConfirmed(models, conf) {
 }
 
 /** The run's identity: what the owner approves. Any change gives another sha. */
-function runSha(frozen, models, budgetUsd, confirmedSha, { inputs = ['full_text'], digestBy = null, stream = false } = {}) {
+function runSha(frozen, models, budgetUsd, confirmedSha, { inputs = ['full_text'], digestBy = null, stream = false, task = 'explain' } = {}) {
   const digest = inputs.includes('digest') ? {
     by: digestBy && { variant: digestBy.variant, requestedModel: digestBy.requestedModel, profile: digestBy.profile },
     system: sha(ex.DIGEST_SYSTEM), limits: DIGEST_LIMITS, maxExtraCalls: ex.DIGEST_LIMITS.maxExtraCalls,
@@ -278,6 +358,7 @@ function runSha(frozen, models, budgetUsd, confirmedSha, { inputs = ['full_text'
   return sha({
     ...(inputs.length === 1 && inputs[0] === 'full_text' ? {} : { inputs, digest }),
     ...(stream ? { stream: true } : {}),
+    ...(task !== 'explain' ? { task } : {}),
     cases: frozen.map(f => ({ id: f.id, hashes: f.hashes })),
     models: models.map(m => ({ variant: m.variant, provider: m.provider, requestedModel: m.requestedModel, profile: { params: m.profile.params, capParam: m.profile.capParam, cap: m.profile.cap, reasoning: m.profile.reasoning } })),
     controls: CONTROLS, budgetUsd: Number(budgetUsd) || 0, confirmedSha: confirmedSha || null,
@@ -446,14 +527,14 @@ function answerIds(out, jobs) {
  * input, `digestBy` (a model of the config) builds each document's digest
  * once; it needs its own confirmation entry.
  */
-async function runLive({ frozen, models, budgetUsd, out, confirmed, sha: runId, call = prov.callProvider, log = () => {}, inputs = ['full_text'], digestBy = null, stream = false }) {
+async function runLive({ frozen, models, budgetUsd, out, confirmed, sha: runId, call = prov.callProvider, log = () => {}, inputs = ['full_text'], digestBy = null, stream = false, task = 'explain' }) {
   fs.mkdirSync(path.join(out, 'answers'), { recursive: true });
   const ledgerFile = path.join(out, 'ledger.jsonl');
   const append = e => fs.appendFileSync(ledgerFile, JSON.stringify({ ...e, at: new Date().toISOString() }) + '\n');
   const entries = readLedger(ledgerFile);
   const head = entries.find(e => e.type === 'run');
   if (head && head.runSha !== runId) throw Object.assign(new Error('this --out holds another run (other sha): nothing called'), { exit: 3 });
-  if (!head) append({ type: 'run', runSha: runId, budgetUsd, controls: CONTROLS, inputs, digestBy: digestBy ? digestBy.variant : null, stream });
+  if (!head) append({ type: 'run', runSha: runId, budgetUsd, controls: CONTROLS, inputs, digestBy: digestBy ? digestBy.variant : null, stream, task });
   if (frozen.some(f => f.file)) fs.writeFileSync(path.join(out, 'cases.json'), JSON.stringify(frozen.map(f => ({ id: f.id, file: f.path, sha256: f.hashes.source })), null, 2));
   const jobs = jobList(frozen, models, inputs);
   const ids = answerIds(out, jobs);
@@ -531,7 +612,8 @@ async function runLive({ frozen, models, budgetUsd, out, confirmed, sha: runId, 
     } });
     // the final prompt on this digest: hashed once, the same for every model
     let finalMessages = null;
-    if (!ex.digestUnusable(d)) {
+    if (!ex.digestUnusable(d) && task === 'opinion') finalMessages = opinionMessages(f, d);
+    else if (!ex.digestUnusable(d)) {
       await ex.explainDocument({ documentText: f.text, langName: 'Uzbek', inputMode: 'digest', sameHelpers: CONTROLS.sameHelpers, tables: f.tables, digest: async () => d,
         callAI: async (m) => { finalMessages = m.map(x => ({ role: x.role, text: x.text })); return { text: 'Izoh.', provider: 'stub' }; } });
     }
@@ -562,7 +644,12 @@ async function runLive({ frozen, models, budgetUsd, out, confirmed, sha: runId, 
           throw Object.assign(new Error(`${res.status}${res.r.error ? `: ${res.r.error}` : ''}`), { attempt });
         };
         let res = null, err = null;
-        try {
+        if (task === 'opinion') {
+          try {
+            const r = await callAI(input === 'digest' ? opinionMessages(f, dg.digest) : f.messages);
+            res = opinionResult(r.text);
+          } catch (e2) { err = e2; }
+        } else try {
           res = await ex.explainDocument({ documentText: f.text, langName: 'Uzbek', callAI, inputMode: input, sameHelpers: CONTROLS.sameHelpers, tables: f.tables,
             digest: async () => { if (!dg) throw new Error('no digest'); return dg.digest; } });
         } catch (e2) { err = e2; }
@@ -573,7 +660,7 @@ async function runLive({ frozen, models, budgetUsd, out, confirmed, sha: runId, 
       }
     }
   } finally { restore(); }
-  writeBlind(out);
+  writeBlind(out, task);
   return budget;
 }
 
@@ -583,7 +670,9 @@ async function runLive({ frozen, models, budgetUsd, out, confirmed, sha: runId, 
  * is rated for quality; a cut answer is shown but not rated as finished.
  * The key (id -> job, model) is its own file.
  */
-function writeBlind(out) {
+function writeBlind(out, task = null) {
+  // the run's task from its ledger when not given (a re-written blind set keeps its criteria)
+  if (!task) task = ((readLedger(path.join(out, 'ledger.jsonl')).find(e => e.type === 'run') || {}).task) || 'explain';
   const ids = readJson(path.join(out, 'answer-ids.json'));
   const dir = path.join(out, 'answers');
   const rows = Object.entries(ids).map(([job, x]) => {
@@ -600,10 +689,11 @@ function writeBlind(out) {
   }
   fs.writeFileSync(path.join(out, 'key.json'), JSON.stringify(rows.map(a => ({ answerId: a.answerId, job: a.job, case: a.case, variant: a.variant, input: a.input || 'full_text', status: a.status })), null, 2));
   fs.writeFileSync(path.join(out, 'review-sheet.json'), JSON.stringify({
-    instructions: "Model nomi va xarajat ko'rsatilmaydi. Barcha rejalashtirilgan vazifalar shu yerda. Faqat serviceStatus=completed javob sifat bo'yicha baholanadi; qolganlari xizmat yakunlanmagani sifatida hisobotda qoladi. Har mezon: ok | distorted | missing | na. distorted yoki missing = critical_error. Comet javobi ground truth emas.",
-    criteria: CRITERIA, scores: ['factual_accuracy 0-4', 'source_support 0-4', 'completeness 0-4', 'uncertainty_handling 0-4', 'uzbek_clarity 0-4'],
+    task,
+    instructions: (task === 'opinion' ? "Yuridik xulosa (IRAC: Masala, Faktlar, Qo'llaniladigan huquq, Tahlil, Xulosa). KONTEKST bo'sh yuborilgan (lex.uz va korpus offline yo'q) - modda raqamini o'ylab topish xato (norma_oylab_topilmagan), 'KONTEKSTda tasdiqlanmadi' deyish to'g'ri. " : '') + "Model nomi va xarajat ko'rsatilmaydi. Barcha rejalashtirilgan vazifalar shu yerda. Faqat serviceStatus=completed javob sifat bo'yicha baholanadi; qolganlari xizmat yakunlanmagani sifatida hisobotda qoladi. Har mezon: ok | distorted | missing | na. distorted yoki missing = critical_error. Comet javobi ground truth emas.",
+    criteria: criteriaFor(task), scores: ['factual_accuracy 0-4', 'source_support 0-4', 'completeness 0-4', 'uncertainty_handling 0-4', 'uzbek_clarity 0-4'],
     answers: rows.map(a => ({ answerId: a.answerId, case: a.case, serviceStatus: a.status, ratable: a.status === COMPLETED,
-      criteria: Object.fromEntries(CRITERIA.map(k => [k, null])), critical_error: null, acceptable_for_this_case: null, reviewer_note: '' })),
+      criteria: Object.fromEntries(criteriaFor(task).map(k => [k, null])), critical_error: null, acceptable_for_this_case: null, reviewer_note: '' })),
   }, null, 2));
 }
 
@@ -662,7 +752,8 @@ async function main(argv = process.argv.slice(2)) {
   const restore = prov.guardNetwork([]);
   try {
     const cfg = loadConfig();
-    const models = selectModels(cfg.models, has('--variants') ? arg('--variants', '') : null);
+    const task = selectTask(arg('--task'));
+    const models = applyTask(selectModels(cfg.models, has('--variants') ? arg('--variants', '') : null), task);
     const inputs = selectInputs(arg('--input'));
     const stream = has('--stream');
     const digestBy = inputs.includes('digest') ? digestModel(selectModels(cfg.models, arg('--digest-by', 'baseline'))[0]) : null;
@@ -671,21 +762,21 @@ async function main(argv = process.argv.slice(2)) {
     if (keyFile && inside(keyFile) && !path.resolve(keyFile).startsWith(FIXTURES + path.sep)) { console.error('--reviewer-key must be outside the repository'); return 2; }
     const phrases = keyFile ? keyPhrasesFrom(keyFile) : docs ? [] : keyPhrases();
     const frozen = [];
-    for (const c of (docs ? await loadDocs(docs) : loadCases())) frozen.push(await freeze(c, phrases));
+    for (const c of (docs ? await loadDocs(docs) : loadCases())) frozen.push(await freeze(c, phrases, task));
     const digestPlans = {};
-    if (digestBy) for (const f of frozen) digestPlans[f.id] = await planDigest(f);
+    if (digestBy) for (const f of frozen) digestPlans[f.id] = await planDigest(f, task);
     const budgetUsd = Number(arg('--budget-usd', 0)) || 0;
     const confFile = arg('--confirmed');
     if (confFile && inside(confFile)) { console.error('--confirmed must be outside the repository (owner file)'); return 2; }
     const confirmed = confFile ? readJson(confFile) : null;
     const jobs = plan(frozen, models, confirmed, { inputs, digestBy, digestPlans });
-    const id = runSha(frozen, models, budgetUsd, confFile ? sha(fs.readFileSync(confFile, 'utf8')) : null, { inputs, digestBy, stream });
+    const id = runSha(frozen, models, budgetUsd, confFile ? sha(fs.readFileSync(confFile, 'utf8')) : null, { inputs, digestBy, stream, task });
     const sum = f => jobs.reduce((n, j) => (f(j) == null ? n : n + f(j)), 0);
     const summary = {
       mode: live ? 'live' : 'dry-run (no network)', jobs: jobs.length, ready: jobs.filter(j => j.state === 'READY').length, blocked: jobs.filter(j => j.state === 'BLOCKED').length,
       finalAnswerCalls: jobs.filter(j => j.stage === 'final').length, helperAiCalls: 0, paidPreflight: 0,
       digestCalls: jobs.filter(j => j.stage === 'digest').reduce((n, j) => n + j.digest.calls, 0), digestReReadAllowance: jobs.filter(j => j.stage === 'digest').length * ex.DIGEST_LIMITS.maxExtraCalls,
-      inputs, digestBy: digestBy ? digestBy.variant : null, stream, reviewerKeyCheck: phrases.length ? `${phrases.length} key phrase(s) checked against every prompt` : 'no reviewer key given: the leak check is off',
+      task, inputs, digestBy: digestBy ? digestBy.variant : null, stream, reviewerKeyCheck: phrases.length ? `${phrases.length} key phrase(s) checked against every prompt` : 'no reviewer key given: the leak check is off',
       maxAttempts: jobs.filter(j => j.stage === 'final').length * (1 + CONTROLS.autoRetry),
       controls: CONTROLS, scenario: SCENARIO, inputBoundMethod: prov.INPUT_BOUND_METHOD,
       estimateVisibleUsd: sum(j => j.estimate.visibleUsd), estimateAtCapUsd: sum(j => j.estimate.atCapUsd), estimateUnpriced: jobs.filter(j => j.estimate.visibleUsd == null).map(j => j.job),
@@ -694,7 +785,7 @@ async function main(argv = process.argv.slice(2)) {
     };
     const subset = models.length < cfg.models.length ? ` --variants ${models.map(m => m.variant).join(',')}` : '';
     summary.variants = models.map(m => m.variant);
-    const extraFlags = `${inputs.length === 1 && inputs[0] === 'full_text' ? '' : ` --input ${inputs.length === 2 ? 'both' : inputs[0]}`}${digestBy && digestBy.variant !== 'baseline' ? ` --digest-by ${digestBy.variant}` : ''}${docs ? ` --docs ${docs}` : ''}${stream ? ' --stream' : ''}${keyFile ? ` --reviewer-key ${keyFile}` : ''}`;
+    const extraFlags = `${task !== 'explain' ? ` --task ${task}` : ''}${inputs.length === 1 && inputs[0] === 'full_text' ? '' : ` --input ${inputs.length === 2 ? 'both' : inputs[0]}`}${digestBy && digestBy.variant !== 'baseline' ? ` --digest-by ${digestBy.variant}` : ''}${docs ? ` --docs ${docs}` : ''}${stream ? ' --stream' : ''}${keyFile ? ` --reviewer-key ${keyFile}` : ''}`;
     summary.liveCommand = `NODE_USE_ENV_PROXY=1 PROVIDER_EVAL_LIVE=yes node scripts/provider-eval.js --live${subset}${extraFlags} --budget-usd ${budgetUsd || 'N'} --out <dir outside the repo> --confirmed ${confFile || '<owner file>'} --approve ${budgetUsd && confFile ? id : '<run sha>'}`;
     if (has('--json')) console.log(JSON.stringify({ summary, officialDocsReadAttempts: cfg.officialDocsReadAttempts, cases: frozen.map(f => ({ id: f.id, chars: f.chars, promptChars: f.promptChars, hashes: f.hashes, keyLines: f.helpers.keyLines.length, conflicts: f.helpers.conflicts.length })), models: models.map(m => ({ variant: m.variant, label: m.label, why: m.why, profile: m.profile, facts: m.facts, scenarioPrices: m.scenarioPrices })), jobs }, null, 2));
     else printPlan(frozen, models, jobs, summary, cfg);
@@ -727,7 +818,7 @@ async function main(argv = process.argv.slice(2)) {
     const need = remaining.reduce((n, j) => n + j.reserve.usd, 0);
     if (need > prior.left + 1e-12) { console.error(`the reserve $${need.toFixed(4)} does not fit what is left of the budget ($${prior.left.toFixed(4)} of $${budgetUsd}) - nothing called`); return 3; }
     restore();
-    const b = await runLive({ frozen, models, budgetUsd, out, confirmed, sha: id, log: s => console.log(s), inputs, digestBy, stream });
+    const b = await runLive({ frozen, models, budgetUsd, out, confirmed, sha: id, log: s => console.log(s), inputs, digestBy, stream, task });
     console.log(`live: known cost $${b.spent.toFixed(5)} (list USD $${b.listUsd.toFixed(5)}, provider-reported $${b.providerUsd.toFixed(5)}, VoiceLab credits ${b.credits} - shown apart); ${b.unknownCalls} call(s) with cost UNKNOWN, reserve $${b.heldUnknown.toFixed(5)} held; ${b.halted ? `HALTED: ${b.haltedBy && b.haltedBy.reason}` : 'not halted'}. Outputs: ${out} (blind/ for the reviewer, key.json apart).`);
     return 0;
   } finally { restore(); }
@@ -736,7 +827,7 @@ async function main(argv = process.argv.slice(2)) {
 function printPlan(frozen, models, jobs, s, cfg) {
   const usd = x => (x == null ? 'UNKNOWN' : `$${x.toFixed(5)}`);
   console.log(`Provider evaluation - ${s.mode}. NO AI CALL, NO NETWORK. ${frozen.length} document(s) x ${models.length} model(s) x ${s.inputs.join(' + ')} = ${s.finalAnswerCalls} final answers; digest calls ${s.digestCalls} predicted (+ up to ${s.digestReReadAllowance} re-reads)${s.digestBy ? `, built once per document by ${s.digestBy}` : ''}; other helper AI calls 0, paid preflight 0; concurrency 1, auto-retry 0, fallback off.`);
-  console.log(`Jobs READY ${s.ready}, BLOCKED ${s.blocked}. Prompt: production explainDocument (sameHelpers), the full-text prompt frozen per document; the digest prompt frozen after the digest is built. Reviewer key: ${s.reviewerKeyCheck}.`);
+  console.log(`Jobs READY ${s.ready}, BLOCKED ${s.blocked}. Prompt: ${s.task === 'opinion' ? 'production legal opinion (buildOpinionPrompt), KONTEKST empty (offline: no corpus, no lex.uz), opinion caps' : 'production explainDocument (sameHelpers)'}, the full-text prompt frozen per document; the digest prompt frozen after the digest is built. Reviewer key: ${s.reviewerKeyCheck}.`);
   console.log(`ESTIMATE: ${s.scenario.inPerChar} tokens/char and a ${s.scenario.answerTokens}-token answer from ${s.scenario.source}.`);
   console.log(`RESERVE: input = ${s.inputBoundMethod}; output = the profile cap, only once the owner confirms it limits every billed output token; price = the owner-confirmed rate (highest listed). Without them: UNKNOWN, live BLOCKED.\n`);
   for (const a of cfg.officialDocsReadAttempts || []) console.log(`Official page ${a.url}: ${a.result} (${a.at})`);
@@ -764,4 +855,4 @@ function printPlan(frozen, models, jobs, s, cfg) {
 // exitCode, not process.exit(): a large --json plan piped to another
 // program must be written out whole before the process ends
 if (require.main === module) main().then((code) => { process.exitCode = code || 0; }).catch((e) => { console.error(prov.redact(e.message)); process.exitCode = e.exit || 1; });
-module.exports = { CONTROLS, INPUTS, DIGEST_LIMITS, CRITERIA, STATUSES, SCENARIO, selectModels, selectInputs, loadDocs, keyPhrasesFrom, digestModel, planDigest, jobList, usageCheck, loadConfig, loadCases, keyPhrases, keyLeak, freeze, missingFacts, checkConfirmed, runSha, plan, replay, classify, answerIds, runLive, writeBlind, report, main };
+module.exports = { CONTROLS, INPUTS, DIGEST_LIMITS, CRITERIA, OPINION_CRITERIA, TASKS, STATUSES, SCENARIO, selectModels, selectInputs, selectTask, applyTask, opinionMessages, opinionResult, loadDocs, keyPhrasesFrom, digestModel, planDigest, jobList, usageCheck, loadConfig, loadCases, keyPhrases, keyLeak, freeze, missingFacts, checkConfirmed, runSha, plan, replay, classify, answerIds, runLive, writeBlind, report, main };

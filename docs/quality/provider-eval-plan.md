@@ -244,6 +244,16 @@ Tasdiq fayli bo'lmagani uchun hozir **15 vazifaning 15 tasi BLOCKED**, rezerv es
   - Narx repo jadvalidan olinadi (2026-09-23). Uzun kontekst uchun narx ×2 alohida qator sifatida qo'shilgan, rezerv esa eng yuqori narx bo'yicha hisoblanadi.
 - Standart matritsa (5 model) va uning run sha'si o'zgarmaydi.
 
+## Yuridik xulosa sinovi (`--task opinion`, 2026-10-12)
+Egasining so'rovi: yuridik xulosa sifati bo'yicha DeepSeek V4 Pro, GPT-6 Luna va DeepSeek Flash'ni solishtirish.
+- **Prompt.** Production'ning o'zi: `/api/draft/legal-opinion` prompti o'zgarishsiz `src/rag/legal-opinion.js` (`buildOpinionPrompt`) ga ko'chirildi. Server ham, runner ham shu modulni ishlatadi. Tidy qadami va ikkala iqtibos auditi ham shu modulda.
+- **Huquqiy kontekst yo'q.** Production korpus qidiruvi va jonli lex.uz natijalarini KONTEKST'ga qo'shadi. Offline sinovda ikkalasi ham yo'q (lex.uz bu muhitdan ochilmaydi, korpus bazasi yo'q). Shuning uchun KONTEKST bo'sh ketadi va "tasdiqlangan manba topilmadi" deyiladi. Bu hamma model uchun bir xil. Demak sinov hujjatni o'qish, tahlil va o'zini tutishni (modda raqamini o'ylab topmaslik) o'lchaydi, huquqiy asoslashni emas.
+- **Tuzatish chaqiruvi qilinmaydi.** Production audit muammo topsa, ikkinchi (tuzatish) chaqiruvni qiladi. Sinovda u qilinmaydi; javob faylida `productionCorrectionCall` uning kerak bo'lishi yoki bo'lmasligini aytadi.
+- **Chegaralar** (`profile.taskCaps.opinion`): DeepSeek (flash va V4 Pro) 14 000 — production 7 000 × 2 (#442); GPT-6 Luna 12 000 — production 7 000 (reasoning shu ichida), bu yerda reasoning uchun joy qoldirilgan. Opinion chegarasi yo'q model bu vazifada rad etiladi.
+- `deepseek_v4_pro` — yangi qo'shimcha variant: narx rasmiy sahifadan (peak 1.32 / 0.044 / 3.96, off-peak yarmi), akkauntning `GET /models` ro'yxatida bor (2026-10-12). Thinking o'chiq, flash bilan bir xil.
+- **Baholash mezonlari** alohida (`OPINION_CRITERIA`): faktlar to'liqligi, summa, muddat, subyekt, istisno, oqibatlar, tahlilning faktga bog'liqligi, xulosa va tavsiyalar, o'ylab topilgan norma yo'qligi.
+- `--task` run sha'siga kiradi; tushuntirish run'larining sha'si o'zgarmaydi.
+
 ## Keyingi bosqich: mustaqil uzun hujjat sinovi (reja, hali ruxsat yo'q)
 - **Hujjatlar.** Sozlashda ishlatilmagan, egasi rozilik bergan 6–10 ta uzun hujjat (30–60 ming belgi): jadvalli DOCX, ilovali, ziddiyatli. Kamida ikkitasi holdout bo'ladi.
 - **Kirish.** Har model bitta muzlatilgan dayjestni va to'liq matnni alohida oladi (#430 sxemasi).
