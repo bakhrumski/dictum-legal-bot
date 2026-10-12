@@ -159,6 +159,11 @@ Tasdiq fayli bo'lmagani uchun hozir **15 vazifaning 15 tasi BLOCKED**, rezerv es
 - Rezerv uchun hech qanday raqam ko'rsatilmaydi: kirish tokeni asosi yo'q ekan, bayt soni token chegarasi o'rnida ishlatilmaydi.
 
 ## Jonli sinov (faqat egasining yozma ruxsati bilan)
+**Shartli qabul (`verify_by_usage`).** `capCoversBilledOutput` va `reasoningBilledInCompletion` uchun `true` o'rniga `"verify_by_usage"` yozilsa, fakt shartli qabul qilinadi: rezerv hisoblanadi, lekin har chaqiruvning o'z usage'i tekshiriladi.
+- Usage yo'q yoki to'liqsiz bo'lsa, yoki `completion_tokens` yuborilgan chegaradan oshsa, o'sha provayder to'xtatiladi. Bu restart'dan keyin ham saqlanadi.
+- Usage ko'rsata olmaydigan narsa "o'tdi" deb belgilanmaydi, ochiq yoziladi. Masalan, GLM `reasoning_tokens` bermaydi, shuning uchun reasoning `completion_tokens` ichida hisoblanishini billing konsoli bilan solishtirish kerak.
+- Natija ledger'dagi `usageCheck` maydonida.
+
 **Kichik sinov.** `--variants deepseek,glm` faqat nomlangan modellarni oladi: 3 hujjat × 2 model = 6 vazifa.
 - Tasdiq faylida faqat shu modellar bo'lishi yetarli.
 - Run sha'si to'liq run'nikidan farq qiladi, ya'ni kichik run'ni tasdiqlash to'liq run'ni tasdiqlash emas.

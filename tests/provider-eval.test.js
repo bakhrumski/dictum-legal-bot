@@ -514,6 +514,39 @@ const response = (status, body, headers = {}) => ({ ok: status >= 200 && status 
     assert.strictEqual(fs.readdirSync(path.join(lo, 'blind')).length, 6);
   });
 
+  await test('verify_by_usage: a billing fact accepted on condition is checked on every call; completion_tokens above the cap or missing usage stops that provider (also after a restart); what usage cannot show is named, not passed', async () => {
+    const conf = confirmedAll();
+    for (const v of ['deepseek', 'glm']) { conf.models[v].capCoversBilledOutput = 'verify_by_usage'; conf.models[v].reasoningBilledInCompletion = 'verify_by_usage'; }
+    const pick = pe.selectModels(cfg.models, 'deepseek,glm');
+    // accepted for the gate and the reserve
+    assert.deepStrictEqual(pick.flatMap(m => pe.missingFacts(m, conf.models[m.variant])), []);
+    assert.ok(prov.callBound(pick[1], frozen[0].messages, prov.priceFor(pick[1], conf.models.glm), conf.models.glm).usd > 0);
+    assert.strictEqual(prov.factAccepted('yes'), false, 'only true or verify_by_usage');
+    // GLM's first call bills 9000 completion tokens against a cap of 8000: GLM stops, DeepSeek goes on
+    const call = stubCall(m => answered(m, m.variant === 'glm' ? { usage: { inTokens: 3000, outTokens: 9000, cachedTokens: 0, reasoningTokens: null, complete: true }, reasoningChars: 5000 } : {}));
+    const out = tmp('pe-vbu-');
+    await pe.runLive({ frozen, models: pick, budgetUsd: 5, out, confirmed: conf, sha: 'vbu', call });
+    assert.deepStrictEqual(call.calls.map(c => c.variant), ['deepseek', 'glm', 'deepseek', 'deepseek']);
+    const l = ledger(out);
+    const g = l.find(e => e.type === 'settle' && e.job === 'D1__glm');
+    assert.strictEqual(g.usageCheck.result, 'failed');
+    assert.ok(/completion_tokens 9000 above the cap 8000/u.test(g.usageCheck.problems[0]));
+    assert.ok(/not visible in usage/u.test(g.usageCheck.notShown), 'GLM reports no reasoning_tokens: said, not passed');
+    assert.ok(l.filter(e => e.type === 'skip' && e.job.endsWith('__glm')).every(e => /usage check failed/u.test(e.reason)));
+    assert.strictEqual(l.find(e => e.type === 'settle' && e.job === 'D1__deepseek').usageCheck.result, 'passed');
+    // a restart keeps GLM stopped
+    const again = stubCall(m => answered(m));
+    fs.unlinkSync(path.join(out, 'answers', 'D3__glm.json'));
+    const lines = fs.readFileSync(path.join(out, 'ledger.jsonl'), 'utf8').split('\n').filter(Boolean).filter(x => !(JSON.parse(x).type === 'skip' && JSON.parse(x).job === 'D3__glm'));
+    fs.writeFileSync(path.join(out, 'ledger.jsonl'), lines.join('\n') + '\n');
+    await pe.runLive({ frozen, models: pick, budgetUsd: 5, out, confirmed: conf, sha: 'vbu', call: again });
+    assert.strictEqual(again.calls.length, 0, 'not called again after the failed check');
+    // missing usage fails the check too; a facts-true entry runs no check
+    const m0 = pick[0];
+    assert.strictEqual(pe.usageCheck(m0, conf.models.deepseek, { outcome: 'answered', usage: { complete: false, problem: 'no usage' } }).result, 'failed');
+    assert.strictEqual(pe.usageCheck(m0, confirmedAll().models.deepseek, { outcome: 'answered', usage: { complete: true, outTokens: 1 } }), null);
+  });
+
   await test('restart: a finished run spends nothing again; an attempt with no outcome written keeps its reserve and halts', async () => {
     const call = stubCall(m => answered(m));
     const { out } = await live(call);
