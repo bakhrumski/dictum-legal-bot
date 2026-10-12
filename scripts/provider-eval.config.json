@@ -937,6 +937,81 @@
       "optIn": true
     },
     {
+      "variant": "gpt6_1_sol",
+      "provider": "openai",
+      "requestedModel": "gpt-6.1-sol",
+      "label": "openai/gpt-6.1-sol",
+      "why": "Owner's request (2026-10-12): the newer Sol for the legal opinion. gpt-6.1-luna is not listed on the account (GET /v1/models, 2026-10-12), so it is not in the run.",
+      "profile": {
+        "reasoning": "provider default (none sent, as production)",
+        "reasoningNote": "Production callOpenAI sends no reasoning parameter and drops temperature for GPT-6; the same here. max_output_tokens caps visible output and reasoning (repository note in src/ai/model-pricing.js, from the OpenAI Responses docs; the docs host is not reachable from this session).",
+        "params": {},
+        "capParam": "max_output_tokens",
+        "cap": 8000,
+        "capNote": "3 000 for the visible answer + 5 000 reasoning allowance (production explain sends 3 000: a reasoning model can spend it before the answer)",
+        "taskCaps": {
+          "opinion": 12000
+        },
+        "taskCapsNote": "opinion: production sends 7 000 (reasoning included in max_output_tokens); 12 000 here leaves reasoning room so a cut answer measures the model, not the cap"
+      },
+      "facts": {
+        "endpoint": {
+          "value": "https://api.openai.com/v1/responses",
+          "status": "REPO_ADAPTER",
+          "source": "src/api/server.js callOpenAI (production)"
+        },
+        "modelId": {
+          "value": "gpt-6.1-sol",
+          "status": "ACCOUNT_LIST",
+          "source": "GET https://api.openai.com/v1/models via network secret, 2026-10-12"
+        },
+        "accountAccess": {
+          "value": "gpt-6.1-sol listed",
+          "status": "ACCOUNT_LIST",
+          "source": "GET /v1/models, 2026-10-12"
+        },
+        "price": {
+          "value": "2 in / 10 out USD per 1M on third-party pages (cached 0.10); not in src/ai/model-pricing.js; the OpenAI pricing page is not reachable from this session",
+          "status": "UNKNOWN",
+          "source": "third-party pages (anotherwrapper.com, omidsaffari.com), 2026-10-12 - not official"
+        },
+        "capCoversBilledOutput": {
+          "value": "max_output_tokens caps reasoning (repository note)",
+          "status": "UNKNOWN",
+          "source": "docs not readable here: verify_by_usage"
+        },
+        "reasoningBilledInCompletion": {
+          "value": "output_tokens include output_tokens_details.reasoning_tokens (repository usage parser)",
+          "status": "UNKNOWN"
+        },
+        "inputTokenBasis": {
+          "value": null,
+          "status": "UNKNOWN",
+          "source": "GPT-6 tokenizer not published here"
+        }
+      },
+      "scenarioPrices": {
+        "status": "THIRD_PARTY",
+        "source": "third-party pages, 2026-10-12 (not official); the gpt-6-sol rates and its long-context x2 row are used as the planning rate",
+        "seenAt": "2026-10-12",
+        "rates": [
+          {
+            "label": "standard (third-party)",
+            "in": 2.0,
+            "cachedIn": 0.2,
+            "out": 10.0
+          },
+          {
+            "label": "long context about x2 (repository note for gpt-6)",
+            "in": 4.0,
+            "cachedIn": 0.4,
+            "out": 20.0
+          }
+        ]
+      },
+      "optIn": true
+    },
+    {
       "variant": "gpt6_astra",
       "provider": "openai",
       "requestedModel": "gpt-6-astra",
