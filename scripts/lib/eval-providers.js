@@ -36,17 +36,20 @@ const pricing = require('../../src/ai/model-pricing');
 const voicelabAdapter = () => require('../../src/ai/voicelab');
 
 const PROVIDERS = Object.freeze({
-  voicelab: Object.freeze({ host: 'api.voicelab.uz', url: 'https://api.voicelab.uz/v1/chat/completions', secretEnv: 'VOICELAB_API_KEY', transport: 'voicelab-adapter' }),
-  deepseek: Object.freeze({ host: 'api.deepseek.com', url: 'https://api.deepseek.com/chat/completions', secretEnv: 'DEEPSEEK_API_KEY', transport: 'openai-compatible' }),
-  zai: Object.freeze({ host: 'api.z.ai', url: 'https://api.z.ai/api/paas/v4/chat/completions', secretEnv: 'ZAI_API_KEY', transport: 'openai-compatible' }),
-  moonshot: Object.freeze({ host: 'api.moonshot.ai', url: 'https://api.moonshot.ai/v1/chat/completions', secretEnv: 'MOONSHOT_API_KEY', transport: 'openai-compatible' }),
+  // streamUsage: how a stream reports usage - 'include_usage' (the provider
+  // documents stream_options.include_usage) or 'last_chunk' (usage comes in
+  // the final chunk without it; docs.z.ai streaming guide, 2026-10-12)
+  voicelab: Object.freeze({ host: 'api.voicelab.uz', url: 'https://api.voicelab.uz/v1/chat/completions', secretEnv: 'VOICELAB_API_KEY', transport: 'voicelab-adapter', streamUsage: 'include_usage' }),
+  deepseek: Object.freeze({ host: 'api.deepseek.com', url: 'https://api.deepseek.com/chat/completions', secretEnv: 'DEEPSEEK_API_KEY', transport: 'openai-compatible', streamUsage: 'include_usage' }),
+  zai: Object.freeze({ host: 'api.z.ai', url: 'https://api.z.ai/api/paas/v4/chat/completions', secretEnv: 'ZAI_API_KEY', transport: 'openai-compatible', streamUsage: 'last_chunk' }),
+  moonshot: Object.freeze({ host: 'api.moonshot.ai', url: 'https://api.moonshot.ai/v1/chat/completions', secretEnv: 'MOONSHOT_API_KEY', transport: 'openai-compatible', streamUsage: 'include_usage' }),
   // Alibaba Model Studio, Singapore (ap-southeast-1). The docs (OpenAI
   // compatibility page, 2026-10-12) give the workspace domain
   // {WorkspaceId}.ap-southeast-1.maas.aliyuncs.com and ask to migrate from
   // dashscope-intl.aliyuncs.com; they do not say the old domain stopped
   // working. With a confirmed workspaceId the workspace domain is used, else
   // the dashscope-intl one - the selected endpoint is recorded either way.
-  dashscope: Object.freeze({ host: 'dashscope-intl.aliyuncs.com', url: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions', secretEnv: 'DASHSCOPE_API_KEY', transport: 'openai-compatible',
+  dashscope: Object.freeze({ host: 'dashscope-intl.aliyuncs.com', url: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions', secretEnv: 'DASHSCOPE_API_KEY', transport: 'openai-compatible', streamUsage: 'include_usage',
     workspace: Object.freeze({ region: 'ap-southeast-1', hostOf: id => `${id}.ap-southeast-1.maas.aliyuncs.com` }) }),
 });
 
@@ -316,16 +319,19 @@ function listCost(model, usage, priceInfo, facts) {
  * transport_unknown: no HTTP answer came back (timeout, network, redirect,
  * unreadable body) - whether the provider billed it is not known.
  */
-async function callProvider(model, messages, { timeoutMs = 120000, fetchImpl = null, entry = null } = {}) {
+async function callProvider(model, messages, { timeoutMs = 120000, fetchImpl = null, entry = null, stream = false } = {}) {
   const p = PROVIDERS[model.provider];
   if (!p) return { outcome: 'not_called', error: `unknown provider ${model.provider}` };
   const auth = authFor(model.provider, entry);
   if (auth.mode === 'missing') return { outcome: 'not_called', error: auth.reason };
-  if (p.transport === 'voicelab-adapter' && auth.mode === 'env') return callVoiceLab(model, messages, timeoutMs);
+  if (p.transport === 'voicelab-adapter' && auth.mode === 'env' && !stream) return callVoiceLab(model, messages, timeoutMs);
   const ep = endpointFor(model.provider, entry);
   if (ep.error) return { outcome: 'not_called', error: ep.error };
   const body = requestBody(model, messages);
-  const headers = { 'Content-Type': 'application/json', Accept: 'application/json' };
+  // a stream keeps bytes flowing, so a proxy that drops a quiet connection
+  // (2026-10-12: ~30 s, "upstream request failed") does not cut a long answer
+  if (stream) { body.stream = true; if (p.streamUsage === 'include_usage') body.stream_options = { include_usage: true }; }
+  const headers = { 'Content-Type': 'application/json', Accept: stream ? 'text/event-stream' : 'application/json' };
   if (auth.mode === 'env') headers.Authorization = `Bearer ${String(process.env[p.secretEnv]).trim()}`;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -338,6 +344,10 @@ async function callProvider(model, messages, { timeoutMs = 120000, fetchImpl = n
   } catch (e) {
     clearTimeout(timer);
     return { outcome: 'transport_unknown', error: redact(e && e.name === 'AbortError' ? `timed out after ${timeoutMs} ms` : (e && e.message) || e), usage: usageOf(null) };
+  }
+  if (stream && resp.ok) {
+    const out = await readStream(resp, p, timer);
+    return out;
   }
   let raw = '';
   try { raw = await resp.text(); } catch (e) { clearTimeout(timer); return { outcome: 'transport_unknown', status: resp.status, error: redact(`body not read: ${e && e.message}`), usage: usageOf(null) }; }
@@ -366,6 +376,55 @@ async function callProvider(model, messages, { timeoutMs = 120000, fetchImpl = n
     reasoningChars: ['reasoning_content', 'reasoning'].map(k => (typeof msg[k] === 'string' ? msg[k].length : 0)).reduce((a, b) => a + b, 0),
     usage: usageOf(data), providerCostUsd: providerCostOf(data), ...billing,
   };
+}
+
+/**
+ * A server-sent-event answer: content and reasoning deltas joined, the last
+ * finish_reason, model and usage. A stream that breaks, carries an error
+ * event, or ends with no finish_reason is a transport whose outcome (and
+ * billing) is unknown - never a finished answer.
+ */
+async function readStream(resp, p, timer) {
+  const vl = p.transport === 'voicelab-adapter' ? voicelabAdapter()._internal.billingHeaders(resp) : null;
+  const headerId = (vl && vl.requestId) || (resp.headers && typeof resp.headers.get === 'function' && (resp.headers.get('x-request-id') || resp.headers.get('request-id'))) || null;
+  const decoder = new TextDecoder();
+  let buf = '', text = '', reasoningChars = 0, finishReason = null, model = null, id = null, usageData = null, refusal = null, done = false, streamError = null;
+  const handle = (line) => {
+    if (!line.startsWith('data:')) return;
+    const payload = line.slice(5).trim();
+    if (!payload) return;
+    if (payload === '[DONE]') { done = true; return; }
+    let ev; try { ev = JSON.parse(payload); } catch { return; }
+    if (ev.error) { streamError = redact(typeof ev.error === 'string' ? ev.error : [ev.error.code, ev.error.message].filter(Boolean).join(': ')); return; }
+    if (ev.model) model = ev.model;
+    if (ev.id) id = ev.id;
+    if (ev.usage) usageData = { usage: ev.usage };
+    const c = Array.isArray(ev.choices) ? ev.choices[0] : null;
+    if (!c) return;
+    const d = c.delta || c.message || {};
+    text += voicelabAdapter()._internal.contentText(d.content);
+    for (const k of ['reasoning_content', 'reasoning']) if (typeof d[k] === 'string') reasoningChars += d[k].length;
+    if (typeof d.refusal === 'string' && d.refusal) refusal = redact(d.refusal);
+    if (c.finish_reason) finishReason = c.finish_reason;
+  };
+  try {
+    for await (const chunk of resp.body) {
+      buf += decoder.decode(chunk, { stream: true });
+      let i;
+      while ((i = buf.indexOf('\n')) !== -1) { handle(buf.slice(0, i).trim()); buf = buf.slice(i + 1); }
+    }
+    if (buf.trim()) handle(buf.trim());
+  } catch (e) {
+    clearTimeout(timer);
+    return { outcome: 'transport_unknown', status: resp.status, requestId: headerId || id, error: redact(e && e.name === 'AbortError' ? 'timed out while streaming' : `stream broke: ${e && e.message}`), text, usage: usageOf(usageData), partialText: !!text };
+  }
+  clearTimeout(timer);
+  const usage = usageOf(usageData);
+  const billing = vl ? { credits: vl.creditsCharged, billingStatus: vl.billingStatus } : {};
+  if (streamError || !finishReason) {
+    return { outcome: 'transport_unknown', status: resp.status, requestId: headerId || id, returnedModel: model, error: streamError || `stream ended with no finish_reason${done ? '' : ' and no [DONE]'}`, text, usage, ...billing };
+  }
+  return { outcome: 'answered', status: resp.status, requestId: headerId || id, returnedModel: model, text, finishReason, refusal, reasoningChars, usage, providerCostUsd: providerCostOf(usageData), streamed: true, ...billing };
 }
 
 /** Comet through the existing adapter: explicit id, no fallback, same outcome shape. */

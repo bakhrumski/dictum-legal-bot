@@ -29,7 +29,7 @@
  *   node scripts/provider-eval.js                       # dry run, 15 jobs
  *   node scripts/provider-eval.js --json
  *   node scripts/provider-eval.js --variants deepseek,glm          # a subset of the models (3 x 2 = 6 jobs)
- *   node scripts/provider-eval.js --input both --docs <dir> [--reviewer-key <file>] [--digest-by baseline]
+ *   node scripts/provider-eval.js --input both --docs <dir> [--reviewer-key <file>] [--digest-by baseline] [--stream]
  *        # owner documents (outside the repo), full text and/or the production digest
  *   node scripts/provider-eval.js --budget-usd N --confirmed <file>   # also prints the run sha
  *   node scripts/provider-eval.js --report <out> [--ratings <file>]   # offline summary
@@ -70,6 +70,9 @@ const INPUTS = Object.freeze(['full_text', 'digest']);
 // with the time limit raised so a sequential reading is not cut by it
 const DIGEST_LIMITS = Object.freeze({ concurrency: 1, timeMs: 30 * 60 * 1000 });
 const TIMEOUT_MS = 120000;
+// a streamed answer may run long; the bytes keep coming, so the limit is the
+// whole answer's, not a quiet-connection one
+const STREAM_TIMEOUT_MS = 300000;
 // ESTIMATE only, never a bound: comet's request R2 (504b2e59-..., one
 // 54 260-char DOCX) gave 0.367 input tokens per character and a 1 947-token
 // answer. Not measured for any other model; the reserve never uses it.
@@ -265,13 +268,14 @@ function checkConfirmed(models, conf) {
 }
 
 /** The run's identity: what the owner approves. Any change gives another sha. */
-function runSha(frozen, models, budgetUsd, confirmedSha, { inputs = ['full_text'], digestBy = null } = {}) {
+function runSha(frozen, models, budgetUsd, confirmedSha, { inputs = ['full_text'], digestBy = null, stream = false } = {}) {
   const digest = inputs.includes('digest') ? {
     by: digestBy && { variant: digestBy.variant, requestedModel: digestBy.requestedModel, profile: digestBy.profile },
     system: sha(ex.DIGEST_SYSTEM), limits: DIGEST_LIMITS, maxExtraCalls: ex.DIGEST_LIMITS.maxExtraCalls,
   } : null;
   return sha({
     ...(inputs.length === 1 && inputs[0] === 'full_text' ? {} : { inputs, digest }),
+    ...(stream ? { stream: true } : {}),
     cases: frozen.map(f => ({ id: f.id, hashes: f.hashes })),
     models: models.map(m => ({ variant: m.variant, provider: m.provider, requestedModel: m.requestedModel, profile: { params: m.profile.params, capParam: m.profile.capParam, cap: m.profile.cap, reasoning: m.profile.reasoning } })),
     controls: CONTROLS, budgetUsd: Number(budgetUsd) || 0, confirmedSha: confirmedSha || null,
@@ -440,14 +444,14 @@ function answerIds(out, jobs) {
  * input, `digestBy` (a model of the config) builds each document's digest
  * once; it needs its own confirmation entry.
  */
-async function runLive({ frozen, models, budgetUsd, out, confirmed, sha: runId, call = prov.callProvider, log = () => {}, inputs = ['full_text'], digestBy = null }) {
+async function runLive({ frozen, models, budgetUsd, out, confirmed, sha: runId, call = prov.callProvider, log = () => {}, inputs = ['full_text'], digestBy = null, stream = false }) {
   fs.mkdirSync(path.join(out, 'answers'), { recursive: true });
   const ledgerFile = path.join(out, 'ledger.jsonl');
   const append = e => fs.appendFileSync(ledgerFile, JSON.stringify({ ...e, at: new Date().toISOString() }) + '\n');
   const entries = readLedger(ledgerFile);
   const head = entries.find(e => e.type === 'run');
   if (head && head.runSha !== runId) throw Object.assign(new Error('this --out holds another run (other sha): nothing called'), { exit: 3 });
-  if (!head) append({ type: 'run', runSha: runId, budgetUsd, controls: CONTROLS, inputs, digestBy: digestBy ? digestBy.variant : null });
+  if (!head) append({ type: 'run', runSha: runId, budgetUsd, controls: CONTROLS, inputs, digestBy: digestBy ? digestBy.variant : null, stream });
   if (frozen.some(f => f.file)) fs.writeFileSync(path.join(out, 'cases.json'), JSON.stringify(frozen.map(f => ({ id: f.id, file: f.path, sha256: f.hashes.source })), null, 2));
   const jobs = jobList(frozen, models, inputs);
   const ids = answerIds(out, jobs);
@@ -475,7 +479,7 @@ async function runLive({ frozen, models, budgetUsd, out, confirmed, sha: runId, 
     if (!taken.ok) throw new Error(`budget ${taken.reason} - not called`);
     append({ type: 'reserve', job, attempt: attemptNo, variant: m.variant, reservedUsd: b.usd });
     const t0 = Date.now();
-    const r = await call(m, messages, { timeoutMs: TIMEOUT_MS, entry: e });
+    const r = await call(m, messages, { timeoutMs: stream ? STREAM_TIMEOUT_MS : TIMEOUT_MS, entry: e, stream });
     const durationMs = Date.now() - t0;
     const listUsd = r.usage ? prov.listCost(m, r.usage, priceInfo, e) : null;
     const rate = pricing.voicelabCreditUsd();
@@ -496,7 +500,7 @@ async function runLive({ frozen, models, budgetUsd, out, confirmed, sha: runId, 
       listUsd, providerUsd: r.providerCostUsd == null ? null : r.providerCostUsd, credits: r.credits == null ? null : r.credits, creditUsd,
       provider: m.provider, endpoint: prov.endpointFor(m.provider, e).url, auth: prov.authFor(m.provider, e).mode, billingStatus: r.billingStatus || null, requestedModel: m.requestedModel, returnedModel: r.returnedModel || null, modelMatch: match, requestId: r.requestId || null,
       profile: { reasoning: m.profile.reasoning, params: m.profile.params, capParam: m.profile.capParam, cap: m.profile.cap },
-      usage: r.usage || null, reasoningChars: r.reasoningChars || 0, finishReason: r.finishReason || null, durationMs, httpStatus: r.status || null,
+      usage: r.usage || null, reasoningChars: r.reasoningChars || 0, finishReason: r.finishReason || null, durationMs, httpStatus: r.status || null, streamed: !!r.streamed,
       error: r.error || null, halt, usageCheck: check, promptSha: sha(messages.map(x => ({ role: x.role, text: x.text }))), runSha: runId,
     };
     append(attempt);
@@ -658,6 +662,7 @@ async function main(argv = process.argv.slice(2)) {
     const cfg = loadConfig();
     const models = selectModels(cfg.models, has('--variants') ? arg('--variants', '') : null);
     const inputs = selectInputs(arg('--input'));
+    const stream = has('--stream');
     const digestBy = inputs.includes('digest') ? digestModel(selectModels(cfg.models, arg('--digest-by', 'baseline'))[0]) : null;
     const docs = arg('--docs');
     const keyFile = arg('--reviewer-key');
@@ -672,13 +677,13 @@ async function main(argv = process.argv.slice(2)) {
     if (confFile && inside(confFile)) { console.error('--confirmed must be outside the repository (owner file)'); return 2; }
     const confirmed = confFile ? readJson(confFile) : null;
     const jobs = plan(frozen, models, confirmed, { inputs, digestBy, digestPlans });
-    const id = runSha(frozen, models, budgetUsd, confFile ? sha(fs.readFileSync(confFile, 'utf8')) : null, { inputs, digestBy });
+    const id = runSha(frozen, models, budgetUsd, confFile ? sha(fs.readFileSync(confFile, 'utf8')) : null, { inputs, digestBy, stream });
     const sum = f => jobs.reduce((n, j) => (f(j) == null ? n : n + f(j)), 0);
     const summary = {
       mode: live ? 'live' : 'dry-run (no network)', jobs: jobs.length, ready: jobs.filter(j => j.state === 'READY').length, blocked: jobs.filter(j => j.state === 'BLOCKED').length,
       finalAnswerCalls: jobs.filter(j => j.stage === 'final').length, helperAiCalls: 0, paidPreflight: 0,
       digestCalls: jobs.filter(j => j.stage === 'digest').reduce((n, j) => n + j.digest.calls, 0), digestReReadAllowance: jobs.filter(j => j.stage === 'digest').length * ex.DIGEST_LIMITS.maxExtraCalls,
-      inputs, digestBy: digestBy ? digestBy.variant : null, reviewerKeyCheck: phrases.length ? `${phrases.length} key phrase(s) checked against every prompt` : 'no reviewer key given: the leak check is off',
+      inputs, digestBy: digestBy ? digestBy.variant : null, stream, reviewerKeyCheck: phrases.length ? `${phrases.length} key phrase(s) checked against every prompt` : 'no reviewer key given: the leak check is off',
       maxAttempts: jobs.filter(j => j.stage === 'final').length * (1 + CONTROLS.autoRetry),
       controls: CONTROLS, scenario: SCENARIO, inputBoundMethod: prov.INPUT_BOUND_METHOD,
       estimateVisibleUsd: sum(j => j.estimate.visibleUsd), estimateAtCapUsd: sum(j => j.estimate.atCapUsd), estimateUnpriced: jobs.filter(j => j.estimate.visibleUsd == null).map(j => j.job),
@@ -687,7 +692,7 @@ async function main(argv = process.argv.slice(2)) {
     };
     const subset = models.length < cfg.models.length ? ` --variants ${models.map(m => m.variant).join(',')}` : '';
     summary.variants = models.map(m => m.variant);
-    const extraFlags = `${inputs.length === 1 && inputs[0] === 'full_text' ? '' : ` --input ${inputs.length === 2 ? 'both' : inputs[0]}`}${digestBy && digestBy.variant !== 'baseline' ? ` --digest-by ${digestBy.variant}` : ''}${docs ? ` --docs ${docs}` : ''}${keyFile ? ` --reviewer-key ${keyFile}` : ''}`;
+    const extraFlags = `${inputs.length === 1 && inputs[0] === 'full_text' ? '' : ` --input ${inputs.length === 2 ? 'both' : inputs[0]}`}${digestBy && digestBy.variant !== 'baseline' ? ` --digest-by ${digestBy.variant}` : ''}${docs ? ` --docs ${docs}` : ''}${stream ? ' --stream' : ''}${keyFile ? ` --reviewer-key ${keyFile}` : ''}`;
     summary.liveCommand = `NODE_USE_ENV_PROXY=1 PROVIDER_EVAL_LIVE=yes node scripts/provider-eval.js --live${subset}${extraFlags} --budget-usd ${budgetUsd || 'N'} --out <dir outside the repo> --confirmed ${confFile || '<owner file>'} --approve ${budgetUsd && confFile ? id : '<run sha>'}`;
     if (has('--json')) console.log(JSON.stringify({ summary, officialDocsReadAttempts: cfg.officialDocsReadAttempts, cases: frozen.map(f => ({ id: f.id, chars: f.chars, promptChars: f.promptChars, hashes: f.hashes, keyLines: f.helpers.keyLines.length, conflicts: f.helpers.conflicts.length })), models: models.map(m => ({ variant: m.variant, label: m.label, why: m.why, profile: m.profile, facts: m.facts, scenarioPrices: m.scenarioPrices })), jobs }, null, 2));
     else printPlan(frozen, models, jobs, summary, cfg);
@@ -720,7 +725,7 @@ async function main(argv = process.argv.slice(2)) {
     const need = remaining.reduce((n, j) => n + j.reserve.usd, 0);
     if (need > prior.left + 1e-12) { console.error(`the reserve $${need.toFixed(4)} does not fit what is left of the budget ($${prior.left.toFixed(4)} of $${budgetUsd}) - nothing called`); return 3; }
     restore();
-    const b = await runLive({ frozen, models, budgetUsd, out, confirmed, sha: id, log: s => console.log(s), inputs, digestBy });
+    const b = await runLive({ frozen, models, budgetUsd, out, confirmed, sha: id, log: s => console.log(s), inputs, digestBy, stream });
     console.log(`live: known cost $${b.spent.toFixed(5)} (list USD $${b.listUsd.toFixed(5)}, provider-reported $${b.providerUsd.toFixed(5)}, VoiceLab credits ${b.credits} - shown apart); ${b.unknownCalls} call(s) with cost UNKNOWN, reserve $${b.heldUnknown.toFixed(5)} held; ${b.halted ? `HALTED: ${b.haltedBy && b.haltedBy.reason}` : 'not halted'}. Outputs: ${out} (blind/ for the reviewer, key.json apart).`);
     return 0;
   } finally { restore(); }
