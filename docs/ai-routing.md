@@ -37,6 +37,20 @@ Paid opinions therefore stay on Sol; `OPINION_MODEL=deepseek/deepseek-v4-pro`
 price 1.32 / 0.044 / 3.96 per 1M in `model-pricing.js`), Sol behind it.
 `deepseek/<model>` accepts only `deepseek-flash` and `deepseek-v4-pro`.
 
+GLM (Z.AI, `src/ai/zai.js`, 2026-10-12): opt-in only, for trials on the
+platform. A call goes to `glm-5.3-flash` only when its id is
+`zai/glm-5.3-flash` (`MODEL_TELEGRAM`, `MODEL_CHAT`, `OPINION_MODEL_<PLAN>`,
+`/api/admin/model-ab?a=zai/glm-5.3-flash&b=...`) and `ZAI_API_KEY` is set;
+thinking is always on there, sent with `reasoning_effort=low`; a failure or a
+refusal (`finish_reason: sensitive`) goes on to DeepSeek, then the lane's
+GPT-6. Price 0.15 / 0.03 / 0.50 per 1M (docs.z.ai). Not in the hybrid
+pipeline or the explanation router.
+
+Legal opinion's second model: `OPINION_FALLBACK_MODEL` (e.g.
+`deepseek/deepseek-v4-pro`) is tried after the paid model and its retries
+fail, before Gemini. Sinov's opinion model is `OPINION_MODEL_SINOV`; a
+failure there goes to the cheap lane (GPT-6 Luna), never to Sol.
+
 Without DeepSeek (no key, or `DEEPSEEK_ROUTING=off`) the chains are as
 before: VoiceLab first only when `LLM_PROVIDER=voicelab` and
 `VOICELAB_API_KEY` are set, and the lane is in `VOICELAB_LANES`.
