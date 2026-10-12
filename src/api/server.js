@@ -3523,6 +3523,8 @@ async function callGeminiOnce(messages, options, call) {
 // This restores the intended routing for streamed answers too.
 async function callOpenAIStream(messages, options = {}, onToken) {
   return usageLedger.withChain(async () => {
+    const viaZai = await tryZai(messages, options, options.model || MODELS.standard, onToken);
+    if (viaZai) return viaZai;
     const viaDeepSeek = await tryDeepSeek(messages, options, options.model || MODELS.standard, onToken);
     if (viaDeepSeek) return viaDeepSeek;
     const viaVoiceLab = await tryVoiceLab(messages, options, options.model || MODELS.standard, onToken);
@@ -3732,6 +3734,8 @@ const voicelab = require('../ai/voicelab');
 // DeepSeek is the first choice for every text call (2026-10-12; images, OCR
 // and embeddings keep their providers): src/ai/deepseek.js
 const deepseek = require('../ai/deepseek');
+// GLM (Z.AI): only an explicit 'zai/<model>' id goes there (src/ai/zai.js)
+const zai = require('../ai/zai');
 
 /** A paid provider is reachable: OpenAI as before, or VoiceLab when switched on. */
 function paidProviderConfigured() {
@@ -3828,10 +3832,36 @@ function sameModelId(a, b) {
   return !!a && n(a) === n(b);
 }
 
-/** The OpenAI model behind a requested id: an explicit deepseek/ id falls back to the lane's GPT-6. */
+/**
+ * GLM for an explicit 'zai/glm-5.3-flash' id only (trials: MODEL_TELEGRAM,
+ * MODEL_CHAT, OPINION_MODEL_<PLAN>, model-ab). null on a failure, so the
+ * call goes on down the chain (DeepSeek, then the lane's GPT-6). A stream
+ * that already showed tokens is not replayed elsewhere.
+ */
+async function tryZai(messages, options, requestedModel, onToken) {
+  if (!zai.routes(requestedModel)) return null;
+  if (!(await paidModelsAllowed())) return null;
+  const maxTokens = zai.maxTokensFor(options.maxTokens || 8192);
+  const zModel = zai.modelFor(requestedModel);
+  const label = `zai/${zModel}`;
+  try {
+    const r = await usageLedger.track({ provider: 'zai', model: label, endpoint: options.endpoint, userId: options.userId || null, detail: options.detail || null, ...(onToken ? { retryTransient: 0 } : {}),
+      bound: modelPricing.callCostBound({ model: label, inputTokensMax: modelPricing.inputTokenBound(messages), outputTokensMax: maxTokens }) },
+    (call) => (onToken
+      ? zai.chatCompletionStream(messages, { maxTokens, call, model: zModel }, onToken)
+      : zai.chatCompletion(messages, { maxTokens, call, model: zModel })));
+    return { text: r.text, provider: r.provider, truncated: r.truncated, usage: { ...r.usage, costUsd: calculateTokenCost(label, r.usage) || 0 } };
+  } catch (err) {
+    console.warn('[Z.AI] failed, going on down the chain:', err.message);
+    if (onToken && err.partialStream) throw err;
+    return null;
+  }
+}
+
+/** The OpenAI model behind a requested id: an explicit deepseek/ or zai/ id falls back to the lane's GPT-6. */
 function openaiModelFor(options) {
   const m = String(options.model || MODELS.standard);
-  if (/^deepseek\//i.test(m)) return MODELS[options.lane] || MODELS.chat || MODELS.cheap;
+  if (/^(deepseek|zai)\//i.test(m)) return MODELS[options.lane] || MODELS.chat || MODELS.cheap;
   return voicelab.stripProviderPrefix(m);
 }
 
@@ -3867,6 +3897,8 @@ async function paidModelsAllowed() {
 
 async function callOpenAI(messages, options = {}) {
   return usageLedger.withChain(async () => {
+    const viaZai = await tryZai(messages, options, options.model || MODELS.standard);
+    if (viaZai) return viaZai;
     const viaDeepSeek = await tryDeepSeek(messages, options, options.model || MODELS.standard);
     if (viaDeepSeek) return viaDeepSeek;
     const viaVoiceLab = await tryVoiceLab(messages, options, options.model || MODELS.standard);
@@ -4043,6 +4075,17 @@ async function callPremiumAIChain(messages, options = {}) {
         const last = i === attempts - 1;
         console.error(`[PremiumAI] ${model} attempt ${i + 1}/${attempts} FAILED${last ? ' (falling back)' : ', retrying'}:`, e.message);
         if (!last) await new Promise(r => setTimeout(r, 800 * (i + 1)));
+      }
+    }
+    // a caller's own second model (legal opinion: OPINION_FALLBACK_MODEL,
+    // e.g. deepseek/deepseek-v4-pro) before the last resort
+    if (options.fallbackModel && !sameModelId(options.fallbackModel, model)) {
+      try {
+        const lane = options.lane || (model === MODELS.cheap ? 'cheap' : 'premium');
+        console.warn(`[PremiumAI] ${model} failed - trying the fallback ${options.fallbackModel}`);
+        return await callOpenAI(messages, { ...options, model: options.fallbackModel, lane, useSearch: false });
+      } catch (e) {
+        console.error(`[PremiumAI] fallback ${options.fallbackModel} FAILED:`, e.message);
       }
     }
   } else {
@@ -7204,6 +7247,11 @@ app.post('/api/draft/legal-opinion', requireAuth, require('../ai/ai-trigger').re
     };
     let opinionMaxTokens = 7000;
     let opinionModel = process.env.OPINION_MODEL || null;
+    // Sinov: a failure of its model goes to the cheap lane (GPT-6 Luna), never Sol
+    let opinionLane;
+    // the second model when the first fails (OPINION_FALLBACK_MODEL, e.g.
+    // deepseek/deepseek-v4-pro), before the last resort
+    const opinionFallback = String(process.env.OPINION_FALLBACK_MODEL || '').trim() || null;
     try {
       const u = await tariffModule.getUserPlan(req.session.adminId);
       const isExempt = u && (u.plan === 'master' || u.staff || (u.role && u.role !== 'user'));
@@ -7216,6 +7264,7 @@ app.post('/api/draft/legal-opinion', requireAuth, require('../ai/ai-trigger').re
         if (!m.allowed) return;
         const planKey = (res.locals.quota && res.locals.quota.plan) || (u && u.plan) || 'sinov';
         opinionMaxTokens = planKey === 'sinov' ? 4500 : 7000;
+        if (planKey === 'sinov') opinionLane = 'cheap';
         if (!opinionModel) opinionModel = process.env['OPINION_MODEL_' + planKey.toUpperCase()] || OPINION_MODELS[planKey] || MODELS.standard;
       }
     } catch (qErr) {
@@ -7519,7 +7568,7 @@ ${groundingRule}
       // premiumRetries 2: the synthesis MUST come from the requested model
       // (Sol for every paid tier) — retry through transient 429s/timeouts
       // rather than silently downgrading the deliverable to Terra.
-      { model: opinionModel, useSearch: false, maxTokens: opinionMaxTokens, premiumRetries: 2, userId: req.session?.adminId || null, endpoint: '/api/draft/legal-opinion' }
+      { model: opinionModel, lane: opinionLane, fallbackModel: opinionLane === 'cheap' ? null : opinionFallback, useSearch: false, maxTokens: opinionMaxTokens, premiumRetries: 2, userId: req.session?.adminId || null, endpoint: '/api/draft/legal-opinion' }
     );
     let html = (result.text || '').trim().replace(/```(?:html)?/gi, '').trim();
     if (!html) return res.status(500).json({ error: 'Xulosa yaratib bo\'lmadi — qayta urinib ko\'ring' });
@@ -7552,7 +7601,7 @@ Rewrite the opinion so that:
 - Nothing else changes: keep the same language, structure (<h2> sections) and all verified content.
 Return ONLY the corrected HTML body — no fences, no commentary.` },
           { role: 'user', text: `KONTEKST:\n${sourceText.slice(0, 12000)}\n\nTASDIQLANGAN LEX.UZ MANBALARI:\n${verifiedSourceDirectory.join('\n') || '- Yo\'q'}\n\n─── XULOSA ───\n${html}` },
-        ], { model: opinionModel, useSearch: false, maxTokens: opinionMaxTokens + 1000, premiumRetries: 1,
+        ], { model: opinionModel, lane: opinionLane, fallbackModel: opinionLane === 'cheap' ? null : opinionFallback, useSearch: false, maxTokens: opinionMaxTokens + 1000, premiumRetries: 1,
              userId: req.session?.adminId || null, endpoint: '/api/draft/legal-opinion/fix-citations' });
         const fixed = tidyDocumentHtml((fix.text || '').trim().replace(/```(?:html)?/gi, '').trim());
         // A truncated rewrite is worse than the original with a disclosure
