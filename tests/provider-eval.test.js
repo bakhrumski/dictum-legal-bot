@@ -55,6 +55,8 @@ const response = (status, body, headers = {}) => ({ ok: status >= 200 && status 
 
 (async () => {
   const cfg = pe.loadConfig();
+  // the default matrix (extra opt-in variants are tested on their own below)
+  cfg.models = pe.selectModels(cfg.models, null);
   const phrases = pe.keyPhrases();
   const frozen = [];
   for (const c of pe.loadCases()) frozen.push(await pe.freeze(c, phrases));
@@ -495,7 +497,7 @@ const response = (status, body, headers = {}) => ({ ok: status >= 200 && status 
   await test('--variants: a small run of the named models only (deepseek,glm = 6 jobs); unknown, repeated or empty names refused; the selection changes the run sha; only the selected models need confirmation', async () => {
     const pick = pe.selectModels(cfg.models, 'glm,deepseek');
     assert.deepStrictEqual(pick.map(m => m.variant), ['deepseek', 'glm'], 'config order kept');
-    assert.strictEqual(pe.selectModels(cfg.models, null), cfg.models);
+    assert.deepStrictEqual(pe.selectModels(cfg.models, null), cfg.models);
     for (const bad of ['', 'deepseek,kimix', 'glm,glm', ' , ']) assert.throws(() => pe.selectModels(cfg.models, bad), /--variants/u, bad);
     const r = run(['--json', '--variants', 'deepseek,glm'], KEYS);
     assert.strictEqual(r.code, 0, r.out);
@@ -728,6 +730,42 @@ const response = (status, body, headers = {}) => ({ ok: status >= 200 && status 
     assert.deepStrictEqual([r.outcome, hdr.Authorization, sent.stream_options], ['answered', `Bearer ${KEYS.VOICELAB_API_KEY}`, { include_usage: true }]);
     // the stream flag is part of the run sha
     assert.notStrictEqual(pe.runSha(frozen, cfg.models, 1, 'c', { stream: true }), pe.runSha(frozen, cfg.models, 1, 'c'));
+  });
+
+  await test('extra variants (deepseek_6k, GPT-6) run only when named; GPT-6 goes the Responses API way production uses: input with the system message, max_output_tokens, no temperature; output_text, incomplete -> length, reasoning tokens inside output', async () => {
+    const all = pe.loadConfig().models;
+    assert.deepStrictEqual(pe.selectModels(all, null).map(m => m.variant), ['baseline', 'deepseek', 'glm', 'kimi', 'qwen'], 'the default matrix is unchanged');
+    const pick = pe.selectModels(all, 'gpt6_sol,deepseek_6k');
+    assert.deepStrictEqual(pick.map(m => m.variant), ['deepseek_6k', 'gpt6_sol']);
+    const msgs = frozen[0].messages;
+    assert.strictEqual(prov.requestBody(pick[0], msgs).max_tokens, 6000);
+    assert.strictEqual(prov.requestBody(pick[0], msgs).model, 'deepseek-flash', 'the same model, only the cap differs');
+    const sol = pick[1];
+    const body = prov.requestBody(sol, msgs);
+    assert.deepStrictEqual(Object.keys(body).sort(), ['input', 'max_output_tokens', 'model']);
+    assert.deepStrictEqual([body.input[0].role, body.input[1].role, body.max_output_tokens], ['system', 'user', 8000]);
+    const resp = (status, extra = {}) => ({ id: 'resp_1', model: 'gpt-6-sol', status, output: [{ type: 'reasoning', summary: [] }, { type: 'message', content: [{ type: 'output_text', text: 'Izoh tayyor.' }] }], usage: { input_tokens: 3000, input_tokens_details: { cached_tokens: 1000 }, output_tokens: 900, output_tokens_details: { reasoning_tokens: 300 } }, ...extra });
+    let seen = null;
+    let r = await prov.callProvider(sol, msgs, { entry: { auth: 'network_secret' }, fetchImpl: async (u, init) => { seen = { u, init }; return response(200, resp('completed')); } });
+    assert.strictEqual(seen.u, 'https://api.openai.com/v1/responses');
+    assert.ok(!Object.keys(seen.init.headers).some(h => /authorization/iu.test(h)));
+    assert.deepStrictEqual([r.outcome, r.text, r.finishReason, r.returnedModel], ['answered', 'Izoh tayyor.', 'stop', 'gpt-6-sol']);
+    assert.deepStrictEqual([r.usage.inTokens, r.usage.cachedTokens, r.usage.outTokens, r.usage.reasoningTokens, r.usage.complete], [3000, 1000, 900, 300, true]);
+    assert.strictEqual(pe.classify(r, sol), 'completed');
+    r = await prov.callProvider(sol, msgs, { entry: { auth: 'network_secret' }, fetchImpl: async () => response(200, resp('incomplete', { incomplete_details: { reason: 'max_output_tokens' } })) });
+    assert.deepStrictEqual([r.finishReason, pe.classify(r, sol)], ['length', 'truncated']);
+    r = await prov.callProvider(sol, msgs, { entry: { auth: 'network_secret' }, fetchImpl: async () => response(200, resp('incomplete', { incomplete_details: { reason: 'content_filter' } })) });
+    assert.strictEqual(pe.classify(r, sol), 'finish_unknown', 'another incomplete reason is not a finished answer');
+    // streamed: text deltas, then the final response object; a failed event is an unknown outcome
+    const enc = new TextEncoder();
+    const sse = events => ({ ok: true, status: 200, headers: { get: () => null }, body: (async function* () { for (const e of events) yield enc.encode(`event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`); })() });
+    r = await prov.callProvider(sol, msgs, { entry: { auth: 'network_secret' }, stream: true, fetchImpl: async (u, init) => { seen = JSON.parse(init.body); return sse([{ type: 'response.output_text.delta', delta: 'Izoh ' }, { type: 'response.output_text.delta', delta: 'tayyor.' }, { type: 'response.completed', response: resp('completed') }]); } });
+    assert.ok(seen.stream === true && !('stream_options' in seen));
+    assert.deepStrictEqual([r.outcome, r.text, r.finishReason, r.usage.outTokens, r.streamed], ['answered', 'Izoh tayyor.', 'stop', 900, true]);
+    r = await prov.callProvider(sol, msgs, { entry: { auth: 'network_secret' }, stream: true, fetchImpl: async () => sse([{ type: 'response.output_text.delta', delta: 'yarim' }, { type: 'response.failed', response: { error: { code: 'server_error' } } }]) });
+    assert.strictEqual(r.outcome, 'transport_unknown');
+    r = await prov.callProvider(sol, msgs, { entry: { auth: 'network_secret' }, stream: true, fetchImpl: async () => sse([{ type: 'response.output_text.delta', delta: 'yarim' }]) });
+    assert.ok(r.outcome === 'transport_unknown' && /no final response/u.test(r.error));
   });
 
   await test('restart: a finished run spends nothing again; an attempt with no outcome written keeps its reserve and halts', async () => {
