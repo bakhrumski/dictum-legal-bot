@@ -2,9 +2,10 @@
 
 /**
  * Which model writes the document explanation (2026-10-12): DeepSeek
- * deepseek-flash with a 6 000-token answer cap, then GPT-6 Luna, then the
- * last-resort tier. Only the final explanation call - the long-document
- * digest, opinions, chat and Telegram keep their own routing.
+ * deepseek-flash with a 6 000-token answer cap, then GPT-6 Luna at 8 000,
+ * then the last-resort tier. The other text calls go to DeepSeek first
+ * through callOpenAI (src/ai/deepseek.js routes); this route only fixes the
+ * explanation's caps, as measured in the provider evaluation.
  *
  * Environment (an env change, not a deploy, turns it off):
  *   EXPLAIN_PROVIDER              'deepseek' (default when DEEPSEEK_API_KEY is
@@ -21,7 +22,8 @@
  */
 
 function routing(env = process.env) {
-  const has = String(env.DEEPSEEK_API_KEY || '').trim().length > 0;
+  // DEEPSEEK_ROUTING=off turns DeepSeek off everywhere, this route included
+  const has = String(env.DEEPSEEK_API_KEY || '').trim().length > 0 && String(env.DEEPSEEK_ROUTING || '').trim().toLowerCase() !== 'off';
   const provider = String(env.EXPLAIN_PROVIDER || (has ? 'deepseek' : 'default')).trim().toLowerCase();
   const n = (v, d) => { const x = Number(v); return Number.isFinite(x) && x >= 16 ? x : d; };
   return {

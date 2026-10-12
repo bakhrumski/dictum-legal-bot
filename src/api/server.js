@@ -3523,9 +3523,11 @@ async function callGeminiOnce(messages, options, call) {
 // This restores the intended routing for streamed answers too.
 async function callOpenAIStream(messages, options = {}, onToken) {
   return usageLedger.withChain(async () => {
+    const viaDeepSeek = await tryDeepSeek(messages, options, options.model || MODELS.standard, onToken);
+    if (viaDeepSeek) return viaDeepSeek;
     const viaVoiceLab = await tryVoiceLab(messages, options, options.model || MODELS.standard, onToken);
     if (viaVoiceLab) return viaVoiceLab;
-    const model = voicelab.stripProviderPrefix(options.model || MODELS.standard);
+    const model = openaiModelFor(options);
     return usageLedger.track({ provider: 'openai', model, endpoint: options.endpoint || '/api/legal-chat/stream', userId: options.userId || null, retryTransient: 0,
       bound: modelPricing.callCostBound({ model, inputTokensMax: modelPricing.inputTokenBound(messages), outputTokensMax: Number(options.maxTokens) || 8192 }) },
       (call) => callOpenAIStreamOnce(messages, options, onToken, model, call));
@@ -3727,6 +3729,9 @@ const { calculateTokenCost } = require('../ai/model-pricing');
 // VoiceLab switch (LLM_PROVIDER=voicelab). Off by default; when off, every
 // router below runs exactly as before. See src/ai/voicelab.js.
 const voicelab = require('../ai/voicelab');
+// DeepSeek is the first choice for every text call (2026-10-12; images, OCR
+// and embeddings keep their providers): src/ai/deepseek.js
+const deepseek = require('../ai/deepseek');
 
 /** A paid provider is reachable: OpenAI as before, or VoiceLab when switched on. */
 function paidProviderConfigured() {
@@ -3746,6 +3751,9 @@ async function tryVoiceLab(messages, options, requestedModel, onToken) {
     ? requestedModel
     : (options.lane || requestedModel);
   if (!voicelab.routes(model)) return null;
+  // comet and the other VoiceLab text lanes are replaced by DeepSeek while it
+  // routes this lane (an explicit voicelab/ id still goes to VoiceLab)
+  if (deepseek.routes(model)) return null;
   try {
     const { temperature = 0.2, maxTokens = 8192 } = options;
     const opts = { temperature, maxTokens };
@@ -3785,6 +3793,40 @@ async function tryVoiceLab(messages, options, requestedModel, onToken) {
   }
 }
 
+/**
+ * DeepSeek first (src/ai/deepseek.js): one usage-ledger row with a cost
+ * bound; null on a failure, so the caller goes on to the OpenAI model of the
+ * lane. A stream that already showed tokens is not replayed elsewhere. The
+ * daily paid-spend ceiling applies as to every paid model.
+ */
+async function tryDeepSeek(messages, options, requestedModel, onToken) {
+  const explicit = /^(deepseek|voicelab|openai)\//i.test(String(requestedModel || ''));
+  const route = explicit ? requestedModel : (options.lane || requestedModel);
+  if (!deepseek.routes(route)) return null;
+  if (!(await paidModelsAllowed())) return null;
+  const maxTokens = deepseek.maxTokensFor(options.maxTokens || 8192);
+  const label = 'deepseek/deepseek-flash';
+  try {
+    const r = await usageLedger.track({ provider: 'deepseek', model: label, endpoint: options.endpoint, userId: options.userId || null, detail: options.detail || null, ...(onToken ? { retryTransient: 0 } : {}),
+      bound: modelPricing.callCostBound({ model: label, inputTokensMax: modelPricing.inputTokenBound(messages), outputTokensMax: maxTokens }) },
+    (call) => (onToken
+      ? deepseek.chatCompletionStream(messages, { maxTokens, temperature: options.temperature, call }, onToken)
+      : deepseek.chatCompletion(messages, { maxTokens, temperature: options.temperature, call })));
+    return { text: r.text, provider: r.provider, truncated: r.truncated, usage: { ...r.usage, costUsd: calculateTokenCost(label, r.usage) || 0 } };
+  } catch (err) {
+    console.warn('[DeepSeek] failed, using the OpenAI model of the lane:', err.message);
+    if (onToken && err.partialStream) throw err;
+    return null;
+  }
+}
+
+/** The OpenAI model behind a requested id: an explicit deepseek/ id falls back to the lane's GPT-6. */
+function openaiModelFor(options) {
+  const m = String(options.model || MODELS.standard);
+  if (/^deepseek\//i.test(m)) return MODELS[options.lane] || MODELS.chat || MODELS.cheap;
+  return voicelab.stripProviderPrefix(m);
+}
+
 // Every AI call is recorded by the usage ledger (src/ai/usage-ledger.js) into
 // llm_spend_log — failed and retried attempts included — and its cost feeds
 // the daily budget breaker below.
@@ -3817,15 +3859,17 @@ async function paidModelsAllowed() {
 
 async function callOpenAI(messages, options = {}) {
   return usageLedger.withChain(async () => {
+    const viaDeepSeek = await tryDeepSeek(messages, options, options.model || MODELS.standard);
+    if (viaDeepSeek) return viaDeepSeek;
     const viaVoiceLab = await tryVoiceLab(messages, options, options.model || MODELS.standard);
     if (viaVoiceLab) return viaVoiceLab;
-    const model = voicelab.stripProviderPrefix(options.model || MODELS.standard);
+    const model = openaiModelFor(options);
     return usageLedger.track({ provider: 'openai', model, endpoint: options.endpoint, userId: options.userId || null, detail: options.detail || null,
       // the most this call can cost (Responses: max_output_tokens caps
       // reasoning too); a web search tool makes it unbounded
       bound: modelPricing.callCostBound({ model, inputTokensMax: modelPricing.inputTokenBound(messages),
         outputTokensMax: Math.max(16, Number(options.maxTokens) || 8192), webSearch: webSearchAllowed(options.useSearch) }) },
-      (call) => callOpenAIOnce(messages, options, call));
+      (call) => callOpenAIOnce(messages, { ...options, model }, call));
   });
 }
 

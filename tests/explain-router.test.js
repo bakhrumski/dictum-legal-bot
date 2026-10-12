@@ -121,6 +121,53 @@ const fakeLedger = () => {
     assert.strictEqual((src.match(/callExplainAI/gu) || []).length, 2, 'defined once, used once');
   });
 
+  await test('DeepSeek first for every text lane: routes() on with the key, off with DEEPSEEK_ROUTING=off; explicit openai/, voicelab/ and gemini ids and the vision lane never; the cap is the caller\'s x2 up to 16 000', async () => {
+    await withEnv({ DEEPSEEK_API_KEY: KEY, DEEPSEEK_ROUTING: null, DEEPSEEK_MAX_TOKENS_FACTOR: null, DEEPSEEK_MAX_TOKENS_CAP: null }, async () => {
+      for (const m of ['cheap', 'standard', 'premium', 'gpt-6-luna', 'gpt-6-sol', 'deepseek/deepseek-flash']) assert.strictEqual(deepseek.routes(m), true, m);
+      for (const m of ['vision', 'openai/gpt-6-luna', 'voicelab/aisha-comet', 'gemini-2.5-flash']) assert.strictEqual(deepseek.routes(m), false, m);
+      assert.deepStrictEqual([deepseek.maxTokensFor(3000), deepseek.maxTokensFor(1600), deepseek.maxTokensFor(12000), deepseek.maxTokensFor(undefined)], [6000, 3200, 16000, 16000]);
+      assert.strictEqual(routing().provider, 'deepseek');
+    });
+    await withEnv({ DEEPSEEK_API_KEY: KEY, DEEPSEEK_ROUTING: 'off' }, async () => {
+      assert.strictEqual(deepseek.routes('cheap'), false);
+      assert.strictEqual(routing().provider, 'default', 'off everywhere, the explanation included');
+    });
+    await withEnv({ DEEPSEEK_API_KEY: null }, async () => assert.strictEqual(deepseek.routes('standard'), false, 'no key: nothing changes'));
+  });
+
+  await test('the streamed DeepSeek answer (web chat): deltas to the screen, usage from the last chunk; a stream broken after tokens is marked partial (not replayed elsewhere)', async () => {
+    const enc = new TextEncoder();
+    const sse = (lines, br = false) => ({ ok: true, status: 200, headers: { get: () => null }, body: (async function* () { for (const l of lines) yield enc.encode(`data: ${JSON.stringify(l)}\n\n`); if (br) throw new Error('socket hang up'); yield enc.encode('data: [DONE]\n\n'); })() });
+    await withEnv({ DEEPSEEK_API_KEY: KEY }, async () => {
+      const shown = [];
+      let body = null;
+      const r = await deepseek.chatCompletionStream(msgs, { maxTokens: 6000, fetchImpl: async (u, init) => { body = JSON.parse(init.body); return sse([{ model: 'deepseek-flash', choices: [{ delta: { content: 'Salom ' } }] }, { choices: [{ delta: { content: 'dunyo' }, finish_reason: 'stop' }] }, { choices: [], usage: { prompt_tokens: 10, completion_tokens: 3 } }]); } }, p => shown.push(p));
+      assert.deepStrictEqual([body.stream, body.stream_options, body.thinking], [true, { include_usage: true }, { type: 'disabled' }]);
+      assert.deepStrictEqual([shown.join(''), r.text, r.usage.outTokens, r.truncated], ['Salom dunyo', 'Salom dunyo', 3, false]);
+      const e = await deepseek.chatCompletionStream(msgs, { fetchImpl: async () => sse([{ choices: [{ delta: { content: 'yarim' } }] }], true) }, () => {}).catch(x => x);
+      assert.ok(e.partialStream === true);
+    });
+  });
+
+  await test('the server: DeepSeek before VoiceLab and OpenAI in callOpenAI and its stream; VoiceLab text lanes skipped while DeepSeek routes them; vision/OCR untouched; an explicit deepseek/ id falls back to the lane\'s GPT-6', () => {
+    const fs = require('fs'), path = require('path');
+    const src = fs.readFileSync(path.join(__dirname, '../src/api/server.js'), 'utf8');
+    const body = name => { const i = src.indexOf(`async function ${name}(`); return src.slice(i, src.indexOf('\n}\n', i)); };
+    for (const fn of ['callOpenAI', 'callOpenAIStream']) {
+      const b = body(fn);
+      assert.ok(b.indexOf('tryDeepSeek(') > 0 && b.indexOf('tryDeepSeek(') < b.indexOf('tryVoiceLab('), `${fn}: DeepSeek first`);
+      assert.ok(/openaiModelFor\(options\)/u.test(b), `${fn}: the lane's GPT-6 after it`);
+    }
+    assert.ok(/if \(deepseek\.routes\(model\)\) return null;/u.test(body('tryVoiceLab')));
+    assert.ok(/paidModelsAllowed\(\)/u.test(body('tryDeepSeek')), 'the daily ceiling applies');
+    // OCR / vision keep their providers
+    const ocr = fs.readFileSync(path.join(__dirname, '../src/ocr/routes.js'), 'utf8');
+    assert.ok(!/deepseek/iu.test(ocr));
+    assert.ok(!/deepseek|tryDeepSeek/u.test(body('triggerAiScreening')));
+    const hp = fs.readFileSync(path.join(__dirname, '../src/rag/hybrid-pipeline.js'), 'utf8');
+    assert.ok(hp.indexOf('if (deepseek.routes(model))') < hp.indexOf('if (voicelab.routes(model) && !deepseek.routes(model))'));
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);
 })();

@@ -8,25 +8,37 @@ can use them is decided by the provider, not by this file.
 
 | Router | Primary | Then | Last resort |
 |---|---|---|---|
-| `callAI` (standard lane) | VoiceLab `aisha-orbit`* | OpenAI `MODELS.standard` (`gpt-6-sol`) | Gemini `gemini-2.5-flash` |
-| `callAI` with `model: MODELS.chat` (Telegram/web answer) | VoiceLab `aisha-comet`* | OpenAI `gpt-6-luna` | Gemini `gemini-2.5-flash` |
-| `callCheapAI` | VoiceLab `aisha-comet`* | OpenAI `MODELS.cheap` (`gpt-6-luna`) | Gemini `gemini-2.5-flash` |
-| `callPremiumAI` | VoiceLab `aisha-halo`* | OpenAI `MODELS.premium` (`gpt-6-sol`), `premiumRetries` | Gemini `gemini-2.5-flash` |
+| `callAI` (standard lane) | DeepSeek `deepseek-flash`† | OpenAI `MODELS.standard` (`gpt-6-sol`) | Gemini `gemini-2.5-flash` |
+| `callAI` with `model: MODELS.chat` (Telegram/web answer) | DeepSeek `deepseek-flash`† | OpenAI `gpt-6-luna` | Gemini `gemini-2.5-flash` |
+| `callCheapAI` | DeepSeek `deepseek-flash`† | OpenAI `MODELS.cheap` (`gpt-6-luna`) | Gemini `gemini-2.5-flash` |
+| `callPremiumAI` (legal opinion) | DeepSeek `deepseek-flash`† | OpenAI `MODELS.premium` (`gpt-6-sol`), `premiumRetries` | Gemini `gemini-2.5-flash` |
 | `callExplainAI` (document explanation, final call only; 2026-10-12) | DeepSeek `deepseek-flash`, thinking off, `max_tokens` 6000 | OpenAI `gpt-6-luna` (explicit `openai/`, never VoiceLab), `max_output_tokens` 8000 | Gemini `gemini-2.5-flash` |
-| Streaming answer (web) | VoiceLab (lane of the model)* | OpenAI stream | Gemini stream, then `callAI` |
+| Streaming answer (web) | DeepSeek stream† | OpenAI stream | Gemini stream, then `callAI` |
 | Embeddings | Gemini `gemini-embedding-001` / HF `multilingual-e5-large` / OpenAI `text-embedding-3-small` (`EMBED_PROVIDER`; not routed, the corpus is embedded with one) | — | — |
 | Rerank | HF `BAAI/bge-reranker-v2-m3` | — | keyword re-rank (no AI call), request marked `degraded` |
 
-\* only when `LLM_PROVIDER=voicelab` and `VOICELAB_API_KEY` are set, and the
-lane is in `VOICELAB_LANES`; `MODEL_TELEGRAM=voicelab/<id>` pins Telegram.
+† when `DEEPSEEK_API_KEY` is set and `DEEPSEEK_ROUTING` is not `off`
+(`src/ai/deepseek.js`; 2026-10-12, owner's decision after the provider
+evaluation). Thinking off; the cap sent is the caller's x2 (at most 16 000).
+While DeepSeek routes a lane, VoiceLab text lanes (comet, orbit, halo) are
+skipped: a DeepSeek failure goes to the lane's GPT-6. An explicit id picks its
+provider: `voicelab/<id>` (e.g. `MODEL_TELEGRAM=voicelab/aisha-comet`) still
+goes to VoiceLab, `openai/<id>` to OpenAI, `deepseek/<id>` to DeepSeek.
+Images, scanned documents (OCR, vision) and embeddings are not routed to
+DeepSeek. The hybrid pipeline's `callOpenAIModel` follows the same order.
 
-Changed on 2026-10-12: the document explanation's final call goes to
-DeepSeek `deepseek-flash` (6 000-token answer cap) after the provider
+Without DeepSeek (no key, or `DEEPSEEK_ROUTING=off`) the chains are as
+before: VoiceLab first only when `LLM_PROVIDER=voicelab` and
+`VOICELAB_API_KEY` are set, and the lane is in `VOICELAB_LANES`.
+
+Changed on 2026-10-12: DeepSeek `deepseek-flash` is the first choice for
+every text call (chat, Telegram, legal opinion, document analysis and
+explanation, digests, helpers) in place of VoiceLab comet, after the provider
 evaluation (`docs/quality/provider-eval-plan.md`): on the 54 260-char
-investment agreement it kept every condition of the evidence table, and at
-the old 3 000 cap its answer was cut. It sends the user's document to
-DeepSeek (api.deepseek.com). The long-document digest, opinions, chat and
-Telegram are unchanged. Off: `EXPLAIN_PROVIDER=default` (env, no deploy).
+investment agreement it kept every condition of the evidence table (at a
+6 000-token cap; at 3 000 it was cut). Users' questions and documents are
+sent to DeepSeek (api.deepseek.com). Off everywhere: `DEEPSEEK_ROUTING=off`
+(env, no deploy); the explanation alone: `EXPLAIN_PROVIDER=default`.
 
 Changed on 2026-10-04: `callCheapAI` and `callPremiumAI` used to fall back to
 the whole `callAI` chain — Orbit and Sol again — before Gemini. They now go
