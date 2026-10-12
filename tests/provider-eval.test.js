@@ -916,6 +916,48 @@ const response = (status, body, headers = {}) => ({ ok: status >= 200 && status 
     assert.strictEqual(Object.values(r).reduce((n, x) => n + x.service.planned, 0), 15);
   });
 
+  await test('legal opinion task: the production opinion prompt (shared module), opinion caps, empty legal context named, its own criteria, and the sha moves with the task', async () => {
+    const op = require('../src/rag/legal-opinion');
+    // the module is what server.js uses (no copy of the prompt left there)
+    const server = fs.readFileSync(path.join(__dirname, '../src/api/server.js'), 'utf8');
+    assert.ok(/buildOpinionPrompt\(\{ lang, ragContext, lexUnresolved, lexForeign, verifiedSourceDirectory, unreadParts, docForAnalysis \}\)/u.test(server));
+    assert.ok(!server.includes('IMKONIYAT SHARTNOMASI — YURIDIK XULOSA') && !/^function auditOpinionCitations/mu.test(server));
+    assert.strictEqual(pe.selectTask(null), 'explain');
+    assert.throws(() => pe.selectTask('draft'), /--task/u);
+    const all = pe.loadConfig().models;
+    const pick = pe.applyTask(pe.selectModels(all, 'deepseek,deepseek_v4_pro,gpt6_luna'), 'opinion');
+    assert.deepStrictEqual(pick.map(m => [m.requestedModel, m.profile.cap]), [['deepseek-flash', 14000], ['deepseek-v4-pro', 14000], ['gpt-6-luna', 12000]]);
+    assert.throws(() => pe.applyTask(pe.selectModels(all, 'glm'), 'opinion'), /no opinion cap/u, 'never run at the explanation cap');
+    assert.strictEqual(pe.applyTask(pe.selectModels(all, 'deepseek'), 'explain')[0].profile.cap, 3000);
+    const c = pe.loadCases()[0];
+    const f = await pe.freeze(c, phrases, 'opinion');
+    const p = op.buildOpinionPrompt({ lang: 'uz', docForAnalysis: c.text });
+    assert.deepStrictEqual(f.messages, [{ role: 'system', text: p.systemPrompt }, { role: 'user', text: p.userText }]);
+    assert.ok(/kontekst topilmadi/u.test(f.messages[1].text) && /Tasdiqlangan Lex\.uz manbasi topilmadi/u.test(f.messages[1].text));
+    assert.ok(f.messages[1].text.includes(c.text), 'the whole document');
+    const conf = confirmedAll();
+    assert.notStrictEqual(pe.runSha([f], pick, 1, 'x', { task: 'opinion' }), pe.runSha([f], pick, 1, 'x'));
+    assert.strictEqual(pe.runSha(frozen, cfg.models, 1, 'x', { task: 'explain' }), pe.runSha(frozen, cfg.models, 1, 'x'), 'explanation shas unchanged');
+    // the answer: tidied as production, both audits, the correction call named, not made
+    const r = pe.opinionResult('```html\n<h2>Masala</h2><p></p><p>FK 354-modda bo‘yicha PQ-4624.</p>\n```');
+    assert.ok(!/```|<p><\/p>/u.test(r.reply));
+    assert.deepStrictEqual(r.check.citations.unverified, ['354-modda', 'PQ-4624']);
+    assert.strictEqual(r.check.productionCorrectionCall, 'would run (not made here)');
+    assert.strictEqual(pe.opinionResult('<h2>Xulosa</h2><p>KONTEKSTda tasdiqlanmadi.</p>').check.productionCorrectionCall, 'not needed');
+    // a stub run: one call per model with the frozen opinion prompt, opinion criteria in the sheet
+    const call = stubCall(m => answered(m, { text: '<h2>Masala</h2><p>Javob.</p>' }));
+    const out = tmp('pe-op-');
+    await pe.runLive({ frozen: [f], models: pick, budgetUsd: 5, out, confirmed: conf, sha: 'op', call, task: 'opinion' });
+    assert.deepStrictEqual(call.calls.map(x => x.variant), ['deepseek', 'deepseek_v4_pro', 'gpt6_luna']);
+    assert.ok(call.calls.every(x => x.messages === f.messages));
+    const ans = JSON.parse(fs.readFileSync(path.join(out, 'answers', 'D1__deepseek_v4_pro.json'), 'utf8'));
+    assert.deepStrictEqual([ans.status, ans.reply, ans.check.productionCorrectionCall], ['completed', '<h2>Masala</h2><p>Javob.</p>', 'not needed']);
+    pe.writeBlind(out);
+    const sheet = JSON.parse(fs.readFileSync(path.join(out, 'review-sheet.json'), 'utf8'));
+    assert.deepStrictEqual([sheet.task, sheet.criteria], ['opinion', pe.OPINION_CRITERIA]);
+    assert.strictEqual(ledger(out)[0].task, 'opinion');
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);
 })();

@@ -204,7 +204,11 @@
         },
         "capParam": "max_tokens",
         "cap": 3000,
-        "capNote": "for the visible answer, valid only if thinking is really off and max_tokens caps all billed output (UNKNOWN)"
+        "capNote": "for the visible answer, valid only if thinking is really off and max_tokens caps all billed output (UNKNOWN)",
+        "taskCaps": {
+          "opinion": 14000
+        },
+        "taskCapsNote": "opinion: production sends 7 000 (paid plans); with DeepSeek first (#442) the cap sent is x2 = 14 000"
       },
       "facts": {
         "endpoint": {
@@ -385,6 +389,112 @@
             "in": 0.15,
             "cachedIn": 0.003,
             "out": 0.6
+          }
+        ]
+      },
+      "optIn": true
+    },
+    {
+      "variant": "deepseek_v4_pro",
+      "provider": "deepseek",
+      "requestedModel": "deepseek-v4-pro",
+      "label": "deepseek/deepseek-v4-pro",
+      "why": "Owner's request (2026-10-12): DeepSeek's larger model for the legal opinion, against GPT-6 Luna and deepseek-flash. Non-thinking mode, as the flash profile, so the comparison is the model and not the reasoning switch.",
+      "profile": {
+        "reasoning": "off",
+        "reasoningNote": "Non-thinking mode, written as thinking.type=disabled. The official API page (create-chat-completion) could not be read here: the switch is UNKNOWN until the owner confirms it (profileConfirmed); never sent blind in live.",
+        "params": {
+          "thinking": {
+            "type": "disabled"
+          },
+          "temperature": 0.2
+        },
+        "capParam": "max_tokens",
+        "cap": 6000,
+        "capNote": "explanation cap as deepseek_6k; the opinion uses taskCaps.opinion",
+        "taskCaps": {
+          "opinion": 14000
+        },
+        "taskCapsNote": "opinion: as deepseek-flash under #442 (7 000 x 2)"
+      },
+      "facts": {
+        "endpoint": {
+          "value": "https://api.deepseek.com/chat/completions",
+          "status": "OFFICIAL_DOCS",
+          "source": "https://api-docs.deepseek.com/api/create-chat-completion/"
+        },
+        "modelId": {
+          "value": "deepseek-v4-pro",
+          "status": "OFFICIAL_DOCS",
+          "source": "https://api-docs.deepseek.com/quick_start/pricing/"
+        },
+        "accountAccess": {
+          "value": "deepseek-v4-pro listed",
+          "status": "ACCOUNT_LIST",
+          "source": "GET https://api.deepseek.com/models via network secret, 2026-10-12"
+        },
+        "price": {
+          "value": "peak: miss 1.32 / hit 0.044 / out 3.96; off-peak half",
+          "status": "OFFICIAL_DOCS",
+          "source": "https://api-docs.deepseek.com/quick_start/pricing/"
+        },
+        "timeOfDayPricing": {
+          "value": "peak 01:00-04:00 and 06:00-10:00 UTC Mon-Fri (not Chinese public holidays); other hours off-peak",
+          "status": "OFFICIAL_DOCS",
+          "source": "https://api-docs.deepseek.com/quick_start/pricing/"
+        },
+        "context": {
+          "value": "1M",
+          "status": "OFFICIAL_DOCS"
+        },
+        "maxOutput": {
+          "value": "384K",
+          "status": "OFFICIAL_DOCS"
+        },
+        "thinkingSwitch": {
+          "value": "thinking.type=disabled (thinking on by default); temperature ignored only in thinking mode",
+          "status": "OFFICIAL_DOCS",
+          "source": "https://api-docs.deepseek.com/guides/thinking_mode/"
+        },
+        "capCoversBilledOutput": {
+          "value": "max_tokens = tokens generated; inclusion of reasoning tokens not stated (thinking is off in this profile)",
+          "status": "UNKNOWN",
+          "source": "https://api-docs.deepseek.com/api/create-chat-completion/"
+        },
+        "reasoningBilledInCompletion": {
+          "value": "completion_tokens_details.reasoning_tokens reported; inclusion in completion_tokens not stated",
+          "status": "UNKNOWN"
+        },
+        "returnedModel": {
+          "value": "deepseek-v4-pro (expected; checked on the first answer)",
+          "status": "UNKNOWN"
+        },
+        "inputTokenBasis": {
+          "value": "official tokenizer counted; byte-level BPE (<= 1 token / byte)",
+          "status": "OFFICIAL_DOCS",
+          "source": "https://api-docs.deepseek.com/quick_start/token_usage"
+        },
+        "usageFields": {
+          "value": "prompt_tokens = prompt_cache_hit_tokens + prompt_cache_miss_tokens; completion_tokens_details.reasoning_tokens",
+          "status": "OFFICIAL_DOCS"
+        }
+      },
+      "scenarioPrices": {
+        "status": "OFFICIAL_DOCS",
+        "source": "https://api-docs.deepseek.com/quick_start/pricing/",
+        "seenAt": "2026-10-12",
+        "rates": [
+          {
+            "label": "peak",
+            "in": 1.32,
+            "cachedIn": 0.044,
+            "out": 3.96
+          },
+          {
+            "label": "off-peak",
+            "in": 0.66,
+            "cachedIn": 0.022,
+            "out": 1.98
           }
         ]
       },
@@ -686,7 +796,11 @@
         "params": {},
         "capParam": "max_output_tokens",
         "cap": 8000,
-        "capNote": "3 000 for the visible answer + 5 000 reasoning allowance (production explain sends 3 000: a reasoning model can spend it before the answer)"
+        "capNote": "3 000 for the visible answer + 5 000 reasoning allowance (production explain sends 3 000: a reasoning model can spend it before the answer)",
+        "taskCaps": {
+          "opinion": 12000
+        },
+        "taskCapsNote": "opinion: production sends 7 000 (reasoning included in max_output_tokens); 12 000 here leaves reasoning room so a cut answer measures the model, not the cap"
       },
       "facts": {
         "endpoint": {
@@ -758,7 +872,11 @@
         "params": {},
         "capParam": "max_output_tokens",
         "cap": 8000,
-        "capNote": "3 000 for the visible answer + 5 000 reasoning allowance (production explain sends 3 000: a reasoning model can spend it before the answer)"
+        "capNote": "3 000 for the visible answer + 5 000 reasoning allowance (production explain sends 3 000: a reasoning model can spend it before the answer)",
+        "taskCaps": {
+          "opinion": 12000
+        },
+        "taskCapsNote": "opinion: production sends 7 000 (reasoning included in max_output_tokens); 12 000 here leaves reasoning room so a cut answer measures the model, not the cap"
       },
       "facts": {
         "endpoint": {
