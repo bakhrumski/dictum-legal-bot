@@ -187,6 +187,12 @@ Known state of the suites (Sept 2026):
   on 3 synthetic documents, `docs/quality/provider-eval-plan.md`); both
   share one budget module (`scripts/lib/eval-budget.js`). Live needs the
   owner's confirmation file and approval of the run sha.
+  The explanation's final call (not its digest) goes to DeepSeek
+  `deepseek-flash` with a 6 000-token cap, then GPT-6 Luna, then Gemini
+  (`src/ai/explain-router.js`, `src/ai/deepseek.js`, 2026-10-12, chosen in
+  the provider evaluation); it sends the document to api.deepseek.com;
+  `EXPLAIN_PROVIDER=default` (env) restores the cheap lane, and with no
+  `DEEPSEEK_API_KEY` nothing changes.
   `src/rag/question-aspects.js` splits a question into deadline,
   compensation, evidence and remedy and runs a light corpus search for each
   (Telegram, web chat, Workspace).

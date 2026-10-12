@@ -12,12 +12,21 @@ can use them is decided by the provider, not by this file.
 | `callAI` with `model: MODELS.chat` (Telegram/web answer) | VoiceLab `aisha-comet`* | OpenAI `gpt-6-luna` | Gemini `gemini-2.5-flash` |
 | `callCheapAI` | VoiceLab `aisha-comet`* | OpenAI `MODELS.cheap` (`gpt-6-luna`) | Gemini `gemini-2.5-flash` |
 | `callPremiumAI` | VoiceLab `aisha-halo`* | OpenAI `MODELS.premium` (`gpt-6-sol`), `premiumRetries` | Gemini `gemini-2.5-flash` |
+| `callExplainAI` (document explanation, final call only; 2026-10-12) | DeepSeek `deepseek-flash`, thinking off, `max_tokens` 6000 | OpenAI `gpt-6-luna` (explicit `openai/`, never VoiceLab), `max_output_tokens` 8000 | Gemini `gemini-2.5-flash` |
 | Streaming answer (web) | VoiceLab (lane of the model)* | OpenAI stream | Gemini stream, then `callAI` |
 | Embeddings | Gemini `gemini-embedding-001` / HF `multilingual-e5-large` / OpenAI `text-embedding-3-small` (`EMBED_PROVIDER`; not routed, the corpus is embedded with one) | — | — |
 | Rerank | HF `BAAI/bge-reranker-v2-m3` | — | keyword re-rank (no AI call), request marked `degraded` |
 
 \* only when `LLM_PROVIDER=voicelab` and `VOICELAB_API_KEY` are set, and the
 lane is in `VOICELAB_LANES`; `MODEL_TELEGRAM=voicelab/<id>` pins Telegram.
+
+Changed on 2026-10-12: the document explanation's final call goes to
+DeepSeek `deepseek-flash` (6 000-token answer cap) after the provider
+evaluation (`docs/quality/provider-eval-plan.md`): on the 54 260-char
+investment agreement it kept every condition of the evidence table, and at
+the old 3 000 cap its answer was cut. It sends the user's document to
+DeepSeek (api.deepseek.com). The long-document digest, opinions, chat and
+Telegram are unchanged. Off: `EXPLAIN_PROVIDER=default` (env, no deploy).
 
 Changed on 2026-10-04: `callCheapAI` and `callPremiumAI` used to fall back to
 the whole `callAI` chain — Orbit and Sol again — before Gemini. They now go
@@ -36,7 +45,8 @@ straight to Gemini, so a failing helper call no longer costs three more calls.
 | cross_check | `*/lex-cross-check` | `callAI` with the chat model |
 | claim_check | `*/claim-check` | `callAI` with the chat model |
 | source_suggestion | `/rag/source-suggestions` | `callAI` (standard) |
-| document, legal opinion | `/api/draft/*` | `callPremiumAI` / `callCheapAI` |
+| document explanation (final answer) | `/api/draft/explain-document` | `callExplainAI` (`src/ai/explain-router.js`); with no `DEEPSEEK_API_KEY` or `EXPLAIN_PROVIDER=default`, `callCheapAI` as before |
+| explanation digest, legal opinion, other drafts | `/api/draft/*` | `callPremiumAI` / `callCheapAI` |
 
 ## Failure handling (src/ai/provider-health.js)
 

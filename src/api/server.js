@@ -7583,9 +7583,18 @@ app.post('/api/draft/legal-opinion/rate', requireAuth, async (req, res) => {
 // Mounted from src/rag/document-explain-route.js (the confirm, scan and
 // quota steps are as before; the prompt, coverage and checks are in
 // src/rag/document-explain.js).
+// The explanation itself (not the digest) is written by DeepSeek
+// deepseek-flash, then GPT-6 Luna, then the last resort (src/ai/explain-router.js,
+// 2026-10-12; EXPLAIN_PROVIDER=default restores the cheap lane).
+const callExplainAI = require('../ai/explain-router').createExplainAI({
+  usageLedger, modelPricing, deepseek: require('../ai/deepseek'), callOpenAI,
+  paidAllowed: async () => paidProviderConfigured() && await paidModelsAllowed(),
+  spendAllowed: () => paidModelsAllowed(),
+  lastResort: callGeminiLastResort, callDefault: callCheapAI,
+});
 require('../rag/document-explain-route').mountExplainDocument(app, {
   requireAuth, requireServiceConfirm: require('../ai/ai-trigger').requireServiceConfirm, resolveScanDocs, tariffModule,
-  callAI: callCheapAI, digest: digestLongDocumentDetailed, lexLangForText, logAudit,
+  callAI: callExplainAI, digest: digestLongDocumentDetailed, lexLangForText, logAudit,
   // the stage trace goes to an account that is master in the database
   verifyMaster: require('../rag/document-explain-route').createVerifyMaster(pool),
 });

@@ -30,6 +30,11 @@ const MODEL_PRICING = Object.freeze({
   'voicelab/aisha-comet': Object.freeze({ in: 0.45, out:  0.70, cached: null }),
   'voicelab/aisha-orbit': Object.freeze({ in: 1.20, out:  4.20, cached: null }),
   'voicelab/aisha-halo':  Object.freeze({ in: 3.20, out: 12.70, cached: null }),
+  // DeepSeek (api-docs.deepseek.com/quick_start/pricing, 2026-10-12): the
+  // PEAK rates (01-04 and 06-10 UTC, Mon-Fri); off-peak is half. One price
+  // per model here, so off-peak calls are reported at up to twice their
+  // cost - an over-statement, never an under-statement.
+  'deepseek/deepseek-flash': Object.freeze({ in: 0.30, out: 1.20, cached: 0.006 }),
 });
 
 /**
@@ -87,6 +92,7 @@ const PRICING_SOURCES = Object.freeze({
   openai_2026_09_23: { source: 'OpenAI pricing page, Standard processing, short context', effectiveFrom: null, checkedAt: '2026-09-23', confirmation: 'official_list' },
   gemini_2026_08_11: { source: 'https://ai.google.dev/gemini-api/docs/pricing (paid tier; the free tier bills $0)', effectiveFrom: null, checkedAt: '2026-08-11', confirmation: 'official_list' },
   voicelab_2026_09_23: { source: 'VoiceLab console list prices', effectiveFrom: null, checkedAt: '2026-09-23', confirmation: 'provider_console' },
+  deepseek_2026_10_12: { source: 'https://api-docs.deepseek.com/quick_start/pricing/ (peak rates; off-peak is half)', effectiveFrom: null, checkedAt: '2026-10-12', confirmation: 'official_list' },
 });
 
 const PRICE_SOURCE_OF = Object.freeze({
@@ -95,6 +101,7 @@ const PRICE_SOURCE_OF = Object.freeze({
   'gpt-6-astra': 'openai_2026_09_23', 'gpt-6-sol': 'openai_2026_09_23', 'gpt-6-luna': 'openai_2026_09_23',
   'text-embedding-3-small': 'openai_2026_08_11',
   'voicelab/aisha-comet': 'voicelab_2026_09_23', 'voicelab/aisha-orbit': 'voicelab_2026_09_23', 'voicelab/aisha-halo': 'voicelab_2026_09_23',
+  'deepseek/deepseek-flash': 'deepseek_2026_10_12',
 });
 
 /**
