@@ -258,8 +258,20 @@ const response = (status, body, headers = {}) => ({ ok: status >= 200 && status 
       // the proxy did not add it: the provider's 401 is an auth error, recorded, provider stopped by the runner
       r = await prov.callProvider(ds, frozen[0].messages, { entry: { auth: 'network_secret' }, fetchImpl: async () => response(401, { error: { message: 'Authentication Fails' } }) });
       assert.deepStrictEqual([r.outcome, r.status], ['http_error', 401]);
-      // VoiceLab's adapter needs its key in the environment
-      assert.strictEqual(prov.authFor('voicelab', { auth: 'network_secret' }).mode, 'missing');
+      // VoiceLab with a network secret: the fixed VoiceLab URL, no Authorization header, its billing headers read
+      assert.strictEqual(prov.authFor('voicelab', { auth: 'network_secret' }).mode, 'network_secret');
+      assert.strictEqual(prov.authFor('voicelab', null).mode, 'missing');
+      const comet = cfg.models.find(m => m.variant === 'baseline');
+      const vlSeen = [];
+      const vlBody = { id: 'chatcmpl_9', model: 'aisha-comet', choices: [{ message: { content: 'Izoh.' }, finish_reason: 'stop' }], usage: { prompt_tokens: 3000, completion_tokens: 400 } };
+      const vr = await prov.callProvider(comet, frozen[0].messages, { entry: { auth: 'network_secret' }, fetchImpl: async (url, init) => { vlSeen.push({ url, init }); return response(200, vlBody, { 'x-credits-charged': '41', 'x-llm-request-id': 'chatcmpl_9' }); } });
+      assert.strictEqual(vlSeen[0].url, 'https://api.voicelab.uz/v1/chat/completions');
+      assert.strictEqual(vlSeen[0].init.redirect, 'error');
+      assert.ok(!Object.keys(vlSeen[0].init.headers).some(h => /authorization/iu.test(h)));
+      assert.deepStrictEqual(Object.keys(JSON.parse(vlSeen[0].init.body)).sort(), ['max_tokens', 'messages', 'model', 'temperature']);
+      assert.deepStrictEqual([vr.outcome, vr.credits, vr.requestId, vr.returnedModel, vr.usage.complete], ['answered', 41, 'chatcmpl_9', 'aisha-comet', true]);
+      const pending = await prov.callProvider(comet, frozen[0].messages, { entry: { auth: 'network_secret' }, fetchImpl: async () => response(200, { ...vlBody, usage: null }, { 'x-llm-billing-status': 'pending' }) });
+      assert.deepStrictEqual([pending.credits, pending.billingStatus, pending.usage.complete], [null, 'pending', false]);
       // the plan: missing -> BLOCKED with the secret named; network secret -> no secret blocker
       const plain = pe.plan(frozen.slice(0, 1), [ds], null)[0];
       assert.ok(plain.blockers.some(b => /^secret: DEEPSEEK_API_KEY not set and no confirmed network secret/u.test(b)));

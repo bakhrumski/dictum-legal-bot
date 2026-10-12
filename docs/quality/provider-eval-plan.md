@@ -57,7 +57,7 @@ Bu 3 ta qisqa sun'iy hujjatdagi dastlabki saralash. Uzun hujjat, dayjest, RAG yo
 - Runner bunday hostda kalitni faqat tasdiq faylidagi `"auth": "network_secret"` bilan qabul qiladi va `Authorization` sarlavhasini umuman yubormaydi.
 - Oddiy yetishmayotgan kalit avvalgidek BLOCKED bo'ladi. Soxta kalit hech qachon yuborilmaydi.
 - Proxy kalitni qo'shmasa, provayder 401 qaytaradi: bu auth xatosi sifatida yoziladi va shu provayder to'xtatiladi.
-- VoiceLab adapteri kalitni env'dan oladi, shuning uchun unga network secret yetmaydi.
+- VoiceLab: kalit env'da bo'lsa, mavjud adapter ishlatiladi. Network secret bilan esa comet boshqa provayderlar kabi qat'iy belgilangan VoiceLab URL'iga to'g'ridan-to'g'ri chaqiriladi; billing sarlavhalari xuddi shunday o'qiladi. Production'dagi adapter o'zgarmaydi.
 - **Node'ning `fetch`'i `HTTPS_PROXY` dan faqat `NODE_USE_ENV_PROXY=1` bo'lganda o'tadi.** Busiz so'rov proxy'ni chetlab o'tadi va kalitsiz yetib boradi (2026-10-12 da ikkala provayder ham 401 qaytardi). Shuning uchun `network_secret` ishlatilsa, `NODE_USE_ENV_PROXY=1` va `HTTPS_PROXY` o'rnatilmagan bo'lsa, live chaqiruvdan oldin to'xtaydi.
 
 **Qwen endpointi.** Hujjat Singapore uchun `https://{WorkspaceId}.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1` ni beradi va `dashscope-intl.aliyuncs.com` dan unga o'tishni so'raydi. Eski domen ishlamaydi deb yozilmagan.
