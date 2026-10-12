@@ -245,6 +245,14 @@ function inputTokensMax(messages, basis) {
 }
 
 /**
+ * A billing fact the owner accepts: true, or 'verify_by_usage' - accepted on
+ * the condition that every call's own usage is checked (provider-eval
+ * usageCheck): a call whose usage is missing, or whose completion_tokens
+ * pass the cap, stops that provider.
+ */
+const factAccepted = v => v === true || v === 'verify_by_usage';
+
+/**
  * The most one call can cost (before it is made), or { usd: null, reason }.
  * Needs all of:
  *   - a confirmed price (priceFor; the highest listed rate is used);
@@ -258,7 +266,7 @@ function inputTokensMax(messages, basis) {
 function callBound(model, messages, priceInfo, facts) {
   const rates = priceInfo && priceInfo.rates;
   if (!rates) return { usd: null, reason: 'no confirmed price' };
-  if (!(facts && facts.capCoversBilledOutput === true)) return { usd: null, reason: `not confirmed that ${model.profile.capParam} limits every billed output token (visible + reasoning)` };
+  if (!(facts && factAccepted(facts.capCoversBilledOutput))) return { usd: null, reason: `not confirmed that ${model.profile.capParam} limits every billed output token (visible + reasoning)` };
   const basisProblem = inputBasisProblem(facts.inputTokenBasis);
   if (basisProblem) return { usd: null, reason: basisProblem };
   const inp = inputTokensMax(messages, facts.inputTokenBasis);
@@ -291,7 +299,7 @@ function modelMatch(requested, returned, accepted = []) {
 /** List-price dollars from complete usage at the highest listed rates, else null. */
 function listCost(model, usage, priceInfo, facts) {
   if (!usage || !usage.complete) return null;
-  if (usage.reasoningTokens && !(facts && facts.reasoningBilledInCompletion === true)) return null;
+  if (usage.reasoningTokens && !(facts && factAccepted(facts.reasoningBilledInCompletion))) return null;
   const rates = priceInfo && priceInfo.rates;
   if (!rates) return null;
   const cached = usage.cachedTokens || 0;
@@ -383,4 +391,4 @@ async function callVoiceLab(model, messages, timeoutMs) {
   }
 }
 
-module.exports = { PROVIDERS, ALL_SECRET_ENVS, endpointFor, authFor, INPUT_BOUND_METHOD, INPUT_BASIS_METHODS, inputBasisProblem, inputTokensMax, secretState, redact, guardNetwork, wireMessages, requestBody, usageOf, providerCostOf, worstRates, priceFor, callBound, modelMatch, listCost, callProvider };
+module.exports = { factAccepted, PROVIDERS, ALL_SECRET_ENVS, endpointFor, authFor, INPUT_BOUND_METHOD, INPUT_BASIS_METHODS, inputBasisProblem, inputTokensMax, secretState, redact, guardNetwork, wireMessages, requestBody, usageOf, providerCostOf, worstRates, priceFor, callBound, modelMatch, listCost, callProvider };

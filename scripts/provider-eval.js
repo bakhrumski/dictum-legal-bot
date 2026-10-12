@@ -161,10 +161,10 @@ function missingFacts(m, e) {
   if (e.accountAccess !== true) out.push('account access to the model not confirmed');
   if (e.profileConfirmed !== true) out.push('generation profile (thinking switch, parameters, cap name) not confirmed');
   if (!prov.priceFor(m, e).rates) out.push('price (rates[].in/out with source and checkedAt) not confirmed');
-  if (e.capCoversBilledOutput !== true) out.push(`not confirmed that ${m.profile.capParam} limits every billed output token (visible + reasoning)`);
+  if (!prov.factAccepted(e.capCoversBilledOutput)) out.push(`not confirmed that ${m.profile.capParam} limits every billed output token (visible + reasoning)`);
   const basisProblem = prov.inputBasisProblem(e.inputTokenBasis);
   if (basisProblem) out.push(basisProblem);
-  if (m.profile.reasoning !== 'off' && m.provider !== 'voicelab' && e.reasoningBilledInCompletion !== true) out.push('reasoning billing inside completion_tokens not confirmed');
+  if (m.profile.reasoning !== 'off' && m.provider !== 'voicelab' && !prov.factAccepted(e.reasoningBilledInCompletion)) out.push('reasoning billing inside completion_tokens not confirmed');
   if (e.acceptedReturnedModels != null && !(Array.isArray(e.acceptedReturnedModels) && e.acceptedReturnedModels.every(x => typeof x === 'string' && x.trim()))) out.push('acceptedReturnedModels must be a list of exact model ids');
   return out;
 }
@@ -239,6 +239,7 @@ function readLedger(file) {
 function replay(entries, budget) {
   const done = new Set();
   const open = new Map();
+  const stopped = new Map();
   for (const e of entries) {
     if (e.type === 'reserve') { evalBudget.take(budget, e.reservedUsd); open.set(`${e.job}#${e.attempt}`, e); done.add(e.job); }
     else if (e.type === 'settle') {
@@ -246,13 +247,35 @@ function replay(entries, budget) {
       if (e.costStatus === 'not_called') { evalBudget.release(budget, e.reservedUsd); continue; }
       evalBudget.settle(budget, e.reservedUsd, { listUsd: e.listUsd, providerUsd: e.providerUsd, creditUsd: e.creditUsd, credits: e.credits }, { job: e.job });
       if (e.halt) evalBudget.halt(budget, { job: e.job, reason: e.halt });
+      if (e.usageCheck && e.usageCheck.result === 'failed') stopped.set(e.job.split('__')[1], `usage check failed: ${e.usageCheck.problems.join('; ')}`);
     } else if (e.type === 'skip') done.add(e.job);
   }
   for (const e of open.values()) {
     evalBudget.settle(budget, e.reservedUsd, {}, {});
     evalBudget.halt(budget, { job: e.job, reason: 'an earlier attempt has no outcome written (interrupted): its cost is unknown' });
   }
-  return { done, interrupted: [...open.keys()] };
+  return { done, interrupted: [...open.keys()], stopped };
+}
+
+/**
+ * The owner accepted a billing fact 'verify_by_usage': each answered call of
+ * that model is checked against its own usage. It fails when the usage is
+ * missing or incomplete, or completion_tokens pass the cap sent (the cap did
+ * not limit the billed output); a failure stops that provider. What usage
+ * cannot show is said, not passed: a provider that reports no
+ * reasoning_tokens (GLM) cannot show whether reasoning is billed inside
+ * completion_tokens - that is reconciled with its billing console.
+ */
+function usageCheck(m, e, r) {
+  const facts = ['capCoversBilledOutput', 'reasoningBilledInCompletion'].filter(k => e && e[k] === 'verify_by_usage');
+  if (!facts.length || r.outcome !== 'answered') return null;
+  const u = r.usage || {};
+  const problems = [];
+  if (!u.complete) problems.push(`usage missing or incomplete (${u.problem || 'no counts'})`);
+  else if (u.outTokens > m.profile.cap) problems.push(`completion_tokens ${u.outTokens} above the cap ${m.profile.cap}`);
+  const notShown = facts.includes('reasoningBilledInCompletion') && u.reasoningTokens == null && m.profile.reasoning !== 'off'
+    ? 'reasoning_tokens not reported: whether reasoning is billed inside completion_tokens is not visible in usage - reconcile with the billing console' : null;
+  return { facts, result: problems.length ? 'failed' : 'passed', problems, ...(notShown ? { notShown } : {}), outTokens: u.outTokens == null ? null : u.outTokens, cap: m.profile.cap, reasoningTokens: u.reasoningTokens == null ? null : u.reasoningTokens, reasoningChars: r.reasoningChars || 0 };
 }
 
 /** One call's service outcome; the model check comes first (prov.modelMatch). */
@@ -298,8 +321,8 @@ async function runLive({ frozen, models, budgetUsd, out, confirmed, sha: runId, 
   if (!head) append({ type: 'run', runSha: runId, budgetUsd, controls: CONTROLS });
   const ids = answerIds(out, frozen, models);
   const budget = evalBudget.newBudget(budgetUsd);
-  const { done } = replay(entries, budget);
-  const disabled = new Map();
+  const { done, stopped } = replay(entries, budget);
+  const disabled = new Map(stopped);
   const saveAnswer = (job, f, m, status, res, reason = null) => fs.writeFileSync(path.join(out, 'answers', `${job}.json`), JSON.stringify({ job, answerId: ids[job].answerId, case: f.id, variant: m.variant, status, reason, reply: res ? res.reply : '', raw: res && res.trace ? res.trace.answer : null, check: res ? res.check : null }, null, 2));
   const restore = prov.guardNetwork([...new Set(models.map(m => prov.endpointFor(m.provider, confirmed.models[m.variant]).host).filter(Boolean))]);
   try {
@@ -338,13 +361,15 @@ async function runLive({ frozen, models, budgetUsd, out, confirmed, sha: runId, 
           if (st && st.costStatus === 'over_reserve') halt = 'a cost went above its reserve';
           if (r.outcome === 'http_error' && (['auth', 'quota', 'permanent', 'not_found'].includes(r.kind) || [401, 402, 403, 404].includes(r.status))) disabled.set(m.variant, `${r.status} ${r.kind || ''}`.trim());
           if (status === 'model_mismatch') disabled.set(m.variant, 'an unexpected model came back');
+          const check = usageCheck(m, e, r);
+          if (check && check.result === 'failed') disabled.set(m.variant, `usage check failed: ${check.problems.join('; ')}`);
           attempt = {
             type: 'settle', job, attempt: 1, status, outcome: r.outcome, reservedUsd: b.usd, reserveBasis: b.basis, costStatus: st ? st.costStatus : 'not_called', settledUsd: st ? st.settledUsd : null,
             listUsd, providerUsd: r.providerCostUsd == null ? null : r.providerCostUsd, credits: r.credits == null ? null : r.credits, creditUsd,
             provider: m.provider, endpoint: prov.endpointFor(m.provider, e).url, auth: prov.authFor(m.provider, e).mode, billingStatus: r.billingStatus || null, requestedModel: m.requestedModel, returnedModel: r.returnedModel || null, modelMatch: match, requestId: r.requestId || null,
             profile: { reasoning: m.profile.reasoning, params: m.profile.params, capParam: m.profile.capParam, cap: m.profile.cap },
             usage: r.usage || null, reasoningChars: r.reasoningChars || 0, finishReason: r.finishReason || null, durationMs, httpStatus: r.status || null,
-            error: r.error || null, halt, hashes: f.hashes, runSha: runId,
+            error: r.error || null, halt, usageCheck: check, hashes: f.hashes, runSha: runId,
           };
           append(attempt);
           lastText = r.text || '';
@@ -530,4 +555,4 @@ function printPlan(frozen, models, jobs, s, cfg) {
 // exitCode, not process.exit(): a large --json plan piped to another
 // program must be written out whole before the process ends
 if (require.main === module) main().then((code) => { process.exitCode = code || 0; }).catch((e) => { console.error(prov.redact(e.message)); process.exitCode = e.exit || 1; });
-module.exports = { CONTROLS, CRITERIA, STATUSES, SCENARIO, selectModels, loadConfig, loadCases, keyPhrases, keyLeak, freeze, missingFacts, checkConfirmed, runSha, plan, replay, classify, answerIds, runLive, writeBlind, report, main };
+module.exports = { CONTROLS, CRITERIA, STATUSES, SCENARIO, selectModels, usageCheck, loadConfig, loadCases, keyPhrases, keyLeak, freeze, missingFacts, checkConfirmed, runSha, plan, replay, classify, answerIds, runLive, writeBlind, report, main };
