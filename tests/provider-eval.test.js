@@ -547,6 +547,25 @@ const response = (status, body, headers = {}) => ({ ok: status >= 200 && status 
     assert.strictEqual(pe.usageCheck(m0, confirmedAll().models.deepseek, { outcome: 'answered', usage: { complete: true, outTokens: 1 } }), null);
   });
 
+  await test('network secret: live refuses before any call unless fetch goes through the proxy (NODE_USE_ENV_PROXY=1 and HTTPS_PROXY)', () => {
+    const conf = path.join(tmp('pe-proxy-'), 'confirmed.json');
+    const c = confirmedAll();
+    for (const v of ['deepseek', 'glm']) c.models[v].auth = 'network_secret';
+    fs.writeFileSync(conf, JSON.stringify({ models: { deepseek: c.models.deepseek, glm: c.models.glm } }));
+    const out = tmp('pe-proxy-out-');
+    const spyFile = path.join(tmp('pe-net3-'), 'calls.txt');
+    const spy = fetchSpy(spyFile);
+    const base = ['--live', '--variants', 'deepseek,glm', '--budget-usd', '1', '--out', out, '--confirmed', conf];
+    const sha = /--approve ([0-9a-f]{64})/u.exec(run(base, { PROVIDER_EVAL_LIVE: 'yes' }, spy).out)[1];
+    const noProxyEnv = run([...base, '--approve', sha], { PROVIDER_EVAL_LIVE: 'yes', NODE_USE_ENV_PROXY: '', HTTPS_PROXY: 'http://127.0.0.1:9', https_proxy: '' }, spy);
+    assert.strictEqual(noProxyEnv.code, 3, noProxyEnv.out);
+    assert.ok(/NODE_USE_ENV_PROXY=1/u.test(noProxyEnv.out), noProxyEnv.out);
+    const noProxyUrl = run([...base, '--approve', sha], { PROVIDER_EVAL_LIVE: 'yes', NODE_USE_ENV_PROXY: '1', HTTPS_PROXY: '', https_proxy: '' }, spy);
+    assert.strictEqual(noProxyUrl.code, 3, noProxyUrl.out);
+    assert.deepStrictEqual(fs.readdirSync(out), [], 'nothing written');
+    assert.ok(!fs.existsSync(spyFile), 'no network');
+  });
+
   await test('restart: a finished run spends nothing again; an attempt with no outcome written keeps its reserve and halts', async () => {
     const call = stubCall(m => answered(m));
     const { out } = await live(call);

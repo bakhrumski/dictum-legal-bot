@@ -509,6 +509,11 @@ async function main(argv = process.argv.slice(2)) {
     // a key in the environment, or a network secret the owner confirmed for that host; never a placeholder key
     const missing = models.map(m => [m, prov.authFor(m.provider, confirmed.models[m.variant])]).filter(([, a]) => a.mode === 'missing').map(([m]) => prov.PROVIDERS[m.provider].secretEnv);
     if (missing.length) { console.error(`secrets missing (names only): ${[...new Set(missing)].join(', ')} - nothing called`); return 3; }
+    // a network secret is added by the cloud proxy only on requests that go
+    // through it; Node's fetch ignores HTTPS_PROXY unless NODE_USE_ENV_PROXY=1
+    // (2026-10-12: without it both providers answered 401, the key never sent)
+    const viaProxy = models.filter(m => prov.authFor(m.provider, confirmed.models[m.variant]).mode === 'network_secret').map(m => m.variant);
+    if (viaProxy.length && (process.env.NODE_USE_ENV_PROXY !== '1' || !(process.env.HTTPS_PROXY || process.env.https_proxy))) { console.error(`${viaProxy.join(', ')}: a network secret needs the request to go through the proxy - run with NODE_USE_ENV_PROXY=1 (and HTTPS_PROXY set); nothing called`); return 3; }
     // the whole remaining reserve must fit before the first call (an earlier
     // run in this --out counts: spent stays spent, unknown stays held)
     const prior = evalBudget.newBudget(budgetUsd);
