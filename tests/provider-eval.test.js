@@ -927,7 +927,7 @@ const response = (status, body, headers = {}) => ({ ok: status >= 200 && status 
     const all = pe.loadConfig().models;
     const pick = pe.applyTask(pe.selectModels(all, 'deepseek,deepseek_v4_pro,gpt6_luna'), 'opinion');
     assert.deepStrictEqual(pick.map(m => [m.requestedModel, m.profile.cap]), [['deepseek-flash', 14000], ['deepseek-v4-pro', 14000], ['gpt-6-luna', 12000]]);
-    assert.throws(() => pe.applyTask(pe.selectModels(all, 'glm'), 'opinion'), /no opinion cap/u, 'never run at the explanation cap');
+    assert.throws(() => pe.applyTask(pe.selectModels(all, 'kimi'), 'opinion'), /no opinion cap/u, 'never run at the explanation cap');
     assert.strictEqual(pe.applyTask(pe.selectModels(all, 'deepseek'), 'explain')[0].profile.cap, 3000);
     const c = pe.loadCases()[0];
     const f = await pe.freeze(c, phrases, 'opinion');

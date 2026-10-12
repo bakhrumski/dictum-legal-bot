@@ -36,6 +36,9 @@ const MODEL_PRICING = Object.freeze({
   // cost - an over-statement, never an under-statement.
   'deepseek/deepseek-flash': Object.freeze({ in: 0.30, out: 1.20, cached: 0.006 }),
   'deepseek/deepseek-v4-pro': Object.freeze({ in: 1.32, out: 3.96, cached: 0.044 }),
+  // Z.AI (docs.z.ai/guides/overview/pricing, 2026-10-12): GLM-5.3-Flash;
+  // reasoning is billed as output (no separate field in usage)
+  'zai/glm-5.3-flash': Object.freeze({ in: 0.15, out: 0.50, cached: 0.03 }),
 });
 
 /**
@@ -93,6 +96,7 @@ const PRICING_SOURCES = Object.freeze({
   openai_2026_09_23: { source: 'OpenAI pricing page, Standard processing, short context', effectiveFrom: null, checkedAt: '2026-09-23', confirmation: 'official_list' },
   gemini_2026_08_11: { source: 'https://ai.google.dev/gemini-api/docs/pricing (paid tier; the free tier bills $0)', effectiveFrom: null, checkedAt: '2026-08-11', confirmation: 'official_list' },
   voicelab_2026_09_23: { source: 'VoiceLab console list prices', effectiveFrom: null, checkedAt: '2026-09-23', confirmation: 'provider_console' },
+  zai_2026_10_12: { source: 'https://docs.z.ai/guides/overview/pricing', effectiveFrom: null, checkedAt: '2026-10-12', confirmation: 'official_list' },
   deepseek_2026_10_12: { source: 'https://api-docs.deepseek.com/quick_start/pricing/ (peak rates; off-peak is half)', effectiveFrom: null, checkedAt: '2026-10-12', confirmation: 'official_list' },
 });
 
@@ -103,6 +107,7 @@ const PRICE_SOURCE_OF = Object.freeze({
   'text-embedding-3-small': 'openai_2026_08_11',
   'voicelab/aisha-comet': 'voicelab_2026_09_23', 'voicelab/aisha-orbit': 'voicelab_2026_09_23', 'voicelab/aisha-halo': 'voicelab_2026_09_23',
   'deepseek/deepseek-flash': 'deepseek_2026_10_12', 'deepseek/deepseek-v4-pro': 'deepseek_2026_10_12',
+  'zai/glm-5.3-flash': 'zai_2026_10_12',
 });
 
 /**

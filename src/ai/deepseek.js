@@ -120,7 +120,8 @@ async function post(body, fetchImpl) {
     throw err;
   }
   if (!resp.ok) {
-    const raw = await resp.text().catch(() => '');
+    // a provider that echoes the key back never puts it into our logs
+    const raw = (await resp.text().catch(() => '')).split(key).join('[key]');
     const { parseProviderError, safeReason } = require('./provider-health');
     const parsed = parseProviderError(raw);
     throw Object.assign(new Error(`DeepSeek ${name} ${resp.status}: ${safeReason([parsed.code, parsed.message].filter(Boolean).join(': ') || raw.slice(0, 200))}`),

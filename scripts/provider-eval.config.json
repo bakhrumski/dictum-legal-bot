@@ -517,7 +517,11 @@
         },
         "capParam": "max_tokens",
         "cap": 8000,
-        "capNote": "3 000 for the visible answer + 5 000 reasoning allowance, only IF max_tokens caps reasoning (UNKNOWN). Equal max_tokens is not an equal visible answer."
+        "capNote": "3 000 for the visible answer + 5 000 reasoning allowance, only IF max_tokens caps reasoning (UNKNOWN). Equal max_tokens is not an equal visible answer.",
+        "taskCaps": {
+          "opinion": 14000
+        },
+        "taskCapsNote": "opinion: as production sends it (src/ai/zai.js maxTokensFor: 7 000 x 2), reasoning included only if max_tokens caps it (verify_by_usage)"
       },
       "facts": {
         "endpoint": {

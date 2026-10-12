@@ -260,6 +260,12 @@ Known state of the suites (Sept 2026):
   Explicit ids pick a provider for side-by-side tests: `voicelab/<model>`
   (VoiceLab, needs only the key, never falls back) and `openai/<model>`
   (bypasses VoiceLab), e.g. `/api/admin/model-ab?a=voicelab/aisha-comet&b=openai/gpt-5.6-luna`.
+- `src/ai/deepseek.js` (first for text since #442; `deepseek/deepseek-v4-pro`
+  by explicit id) and `src/ai/zai.js` (GLM, explicit `zai/glm-5.3-flash`
+  only): see `docs/ai-routing.md`. Legal opinion: paid plans on
+  `openai/gpt-6-sol`; `OPINION_MODEL`, `OPINION_MODEL_<PLAN>` and
+  `OPINION_FALLBACK_MODEL` pick the models. A provider error is scrubbed of
+  the key before it is logged.
 - `src/ai/voicelab-speech.js` — Telegram voice via VoiceLab (`@voicelab/sdk`).
   STT: a voice note is transcribed, echoed back ("🎙 Savolingiz: …") and
   answered by the agent like typed text; on by default with the key
