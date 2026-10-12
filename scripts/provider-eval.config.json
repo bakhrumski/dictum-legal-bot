@@ -289,6 +289,108 @@
       }
     },
     {
+      "variant": "deepseek_6k",
+      "provider": "deepseek",
+      "requestedModel": "deepseek-flash",
+      "label": "deepseek/deepseek-flash (cap 6000)",
+      "why": "The same model with a larger answer cap: on the 54 260-char agreement (2026-10-12) both DeepSeek answers stopped at the production cap of 3 000 tokens. This variant measures the finished answer and what it costs; it is not the production setting.",
+      "profile": {
+        "reasoning": "off",
+        "reasoningNote": "Non-thinking mode, written as thinking.type=disabled. The official API page (create-chat-completion) could not be read here: the switch is UNKNOWN until the owner confirms it (profileConfirmed); never sent blind in live.",
+        "params": {
+          "thinking": {
+            "type": "disabled"
+          },
+          "temperature": 0.2
+        },
+        "capParam": "max_tokens",
+        "cap": 6000,
+        "capNote": "6 000 for the visible answer (thinking off); production explainDocument uses 3 000"
+      },
+      "facts": {
+        "endpoint": {
+          "value": "https://api.deepseek.com/chat/completions",
+          "status": "OFFICIAL_DOCS",
+          "source": "https://api-docs.deepseek.com/api/create-chat-completion/"
+        },
+        "modelId": {
+          "value": "deepseek-flash (DeepSeek-V4.1-Flash); responses name deepseek-flash; legacy deepseek-v4-flash still accepted",
+          "status": "OFFICIAL_DOCS",
+          "source": "https://api-docs.deepseek.com/quick_start/pricing/"
+        },
+        "accountAccess": {
+          "value": "deepseek-flash listed",
+          "status": "ACCOUNT_LIST",
+          "source": "GET https://api.deepseek.com/models via network secret, 2026-10-12"
+        },
+        "price": {
+          "value": "peak: miss 0.30 / hit 0.006 / out 1.20; off-peak half",
+          "status": "OFFICIAL_DOCS",
+          "source": "https://api-docs.deepseek.com/quick_start/pricing/"
+        },
+        "timeOfDayPricing": {
+          "value": "peak 01:00-04:00 and 06:00-10:00 UTC Mon-Fri (not Chinese public holidays); other hours off-peak",
+          "status": "OFFICIAL_DOCS",
+          "source": "https://api-docs.deepseek.com/quick_start/pricing/"
+        },
+        "context": {
+          "value": "1M",
+          "status": "OFFICIAL_DOCS"
+        },
+        "maxOutput": {
+          "value": "384K",
+          "status": "OFFICIAL_DOCS"
+        },
+        "thinkingSwitch": {
+          "value": "thinking.type=disabled (thinking on by default); temperature ignored only in thinking mode",
+          "status": "OFFICIAL_DOCS",
+          "source": "https://api-docs.deepseek.com/guides/thinking_mode/"
+        },
+        "capCoversBilledOutput": {
+          "value": "max_tokens = tokens generated; inclusion of reasoning tokens not stated (thinking is off in this profile)",
+          "status": "UNKNOWN",
+          "source": "https://api-docs.deepseek.com/api/create-chat-completion/"
+        },
+        "reasoningBilledInCompletion": {
+          "value": "completion_tokens_details.reasoning_tokens reported; inclusion in completion_tokens not stated",
+          "status": "UNKNOWN"
+        },
+        "returnedModel": {
+          "value": "deepseek-flash (response examples)",
+          "status": "OFFICIAL_DOCS"
+        },
+        "inputTokenBasis": {
+          "value": "official tokenizer counted; byte-level BPE (<= 1 token / byte)",
+          "status": "OFFICIAL_DOCS",
+          "source": "https://api-docs.deepseek.com/quick_start/token_usage"
+        },
+        "usageFields": {
+          "value": "prompt_tokens = prompt_cache_hit_tokens + prompt_cache_miss_tokens; completion_tokens_details.reasoning_tokens",
+          "status": "OFFICIAL_DOCS"
+        }
+      },
+      "scenarioPrices": {
+        "status": "OFFICIAL_DOCS",
+        "source": "https://api-docs.deepseek.com/quick_start/pricing/",
+        "seenAt": "2026-10-12",
+        "rates": [
+          {
+            "label": "peak",
+            "in": 0.3,
+            "cachedIn": 0.006,
+            "out": 1.2
+          },
+          {
+            "label": "off-peak",
+            "in": 0.15,
+            "cachedIn": 0.003,
+            "out": 0.6
+          }
+        ]
+      },
+      "optIn": true
+    },
+    {
       "variant": "glm",
       "provider": "zai",
       "requestedModel": "glm-5.3-flash",
@@ -571,6 +673,222 @@
           }
         ]
       }
+    },
+    {
+      "variant": "gpt6_luna",
+      "provider": "openai",
+      "requestedModel": "gpt-6-luna",
+      "label": "openai/gpt-6-luna",
+      "why": "Production's cheap and chat lane (MODELS.cheap / chat).",
+      "profile": {
+        "reasoning": "provider default (none sent, as production)",
+        "reasoningNote": "Production callOpenAI sends no reasoning parameter and drops temperature for GPT-6; the same here. max_output_tokens caps visible output and reasoning (repository note in src/ai/model-pricing.js, from the OpenAI Responses docs; the docs host is not reachable from this session).",
+        "params": {},
+        "capParam": "max_output_tokens",
+        "cap": 8000,
+        "capNote": "3 000 for the visible answer + 5 000 reasoning allowance (production explain sends 3 000: a reasoning model can spend it before the answer)"
+      },
+      "facts": {
+        "endpoint": {
+          "value": "https://api.openai.com/v1/responses",
+          "status": "REPO_ADAPTER",
+          "source": "src/api/server.js callOpenAI (production)"
+        },
+        "modelId": {
+          "value": "gpt-6-luna",
+          "status": "ACCOUNT_LIST",
+          "source": "GET https://api.openai.com/v1/models via network secret, 2026-10-12"
+        },
+        "accountAccess": {
+          "value": "gpt-6-luna listed",
+          "status": "ACCOUNT_LIST",
+          "source": "GET /v1/models, 2026-10-12"
+        },
+        "price": {
+          "value": "0.1 in / 0.01 cached / 0.5 out USD per 1M (standard, short context); long context bills about double (not in the table)",
+          "status": "REPO_CONSOLE",
+          "source": "src/ai/model-pricing.js openai_2026_09_23 (OpenAI pricing page, Standard processing)",
+          "checkedAt": "2026-09-23"
+        },
+        "capCoversBilledOutput": {
+          "value": "max_output_tokens caps reasoning (repository note)",
+          "status": "UNKNOWN",
+          "source": "docs not readable here: verify_by_usage"
+        },
+        "reasoningBilledInCompletion": {
+          "value": "output_tokens include output_tokens_details.reasoning_tokens (repository usage parser)",
+          "status": "UNKNOWN"
+        },
+        "inputTokenBasis": {
+          "value": null,
+          "status": "UNKNOWN",
+          "source": "GPT-6 tokenizer not published here"
+        }
+      },
+      "scenarioPrices": {
+        "status": "REPO_CONSOLE",
+        "source": "src/ai/model-pricing.js (x2 long-context listed as its own rate)",
+        "seenAt": "2026-09-23",
+        "rates": [
+          {
+            "label": "standard",
+            "in": 0.1,
+            "cachedIn": 0.01,
+            "out": 0.5
+          },
+          {
+            "label": "long context (about x2, repository note)",
+            "in": 0.2,
+            "cachedIn": 0.02,
+            "out": 1.0
+          }
+        ]
+      },
+      "optIn": true
+    },
+    {
+      "variant": "gpt6_sol",
+      "provider": "openai",
+      "requestedModel": "gpt-6-sol",
+      "label": "openai/gpt-6-sol",
+      "why": "Production's standard and premium lane (MODELS.standard / premium).",
+      "profile": {
+        "reasoning": "provider default (none sent, as production)",
+        "reasoningNote": "Production callOpenAI sends no reasoning parameter and drops temperature for GPT-6; the same here. max_output_tokens caps visible output and reasoning (repository note in src/ai/model-pricing.js, from the OpenAI Responses docs; the docs host is not reachable from this session).",
+        "params": {},
+        "capParam": "max_output_tokens",
+        "cap": 8000,
+        "capNote": "3 000 for the visible answer + 5 000 reasoning allowance (production explain sends 3 000: a reasoning model can spend it before the answer)"
+      },
+      "facts": {
+        "endpoint": {
+          "value": "https://api.openai.com/v1/responses",
+          "status": "REPO_ADAPTER",
+          "source": "src/api/server.js callOpenAI (production)"
+        },
+        "modelId": {
+          "value": "gpt-6-sol",
+          "status": "ACCOUNT_LIST",
+          "source": "GET https://api.openai.com/v1/models via network secret, 2026-10-12"
+        },
+        "accountAccess": {
+          "value": "gpt-6-sol listed",
+          "status": "ACCOUNT_LIST",
+          "source": "GET /v1/models, 2026-10-12"
+        },
+        "price": {
+          "value": "2.0 in / 0.2 cached / 10.0 out USD per 1M (standard, short context); long context bills about double (not in the table)",
+          "status": "REPO_CONSOLE",
+          "source": "src/ai/model-pricing.js openai_2026_09_23 (OpenAI pricing page, Standard processing)",
+          "checkedAt": "2026-09-23"
+        },
+        "capCoversBilledOutput": {
+          "value": "max_output_tokens caps reasoning (repository note)",
+          "status": "UNKNOWN",
+          "source": "docs not readable here: verify_by_usage"
+        },
+        "reasoningBilledInCompletion": {
+          "value": "output_tokens include output_tokens_details.reasoning_tokens (repository usage parser)",
+          "status": "UNKNOWN"
+        },
+        "inputTokenBasis": {
+          "value": null,
+          "status": "UNKNOWN",
+          "source": "GPT-6 tokenizer not published here"
+        }
+      },
+      "scenarioPrices": {
+        "status": "REPO_CONSOLE",
+        "source": "src/ai/model-pricing.js (x2 long-context listed as its own rate)",
+        "seenAt": "2026-09-23",
+        "rates": [
+          {
+            "label": "standard",
+            "in": 2.0,
+            "cachedIn": 0.2,
+            "out": 10.0
+          },
+          {
+            "label": "long context (about x2, repository note)",
+            "in": 4.0,
+            "cachedIn": 0.4,
+            "out": 20.0
+          }
+        ]
+      },
+      "optIn": true
+    },
+    {
+      "variant": "gpt6_astra",
+      "provider": "openai",
+      "requestedModel": "gpt-6-astra",
+      "label": "openai/gpt-6-astra",
+      "why": "The strongest GPT-6 the account lists; production keeps it out of premium for cost (CLAUDE.md). Included because quality comes first in this run.",
+      "profile": {
+        "reasoning": "provider default (none sent, as production)",
+        "reasoningNote": "Production callOpenAI sends no reasoning parameter and drops temperature for GPT-6; the same here. max_output_tokens caps visible output and reasoning (repository note in src/ai/model-pricing.js, from the OpenAI Responses docs; the docs host is not reachable from this session).",
+        "params": {},
+        "capParam": "max_output_tokens",
+        "cap": 8000,
+        "capNote": "3 000 for the visible answer + 5 000 reasoning allowance (production explain sends 3 000: a reasoning model can spend it before the answer)"
+      },
+      "facts": {
+        "endpoint": {
+          "value": "https://api.openai.com/v1/responses",
+          "status": "REPO_ADAPTER",
+          "source": "src/api/server.js callOpenAI (production)"
+        },
+        "modelId": {
+          "value": "gpt-6-astra",
+          "status": "ACCOUNT_LIST",
+          "source": "GET https://api.openai.com/v1/models via network secret, 2026-10-12"
+        },
+        "accountAccess": {
+          "value": "gpt-6-astra listed",
+          "status": "ACCOUNT_LIST",
+          "source": "GET /v1/models, 2026-10-12"
+        },
+        "price": {
+          "value": "10.0 in / 1.0 cached / 50.0 out USD per 1M (standard, short context); long context bills about double (not in the table)",
+          "status": "REPO_CONSOLE",
+          "source": "src/ai/model-pricing.js openai_2026_09_23 (OpenAI pricing page, Standard processing)",
+          "checkedAt": "2026-09-23"
+        },
+        "capCoversBilledOutput": {
+          "value": "max_output_tokens caps reasoning (repository note)",
+          "status": "UNKNOWN",
+          "source": "docs not readable here: verify_by_usage"
+        },
+        "reasoningBilledInCompletion": {
+          "value": "output_tokens include output_tokens_details.reasoning_tokens (repository usage parser)",
+          "status": "UNKNOWN"
+        },
+        "inputTokenBasis": {
+          "value": null,
+          "status": "UNKNOWN",
+          "source": "GPT-6 tokenizer not published here"
+        }
+      },
+      "scenarioPrices": {
+        "status": "REPO_CONSOLE",
+        "source": "src/ai/model-pricing.js (x2 long-context listed as its own rate)",
+        "seenAt": "2026-09-23",
+        "rates": [
+          {
+            "label": "standard",
+            "in": 10.0,
+            "cachedIn": 1.0,
+            "out": 50.0
+          },
+          {
+            "label": "long context (about x2, repository note)",
+            "in": 20.0,
+            "cachedIn": 2.0,
+            "out": 100.0
+          }
+        ]
+      },
+      "optIn": true
     }
   ],
   "tokenizers": {

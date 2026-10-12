@@ -98,14 +98,16 @@ function loadConfig(file = CONFIG) {
 }
 
 /**
- * The models of this run: all five by default, or the variants named in
+ * The models of this run: the default five (models marked optIn - extra
+ * variants such as deepseek_6k or the GPT-6 lanes - run only when named), or the variants named in
  * --variants (comma list, e.g. deepseek,glm). An unknown or repeated name
  * is refused, never ignored; the order stays the config's. The selection is
  * part of the run sha (runSha hashes the models), so approving a small run
  * does not approve the full one.
  */
 function selectModels(models, list) {
-  if (list == null) return models;
+  // a model marked optIn (an extra variant) runs only when --variants names it
+  if (list == null) return models.filter(m => !m.optIn);
   const names = String(list).split(',').map(x => x.trim()).filter(Boolean);
   if (!names.length) throw Object.assign(new Error('--variants is empty'), { exit: 2 });
   const known = new Set(models.map(m => m.variant));

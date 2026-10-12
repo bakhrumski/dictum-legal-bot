@@ -41,6 +41,9 @@ const PROVIDERS = Object.freeze({
   // the final chunk without it; docs.z.ai streaming guide, 2026-10-12)
   voicelab: Object.freeze({ host: 'api.voicelab.uz', url: 'https://api.voicelab.uz/v1/chat/completions', secretEnv: 'VOICELAB_API_KEY', transport: 'voicelab-adapter', streamUsage: 'include_usage' }),
   deepseek: Object.freeze({ host: 'api.deepseek.com', url: 'https://api.deepseek.com/chat/completions', secretEnv: 'DEEPSEEK_API_KEY', transport: 'openai-compatible', streamUsage: 'include_usage' }),
+  // OpenAI Responses API, as production calls GPT-6 (src/api/server.js callOpenAI;
+  // the key there is GPT_API_KEY); max_output_tokens caps reasoning too
+  openai: Object.freeze({ host: 'api.openai.com', url: 'https://api.openai.com/v1/responses', secretEnv: 'GPT_API_KEY', transport: 'openai-responses' }),
   zai: Object.freeze({ host: 'api.z.ai', url: 'https://api.z.ai/api/paas/v4/chat/completions', secretEnv: 'ZAI_API_KEY', transport: 'openai-compatible', streamUsage: 'last_chunk' }),
   moonshot: Object.freeze({ host: 'api.moonshot.ai', url: 'https://api.moonshot.ai/v1/chat/completions', secretEnv: 'MOONSHOT_API_KEY', transport: 'openai-compatible', streamUsage: 'include_usage' }),
   // Alibaba Model Studio, Singapore (ap-southeast-1). The docs (OpenAI
@@ -139,7 +142,12 @@ function wireMessages(messages) {
  * take is left out of its profile, not stripped here).
  */
 function requestBody(model, messages) {
-  const body = { model: model.requestedModel, messages: wireMessages(messages) };
+  // Responses API: `input` with the system prompt kept as a system message
+  // (production maps every non-user message to "assistant" - recorded as a
+  // difference, not copied: the evaluation measures the model)
+  const body = PROVIDERS[model.provider] && PROVIDERS[model.provider].transport === 'openai-responses'
+    ? { model: model.requestedModel, input: wireMessages(messages) }
+    : { model: model.requestedModel, messages: wireMessages(messages) };
   for (const [k, v] of Object.entries(model.profile.params || {})) body[k] = v;
   body[model.profile.capParam] = model.profile.cap;
   return body;
@@ -162,9 +170,11 @@ function usageOf(data) {
   const outTokens = num(u.completion_tokens != null ? u.completion_tokens : u.output_tokens);
   const cachedTokens = num(u.prompt_cache_hit_tokens != null ? u.prompt_cache_hit_tokens
     : u.cached_tokens != null ? u.cached_tokens
-      : (u.prompt_tokens_details && u.prompt_tokens_details.cached_tokens));
+      : u.prompt_tokens_details ? u.prompt_tokens_details.cached_tokens
+        : (u.input_tokens_details && u.input_tokens_details.cached_tokens));
   const reasoningTokens = num((u.completion_tokens_details && u.completion_tokens_details.reasoning_tokens) != null
-    ? u.completion_tokens_details.reasoning_tokens : u.reasoning_tokens);
+    ? u.completion_tokens_details.reasoning_tokens
+    : (u.output_tokens_details && u.output_tokens_details.reasoning_tokens) != null ? u.output_tokens_details.reasoning_tokens : u.reasoning_tokens);
   let problem = null;
   if (inTokens == null || outTokens == null) problem = 'prompt or completion count missing';
   else if (cachedTokens != null && cachedTokens > inTokens) problem = 'cached tokens above prompt tokens';
@@ -331,6 +341,7 @@ async function callProvider(model, messages, { timeoutMs = 120000, fetchImpl = n
   // a stream keeps bytes flowing, so a proxy that drops a quiet connection
   // (2026-10-12: ~30 s, "upstream request failed") does not cut a long answer
   if (stream) { body.stream = true; if (p.streamUsage === 'include_usage') body.stream_options = { include_usage: true }; }
+  const responses = p.transport === 'openai-responses';
   const headers = { 'Content-Type': 'application/json', Accept: stream ? 'text/event-stream' : 'application/json' };
   if (auth.mode === 'env') headers.Authorization = `Bearer ${String(process.env[p.secretEnv]).trim()}`;
   const controller = new AbortController();
@@ -345,10 +356,7 @@ async function callProvider(model, messages, { timeoutMs = 120000, fetchImpl = n
     clearTimeout(timer);
     return { outcome: 'transport_unknown', error: redact(e && e.name === 'AbortError' ? `timed out after ${timeoutMs} ms` : (e && e.message) || e), usage: usageOf(null) };
   }
-  if (stream && resp.ok) {
-    const out = await readStream(resp, p, timer);
-    return out;
-  }
+  if (stream && resp.ok) return responses ? readResponsesStream(resp, timer) : readStream(resp, p, timer);
   let raw = '';
   try { raw = await resp.text(); } catch (e) { clearTimeout(timer); return { outcome: 'transport_unknown', status: resp.status, error: redact(`body not read: ${e && e.message}`), usage: usageOf(null) }; }
   clearTimeout(timer);
@@ -366,6 +374,7 @@ async function callProvider(model, messages, { timeoutMs = 120000, fetchImpl = n
       kind: health.classifyError({ status: resp.status, providerCode: parsed.code, providerMessage: parsed.message, message: raw }).kind };
   }
   if (!data) return { outcome: 'transport_unknown', status: resp.status, requestId, error: 'response is not JSON', usage: usageOf(null) };
+  if (responses) return { ...responsesOutcome(data), status: resp.status, requestId: requestId || data.id || null };
   const choice = Array.isArray(data.choices) ? data.choices[0] : null;
   const msg = (choice && choice.message) || {};
   const text = voicelabAdapter()._internal.contentText(msg.content);
@@ -425,6 +434,53 @@ async function readStream(resp, p, timer) {
     return { outcome: 'transport_unknown', status: resp.status, requestId: headerId || id, returnedModel: model, error: streamError || `stream ended with no finish_reason${done ? '' : ' and no [DONE]'}`, text, usage, ...billing };
   }
   return { outcome: 'answered', status: resp.status, requestId: headerId || id, returnedModel: model, text, finishReason, refusal, reasoningChars, usage, providerCostUsd: providerCostOf(usageData), streamed: true, ...billing };
+}
+
+/**
+ * A Responses API result: the output_text of the message items, a refusal
+ * item, status completed -> 'stop', incomplete for max_output_tokens ->
+ * 'length' (any other incomplete reason is named), usage as reported.
+ */
+function responsesOutcome(r) {
+  const items = Array.isArray(r.output) ? r.output : [];
+  const parts = items.filter(o => o.type === 'message').flatMap(o => o.content || []);
+  const text = parts.filter(c => c.type === 'output_text').map(c => c.text || '').join('');
+  const refusalPart = parts.find(c => c.type === 'refusal');
+  const reasoningChars = items.filter(o => o.type === 'reasoning').flatMap(o => o.summary || []).reduce((n, x) => n + String(x.text || '').length, 0);
+  const why = r.incomplete_details && r.incomplete_details.reason;
+  const finishReason = r.status === 'completed' ? 'stop' : r.status === 'incomplete' ? (/max_output_tokens/u.test(String(why || '')) ? 'length' : `incomplete:${why || '?'}`) : (r.status || null);
+  return { outcome: 'answered', returnedModel: r.model || null, text, finishReason, refusal: refusalPart ? redact(refusalPart.refusal || 'refused') : null, reasoningChars, usage: usageOf(r), providerCostUsd: null };
+}
+
+/** A streamed Responses API answer: text deltas, then the final response object. */
+async function readResponsesStream(resp, timer) {
+  const decoder = new TextDecoder();
+  let buf = '', text = '', final = null, streamError = null;
+  const handle = (line) => {
+    if (!line.startsWith('data:')) return;
+    const payload = line.slice(5).trim();
+    if (!payload || payload === '[DONE]') return;
+    let ev; try { ev = JSON.parse(payload); } catch { return; }
+    if (ev.type === 'response.output_text.delta' && typeof ev.delta === 'string') text += ev.delta;
+    else if (ev.type === 'response.completed' || ev.type === 'response.incomplete') final = ev.response;
+    else if (ev.type === 'response.failed' || ev.type === 'error') streamError = redact(JSON.stringify(ev.error || (ev.response && ev.response.error) || ev).slice(0, 200));
+  };
+  try {
+    for await (const chunk of resp.body) {
+      buf += decoder.decode(chunk, { stream: true });
+      let i;
+      while ((i = buf.indexOf('\n')) !== -1) { handle(buf.slice(0, i).trim()); buf = buf.slice(i + 1); }
+    }
+    if (buf.trim()) handle(buf.trim());
+  } catch (e) {
+    clearTimeout(timer);
+    return { outcome: 'transport_unknown', status: resp.status, error: redact(e && e.name === 'AbortError' ? 'timed out while streaming' : `stream broke: ${e && e.message}`), text, usage: usageOf(null) };
+  }
+  clearTimeout(timer);
+  if (streamError || !final) return { outcome: 'transport_unknown', status: resp.status, error: streamError || 'stream ended with no final response', text, usage: usageOf(final) };
+  const o = responsesOutcome(final);
+  // the final object carries the whole output; the deltas are the same text
+  return { ...o, text: o.text || text, status: resp.status, requestId: final.id || null, streamed: true };
 }
 
 /** Comet through the existing adapter: explicit id, no fallback, same outcome shape. */

@@ -235,6 +235,15 @@ Tasdiq fayli bo'lmagani uchun hozir **15 vazifaning 15 tasi BLOCKED**, rezerv es
 - Streaming'da VoiceLab `X-Credits-Charged` sarlavhasini bermaydi. Shuning uchun xarajat ro'yxat narxi bo'yicha USD'da yoziladi, kreditlarni esa konsoldan tekshirish kerak.
 - `--stream` run sha'siga kiradi.
 
+## Qo'shimcha variantlar (faqat `--variants` bilan nomlanganda ishga tushadi)
+- `deepseek_6k` — o'sha `deepseek-flash` modeli, lekin javob chegarasi 6 000 token (production'da 3 000). 2026-10-12 dagi uzun shartnomada DeepSeek'ning ikkala javobi ham 3 000 tokenda kesildi; bu variant to'liq javobni va uning narxini o'lchaydi.
+- `gpt6_luna`, `gpt6_sol`, `gpt6_astra` — OpenAI Responses API orqali, production'dagidek (`src/api/server.js` dagi `callOpenAI`):
+  - temperature va reasoning parametri yuborilmaydi;
+  - `max_output_tokens` 8 000 (production'dagi 3 000 + reasoning uchun 5 000);
+  - system prompt `system` roli bilan beriladi. Production esa user'dan boshqa barcha xabarlarni `assistant` qilib yuboradi. Bu farq qayd etiladi, lekin takrorlanmaydi: sinov modelning o'zini o'lchaydi.
+  - Narx repo jadvalidan olinadi (2026-09-23). Uzun kontekst uchun narx ×2 alohida qator sifatida qo'shilgan, rezerv esa eng yuqori narx bo'yicha hisoblanadi.
+- Standart matritsa (5 model) va uning run sha'si o'zgarmaydi.
+
 ## Keyingi bosqich: mustaqil uzun hujjat sinovi (reja, hali ruxsat yo'q)
 - **Hujjatlar.** Sozlashda ishlatilmagan, egasi rozilik bergan 6–10 ta uzun hujjat (30–60 ming belgi): jadvalli DOCX, ilovali, ziddiyatli. Kamida ikkitasi holdout bo'ladi.
 - **Kirish.** Har model bitta muzlatilgan dayjestni va to'liq matnni alohida oladi (#430 sxemasi).
