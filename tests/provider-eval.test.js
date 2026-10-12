@@ -768,6 +768,30 @@ const response = (status, body, headers = {}) => ({ ok: status >= 200 && status 
     assert.ok(r.outcome === 'transport_unknown' && /no final response/u.test(r.error));
   });
 
+  await test('a stream whose only event is the provider refusing to serve (no credits, bad key) before any text is that provider\'s error - the provider stops, the run does not halt; after text it stays unknown', async () => {
+    const enc = new TextEncoder();
+    const sse = events => ({ ok: true, status: 200, headers: { get: () => null }, body: (async function* () { for (const e of events) yield enc.encode(`data: ${JSON.stringify(e)}\n\n`); })() });
+    const sol = pe.selectModels(pe.loadConfig().models, 'gpt6_sol')[0];
+    const ds = cfg.models.find(m => m.variant === 'deepseek');
+    const msgs = frozen[0].messages;
+    let r = await prov.callProvider(sol, msgs, { entry: { auth: 'network_secret' }, stream: true, fetchImpl: async () => sse([{ type: 'error', code: 'credit_balance_exhausted', message: 'You have no credits remaining.' }]) });
+    assert.deepStrictEqual([r.outcome, r.status, r.kind], ['http_error', 402, 'quota']);
+    assert.strictEqual(pe.classify(r, sol), 'error');
+    r = await prov.callProvider(ds, msgs, { entry: { auth: 'network_secret' }, stream: true, fetchImpl: async () => sse([{ error: { code: 'invalid_api_key', message: 'Incorrect API key' } }]) });
+    assert.deepStrictEqual([r.outcome, r.status, r.kind], ['http_error', 401, 'auth']);
+    // text already came: whether it was billed is unknown
+    r = await prov.callProvider(sol, msgs, { entry: { auth: 'network_secret' }, stream: true, fetchImpl: async () => sse([{ type: 'response.output_text.delta', delta: 'yarim' }, { type: 'error', code: 'insufficient_quota' }]) });
+    assert.strictEqual(r.outcome, 'transport_unknown');
+    // in a run: the GPT-6 lane stops, the others go on, nothing halted
+    const call = stubCall(m => (m.provider === 'openai' ? { outcome: 'http_error', status: 402, kind: 'quota', error: 'credit_balance_exhausted', usage: prov.usageOf(null) } : answered(m)));
+    const models = pe.selectModels(pe.loadConfig().models, 'deepseek,gpt6_luna');
+    const conf = confirmedAll();
+    const budget = await pe.runLive({ frozen, models, budgetUsd: 5, out: tmp('pe-refuse-'), confirmed: conf, sha: 'refuse', call });
+    assert.strictEqual(budget.halted, false);
+    assert.strictEqual(call.calls.filter(c => c.variant === 'gpt6_luna').length, 1);
+    assert.strictEqual(call.calls.filter(c => c.variant === 'deepseek').length, 3);
+  });
+
   await test('restart: a finished run spends nothing again; an attempt with no outcome written keeps its reserve and halts', async () => {
     const call = stubCall(m => answered(m));
     const { out } = await live(call);
