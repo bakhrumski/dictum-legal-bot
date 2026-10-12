@@ -35,6 +35,7 @@ const MODEL_PRICING = Object.freeze({
   // per model here, so off-peak calls are reported at up to twice their
   // cost - an over-statement, never an under-statement.
   'deepseek/deepseek-flash': Object.freeze({ in: 0.30, out: 1.20, cached: 0.006 }),
+  'deepseek/deepseek-v4-pro': Object.freeze({ in: 1.32, out: 3.96, cached: 0.044 }),
 });
 
 /**
@@ -101,7 +102,7 @@ const PRICE_SOURCE_OF = Object.freeze({
   'gpt-6-astra': 'openai_2026_09_23', 'gpt-6-sol': 'openai_2026_09_23', 'gpt-6-luna': 'openai_2026_09_23',
   'text-embedding-3-small': 'openai_2026_08_11',
   'voicelab/aisha-comet': 'voicelab_2026_09_23', 'voicelab/aisha-orbit': 'voicelab_2026_09_23', 'voicelab/aisha-halo': 'voicelab_2026_09_23',
-  'deepseek/deepseek-flash': 'deepseek_2026_10_12',
+  'deepseek/deepseek-flash': 'deepseek_2026_10_12', 'deepseek/deepseek-v4-pro': 'deepseek_2026_10_12',
 });
 
 /**

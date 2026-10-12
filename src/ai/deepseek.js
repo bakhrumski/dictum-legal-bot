@@ -40,6 +40,15 @@
 
 const URL = 'https://api.deepseek.com/chat/completions';
 const MODEL = 'deepseek-flash';
+// the models a caller may name as 'deepseek/<model>' (listed on the account,
+// priced in model-pricing.js); any other id goes to the default
+const MODELS = Object.freeze(['deepseek-flash', 'deepseek-v4-pro']);
+
+/** The DeepSeek model for a requested id: 'deepseek/deepseek-v4-pro' names it, anything else is the default. */
+function modelFor(id) {
+  const m = /^deepseek\/(.+)$/iu.exec(String(id || '').trim());
+  return m && MODELS.includes(m[1].toLowerCase()) ? m[1].toLowerCase() : MODEL;
+}
 
 const apiKey = () => String(process.env.DEEPSEEK_API_KEY || '').trim();
 
@@ -81,9 +90,9 @@ function usageOf(u) {
  * { text, provider, truncated, usage }; throws on an HTTP error, a missing
  * key, a timeout or an empty answer (the router then falls back).
  */
-function buildBody(messages, { maxTokens = 6000, temperature = 0.2, responseFormat = null, stream = false } = {}) {
+function buildBody(messages, { maxTokens = 6000, temperature = 0.2, responseFormat = null, stream = false, model = MODEL } = {}) {
   const body = {
-    model: MODEL,
+    model: MODELS.includes(model) ? model : MODEL,
     messages: (messages || []).map(m => ({ role: m.role === 'model' ? 'assistant' : (m.role || 'user'), content: m.content !== undefined ? m.content : (m.text || '') })),
     thinking: { type: 'disabled' },
     temperature: temperature == null ? 0.2 : temperature,
@@ -95,6 +104,7 @@ function buildBody(messages, { maxTokens = 6000, temperature = 0.2, responseForm
 }
 
 async function post(body, fetchImpl) {
+  const name = body.model;
   const key = apiKey();
   if (!key) throw Object.assign(new Error('DEEPSEEK_API_KEY sozlanmagan'), { code: 'NO_KEY' });
   let resp;
@@ -105,7 +115,7 @@ async function post(body, fetchImpl) {
       body: JSON.stringify(body),
     });
   } catch (e) {
-    const err = new Error(e && (e.name === 'TimeoutError' || e.name === 'AbortError') ? `DeepSeek ${MODEL} timed out after ${timeoutMs()}ms` : `DeepSeek ${MODEL} request failed`);
+    const err = new Error(e && (e.name === 'TimeoutError' || e.name === 'AbortError') ? `DeepSeek ${name} timed out after ${timeoutMs()}ms` : `DeepSeek ${name} request failed`);
     err.status = e && (e.name === 'TimeoutError' || e.name === 'AbortError') ? 408 : undefined;
     throw err;
   }
@@ -113,22 +123,24 @@ async function post(body, fetchImpl) {
     const raw = await resp.text().catch(() => '');
     const { parseProviderError, safeReason } = require('./provider-health');
     const parsed = parseProviderError(raw);
-    throw Object.assign(new Error(`DeepSeek ${MODEL} ${resp.status}: ${safeReason([parsed.code, parsed.message].filter(Boolean).join(': ') || raw.slice(0, 200))}`),
+    throw Object.assign(new Error(`DeepSeek ${name} ${resp.status}: ${safeReason([parsed.code, parsed.message].filter(Boolean).join(': ') || raw.slice(0, 200))}`),
       { status: resp.status, providerCode: parsed.code, providerMessage: parsed.message ? safeReason(parsed.message) : null, retryAfter: resp.headers.get('retry-after') });
   }
   return resp;
 }
 
-async function chatCompletion(messages, { maxTokens = 6000, temperature = 0.2, responseFormat = null, call = null, fetchImpl = null } = {}) {
-  const resp = await post(buildBody(messages, { maxTokens, temperature, responseFormat }), fetchImpl);
+async function chatCompletion(messages, { maxTokens = 6000, temperature = 0.2, responseFormat = null, call = null, fetchImpl = null, model = MODEL } = {}) {
+  const body = buildBody(messages, { maxTokens, temperature, responseFormat, model });
+  const name = body.model;
+  const resp = await post(body, fetchImpl);
   const data = await resp.json();
   const choice = Array.isArray(data.choices) ? data.choices[0] : null;
   const text = choice && choice.message && typeof choice.message.content === 'string' ? choice.message.content : '';
   const finishReason = (choice && choice.finish_reason) || null;
   const usage = usageOf(data.usage);
   if (call) call.usage({ ...usage, modelReturned: data.model || null, finishReason, truncated: finishReason === 'length' });
-  if (!text.trim()) throw Object.assign(new Error(`DeepSeek ${MODEL} empty response (finish_reason: ${finishReason || '?'})`), { code: 'EMPTY_RESPONSE', usage });
-  return { text, provider: `deepseek/${data.model || MODEL}`, truncated: finishReason === 'length', usage };
+  if (!text.trim()) throw Object.assign(new Error(`DeepSeek ${name} empty response (finish_reason: ${finishReason || '?'})`), { code: 'EMPTY_RESPONSE', usage });
+  return { text, provider: `deepseek/${data.model || name}`, truncated: finishReason === 'length', usage };
 }
 
 /**
@@ -136,9 +148,11 @@ async function chatCompletion(messages, { maxTokens = 6000, temperature = 0.2, r
  * chunk. A stream that breaks after tokens were shown is marked
  * partialStream, so the caller does not replay the answer elsewhere.
  */
-async function chatCompletionStream(messages, { maxTokens = 6000, temperature = 0.2, call = null, fetchImpl = null } = {}, onToken = () => {}) {
-  const resp = await post(buildBody(messages, { maxTokens, temperature, stream: true }), fetchImpl);
-  if (!resp.body) throw new Error(`DeepSeek ${MODEL} stream has no body`);
+async function chatCompletionStream(messages, { maxTokens = 6000, temperature = 0.2, call = null, fetchImpl = null, model: requested = MODEL } = {}, onToken = () => {}) {
+  const body = buildBody(messages, { maxTokens, temperature, stream: true, model: requested });
+  const name = body.model;
+  const resp = await post(body, fetchImpl);
+  if (!resp.body) throw new Error(`DeepSeek ${name} stream has no body`);
   const decoder = new TextDecoder();
   let buf = '', text = '', finishReason = null, model = null, usage = {};
   const handle = (line) => {
@@ -146,7 +160,7 @@ async function chatCompletionStream(messages, { maxTokens = 6000, temperature = 
     const payload = line.slice(5).trim();
     if (!payload || payload === '[DONE]') return;
     let ev; try { ev = JSON.parse(payload); } catch { return; }
-    if (ev.error) throw new Error(`DeepSeek ${MODEL} stream error: ${String(ev.error.message || ev.error.code || 'error').slice(0, 200)}`);
+    if (ev.error) throw new Error(`DeepSeek ${name} stream error: ${String(ev.error.message || ev.error.code || 'error').slice(0, 200)}`);
     if (ev.model) model = ev.model;
     if (ev.usage) usage = usageOf(ev.usage);
     const c = Array.isArray(ev.choices) ? ev.choices[0] : null;
@@ -168,9 +182,9 @@ async function chatCompletionStream(messages, { maxTokens = 6000, temperature = 
     throw err;
   }
   if (call) call.usage({ ...usage, modelReturned: model, finishReason, truncated: finishReason === 'length' });
-  if (!text) throw Object.assign(new Error(`DeepSeek ${MODEL} stream returned no text`), { code: 'EMPTY_RESPONSE' });
-  if (!finishReason) throw Object.assign(new Error(`DeepSeek ${MODEL} stream ended with no finish_reason`), { partialStream: true });
-  return { text, provider: `deepseek/${model || MODEL}`, truncated: finishReason === 'length', usage };
+  if (!text) throw Object.assign(new Error(`DeepSeek ${name} stream returned no text`), { code: 'EMPTY_RESPONSE' });
+  if (!finishReason) throw Object.assign(new Error(`DeepSeek ${name} stream ended with no finish_reason`), { partialStream: true });
+  return { text, provider: `deepseek/${model || name}`, truncated: finishReason === 'length', usage };
 }
 
-module.exports = { chatCompletion, chatCompletionStream, routes, enabled, maxTokensFor, MODEL, URL, _internal: { usageOf, buildBody } };
+module.exports = { chatCompletion, chatCompletionStream, routes, enabled, maxTokensFor, modelFor, MODEL, MODELS, URL, _internal: { usageOf, buildBody } };

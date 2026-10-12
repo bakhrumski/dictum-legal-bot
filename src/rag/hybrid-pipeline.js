@@ -163,19 +163,20 @@ async function callOpenAIModel(model, messages, { temperature = 0.2, maxTokens =
   // attempt is a ledger row of its own)
   if (deepseek.routes(model)) {
     const started = Date.now();
+    const dsLabel = `deepseek/${deepseek.modelFor(model)}`;
     try {
-      const r = await deepseek.chatCompletion(messages, { temperature, maxTokens: deepseek.maxTokensFor(maxTokens), responseFormat });
+      const r = await deepseek.chatCompletion(messages, { temperature, maxTokens: deepseek.maxTokensFor(maxTokens), responseFormat, model: deepseek.modelFor(model) });
       const u = r.usage || {};
       return {
-        text: r.text, provider: r.provider, model: r.provider, providerName: 'deepseek', billedModel: 'deepseek/deepseek-flash',
+        text: r.text, provider: r.provider, model: r.provider, providerName: 'deepseek', billedModel: dsLabel,
         modelReturned: r.provider, cachedTokens: u.cachedTokens || 0, reasoningTokens: u.reasoningTokens || null, usageEstimated: false,
         inTokens: u.inTokens || 0, outTokens: u.outTokens || 0,
-        costUsd: calculateTokenCost('deepseek/deepseek-flash', u) || 0,
+        costUsd: calculateTokenCost(dsLabel, u) || 0,
       };
     } catch (err) {
       const c = require('../ai/provider-health').classifyError(err);
-      require('../ai/provider-health').recordOutcome('deepseek', 'deepseek/deepseek-flash', c);
-      usageLedger.record({ provider: 'deepseek', model: 'deepseek/deepseek-flash', status: c.code === 'TIMEOUT' ? 'timeout' : 'error',
+      require('../ai/provider-health').recordOutcome('deepseek', dsLabel, c);
+      usageLedger.record({ provider: 'deepseek', model: dsLabel, status: c.code === 'TIMEOUT' ? 'timeout' : 'error',
         errorCode: c.code, errorKind: c.kind, errorReason: c.reason, startedAt: started, finishedAt: Date.now(), usage: err.usage || {} });
       log.warn('deepseek failed, using the OpenAI model', { model, err: err.message });
     }

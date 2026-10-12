@@ -168,6 +168,28 @@ const fakeLedger = () => {
     assert.ok(hp.indexOf('if (deepseek.routes(model))') < hp.indexOf('if (voicelab.routes(model) && !deepseek.routes(model))'));
   });
 
+  await test('legal opinion: paid plans on GPT-6 Sol (explicit openai/, DeepSeek bypassed); OPINION_MODEL=deepseek/deepseek-v4-pro sends V4 Pro, priced, with Sol behind it', async () => {
+    const fs = require('fs'), path = require('path');
+    assert.strictEqual(deepseek.modelFor('deepseek/deepseek-v4-pro'), 'deepseek-v4-pro');
+    assert.strictEqual(deepseek.modelFor('deepseek/unknown'), 'deepseek-flash', 'an unlisted id is the default, never sent as is');
+    assert.strictEqual(deepseek.modelFor('gpt-6-sol'), 'deepseek-flash');
+    assert.strictEqual(deepseek.routes('openai/gpt-6-sol'), false, 'openai/ never goes to DeepSeek');
+    let sent = null;
+    await withEnv({ DEEPSEEK_API_KEY: KEY }, async () => {
+      const r = await deepseek.chatCompletion(msgs, { model: 'deepseek-v4-pro', maxTokens: 14000, fetchImpl: async (u, init) => { sent = JSON.parse(init.body); return resp(200, okBody({ model: 'deepseek-v4-pro' })); } });
+      assert.strictEqual(r.provider, 'deepseek/deepseek-v4-pro');
+    });
+    assert.deepStrictEqual([sent.model, sent.max_tokens, sent.thinking], ['deepseek-v4-pro', 14000, { type: 'disabled' }]);
+    assert.deepStrictEqual({ ...modelPricing.MODEL_PRICING['deepseek/deepseek-v4-pro'] }, { in: 1.32, out: 3.96, cached: 0.044 });
+    assert.ok(modelPricing.callCostBound({ model: 'deepseek/deepseek-v4-pro', inputTokensMax: 1000, outputTokensMax: 1000 }).usd > 0, 'a known bound');
+    const src = fs.readFileSync(path.join(__dirname, '../src/api/server.js'), 'utf8');
+    assert.ok(/const paidOpinionModel = `openai\/\$\{MODELS\.premium\}`;/u.test(src));
+    assert.ok(/silver: paidOpinionModel,[\s\S]{0,80}gold: paidOpinionModel,[\s\S]{0,80}platinum: paidOpinionModel,/u.test(src));
+    assert.ok(/let opinionModel = process\.env\.OPINION_MODEL \|\| null;/u.test(src), 'OPINION_MODEL switches it');
+    assert.ok(/const dsModel = deepseek\.modelFor\(explicit \? requestedModel : null\);/u.test(src));
+    assert.ok(/if \(!sameModelId\(actualModel, opinionModel\)\)/u.test(src), 'openai/gpt-6-sol answered by gpt-6-sol is not a fallback');
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);
 })();

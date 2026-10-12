@@ -11,7 +11,8 @@ can use them is decided by the provider, not by this file.
 | `callAI` (standard lane) | DeepSeek `deepseek-flash`† | OpenAI `MODELS.standard` (`gpt-6-sol`) | Gemini `gemini-2.5-flash` |
 | `callAI` with `model: MODELS.chat` (Telegram/web answer) | DeepSeek `deepseek-flash`† | OpenAI `gpt-6-luna` | Gemini `gemini-2.5-flash` |
 | `callCheapAI` | DeepSeek `deepseek-flash`† | OpenAI `MODELS.cheap` (`gpt-6-luna`) | Gemini `gemini-2.5-flash` |
-| `callPremiumAI` (legal opinion) | DeepSeek `deepseek-flash`† | OpenAI `MODELS.premium` (`gpt-6-sol`), `premiumRetries` | Gemini `gemini-2.5-flash` |
+| `callPremiumAI` (legal opinion, paid plans and staff) | OpenAI `gpt-6-sol` (explicit `openai/${MODELS.premium}`; DeepSeek and VoiceLab bypassed), `premiumRetries` — or DeepSeek `deepseek-v4-pro` with `OPINION_MODEL=deepseek/deepseek-v4-pro` | OpenAI `gpt-6-sol` after V4 Pro | Gemini `gemini-2.5-flash` |
+| `callPremiumAI` (legal opinion, Sinov) | DeepSeek `deepseek-flash`† | OpenAI `gpt-6-luna` | Gemini `gemini-2.5-flash` |
 | `callExplainAI` (document explanation, final call only; 2026-10-12) | DeepSeek `deepseek-flash`, thinking off, `max_tokens` 6000 | OpenAI `gpt-6-luna` (explicit `openai/`, never VoiceLab), `max_output_tokens` 8000 | Gemini `gemini-2.5-flash` |
 | Streaming answer (web) | DeepSeek stream† | OpenAI stream | Gemini stream, then `callAI` |
 | Embeddings | Gemini `gemini-embedding-001` / HF `multilingual-e5-large` / OpenAI `text-embedding-3-small` (`EMBED_PROVIDER`; not routed, the corpus is embedded with one) | — | — |
@@ -26,6 +27,15 @@ provider: `voicelab/<id>` (e.g. `MODEL_TELEGRAM=voicelab/aisha-comet`) still
 goes to VoiceLab, `openai/<id>` to OpenAI, `deepseek/<id>` to DeepSeek.
 Images, scanned documents (OCR, vision) and embeddings are not routed to
 DeepSeek. The hybrid pipeline's `callOpenAIModel` follows the same order.
+
+Legal opinion (2026-10-12): in the opinion test (`scripts/provider-eval.js
+--task opinion`, one 54 260-char agreement, empty legal context, read by
+hand, not by a lawyer) GPT-6 Sol kept every checked condition, DeepSeek V4
+Pro most of them at about a quarter of the cost, deepseek-flash the fewest.
+Paid opinions therefore stay on Sol; `OPINION_MODEL=deepseek/deepseek-v4-pro`
+(env, no deploy) moves them to V4 Pro (thinking off, cap 7 000 x 2, peak
+price 1.32 / 0.044 / 3.96 per 1M in `model-pricing.js`), Sol behind it.
+`deepseek/<model>` accepts only `deepseek-flash` and `deepseek-v4-pro`.
 
 Without DeepSeek (no key, or `DEEPSEEK_ROUTING=off`) the chains are as
 before: VoiceLab first only when `LLM_PROVIDER=voicelab` and
