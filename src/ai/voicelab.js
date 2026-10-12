@@ -179,6 +179,20 @@ function creditsOf(resp, data) {
   return Number.isFinite(field) ? field : null;
 }
 
+/**
+ * What VoiceLab's developer API states about billing in the response headers
+ * (docs.voicelab.uz/api/llm, 2026-10-12): X-Credits-Charged = whole credits
+ * debited when billing settled; X-LLM-Billing-Status = 'pending' when usage
+ * is not verified yet; X-LLM-Request-ID = the billable request id. Returned
+ * apart from usage: the usage ledger's cost is unchanged by them.
+ */
+function billingHeaders(resp) {
+  const get = k => (resp && resp.headers && typeof resp.headers.get === 'function' ? resp.headers.get(k) : null);
+  const charged = get('x-credits-charged');
+  const n = charged != null && charged !== '' ? Number(charged) : NaN;
+  return { creditsCharged: Number.isFinite(n) ? n : null, billingStatus: get('x-llm-billing-status') || null, requestId: get('x-llm-request-id') || null };
+}
+
 function usageOf(data) {
   const u = (data && data.usage) || {};
   return {
@@ -279,7 +293,7 @@ async function chatCompletion(modelOrLane, messages, opts = {}) {
     const status = data && (data.status || data.state);
     // a specific code instead of a bare "ERROR" in the usage ledger (2026-10-04)
     throw Object.assign(new Error(`VoiceLab ${model} returned no choices${status ? ` (status: ${status})` : ''}`),
-      { code: 'NO_CHOICES', providerCode: status || null, usage: { ...usageOf(data), credits: creditsOf(resp, data) } });
+      { code: 'NO_CHOICES', providerCode: status || null, usage: { ...usageOf(data), credits: creditsOf(resp, data) }, ...billingHeaders(resp) });
   }
   const text = contentText(choice.message && choice.message.content);
   if (!text.trim()) {
@@ -293,13 +307,14 @@ async function chatCompletion(modelOrLane, messages, opts = {}) {
       + `completion_tokens: ${usage.outTokens}, reasoning_tokens: ${usage.reasoningTokens == null ? '?' : usage.reasoningTokens}, `
       + `reasoning_field: ${reasoningField ? `${reasoningField} (${msg[reasoningField].length} chars)` : 'none'})`),
     // the provider billed these tokens: they go to the ledger, not "unknown"
-    { code: 'EMPTY_RESPONSE', providerCode: choice.finish_reason || null, usage });
+    { code: 'EMPTY_RESPONSE', providerCode: choice.finish_reason || null, usage, ...billingHeaders(resp) });
   }
 
   return {
     text, model, provider: `voicelab/${model}`, raw: data,
     usage: { ...usageOf(data), credits: creditsOf(resp, data) },
     finishReason: choice.finish_reason || null,
+    ...billingHeaders(resp),
   };
 }
 
@@ -362,5 +377,5 @@ module.exports = {
   chatCompletion,
   chatCompletionStream,
   // exported for tests
-  _internal: { toChatMessages, contentText, usageOf, creditsOf, buildBody, minMaxTokens, DEFAULT_MODELS, LANES },
+  _internal: { toChatMessages, contentText, usageOf, creditsOf, billingHeaders, buildBody, minMaxTokens, DEFAULT_MODELS, LANES },
 };

@@ -9,9 +9,9 @@ Bu 3 ta qisqa sun'iy hujjatdagi dastlabki saralash. Uzun hujjat, dayjest, RAG yo
 |---|---|---|---|---|---|
 | baseline | VoiceLab (mavjud adapter) | `aisha-comet` | `VOICELAB_API_KEY` (mavjud nom) | parametr yuborilmaydi | `max_tokens` 3000 |
 | deepseek | DeepSeek | `deepseek-flash` | `DEEPSEEK_API_KEY` | o'chiq: `thinking.type=disabled` | `max_tokens` 3000 |
-| glm | Z.AI (oddiy API, Coding Plan emas) | `glm-5.3-flash` | `ZAI_API_KEY` | yoqiq: o'chirib bo'lmaydi, `thinking.type=enabled` | `max_tokens` 8000 |
+| glm | Z.AI (oddiy API, Coding Plan emas) | `glm-5.3-flash` | `ZAI_API_KEY` | yoqiq: o'chirib bo'lmaydi, `thinking.type=enabled` + `reasoning_effort=low` | `max_tokens` 8000 |
 | kimi | Moonshot | `kimi-k3` | `MOONSHOT_API_KEY` | yoqiq: `reasoning_effort=low` | `max_completion_tokens` 8000 |
-| qwen | Alibaba Model Studio (xalqaro) | `qwen-plus` | `DASHSCOPE_API_KEY` | o'chiq: `enable_thinking=false` | `max_tokens` 3000 |
+| qwen | Alibaba Model Studio (Singapore) | `qwen-plus-2025-12-01` | `DASHSCOPE_API_KEY` | o'chiq: `enable_thinking=false` | `max_tokens` 3000 |
 
 - 3 hujjat × 5 model = 15 ta yakuniy javob.
 - Yordamchi AI chaqiruvi 0, dayjest 0, pullik preflight 0.
@@ -34,26 +34,51 @@ Bu 3 ta qisqa sun'iy hujjatdagi dastlabki saralash. Uzun hujjat, dayjest, RAG yo
 - **Moonshot `kimi-k3`.** Paket nomzodi.
   - Reasoning doim yoqiq; eng past effort (`low`) tanlandi.
   - `low` rad etilsa, xato yoziladi va boshqa qiymat bilan qayta yuborilmaydi.
-- **Qwen `qwen-plus`.** Umumiy matn modeli, coder emas.
+- **Qwen `qwen-plus-2025-12-01`.** Umumiy matn modeli, coder emas.
   - Non-thinking rejimi bor, shuning uchun bazadek ishlay oladi.
-  - Bu alias. Uning snapshot'i faqat egasi oldindan tasdiqlagan bo'lsa qabul qilinadi (quyida).
+  - Hujjatda `qwen-plus` aynan shu snapshot'ga teng deb yozilgan, shuning uchun alias o'rniga sanali ID so'raladi: model sinov davomida almashib qolmaydi.
 
-## Faktlar: manba qanday tasdiq hisoblanadi
-- Live chaqiruv faktlarni **faqat egasining tasdiq faylidan** (`--confirmed`) oladi. Config'dagi qiymatlar faqat dry-run ssenariysi uchun.
-- Qidiruv parchasi (`SEARCH_SNIPPET`) rasmiy hujjat bilan teng tasdiq hisoblanmaydi. U faqat taxminiy narxni ko'rsatadi va jobni hech qachon READY qilmaydi.
-- **DeepSeek rasmiy sahifalari bu sessiyada o'qilmadi.** `https://api-docs.deepseek.com/quick_start/pricing/` va `https://api-docs.deepseek.com/api/create-chat-completion/` hostini muhitning tarmoq siyosati rad etdi (proksi CONNECT'ga 403 qaytardi, DNS ishlamadi). Paketda bu sahifalarning havolasi bor, raqamlar yo'q. Shuning uchun DeepSeek narxi, vaqt bo'yicha tarifi, thinking kaliti va chiqish chegarasi **UNKNOWN**, live esa **BLOCKED**.
-- Z.AI, Moonshot va Alibaba sahifalari ham ochilmadi. Ularda tasdiqlanmagan bandlar UNKNOWN qoladi.
+## Faktlar: rasmiy hujjat (2026-10-12)
+- Live chaqiruv faktlarni **faqat egasining tasdiq faylidan** (`--confirmed`) oladi. Config'dagi qiymatlar dry-run ssenariysi va manba qaydi uchun.
+- Hamma hujjat sahifalari 2026-10-12 da o'qildi; har fakt config'da URL va sana bilan turadi.
+- Akkauntga ruxsat bepul `GET /models` (generation emas) bilan tekshirildi.
 
-| Fakt | baseline | DeepSeek | GLM | Kimi | Qwen |
+| Fakt | baseline (comet) | DeepSeek | GLM | Kimi | Qwen |
 |---|---|---|---|---|---|
-| Endpoint | repo adapteri | paket | paket | paket | UNKNOWN |
-| Model ID | VoiceLab konsoli (repo) | paket | paket | paket | UNKNOWN |
-| Akkaunt/modelga ruxsat | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN |
-| Narx | konsol, 2026-09-23 | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN |
-| Chegara barcha billed output'ni cheklaydi | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN |
-| Reasoning `completion_tokens` ichida | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN |
-| Qaytadigan model ID | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN |
-| Kirish tokeni asosi (tokenizer + chat shabloni) | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN |
+| Endpoint | `api.voicelab.uz/v1/chat/completions` | `api.deepseek.com/chat/completions` | `api.z.ai/api/paas/v4/chat/completions` | `api.moonshot.ai/v1/chat/completions` | Singapore workspace domeni yoki `dashscope-intl` (quyida) |
+| Akkauntga ruxsat | UNKNOWN (kalit yo'q, 401) | ✓ `deepseek-flash` ro'yxatda | ✓ `glm-5.3-flash` ro'yxatda | ✗ `kimi-k3` ro'yxatda **yo'q** (K3 kamida $1 to'ldirishdan keyin ochiladi) | UNKNOWN (kalit yo'q, 401) |
+| Narx, USD / 1M | konsol 0.45 / 0.70 (repo, 2026-09-23); hisob kreditda | peak: miss 0.30 / hit 0.006 / chiqish 1.20; off-peak yarmi | 0.15 / kesh 0.03 / 0.50 | 3.00 / kesh 0.30 / kesh yozish 3.00 (5 daq) / 15.00 | 0.40 / 1.20 (non-thinking, ≤256K) |
+| Chiqish chegarasi | 4096 | 384K | 128K | 1 048 576 | 32 768 |
+| Chegara reasoning'ni ham qamraydi | UNKNOWN | UNKNOWN (thinking o'chiq) | UNKNOWN | UNKNOWN (faqat K2 qo'llanmasida bor — K3 uchun dalil emas) | UNKNOWN (thinking o'chiq) |
+| Reasoning `completion_tokens` ichida | — | UNKNOWN | UNKNOWN | UNKNOWN | ✓ (hujjat misoli) |
+| Kirish tokeni asosi | yo'q | rasmiy tokenizer | HF tokenizer + shablon | HF tiktoken + shablon | yopiq model, yo'q |
+
+**Tarmoq secreti.** Claude cloud'dagi Network secrets bilan proxy `Authorization` sarlavhasini o'zi qo'shadi va kalit jarayonning env'iga tushmaydi. DeepSeek, Z.AI va Moonshot'ning `GET /models` so'rovi kalitsiz 200 qaytardi, ya'ni proxy kalitni qo'shyapti.
+- Runner bunday hostda kalitni faqat tasdiq faylidagi `"auth": "network_secret"` bilan qabul qiladi va `Authorization` sarlavhasini umuman yubormaydi.
+- Oddiy yetishmayotgan kalit avvalgidek BLOCKED bo'ladi. Soxta kalit hech qachon yuborilmaydi.
+- Proxy kalitni qo'shmasa, provayder 401 qaytaradi: bu auth xatosi sifatida yoziladi va shu provayder to'xtatiladi.
+- VoiceLab adapteri kalitni env'dan oladi, shuning uchun unga network secret yetmaydi.
+
+**Qwen endpointi.** Hujjat Singapore uchun `https://{WorkspaceId}.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1` ni beradi va `dashscope-intl.aliyuncs.com` dan unga o'tishni so'raydi. Eski domen ishlamaydi deb yozilmagan.
+- Tasdiq faylida `workspaceId` (faqat kichik harf, raqam va chiziqcha) bo'lsa, workspace domeni ishlatiladi; aks holda `dashscope-intl`.
+- Tanlangan endpoint dry-run'da ham, ledger'da ham yoziladi.
+
+**GLM.** `reasoning_effort=low` yuboriladi (GLM-5.3-Flash low/high/max qabul qiladi, default max). `finish_reason: sensitive` → `refused`.
+
+**VoiceLab.** `X-Credits-Charged` (yechilgan kreditlar) ro'yxat narxi bo'yicha USD'dan alohida yoziladi. `X-LLM-Billing-Status: pending` bo'lsa, usage yo'q va xarajat noma'lum hisoblanadi. Production ledger'ining hisobi o'zgarmaydi.
+
+**Tokenizer bo'yicha sanoq (muzlatilgan xabarlar, shablon bilan).** Bu runner yuboradigan matnning sanog'i. Provayder serverda qo'shadigan matnni ochiq tokenizer ko'rsatmaydi, shuning uchun sanoq kafolatlangan maksimum emas.
+
+| | D1 | D2 | D3 | Shablon overhead |
+|---|---|---|---|---|
+| DeepSeek | 2 949 | 2 757 | 3 269 | 3 |
+| GLM | 2 962 | 2 774 | 3 302 | 13 |
+| Kimi | 2 976 | 2 818 | 3 303 | 100 |
+| (comet nisbati bo'yicha taxmin) | 3 679 | 3 504 | 3 961 | — |
+
+- Uchala tokenizer byte-level BPE: bir matn tokeni kamida bir baytni egallaydi (`maxTokensPerByte` = 1).
+- Qwen va comet uchun ochiq tokenizer yo'q.
+- Kimi'da token sanash API'si bor, lekin u kalit talab qiladi va billing'i yozilmagan, shuning uchun chaqirilmadi.
 
 ## Rezerv qanday "ishonchli chegara" bo'ladi
 Rezerv = kirish chegarasi × eng yuqori tasdiqlangan kirish narxi + chiqish chegarasi × chiqish narxi. Uchta asosdan biri yetishmasa, rezerv **UNKNOWN** va live **BLOCKED**:
@@ -134,6 +159,12 @@ Tasdiq fayli bo'lmagani uchun hozir **15 vazifaning 15 tasi BLOCKED**, rezerv es
 - Rezerv uchun hech qanday raqam ko'rsatilmaydi: kirish tokeni asosi yo'q ekan, bayt soni token chegarasi o'rnida ishlatilmaydi.
 
 ## Jonli sinov (faqat egasining yozma ruxsati bilan)
+**Kichik sinov.** `--variants deepseek,glm` faqat nomlangan modellarni oladi: 3 hujjat × 2 model = 6 vazifa.
+- Tasdiq faylida faqat shu modellar bo'lishi yetarli.
+- Run sha'si to'liq run'nikidan farq qiladi, ya'ni kichik run'ni tasdiqlash to'liq run'ni tasdiqlash emas.
+- Noma'lum, takrorlangan yoki bo'sh nom rad etiladi.
+- Bazasiz (comet'siz) run modellarni bir-biri bilan solishtiradi, comet bilan emas.
+
 1. Egasi har model uchun konsol yoki rasmiy hujjatdan olingan ma'lumotlarni repo **tashqarisidagi** faylga yozadi:
    ```json
    { "models": {

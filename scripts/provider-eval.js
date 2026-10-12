@@ -28,6 +28,7 @@
  *
  *   node scripts/provider-eval.js                       # dry run, 15 jobs
  *   node scripts/provider-eval.js --json
+ *   node scripts/provider-eval.js --variants deepseek,glm          # a subset of the models (3 x 2 = 6 jobs)
  *   node scripts/provider-eval.js --budget-usd N --confirmed <file>   # also prints the run sha
  *   node scripts/provider-eval.js --report <out> [--ratings <file>]   # offline summary
  *
@@ -77,6 +78,24 @@ function loadConfig(file = CONFIG) {
     if ('url' in m || 'baseUrl' in m) throw new Error(`${m.variant}: a URL in the config is refused (URLs are fixed in code)`);
   }
   return cfg;
+}
+
+/**
+ * The models of this run: all five by default, or the variants named in
+ * --variants (comma list, e.g. deepseek,glm). An unknown or repeated name
+ * is refused, never ignored; the order stays the config's. The selection is
+ * part of the run sha (runSha hashes the models), so approving a small run
+ * does not approve the full one.
+ */
+function selectModels(models, list) {
+  if (list == null) return models;
+  const names = String(list).split(',').map(x => x.trim()).filter(Boolean);
+  if (!names.length) throw Object.assign(new Error('--variants is empty'), { exit: 2 });
+  const known = new Set(models.map(m => m.variant));
+  const unknown = names.filter(n => !known.has(n));
+  if (unknown.length) throw Object.assign(new Error(`--variants: unknown ${unknown.join(', ')} (known: ${[...known].join(', ')})`), { exit: 2 });
+  if (new Set(names).size !== names.length) throw Object.assign(new Error('--variants: a name is repeated'), { exit: 2 });
+  return models.filter(m => names.includes(m.variant));
 }
 
 /** The cases, each read and checked against its manifest hash. */
@@ -136,7 +155,9 @@ function missingFacts(m, e) {
   e = e || {};
   if (e.requestedModel == null) out.push(`model id ${m.requestedModel} not confirmed`);
   else if (e.requestedModel !== m.requestedModel) out.push(`model id: confirmed ${e.requestedModel}, config asks ${m.requestedModel} - not substituted`);
-  if (e.endpoint !== prov.PROVIDERS[m.provider].url) out.push(`endpoint: confirm exactly ${prov.PROVIDERS[m.provider].url}`);
+  const ep = prov.endpointFor(m.provider, e);
+  if (ep.error) out.push(`endpoint: ${ep.error}`);
+  else if (e.endpoint !== ep.url) out.push(`endpoint: confirm exactly ${ep.url} (${ep.selected})`);
   if (e.accountAccess !== true) out.push('account access to the model not confirmed');
   if (e.profileConfirmed !== true) out.push('generation profile (thinking switch, parameters, cap name) not confirmed');
   if (!prov.priceFor(m, e).rates) out.push('price (rates[].in/out with source and checkedAt) not confirmed');
@@ -173,7 +194,8 @@ function plan(frozen, models, confirmed = null) {
       const e = confirmed && confirmed.models ? confirmed.models[m.variant] : null;
       const secret = prov.PROVIDERS[m.provider].secretEnv;
       const blockers = missingFacts(m, e);
-      if (prov.secretState(secret) !== 'configured') blockers.push(`secret ${secret} not set (variable name chosen by this runner)`);
+      const auth = prov.authFor(m.provider, e);
+      if (auth.mode === 'missing') blockers.push(`secret: ${auth.reason} (variable name chosen by this runner)`);
       const confirmedPrice = prov.priceFor(m, e && e.rates ? e : null);
       // the estimate uses a confirmed price when there is one, else the scenario price
       const scen = m.scenarioPrices || {};
@@ -183,13 +205,14 @@ function plan(frozen, models, confirmed = null) {
       const inTok = Math.round(f.promptChars * SCENARIO.inPerChar);
       const visible = Math.min(m.profile.cap, SCENARIO.answerTokens);
       const at = out => (est.rates ? (inTok * est.rates.in + out * est.rates.out) / 1e6 : null);
-      const factGaps = blockers.filter(x => !/^secret /u.test(x));
+      const factGaps = blockers.filter(x => !/^secret: /u.test(x));
       const b = factGaps.length ? { usd: null, reason: `${factGaps.length} provider fact(s) not confirmed` } : prov.callBound(m, f.messages, prov.priceFor(m, e), e);
       const estimateVisibleUsd = at(visible);
       jobs.push({
         job: `${f.id}__${m.variant}`, case: f.id, variant: m.variant, provider: m.provider, requestedModel: m.requestedModel,
         state: blockers.length ? 'BLOCKED' : 'READY', blockers,
-        secret: { name: secret, state: prov.secretState(secret) },
+        secret: { name: secret, state: prov.secretState(secret), auth: auth.mode },
+        endpoint: (({ url, selected, error }) => ({ url: url || null, selected: selected || null, error: error || null }))(prov.endpointFor(m.provider, e)),
         profile: { reasoning: m.profile.reasoning, params: m.profile.params, capParam: m.profile.capParam, cap: m.profile.cap },
         hashes: f.hashes, promptChars: f.promptChars,
         estimate: { inTokens: inTok, inMethod: `${SCENARIO.inPerChar} tokens/char (comet, one request) - an estimate`, visibleTokens: visible, visibleUsd: estimateVisibleUsd, atCapUsd: at(m.profile.cap), reasoningTokens: m.profile.reasoning === 'off' ? 'off if the switch works (unconfirmed)' : 'UNKNOWN', priceStatus: est.status, priceSource: est.source, priceDate: est.date },
@@ -239,7 +262,8 @@ function classify(r, m, accepted = []) {
   const mm = prov.modelMatch(m.requestedModel, r.returnedModel, accepted);
   if (mm.match === 'mismatch') return 'model_mismatch';
   if (mm.match === 'not_reported') return 'model_not_reported';
-  if (r.refusal || r.finishReason === 'content_filter') return 'refused';
+  // GLM reports a blocked answer as finish_reason "sensitive" (docs.z.ai chat-completion)
+  if (r.refusal || r.finishReason === 'content_filter' || r.finishReason === 'sensitive') return 'refused';
   if (!String(r.text || '').trim()) return r.finishReason === 'length' ? 'empty_capped' : 'empty';
   if (r.finishReason === 'length') return 'truncated';
   if (r.finishReason === 'stop') return COMPLETED;
@@ -277,7 +301,7 @@ async function runLive({ frozen, models, budgetUsd, out, confirmed, sha: runId, 
   const { done } = replay(entries, budget);
   const disabled = new Map();
   const saveAnswer = (job, f, m, status, res, reason = null) => fs.writeFileSync(path.join(out, 'answers', `${job}.json`), JSON.stringify({ job, answerId: ids[job].answerId, case: f.id, variant: m.variant, status, reason, reply: res ? res.reply : '', raw: res && res.trace ? res.trace.answer : null, check: res ? res.check : null }, null, 2));
-  const restore = prov.guardNetwork([...new Set(models.map(m => prov.PROVIDERS[m.provider].host))]);
+  const restore = prov.guardNetwork([...new Set(models.map(m => prov.endpointFor(m.provider, confirmed.models[m.variant]).host).filter(Boolean))]);
   try {
     for (const f of frozen) {
       for (const m of models) {
@@ -300,7 +324,7 @@ async function runLive({ frozen, models, budgetUsd, out, confirmed, sha: runId, 
           if (!taken.ok) throw new Error(`budget ${taken.reason} - not called`);
           append({ type: 'reserve', job, attempt: 1, reservedUsd: b.usd });
           const t0 = Date.now();
-          const r = await call(m, messages, { timeoutMs: TIMEOUT_MS });
+          const r = await call(m, messages, { timeoutMs: TIMEOUT_MS, entry: e });
           const durationMs = Date.now() - t0;
           const listUsd = r.usage ? prov.listCost(m, r.usage, priceInfo, e) : null;
           const rate = pricing.voicelabCreditUsd();
@@ -317,7 +341,7 @@ async function runLive({ frozen, models, budgetUsd, out, confirmed, sha: runId, 
           attempt = {
             type: 'settle', job, attempt: 1, status, outcome: r.outcome, reservedUsd: b.usd, reserveBasis: b.basis, costStatus: st ? st.costStatus : 'not_called', settledUsd: st ? st.settledUsd : null,
             listUsd, providerUsd: r.providerCostUsd == null ? null : r.providerCostUsd, credits: r.credits == null ? null : r.credits, creditUsd,
-            provider: m.provider, requestedModel: m.requestedModel, returnedModel: r.returnedModel || null, modelMatch: match, requestId: r.requestId || null,
+            provider: m.provider, endpoint: prov.endpointFor(m.provider, e).url, auth: prov.authFor(m.provider, e).mode, billingStatus: r.billingStatus || null, requestedModel: m.requestedModel, returnedModel: r.returnedModel || null, modelMatch: match, requestId: r.requestId || null,
             profile: { reasoning: m.profile.reasoning, params: m.profile.params, capParam: m.profile.capParam, cap: m.profile.cap },
             usage: r.usage || null, reasoningChars: r.reasoningChars || 0, finishReason: r.finishReason || null, durationMs, httpStatus: r.status || null,
             error: r.error || null, halt, hashes: f.hashes, runSha: runId,
@@ -424,7 +448,7 @@ async function main(argv = process.argv.slice(2)) {
   const restore = prov.guardNetwork([]);
   try {
     const cfg = loadConfig();
-    const models = cfg.models;
+    const models = selectModels(cfg.models, has('--variants') ? arg('--variants', '') : null);
     const phrases = keyPhrases();
     const frozen = [];
     for (const c of loadCases()) frozen.push(await freeze(c, phrases));
@@ -443,6 +467,9 @@ async function main(argv = process.argv.slice(2)) {
       reserveUsd: jobs.every(j => j.reserve.usd != null) ? sum(j => j.reserve.usd) : null, reserveUnknownFor: jobs.filter(j => j.reserve.usd == null).map(j => j.job),
       runSha: id, runShaCovers: budgetUsd && confFile ? `budget $${budgetUsd} + ${path.basename(confFile)}` : 'NOT approvable: needs --budget-usd and --confirmed',
     };
+    const subset = models.length < cfg.models.length ? ` --variants ${models.map(m => m.variant).join(',')}` : '';
+    summary.variants = models.map(m => m.variant);
+    summary.liveCommand = `PROVIDER_EVAL_LIVE=yes node scripts/provider-eval.js --live${subset} --budget-usd ${budgetUsd || 'N'} --out <dir outside the repo> --confirmed ${confFile || '<owner file>'} --approve ${budgetUsd && confFile ? id : '<run sha>'}`;
     if (has('--json')) console.log(JSON.stringify({ summary, officialDocsReadAttempts: cfg.officialDocsReadAttempts, cases: frozen.map(f => ({ id: f.id, chars: f.chars, promptChars: f.promptChars, hashes: f.hashes, keyLines: f.helpers.keyLines.length, conflicts: f.helpers.conflicts.length })), models: models.map(m => ({ variant: m.variant, label: m.label, why: m.why, profile: m.profile, facts: m.facts, scenarioPrices: m.scenarioPrices })), jobs }, null, 2));
     else printPlan(frozen, models, jobs, summary, cfg);
     if (!live) return 0;
@@ -454,8 +481,9 @@ async function main(argv = process.argv.slice(2)) {
     const problems = checkConfirmed(models, confirmed);
     if (problems.length) { console.error(`not confirmed - BLOCKED, nothing called:\n  ${problems.join('\n  ')}`); return 3; }
     if (arg('--approve') !== id) { console.error(`the owner's approval must name this run: --approve ${id} (any change of prompt, model, profile, budget or confirmation file changes it)`); return 3; }
-    const missing = [...new Set(models.map(m => prov.PROVIDERS[m.provider].secretEnv))].filter(n => prov.secretState(n) !== 'configured');
-    if (missing.length) { console.error(`secrets missing (names only): ${missing.join(', ')} - nothing called`); return 3; }
+    // a key in the environment, or a network secret the owner confirmed for that host; never a placeholder key
+    const missing = models.map(m => [m, prov.authFor(m.provider, confirmed.models[m.variant])]).filter(([, a]) => a.mode === 'missing').map(([m]) => prov.PROVIDERS[m.provider].secretEnv);
+    if (missing.length) { console.error(`secrets missing (names only): ${[...new Set(missing)].join(', ')} - nothing called`); return 3; }
     // the whole remaining reserve must fit before the first call (an earlier
     // run in this --out counts: spent stays spent, unknown stays held)
     const prior = evalBudget.newBudget(budgetUsd);
@@ -482,8 +510,9 @@ function printPlan(frozen, models, jobs, s, cfg) {
   for (const f of frozen) console.log(`${f.id} ${f.path}: ${f.chars} chars, prompt ${f.promptChars} chars, ${f.helpers.keyLines.length} key lines, ${f.helpers.conflicts.length} conflict candidates | source ${f.hashes.source.slice(0, 12)} messages ${f.hashes.messages.slice(0, 12)} helpers ${f.hashes.helpers.slice(0, 12)}`);
   console.log('\nModels (one per provider):');
   for (const m of models) {
-    const unknown = Object.entries(m.facts).filter(([, v]) => v.status !== 'REPO_CONSOLE' && v.status !== 'REPO_ADAPTER' && v.status !== 'OWNER_PACKAGE').map(([k, v]) => `${k}=${v.status}`);
-    console.log(`  ${m.variant.padEnd(8)} ${m.label.padEnd(26)} secret ${prov.PROVIDERS[m.provider].secretEnv} (${prov.secretState(prov.PROVIDERS[m.provider].secretEnv)}) | reasoning ${m.profile.reasoning} | sent ${JSON.stringify(m.profile.params)} ${m.profile.capParam}=${m.profile.cap}`);
+    const unknown = Object.entries(m.facts).filter(([, v]) => !['REPO_CONSOLE', 'REPO_ADAPTER', 'OWNER_PACKAGE', 'OFFICIAL_DOCS', 'ACCOUNT_LIST'].includes(v.status)).map(([k, v]) => `${k}=${v.status}`);
+    const j0 = jobs.find(j => j.variant === m.variant);
+    console.log(`  ${m.variant.padEnd(8)} ${m.label.padEnd(30)} secret ${prov.PROVIDERS[m.provider].secretEnv} (env ${prov.secretState(prov.PROVIDERS[m.provider].secretEnv)}, auth ${j0.secret.auth}) | endpoint ${j0.endpoint.url || j0.endpoint.error} | reasoning ${m.profile.reasoning} | sent ${JSON.stringify(m.profile.params)} ${m.profile.capParam}=${m.profile.cap}`);
     console.log(`           provider facts not established: ${unknown.join(', ') || '-'}`);
   }
   console.log('\nJobs (estimate = scenario, not a forecast; a reserve is a planning bound, not a guaranteed maximum):');
@@ -495,7 +524,10 @@ function printPlan(frozen, models, jobs, s, cfg) {
   }
   console.log(`\nTotal ${s.jobs} jobs: estimate ${usd(s.estimateVisibleUsd)} (visible answer only, reasoning not included) to ${usd(s.estimateAtCapUsd)} (every cap)${s.estimateUnpriced.length ? `, ${s.estimateUnpriced.length} unpriced` : ''}; reserve ${s.reserveUsd == null ? `UNKNOWN (${s.reserveUnknownFor.length} jobs without a reliable bound)` : usd(s.reserveUsd)}.`);
   console.log(`Run sha: ${s.runSha} (${s.runShaCovers}). Live stays BLOCKED until every job is READY and the owner approves this sha.`);
+  console.log(`Variants: ${s.variants.join(', ')}. Live command (only after the owner's approval of this sha): ${s.liveCommand}`);
 }
 
-if (require.main === module) main().then(code => process.exit(code || 0)).catch((e) => { console.error(prov.redact(e.message)); process.exit(e.exit || 1); });
-module.exports = { CONTROLS, CRITERIA, STATUSES, SCENARIO, loadConfig, loadCases, keyPhrases, keyLeak, freeze, missingFacts, checkConfirmed, runSha, plan, replay, classify, answerIds, runLive, writeBlind, report, main };
+// exitCode, not process.exit(): a large --json plan piped to another
+// program must be written out whole before the process ends
+if (require.main === module) main().then((code) => { process.exitCode = code || 0; }).catch((e) => { console.error(prov.redact(e.message)); process.exitCode = e.exit || 1; });
+module.exports = { CONTROLS, CRITERIA, STATUSES, SCENARIO, selectModels, loadConfig, loadCases, keyPhrases, keyLeak, freeze, missingFacts, checkConfirmed, runSha, plan, replay, classify, answerIds, runLive, writeBlind, report, main };
