@@ -61,6 +61,9 @@ async function searchLexUz(query, opts = {}) {
     includeRegistry = true,
     preferredPrefixes = [],
     maxCandidatesToInspect = 0,
+    // known acts by address (a named special status), inspected first and
+    // kept only when the page's own title matches
+    pinnedDocs = [],
   } = opts;
   const effectiveScoreText = [scoreText || query, TOPIC_SCORE_HINTS[String(topic || '').toLowerCase()] || '']
     .filter(Boolean)
@@ -113,7 +116,10 @@ async function searchLexUz(query, opts = {}) {
   // resolution, annexed regulation or ministry order. The registry is a safe
   // fallback, not a reason to fill every slot with broad codes/laws before the
   // implementing act is even inspected.
-  const candidates = [...dynamicCandidates, ...registryCandidates].filter(candidate => {
+  const pinnedCandidates = (Array.isArray(pinnedDocs) ? pinnedDocs : [])
+    .filter(d => d && d.url && d.expectedTitle)
+    .map(d => ({ url: canonicalLexUrl(d.url), expectedTitle: d.expectedTitle, expectedTitles: d.expectedTitles || [d.expectedTitle], source: 'lex.uz-pinned' }));
+  const candidates = [...pinnedCandidates, ...dynamicCandidates, ...registryCandidates].filter(candidate => {
     if (!candidate.url || seenCandidates.has(candidate.url)) return false;
     seenCandidates.add(candidate.url);
     return true;
@@ -145,7 +151,13 @@ async function searchLexUz(query, opts = {}) {
         continue;
       }
 
-      if (candidate.expectedTitle && !titlesMatch(candidate.expectedTitle, doc.title || '')) {
+      // a pinned act is the act itself, so most of its title must be there
+      // (one shared word is enough for a registry entry, not for this)
+      if (candidate.source === 'lex.uz-pinned' && !candidate.expectedTitles.some(t => titleMostlyMatches(t, doc.title || ''))) {
+        console.warn(`[LEX-LIVE] Pinned act title mismatch, skipped: "${candidate.expectedTitle}" -> "${doc.title || ''}"`);
+        continue;
+      }
+      if (candidate.source !== 'lex.uz-pinned' && candidate.expectedTitle && !titlesMatch(candidate.expectedTitle, doc.title || '')) {
         console.warn(`[LEX-LIVE] Registry title mismatch, skipped: "${candidate.expectedTitle}" -> "${doc.title || ''}"`);
         continue;
       }
@@ -437,6 +449,14 @@ function titlesMatch(expected = '', actual = '') {
   return expectedWords.length > 0 && expectedWords.some(word => actualSet.has(word));
 }
 
+/** At least 60% of the expected title's words are in the page's own title. */
+function titleMostlyMatches(expected = '', actual = '') {
+  const expectedWords = comparableWords(expected);
+  const actualSet = new Set(comparableWords(actual));
+  if (!expectedWords.length) return false;
+  return expectedWords.filter(word => actualSet.has(word)).length / expectedWords.length >= 0.6;
+}
+
 function relevanceScore(value = '', query = '') {
   const haystack = new Set(comparableWords(value));
   return comparableWords(query).reduce((score, word) => score + (haystack.has(word) ? 1 : 0), 0);
@@ -564,6 +584,7 @@ function formatLexSearchResults(results, language = 'uz') {
 
 module.exports = {
   searchLexUz,
+  titleMostlyMatches,
   buildLexSearchUrl,
   formatLexSearchResults,
   parseSearchResults,

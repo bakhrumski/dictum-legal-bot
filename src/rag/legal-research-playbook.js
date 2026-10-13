@@ -108,9 +108,11 @@ function buildExactActQueryVariants(value = '') {
 // 17-band) lets a resident hire foreign specialists without the permit). The
 // acts call it by their own term, which the user rarely uses, and the
 // general query drops "IT" as too short. Each status adds its official
-// terms as concept queries (first, so the 15-step cap keeps them) and the
-// act numbers as search HYPOTHESES only: an act is used only after Lex.uz
-// confirms its own number and the result is ranked by the question.
+// terms as concept queries (first, so the 15-step cap keeps them) and its
+// known act as a PINNED document: fetched by its Lex.uz address and used
+// only when the page's own title matches. Not by number: Cabinet numbers
+// restart every year, and "VMQ-589" first brought VMQ-589 of 06.11.2023
+// (inviting foreigners) instead of VMQ-589 of 15.07.2019 (owner, 2026-10-13).
 // IT Park is ONE technopark (owner, 2026-10-13): its acts (VMQ-589) call it
 // "Texnopark" as their own defined term, but a question that only says
 // "texnopark" may mean another one (Yashnobod, an industrial technopark...).
@@ -123,7 +125,11 @@ const SPECIAL_STATUS_QUERIES = Object.freeze([
     test: IT_PARK,
     concepts: ['dasturiy mahsulotlar va axborot texnologiyalari texnologik parki', 'IT Park rezidenti'],
     withForeignSpecialist: 'IT Park texnopark rezidenti chet ellik mutaxassislarni jalb etish tasdiqnoma',
-    actHypotheses: ['VMQ-589'],
+    pinnedActs: [{
+      label: 'VMQ-589, 15.07.2019',
+      url: 'https://lex.uz/docs/-4422250', // confirmed by the owner, 2026-10-13
+      title: "Dasturiy mahsulotlar va axborot texnologiyalari texnologik parki faoliyatini tashkil etish chora-tadbirlari to'g'risida",
+    }],
   },
   {
     status: 'technopark',
@@ -131,7 +137,7 @@ const SPECIAL_STATUS_QUERIES = Object.freeze([
     test: { test: q => !IT_PARK.test(q) && /texnopark|технопарк|texnologik\s+park|технологик\s+парк/iu.test(q) },
     concepts: ['texnopark rezidenti', 'texnopark rezidentlari imtiyozlari'],
     withForeignSpecialist: 'texnopark rezidenti chet ellik mutaxassislarni jalb etish',
-    actHypotheses: [],
+    pinnedActs: [],
   },
 ]);
 
@@ -204,13 +210,14 @@ function buildLexResearchPlan(question = '', topic = '') {
     const prefix = buildExactActQueryVariants(exact).length ? canonicalQueryPrefix(exact.split('-')[0]) : '';
     pushResearchStep(steps, seen, exact, 'exact-act', 1, false, prefix ? [prefix] : []);
   }
-  // a named special status: its act numbers as search hypotheses (identity
-  // confirmed by Lex.uz, ranked by the question) - never cited unconfirmed
+  // a named special status: its known act by address (identity = the page's
+  // own title; a repealed or historical page is skipped) - never by number
   for (const status of specialStatuses(original)) {
-    for (const act of status.actHypotheses || []) {
-      for (const exact of buildExactActQueryVariants(act)) {
-        pushResearchStep(steps, seen, exact, 'status-act-hypothesis', 1, false, [canonicalQueryPrefix(exact.split('-')[0])]);
-      }
+    for (const act of status.pinnedActs || []) {
+      const before = steps.length;
+      pushResearchStep(steps, seen, act.title, 'status-act-pinned', 1, false, []);
+      // the page may be in Latin or Cyrillic script: both forms are accepted
+      if (steps.length > before) steps[steps.length - 1].pinnedDocs = [{ url: act.url, expectedTitle: act.title, expectedTitles: [act.title, translitQueryToCyr(act.title)], label: act.label }];
     }
   }
   for (const concept of concepts) {
@@ -372,6 +379,10 @@ function scoreLexResearchResult(result = {}, question = '') {
 
   let score = titleOverlap * 35 + Math.min(contentOverlap, 10) * 8;
   if (result.exactIdentityMatch) score += 10_000;
+  // the act a named status is governed by, fetched by address and its title
+  // checked (SPECIAL_STATUS_QUERIES): above a match by number alone, which may
+  // be another year's act with the same number
+  if (result.source === 'lex.uz-pinned') score += 20_000;
   score += Math.max(-100, Math.min(100, Number(result.searchRankScore) || 0));
   if (Array.isArray(result.provisionRefs) && result.provisionRefs.length > 0) score += 8;
   if (result.metadata && result.metadata.is_active === false) score -= 1000;
