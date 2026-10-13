@@ -419,7 +419,20 @@ function excerptFromLines(value = '', partNumber = '', articleRef = '') {
       // an item ("17. Texnopark rezidenti:"): from its own line, which holds its text
       const ref = String(articleRef).replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
       const item = raw.findIndex(l => new RegExp(`^\\s*[*#>\\s-]*${ref}\\.\\s+\\S`, 'u').test(l));
-      if (item >= 0) return cleanFragmentLine(raw[item]);
+      if (item >= 0) {
+        // the whole item: its line and the lines under it up to the next
+        // item or heading ("17. Texnopark rezidenti:" alone marked only the
+        // heading, 2026-10-13); a range link marks it from start to end
+        const own = [cleanFragmentLine(raw[item])];
+        for (const l of raw.slice(item + 1)) {
+          const line = cleanFragmentLine(l);
+          if (!line) continue;
+          if (/^\d+[.)]\s/u.test(line) || isStructuralLine(line) || /^\(?\d+[-\s]band\b|tahririda|редакции/iu.test(line)) break;
+          own.push(line);
+        }
+        const whole = own.join(' ');
+        return whole.length <= 1500 ? whole : own[0];
+      }
     }
   }
   const lines = raw
@@ -1148,12 +1161,26 @@ function linkBareArticleRefs(text = '', chunks = [], lang = 'uz') {
     const already = citedFor.get(article) || [];
     const sameAct = already.length && already.every(x => x.id === already[0].id) ? already[0] : null;
     const chunk = sameAct ? null : docChunks.find(ch => getChunkArticleRefs(ch).includes(article));
+    // else: the article is in the retrieved text of exactly ONE document
+    // (2026-10-13: the guard's note "norma manbada bor (526-modda)" was marked
+    // "manbasi ko'rsatilmagan" because the answer linked two acts, while only
+    // the Labour Code's text in the context had article 526)
+    let onlyDoc = null;
+    if (!sameAct && !chunk) {
+      const holders = (chunks || []).filter(ch => ch && (ch.source_url || ch.sourceUrl) && (ch.law_name || ch.lawName) && getChunkArticleRefs(ch).includes(article));
+      const ids = new Set(holders.map(ch => { const raw = ch.source_url || ch.sourceUrl; return lexDocumentIdentity(normalizeLexSourceUrl(raw, lang, lexDocScript(raw, chunkScriptText(ch)))); }));
+      if (ids.size === 1) onlyDoc = holders[0];
+    }
     let replacement;
     if (sameAct) {
       replacement = `[**${sameAct.act}, ${ru ? `статья ${article}` : `${article}-modda`}**](${sameAct.url})`;
     } else if (chunk) {
       const url = buildLexDeepLink(chunk, { lang, articleRef: article });
       replacement = url ? `[**${single[1]}, ${ru ? `статья ${article}` : `${article}-modda`}**](${url})` : null;
+    } else if (onlyDoc) {
+      const url = buildLexDeepLink(onlyDoc, { lang, articleRef: article });
+      const act = canonicalCitationActLabel(onlyDoc.law_name || onlyDoc.lawName, onlyDoc, lang);
+      replacement = url ? `[**${isCodeAct(onlyDoc.law_name || onlyDoc.lawName) ? stripCodeIdentifier(act) : act}, ${ru ? `статья ${article}` : `${article}-modda`}**](${url})` : null;
     }
     if (!replacement) replacement = `${ref} ${ru ? '(источник не указан)' : "(manbasi ko'rsatilmagan)"}`;
     out += value.slice(last, at) + replacement;

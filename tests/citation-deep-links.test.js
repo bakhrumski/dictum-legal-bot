@@ -698,9 +698,25 @@ test('a provision is highlighted whole: a long line as start,end; a Cyrillic lin
   assert.strictEqual(textFragmentFor('Qisqa band, vergul bilan.'), 'Qisqa%20band%2C%20vergul%20bilan.', 'short: whole, its comma encoded');
   assert.ok(!/,/u.test(textFragmentFor('Bir, ikki, uch, to\'rt, besh, olti, yetti, sakkiz, to\'qqiz, o\'n, o\'n bir, o\'n ikki, o\'n uch, o\'n to\'rt, o\'n besh, o\'n olti so\'z').replace(/^[^,]*,/u, '')), 'only the range comma is raw');
   assert.strictEqual(textFragmentFor('-boshida'), '%2Dboshida');
-  // "17-band" opens at the item: its own line, never the lines before it
+  // "17-band" opens at the item: its own lines, never the lines before it
   const band = { source_url: 'https://lex.uz/docs/-4422250', law_name: 'Texnopark', chunk_text: "16. Shartnomaning shakli tasdiqlanadi.\n17. Texnopark rezidenti:\nchet ellik mutaxassislarni jalb etish;" };
-  assert.strictEqual(decodeURIComponent(buildLexDeepLink(band, { articleRef: '17' }).split('#:~:text=')[1]), '17. Texnopark rezidenti:');
+  assert.strictEqual(decodeURIComponent(buildLexDeepLink(band, { articleRef: '17' }).split('#:~:text=')[1]), '17. Texnopark rezidenti: chet ellik mutaxassislarni jalb etish;');
+});
+
+test('an item link marks the whole item up to the next one; a bare article in the text of exactly one retrieved act is linked to it (2026-10-13)', () => {
+  const { linkBareArticleRefs } = require('../src/rag/citation-utils');
+  const band = { source_url: 'https://lex.uz/docs/-4422250', law_name: 'Texnopark', chunk_text: "16. Shakli tasdiqlanadi.\n17. Texnopark rezidenti:\ntovarlar eksportidan tushumlar doirasida to'lovlarni amalga oshirish;\nchet ellik mutaxassislarni tasdiqnomalarsiz jalb etish;\nvirtual ofisdan foydalangan holda faoliyatni amalga oshirish huquqiga ega.\n(17-band Vazirlar Mahkamasining 2022 yil 15 apreldagi 191-sonli qarori tahririda)\n18. Texnopark rezidenti:" };
+  const frag = decodeURIComponent(buildLexDeepLink(band, { articleRef: '17' }).split('#:~:text=')[1]);
+  assert.deepStrictEqual(frag.split(','), ["17. Texnopark rezidenti: tovarlar eksportidan tushumlar doirasida to'lovlarni", 'holda faoliyatni amalga oshirish huquqiga ega.']);
+  const chunks = [
+    { source_url: 'https://lex.uz/docs/-6257288', law_name: 'Mehnat kodeksi', articleNumber: '526', chunk_text: '526-modda. Yuqori malakali mutaxassislar\nMatn.' },
+    { source_url: 'https://lex.uz/docs/-4422250', law_name: 'Texnopark nizomi', chunk_text: '17. Texnopark rezidenti: x' },
+  ];
+  const out = linkBareArticleRefs("[**A, 523-modda**](https://lex.uz/docs/-6257288#-1) va [**B**](https://lex.uz/docs/-4422250). ⚠️ muddat: norma manbada bor (526-modda), lekin.", chunks, 'uz');
+  assert.ok(/norma manbada bor \(\[\*\*Mehnat kodeksi, 526-modda\*\*\]\(https:\/\/lex\.uz\/docs\/-6257288#/u.test(out), out);
+  assert.ok(!/manbasi ko'rsatilmagan/u.test(out));
+  const two = [...chunks, { source_url: 'https://lex.uz/docs/-111181', law_name: 'Fuqarolik kodeksi', articleNumber: '526', chunk_text: '526-modda. Boshqa' }];
+  assert.ok(/526-modda \(manbasi ko'rsatilmagan\)/u.test(linkBareArticleRefs('[**A**](https://lex.uz/docs/-6257288) va [**B**](https://lex.uz/docs/-4422250). Bu 526-modda bilan.', two, 'uz')), 'two acts hold it: still marked');
 });
 
 console.log(`\n${passed} citation deep-link tests passed.\n`);

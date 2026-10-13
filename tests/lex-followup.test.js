@@ -82,6 +82,10 @@ test('server: after round one, bounded by time, round one kept on failure, ranke
   assert.ok(/selectLexResearchResults\(\[\.\.\.lexGroups, \.\.\.groups2\], originalQuestion, 8\)/u.test(body));
   assert.ok(/round one kept/u.test(body));
   assert.ok(/endpoint: '\/rag\/lex-plan-followup'/u.test(body));
+  // the answer and its claim check keep their time (2026-10-13)
+  const pre = src.slice(at, at + 1400);
+  assert.ok(/usageLedger\.current\(\)/u.test(pre) && /LEX_FOLLOWUP_RESERVE_MS\) \|\| 60000/u.test(pre) && /leftMs - reserveMs < 5000/u.test(pre));
+  assert.ok(/Math\.min\(leftMs - reserveMs,/u.test(pre), 'the round never runs past the reserve');
   const ledger = fs.readFileSync(path.join(__dirname, '../src/ai/usage-ledger.js'), 'utf8');
   assert.ok(/\[\/query-plan\|lex-plan\/u, 'retrieval_plan'\]/u.test(ledger));
 });
