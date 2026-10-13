@@ -5259,6 +5259,7 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
           scoreText: originalQuestion,
           includeRegistry: step.includeRegistry,
           preferredPrefixes: step.preferredPrefixes,
+          pinnedDocs: step.pinnedDocs,
           maxDocs: step.maxDocs,
           maxChars: 4000,
         }).catch(() => []),

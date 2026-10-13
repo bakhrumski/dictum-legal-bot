@@ -183,17 +183,19 @@ test('AI query planning adds official terminology as search hypotheses, never ev
     < merged.indexOf(merged.find(step => step.kind === 'natural-language')));
 });
 
-test('IT Park gets its own terms and VMQ-589 as a hypothesis; another technopark only the general term, no act assumed', () => {
+test('IT Park gets its own terms and VMQ-589 (15.07.2019) pinned by address; another technopark only the general term, no act assumed', () => {
   const { buildLexResearchPlan, specialStatuses } = require('../src/rag/legal-research-playbook');
   const q = 'Men IT park rezidentiman. Men kompaniyamga chet ellik mutaxassis olib kelmoqchiman. Qandaydir tasdiqnoma hujjat qilishim kerakmi?';
   const plan = buildLexResearchPlan(q, 'mehnat');
   assert.ok(plan.length <= 15);
   const queries = plan.map(step => step.query);
-  for (const expected of ['VMQ-589', 'IT Park texnopark rezidenti chet ellik mutaxassislarni jalb etish tasdiqnoma', 'dasturiy mahsulotlar va axborot texnologiyalari texnologik parki', 'IT Park rezidenti', 'malakali chet ellik mutaxassis']) {
+  for (const expected of ["Dasturiy mahsulotlar va axborot texnologiyalari texnologik parki faoliyatini tashkil etish chora-tadbirlari to'g'risida", 'IT Park texnopark rezidenti chet ellik mutaxassislarni jalb etish tasdiqnoma', 'dasturiy mahsulotlar va axborot texnologiyalari texnologik parki', 'IT Park rezidenti', 'malakali chet ellik mutaxassis']) {
     assert.ok(queries.includes(expected), expected);
   }
-  const hypothesis = plan.find(step => step.query === 'VMQ-589');
-  assert.deepStrictEqual([hypothesis.kind, hypothesis.preferredPrefixes], ['status-act-hypothesis', ['VMQ']]);
+  // pinned by address, not searched by number (Cabinet numbers repeat yearly: tests/lex-pinned.test.js)
+  const pinned = plan.find(step => step.kind === 'status-act-pinned');
+  assert.strictEqual(pinned.pinnedDocs[0].url, 'https://lex.uz/docs/-4422250');
+  assert.ok(!queries.some(x => /589/u.test(x)));
   assert.ok(queries.indexOf('IT Park rezidenti') < queries.indexOf(q), 'before the general queries (kept by the 15-step cap)');
   const status = phrase => specialStatuses(phrase).map(s => s.status).join(',');
   for (const phrase of ['IT-park rezidenti', 'itpark', 'ИТ парк резиденти', 'Dasturiy mahsulotlar va axborot texnologiyalari texnologik parki rezidenti']) assert.strictEqual(status(phrase), 'it-park', phrase);
