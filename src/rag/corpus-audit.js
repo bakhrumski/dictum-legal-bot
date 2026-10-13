@@ -31,8 +31,13 @@ function textScript(text = '') {
   return 'mixed';
 }
 
-/** /uz/docs/123 or /docs/123 -> https://lex.uz/docs/-123; a Latin URL is kept. */
+/**
+ * /uz/docs/123 or /docs/123 -> https://lex.uz/docs/-123; a Latin URL is kept.
+ * A /ru/docs/ URL has none: a Russian text's id is its own (owner,
+ * 2026-10-13), so /docs/-<that id> would be a 404.
+ */
 function latinLexUrl(url = '') {
+  if (/lex\.uz\/ru\/docs\/\d/iu.test(String(url || ''))) return '';
   const m = String(url || '').match(/lex\.uz\/(?:uz\/|ru\/)?docs\/(-?)(\d+)/iu);
   if (!m) return '';
   return `https://lex.uz/docs/-${m[2]}`;

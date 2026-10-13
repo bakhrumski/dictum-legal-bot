@@ -1755,10 +1755,13 @@ async function handleTelegramMessage(msg) {
       if (resolvedByAgent) {
         // Fully handled — no queue message, the answer already arrived.
         if (!agentResult.meta || agentResult.meta.remainingDailyAnswers > 0) {
-          bot.sendMessage(chatId, '💬 Yana savolingiz bo\'lsa — bemalol yozing.').catch(() => {});
+          const ruAnswer = agentResult.meta && agentResult.meta.lang === 'ru';
+          bot.sendMessage(chatId, ruAnswer ? '💬 Если есть ещё вопросы — пишите.' : '💬 Yana savolingiz bo\'lsa — bemalol yozing.').catch(() => {});
         }
       } else if (agentDelivered && needsHuman && agentResult.action === 'answered') {
-        bot.sendMessage(chatId, '👨‍⚖️ Murojaatingiz aniqlik uchun yuristga ham yuborildi — tasdiq shu yerda keladi.').catch(() => {});
+        bot.sendMessage(chatId, agentResult.meta && agentResult.meta.lang === 'ru'
+          ? '👨‍⚖️ Ваше обращение также передано юристу для уточнения — подтверждение придёт сюда.'
+          : '👨‍⚖️ Murojaatingiz aniqlik uchun yuristga ham yuborildi — tasdiq shu yerda keladi.').catch(() => {});
       } else if (!agentDelivered && tariffTexts.FILE_TYPES.has(requestData.request_type)) {
         // a file: the lawyer queue, not AI - said plainly, with the way to
         // the AI document services on the website

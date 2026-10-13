@@ -190,6 +190,26 @@ function verifier(rules, calls = []) {
     assert.ok(evidence.indexOf('560-modda') < evidence.indexOf('25-modda'));
   });
 
+  await test('notice: a topic in another language is replaced by the notice\'s own word; one line per article and kind (2026-10-13)', () => {
+    const w = (topic, ref = '21', kind = 'term') => ({ kind, topic, verdict: 'not_found', normFound: true, normRefs: [ref], method: null });
+    const withheld = [
+      w("ushni boshqa ishtirokchiga o'tkazishda rozilik talab etilmasligi"),
+      w('улушни бошқа иштирокчиларга ўтказиш ҳуқуқи'),
+      w('битимнинг оддий ёзма шакли'),
+      w('уведомление общества о переходе доли'),
+      w('срок оплаты доли', '22'),
+    ];
+    const ru = g.unverifiedBlock(withheld, 'ru');
+    const lines = ru.split('\n').filter(l => l.startsWith('⚠️'));
+    assert.strictEqual(lines.length, 2, ru);
+    assert.ok(!/[A-Za-z]/u.test(lines.join(' ').replace(/https?:\S+/gu, '')), 'no Latin Uzbek in a Russian notice');
+    assert.ok(!/[ўқғҳ]/u.test(ru), 'no Uzbek Cyrillic in a Russian notice');
+    assert.ok(/срок; уведомление общества о переходе доли: норма в источнике есть \(ст\. 21\)/u.test(lines[0]), lines[0]);
+    assert.ok(/срок оплаты доли: норма в источнике есть \(ст\. 22\)/u.test(lines[1]), lines[1]);
+    const uz = g.unverifiedBlock([w('Обязательное уведомление'), w("ulush o'tkazish shakli")], 'uz');
+    assert.ok(!/Обязательное/u.test(uz) && /ulush o'tkazish shakli/u.test(uz), uz);
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);
 })();

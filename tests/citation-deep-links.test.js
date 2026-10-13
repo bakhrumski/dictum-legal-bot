@@ -567,9 +567,60 @@ test('2026-10-01 production answer: one clean Latin link per citation, article l
 
 test('Uzbek links go to the Latin text (/docs/-N); /uz/docs/-N and Russian links are kept', () => {
   assert.strictEqual(buildLexDeepLink({ source_url: 'https://lex.uz/uz/docs/97664' }, {}), 'https://lex.uz/docs/-97664');
-  assert.strictEqual(buildLexDeepLink({ source_url: 'https://lex.uz/docs/97664' }, {}), 'https://lex.uz/docs/-97664');
+  // /docs/N is an Uzbek Cyrillic text (same id as its Latin /docs/-N) OR a
+  // Russian text (an id of its own): the text decides (owner, 2026-10-13)
+  const cyr = 'Ўзбекистон Республикасининг Фуқаролик кодекси. 135-модда. Ҳуқуқ ва мажбуриятлар';
+  const ru = 'Гражданский кодекс Республики Узбекистан. Статья 135. Права и обязанности участников';
+  assert.strictEqual(buildLexDeepLink({ source_url: 'https://lex.uz/docs/97664', chunk_text: cyr }, {}).split('#')[0], 'https://lex.uz/docs/-97664');
+  assert.strictEqual(buildLexDeepLink({ source_url: 'https://lex.uz/docs/97664', chunk_text: 'Fuqarolik kodeksi 135-modda. Huquq va majburiyatlar ishtirokchilari' }, {}).split('#')[0], 'https://lex.uz/docs/-97664');
+  assert.strictEqual(buildLexDeepLink({ source_url: 'https://lex.uz/docs/97664', chunk_text: ru }, {}).split('#')[0], 'https://lex.uz/docs/97664', 'Russian: kept');
   assert.strictEqual(buildLexDeepLink({ source_url: 'https://lex.uz/uz/docs/-5013007', lex_element_id: '-5013954' }, { articleRef: '48' }), 'https://lex.uz/uz/docs/-5013007#-5013954');
   assert.strictEqual(buildLexDeepLink({ source_url: 'https://lex.uz/ru/docs/97664' }, { lang: 'ru' }), 'https://lex.uz/ru/docs/97664');
+});
+
+test('a Russian text never gets a minus: /docs/-<Russian id> is a 404 (2026-10-13, the LLC law /docs/8152146)', () => {
+  const { lexDocScript, normalizeLexSourceUrl } = require('../src/rag/citation-utils');
+  const ru = 'Закон Республики Узбекистан «Об обществах с ограниченной ответственностью». Статья 21. Отчуждение доли';
+  const cyr = 'Масъулияти чекланган жамиятлар тўғрисида. 21-модда. Улушни бошқа шахсга ўтказиш';
+  assert.deepStrictEqual([lexDocScript('https://lex.uz/docs/8152146', ru), lexDocScript('https://lex.uz/docs/8152146', cyr), lexDocScript('https://lex.uz/docs/8152146', ''), lexDocScript('https://lex.uz/docs/-8152146', ''), lexDocScript('https://lex.uz/ru/docs/1', ''), lexDocScript('https://lex.uz/uz/docs/1', ''), lexDocScript('https://lex.uz/ru/docs/-2304138', '')], ['ru', 'uz-cyrl', '', 'uz-latn', 'ru', 'uz-cyrl', 'uz-latn']);
+  for (const lang of ['ru', 'uz']) {
+    const link = buildLexDeepLink({ source_url: 'https://lex.uz/docs/8152146', chunk_text: ru, law_name: 'Об обществах с ограниченной ответственностью' }, { lang, articleRef: '21' });
+    assert.ok(link.startsWith('https://lex.uz/docs/8152146') && !link.includes('/docs/-'), `${lang}: ${link}`);
+  }
+  // unknown language: the page as given, never a guessed minus
+  assert.strictEqual(normalizeLexSourceUrl('https://lex.uz/docs/8152146', 'ru'), 'https://lex.uz/docs/8152146');
+  assert.strictEqual(normalizeLexSourceUrl('https://lex.uz/docs/8152146', 'uz'), 'https://lex.uz/docs/8152146');
+  // a Russian URL is never moved to an Uzbek id
+  assert.strictEqual(normalizeLexSourceUrl('https://lex.uz/ru/docs/6257291', 'uz'), 'https://lex.uz/ru/docs/6257291');
+  // the Uzbek Cyrillic text of a listed code: its Russian page in a Russian answer
+  assert.strictEqual(normalizeLexSourceUrl('https://lex.uz/docs/6257288', 'ru', 'uz-cyrl'), 'https://lex.uz/ru/docs/6257291');
+  // the corpus audit never turns a Russian URL into /docs/-<id>
+  const audit = require('fs').readFileSync(require('path').join(__dirname, '../src/rag/corpus-audit.js'), 'utf8');
+  assert.ok(audit.includes("if (/lex\\.uz\\/ru\\/docs\\/\\d/iu.test(String(url || ''))) return '';"));
+});
+
+test('an article with no act gets the one cited act and its link, else is marked; a named act is left alone (2026-10-13)', () => {
+  const { linkBareArticleRefs } = require('../src/rag/citation-utils');
+  const chunks = [{ source_url: 'https://lex.uz/docs/8152146', law_name: 'Об обществах с ограниченной ответственностью', document_number: 'ЗРУ-1137', article_numbers: ['9', '21'], chunk_text: 'Статья 9. Права участников общества. Статья 21. Отчуждение доли' }];
+  const t = 'Это право закреплено также в статье 9 (пункт о праве передать долю). Механизм в [**Об обществах (ЗРУ-1137), статья 21**](https://lex.uz/docs/8152146#x). Ст. 5 Закона тоже. В статье 77 сказано иное.';
+  const out = linkBareArticleRefs(t, chunks, 'ru');
+  assert.ok(out.includes('[**Об обществах (ЗРУ-1137), статья 9**](https://lex.uz/docs/8152146#:~:text='), out);
+  assert.ok(!out.includes('docs/-8152146'), 'a Russian page keeps its id');
+  assert.ok(out.includes('Ст. 5 Закона тоже'), 'an act named in the sentence: untouched');
+  assert.ok(out.includes('статье 77 (источник не указан)'), 'not in the cited act: marked, never linked to a guess');
+  // two acts cited: no guess which one
+  const two = linkBareArticleRefs('Bu 12-moddada aytilgan. [**Mehnat kodeksi, 100-modda**](https://lex.uz/docs/-6257288) va [**Soliq kodeksi, 5-modda**](https://lex.uz/docs/-4674902).', [], 'uz');
+  assert.ok(two.startsWith("Bu 12-moddada (manbasi ko'rsatilmagan) aytilgan."), two);
+  // nothing bare: unchanged
+  const linked = '[**Mehnat kodeksi, 100-modda**](https://lex.uz/docs/-6257288) bo\'yicha.';
+  assert.strictEqual(linkBareArticleRefs(linked, [], 'uz'), linked);
+});
+
+test('Telegram Markdown: no asterisks inside a link label, bold with one asterisk (2026-10-13)', () => {
+  const { toTelegramMarkdown, splitForTelegram } = require('../src/agents/telegram-agent');
+  assert.strictEqual(toTelegramMarkdown('[**Об обществах (ЗРУ-1137), статья 21**](https://lex.uz/docs/8152146#x) **Вывод**'), '[Об обществах (ЗРУ-1137), статья 21](https://lex.uz/docs/8152146#x) *Вывод*');
+  assert.deepStrictEqual(splitForTelegram('**A** [**B**](https://lex.uz/docs/-1)'), ['*A* [B](https://lex.uz/docs/-1)']);
+  assert.strictEqual(toTelegramMarkdown('_Javob SI tomonidan tayyorlandi_'), '_Javob SI tomonidan tayyorlandi_', 'italics kept');
 });
 
 console.log(`\n${passed} citation deep-link tests passed.\n`);

@@ -11052,6 +11052,9 @@
 
         function formatBlock(text) {
             return ('<p>' + text
+                // a list number alone on its line belongs to the next line
+                // ("2.\n**Нужно ли...**" showed a bare "2." - 2026-10-13)
+                .replace(/^(\d+)[.)][ \t]*\n+(?=\S)/gm, '$1. ')
                 .replace(/^### (.+)$/gm, '</p><h3>$1</h3><p>')
                 .replace(/^## (.+)$/gm, '</p><h2>$1</h2><p>')
                 .replace(/^# (.+)$/gm, '</p><h1>$1</h1><p>')
@@ -11064,10 +11067,14 @@
                     return '<a href="' + href + '" target="_blank" rel="noopener">' + label + '</a>';
                 })
                 .replace(/^&gt; (.+)$/gm, '</p><blockquote>$1</blockquote><p>')
-                .replace(/^[-*] (.+)$/gm, '<li>$1</li>')
+                .replace(/^[-*\u2022] (.+)$/gm, '<li>$1</li>')
                 .replace(/(<li>[\s\S]*?<\/li>)/g, '<ul>$1</ul>')
                 .replace(/<\/ul>\s*<ul>/g, '')
-                .replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>')
+                // numbered items: an ordered list that keeps the model's own
+                // numbers (they used to be bare <li>s, shown as bullets)
+                .replace(/^(\d+)[.)] (.+)$/gm, '<li value="$1">$2</li>')
+                .replace(/(<li value="\d+">[\s\S]*?<\/li>)/g, '<ol>$1</ol>')
+                .replace(/<\/ol>\s*<ol>/g, '')
                 .replace(/\n{2,}/g, '</p><p>')
                 .replace(/\n/g, '<br>') + '</p>')
                 .replace(/<p>\s*<\/p>/g, '');

@@ -37,6 +37,8 @@ const RU = '1-статья. Цели трудового законодатель
     assert.strictEqual(latinLexUrl('https://lex.uz/docs/111189'), 'https://lex.uz/docs/-111189');
     assert.strictEqual(latinLexUrl('https://lex.uz/docs/-111453'), 'https://lex.uz/docs/-111453');
     assert.strictEqual(latinLexUrl('https://lex.uz/ru/docs/-2304138'), 'https://lex.uz/docs/-2304138');
+    // a Russian text has its own id: no Latin page of it (owner, 2026-10-13)
+    assert.strictEqual(latinLexUrl('https://lex.uz/ru/docs/6257291'), '');
     assert.strictEqual(latinLexUrl('https://example.com/x'), '');
   });
 

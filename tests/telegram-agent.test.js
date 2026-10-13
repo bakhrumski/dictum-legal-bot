@@ -603,6 +603,22 @@ function stubMemory(clarifyCount = 0) {
     stubMemory();
   });
 
+  await test('a Russian question gets its system lines in Russian: disclaimer, preliminary note and Sinov balance (2026-10-13)', async () => {
+    stubMemory();
+    const d = deps({ answer: 'Согласно Трудовому кодексу, статья 100, работодатель обязан издать приказ.' });
+    d.crossCheckLegalAnswer = async ({ answer }) => ({ answer, status: 'insufficient', checked: false });
+    agent.initTelegramAgent(d);
+    const r = await agent.handleUserMessage({ chatId: 1, text: 'Работодатель уволил меня без приказа. Что мне делать?' });
+    assert.strictEqual(r.meta.lang, 'ru');
+    assert.ok(/не имеет юридической силы/u.test(r.reply), r.reply);
+    assert.ok(/Это предварительный ответ: для независимой проверки по тексту Lex\.uz не хватило данных/u.test(r.reply), r.reply);
+    assert.ok(/Sinov: осталось 4 правовых вопроса/u.test(r.reply), r.reply);
+    assert.ok(!/yuridik kuchga ega emas|Bu dastlabki javob|ta huquqiy savol qoldi/u.test(r.reply), 'no Uzbek system line');
+    const src = require('fs').readFileSync(require('path').join(__dirname, '../src/bot/bot.js'), 'utf8');
+    assert.ok(/Ваше обращение также передано юристу/u.test(src) && /agentResult\.meta\.lang === 'ru'/u.test(src), 'the lawyer-queue line follows the answer language');
+    stubMemory();
+  });
+
   await test('a clear legal question is answered with sources and a disclaimer', async () => {
     const d = deps();
     agent.initTelegramAgent(d);
