@@ -268,24 +268,54 @@ function stripFragment(value = '') {
   return String(value || '').split('#')[0];
 }
 
-// lex.uz serves a document's Uzbek Latin text at /docs/-<id> (minus before
-// the id); /uz/docs/<id> and /docs/<id> open the original edition, which for
-// a code is the approving law's page (owner, 2026-10-01: a Mehnat kodeksi
-// link went to "Mehnat kodeksini tasdiqlash to'g'risida"). Uzbek answers
-// link the Latin text.
-function normalizeLexSourceUrl(value = '', lang = 'uz') {
+// lex.uz ids (owner, 2026-10-13): an Uzbek act's Cyrillic text is
+// /docs/<id> (or /uz/docs/<id>) and its Latin text /docs/-<id>, the SAME id
+// with a minus; a Russian text has an id of its own, never with a minus, so
+// /docs/-<Russian id> is a 404 (a Russian answer linked /docs/-8152146 for
+// the LLC law). Only an Uzbek document gets the minus; the number alone
+// cannot tell, so the document's language decides (lexDocScript).
+// (/docs/<id> of a code is its original Cyrillic edition, the approving
+// law's page - owner, 2026-10-01 - so Uzbek answers link the Latin text.)
+const UZ_CYRILLIC_LETTERS = /[\u045e\u049b\u0493\u04b3\u040e\u049a\u0492\u04b2]/u; // ў қ ғ ҳ
+
+/**
+ * The script of a lex.uz document as far as it is known: 'uz-latn' (a /docs/-
+ * URL or Latin text), 'uz-cyrl' (/uz/docs/ or Cyrillic with ў/қ/ғ/ҳ), 'ru'
+ * (/ru/docs/ or Cyrillic without them), '' unknown (too little text).
+ */
+function lexDocScript(url = '', text = '') {
+  const u = String(url || '');
+  // the minus is the Latin text whatever the interface prefix (/ru/docs/-N too)
+  if (/lex\.uz\/(?:uz\/|ru\/)?docs\/-\d/iu.test(u)) return 'uz-latn';
+  if (/lex\.uz\/ru\/docs\/\d/iu.test(u)) return 'ru';
+  if (/lex\.uz\/uz\/docs\//iu.test(u)) return 'uz-cyrl';
+  const t = String(text || '').slice(0, 4000);
+  const cyr = (t.match(/[\u0400-\u04ff]/gu) || []).length;
+  const lat = (t.match(/[A-Za-z]/gu) || []).length;
+  if (cyr >= 30 && cyr > lat) return UZ_CYRILLIC_LETTERS.test(t) ? 'uz-cyrl' : 'ru';
+  if (lat >= 30 && lat > cyr) return 'uz-latn';
+  return '';
+}
+
+/** The text a chunk carries, for lexDocScript. */
+function chunkScriptText(chunk = {}) {
+  return [chunk.law_name || chunk.lawName, chunk.chunk_text || chunk.childText || chunk.parentText || chunk.content || chunk.text].filter(Boolean).join('\n');
+}
+
+function normalizeLexSourceUrl(value = '', lang = 'uz', script = null) {
   let url = stripFragment(value).trim();
+  const docScript = script == null ? lexDocScript(url) : script;
+  const uzbek = docScript === 'uz-cyrl' || docScript === 'uz-latn';
+  const latinOf = u => u.replace(/(lex\.uz\/)(?:uz\/)?docs\/(\d+)/iu, '$1docs/-$2');
   if (lang === 'uz') {
-    url = url
-      .replace('lex.uz/ru/docs/', 'lex.uz/docs/')
-      .replace(/(lex\.uz\/)(?:uz\/)?docs\/(\d+)/iu, '$1docs/-$2');
+    // the Latin text of an Uzbek act; a Russian or unknown page is kept as
+    // it is (a real page, never a guessed /docs/-<id>)
+    if (uzbek) url = latinOf(url);
   } else if (lang === 'ru') {
-    // A Russian answer links the Russian text when its URL is known (it can
-    // have its own id); otherwise the Uzbek Latin text of the same act.
+    // the Russian text when its URL is known (its own id), else the page we
+    // have: an Uzbek act's Latin text, a Russian or unknown page as it is
     const id = (url.match(/lex\.uz\/(?:uz\/|ru\/)?docs\/-?(\d+)/iu) || [])[1];
-    if (id && !/lex\.uz\/ru\/docs\//iu.test(url)) {
-      url = ruUrlFor(id) || url.replace(/(lex\.uz\/)(?:uz\/)?docs\/(\d+)/iu, '$1docs/-$2');
-    }
+    if (id && uzbek) url = ruUrlFor(id) || latinOf(url);
   }
   return url;
 }
@@ -365,7 +395,7 @@ function excerptFromLines(value = '', partNumber = '') {
  */
 function buildLexDeepLink(chunk = {}, opts = {}) {
   const rawUrl = String(chunk.source_url || chunk.sourceUrl || '');
-  const baseUrl = normalizeLexSourceUrl(rawUrl, opts.lang || 'uz');
+  const baseUrl = normalizeLexSourceUrl(rawUrl, opts.lang || 'uz', lexDocScript(rawUrl, chunkScriptText(chunk)));
   if (!baseUrl) return '';
   // Element ids on the Latin page carry the same minus as its URL
   // (/docs/-5013007#-5013954). When the stored URL was the original edition
@@ -380,7 +410,9 @@ function buildLexDeepLink(chunk = {}, opts = {}) {
   // read from the Uzbek page). Without a known Russian page the Uzbek one is
   // linked, with its own anchors.
   if ((opts.lang || 'uz') === 'ru') {
-    if (!/lex\.uz\/ru\/docs\//iu.test(baseUrl)) return buildLexDeepLink(chunk, { ...opts, lang: 'uz' });
+    // a Russian page: its own /ru/docs/ URL, or a /docs/<id> whose text is Russian
+    const russianPage = /lex\.uz\/ru\/docs\//iu.test(baseUrl) || lexDocScript(rawUrl, chunkScriptText(chunk)) === 'ru';
+    if (!russianPage) return buildLexDeepLink(chunk, { ...opts, lang: 'uz' });
     return articleRef ? `${baseUrl}#:~:text=${encodeURIComponent(`Статья ${articleRef}`)}` : baseUrl;
   }
   const resolvedAnchors = chunk.lex_anchor_ids || chunk.lexAnchorIds || {};
@@ -789,7 +821,8 @@ function linkRemainingGroundedActMentions(value = '', chunks = [], lang = 'uz') 
   const bySource = new Map();
   for (const chunk of chunks || []) {
     const lawName = chunk && (chunk.law_name || chunk.lawName);
-    const sourceUrl = normalizeLexSourceUrl(chunk && (chunk.source_url || chunk.sourceUrl), lang);
+    const rawSource = chunk && (chunk.source_url || chunk.sourceUrl);
+    const sourceUrl = normalizeLexSourceUrl(rawSource, lang, chunk ? lexDocScript(rawSource, chunkScriptText(chunk)) : null);
     const sourceKey = lexDocumentIdentity(sourceUrl);
     if (!lawName || !sourceUrl || !sourceKey || bySource.has(sourceKey)) continue;
     bySource.set(sourceKey, { chunk, lawName, sourceUrl });
@@ -861,7 +894,8 @@ function stripDuplicateOfficialIdentifierWrappers(value = '') {
 function upgradeLinkedCitationIdentifiers(value = '', chunks = [], lang = 'uz') {
   const bySource = new Map();
   for (const chunk of chunks || []) {
-    const sourceUrl = normalizeLexSourceUrl(chunk && (chunk.source_url || chunk.sourceUrl), lang);
+    const rawSource = chunk && (chunk.source_url || chunk.sourceUrl);
+    const sourceUrl = normalizeLexSourceUrl(rawSource, lang, chunk ? lexDocScript(rawSource, chunkScriptText(chunk)) : null);
     const sourceKey = lexDocumentIdentity(sourceUrl);
     if (sourceKey && !bySource.has(sourceKey)) bySource.set(sourceKey, chunk);
   }
@@ -946,13 +980,70 @@ function citationLanguageForText(text = '') {
   return /[а-яё]/iu.test(t) ? 'ru' : 'uz';
 }
 
+// An article cited with no act (2026-10-13: "закреплено также в статье 9
+// (пункт о праве передать свою долю)" - the reader cannot tell which law).
+// When the answer links exactly ONE lex.uz document and that document's
+// retrieved text has the article, the reference gets that act and its link;
+// otherwise it is marked as having no named source. A reference with an act
+// name or number in its sentence is left to the other steps.
+const BARE_ARTICLE = {
+  ru: /(?:^|[^\p{L}])((?:стать[яеиюёй]{1,2}|ст\.)\s*(\d{1,4}))(?![\d\p{L}])/giu,
+  uz: /(?:^|[^\p{L}\d])((\d{1,4})\s*[-\u2013\u2014]\s*modda(?:si|sida|siga|sining|ning|ga|da|dan)?)(?![\p{L}])/giu,
+};
+const ACT_NEAR = /(?:кодекс|закон|указ|постановлени|положени|kodeks|qonun|farmon|qaror|nizom|O['\u02bb\u02bc\u2018\u2019`]?RQ|ЗРУ|PQ|PF|VMQ|ПП|УП|ПКМ)/iu;
+
+function linkBareArticleRefs(text = '', chunks = [], lang = 'uz') {
+  const value = String(text || '');
+  const ru = lang === 'ru';
+  const links = Array.from(value.matchAll(/\[([^\]]+)\]\((https?:\/\/(?:www\.)?lex\.uz\/(?:uz\/|ru\/)?docs\/-?\d+[^)]*)\)/giu));
+  const docs = new Map();
+  for (const l of links) {
+    const id = lexDocumentIdentity(l[2]);
+    if (!docs.has(id)) docs.set(id, l[1].replace(/[*_]/gu, '').split(',')[0].trim());
+  }
+  const single = docs.size === 1 ? [...docs.entries()][0] : null;
+  const docChunks = single ? (chunks || []).filter(ch => {
+    const raw = ch && (ch.source_url || ch.sourceUrl);
+    return raw && lexDocumentIdentity(normalizeLexSourceUrl(raw, lang, lexDocScript(raw, chunkScriptText(ch)))) === single[0];
+  }) : [];
+  // the text outside links, by position
+  const protectedRanges = links.map(l => [l.index, l.index + l[0].length]);
+  const inLink = i => protectedRanges.some(([a, b]) => i >= a && i < b);
+  const rx = new RegExp(BARE_ARTICLE[ru ? 'ru' : 'uz'].source, 'giu');
+  let out = '';
+  let last = 0;
+  for (const m of value.matchAll(rx)) {
+    const ref = m[1];
+    const at = m.index + m[0].indexOf(ref);
+    if (inLink(at)) continue;
+    // the sentence around it names an act: left as it is
+    // (searched from after the reference: "ст." has a dot of its own)
+    const start = Math.max(value.lastIndexOf('.', at - 1), value.lastIndexOf('\n', at), 0);
+    const after = at + ref.length;
+    const endDot = value.slice(after).search(/[.\n]/u);
+    const sentence = value.slice(start, endDot < 0 ? value.length : after + endDot);
+    if (ACT_NEAR.test(sentence.replace(ref, ' ')) || /\]\(https?:/u.test(value.slice(at, at + ref.length + 160).split(/[.\n]/u)[0])) continue;
+    const article = normalizeArticleRef(m[2]);
+    const chunk = docChunks.find(ch => getChunkArticleRefs(ch).includes(article));
+    let replacement;
+    if (chunk) {
+      const url = buildLexDeepLink(chunk, { lang, articleRef: article });
+      replacement = url ? `[**${single[1]}, ${ru ? `статья ${article}` : `${article}-modda`}**](${url})` : null;
+    }
+    if (!replacement) replacement = `${ref} ${ru ? '(источник не указан)' : "(manbasi ko'rsatilmagan)"}`;
+    out += value.slice(last, at) + replacement;
+    last = at + ref.length;
+  }
+  return out + value.slice(last);
+}
+
 function normalizeLegalAnswerCitations(replyText = '', chunks = [], lang = 'uz') {
   const linked = linkCitationsInMarkdown(
     stripRawLexAttributions(stripGeneratedSourceSections(replyText)),
     chunks,
     lang
   );
-  return stripDuplicateOfficialIdentifierWrappers(
+  return linkBareArticleRefs(stripDuplicateOfficialIdentifierWrappers(
     collapseDuplicateLexCitations(
       linkRemainingGroundedActMentions(
       upgradeLinkedCitationIdentifiers(linked, chunks, lang),
@@ -960,7 +1051,7 @@ function normalizeLegalAnswerCitations(replyText = '', chunks = [], lang = 'uz')
       lang
       )
     )
-  );
+  ), chunks, lang);
 }
 
 /**
@@ -1007,4 +1098,7 @@ module.exports = {
   stripDuplicateOfficialIdentifierWrappers,
   normalizeLegalAnswerCitations,
   hasCanonicalOfficialCitations,
+  lexDocScript,
+  normalizeLexSourceUrl,
+  linkBareArticleRefs,
 };

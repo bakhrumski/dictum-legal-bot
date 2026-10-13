@@ -356,7 +356,7 @@ function withTimeout(promise, ms, label) {
   ]).finally(() => clearTimeout(timer));
 }
 
-async function runVerifier({ question, claims, chunks, callAI, model, endpoint, opts }) {
+async function runVerifier({ question, claims, chunks, callAI, model, endpoint, opts, lang = 'uz' }) {
   const evidence = buildEvidence(claims, chunks, opts.maxEvidenceChars);
   if (!evidence) return { ok: false, reason: 'no_evidence' };
   const payload = JSON.stringify({
@@ -366,7 +366,10 @@ async function runVerifier({ question, claims, chunks, callAI, model, endpoint, 
   });
   try {
     const res = await withTimeout(callAI([
-      { role: 'system', text: VERIFIER_PROMPT },
+      // the notice shows the topic: it must be in the answer's language
+      { role: 'system', text: VERIFIER_PROMPT + (lang === 'ru'
+        ? '\n\nJavob RUS tilida: har bir "topic"ni faqat rus tilida yozing (masalan "срок уведомления общества").'
+        : '\n\nJavob O\'ZBEK tilida: har bir "topic"ni faqat o\'zbek lotin yozuvida yozing.') },
       { role: 'user', text: payload },
     ], { model, useSearch: false, maxTokens: opts.verifierMaxTokens, temperature: 0, endpoint }), opts.verifierTimeoutMs, 'claim verifier');
     const verdicts = parseVerdicts(res && res.text);
@@ -402,9 +405,25 @@ const KIND_VALUE = {
  * What the source CONTRADICTS is named as removed; what the searched sources
  * did not show is never called "not in the law".
  */
+// The verifier is asked for the topic in the answer's language but may answer
+// in Uzbek (Latin or Cyrillic) under a Russian answer (2026-10-13: "улушни
+// бошқа иштирокчиларга ўтказиш ҳуқуқи: норма в источнике есть..."). A topic
+// in another language is replaced by the notice's own word for the kind.
+function topicInLanguage(topic = '', ru = false) {
+  const t = String(topic || '').trim();
+  if (!t) return false;
+  const latin = /[A-Za-z]/u.test(t);
+  const cyrillic = /[\u0400-\u04ff]/u.test(t);
+  // Uzbek Cyrillic: its own letters, or Uzbek endings when none of them is
+  // in the topic ("битимнинг оддий ёзма шакли")
+  const uzCyrillic = /[\u045e\u049b\u0493\u04b3\u040e\u049a\u0492\u04b2]/u.test(t)
+    || /[\u0430-\u044f](?:нинг|ларни|ларга|ларда|лардан|лари|ини|ига|идан|ида|ишда|ишни|ган|моқ)(?![\u0430-\u044f])/iu.test(t);
+  return ru ? cyrillic && !latin && !uzCyrillic : !(cyrillic && !uzCyrillic);
+}
+
 function unverifiedBlock(withheld = [], lang = 'uz', needsFacts = [], { noCalc = false } = {}) {
   const ru = lang === 'ru';
-  const topicOf = w => w.topic || KIND_TOPIC[ru ? 'ru' : 'uz'][w.kind];
+  const topicOf = w => (topicInLanguage(w.topic, ru) ? w.topic : '') || KIND_TOPIC[ru ? 'ru' : 'uz'][w.kind];
   const uniq = list => [...new Set(list.map(topicOf).filter(Boolean))];
   const wrong = uniq(withheld.filter(w => w.verdict === 'contradicted'));
   const rest = withheld.filter(w => w.verdict !== 'contradicted' && !wrong.includes(topicOf(w)));
@@ -412,11 +431,18 @@ function unverifiedBlock(withheld = [], lang = 'uz', needsFacts = [], { noCalc =
   const missing = uniq(rest.filter(w => !w.normFound)).filter(t => !uniq(normFound).includes(t));
   const facts = [...new Set(needsFacts)].slice(0, 5);
   const lines = [];
-  const seen = new Set();
+  // one line per article, kind and method (2026-10-13: five lines all said
+  // "ст. 21 ... (срок) ... убрано"); their topics are listed together
+  const groups = new Map();
   for (const w of normFound) {
+    const key = [(w.normRefs || []).join(','), w.kind, w.method || ''].join('|');
+    const g = groups.get(key) || { w, topics: [] };
     const topic = topicOf(w);
-    if (seen.has(topic)) continue;
-    seen.add(topic);
+    if (topic && !g.topics.includes(topic)) g.topics.push(topic);
+    groups.set(key, g);
+  }
+  for (const { w, topics } of groups.values()) {
+    const topic = topics.slice(0, 4).join('; ') + (topics.length > 4 ? (ru ? ' и др.' : ' va boshq.') : '');
     const refs = (w.normRefs || []).map(r => (ru ? `ст. ${r}` : `${r}-modda`)).join(', ');
     const value = KIND_VALUE[ru ? 'ru' : 'uz'][w.kind] || (ru ? 'значение' : 'qiymat');
     const method = w.method === 'supported' ? (ru ? ' Порядок расчёта источником подтверждён.' : ' Hisoblash usuli manbada tasdiqlangan.')
@@ -545,7 +571,7 @@ async function guardLegalAnswer({
   const check = async (pending) => {
     for (const c of pending) results.set(c.id, { ...(results.get(c.id) || {}), deterministic: deterministicSupport(c, pool) });
     if (typeof callAI !== 'function') { verifierReason = 'verifier_missing'; return; }
-    const v = await runVerifier({ question, claims: pending, chunks: pool, callAI, model, endpoint, opts });
+    const v = await runVerifier({ question, claims: pending, chunks: pool, callAI, model, endpoint, opts, lang });
     if (!v.ok) { verifierReason = v.reason; return; }
     verifierRan = true;
     for (const c of pending) {

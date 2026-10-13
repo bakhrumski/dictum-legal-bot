@@ -88,6 +88,9 @@ const HISTORY_TTL_H    = 48;
 const TG_LIMIT         = 3900;  // Telegram hard limit is 4096; leave headroom
 
 const DISCLAIMER = "\n\n_Javob SI tomonidan tayyorlandi va yuridik kuchga ega emas. Muhim masalalarda yurist bilan maslahatlashing._";
+// a Russian question gets the system lines in Russian too (2026-10-13: a
+// Russian answer ended with Uzbek notes, quota and lawyer lines)
+const DISCLAIMER_RU = "\n\n_Ответ подготовлен ИИ и не имеет юридической силы. По важным вопросам проконсультируйтесь с юристом._";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Conversation memory
@@ -669,17 +672,21 @@ TELEGRAM FORMATI (majburiy):
   // Why the answer is preliminary, said precisely (2026-10-04: a generic
   // "some norms could not be confirmed" under an answer that applied article
   // 333 read as if the article itself was missing).
+  // each reason in Uzbek (meta.lowReasons, as before) and Russian
   const lowReasons = [];
-  if (chunks.length === 0) lowReasons.push("qidirilgan manbalarda tegishli norma topilmadi");
-  if (unverified.length) lowReasons.push(`${unverified.map(a => `${a}-modda`).join(', ')} iqtibosi qidirilgan manbalarda tasdiqlanmadi`);
-  if (citationCheck !== 'ok') lowReasons.push("iqtiboslarni tekshirish bajarilmadi");
-  if (!groundedToNamedSource && chunks.length) lowReasons.push("javob kontekstdagi hujjatlarga to'liq bog'lanmadi");
-  if (lexCheckWeak) lowReasons.push(lexCrossCheck.status === 'insufficient'
-    ? "Lex.uz matni bilan mustaqil tekshiruvga dalil yetarli bo'lmadi"
-    : "Lex.uz matni bilan mustaqil tekshiruv bajarilmadi");
-  if (claimGuard.status === 'unverified') lowReasons.push("aniq qiymatlarni tekshiruvchi model ishlamadi");
-  else if (claimGuard.status === 'partial') lowReasons.push("ba'zi aniq qiymatlar manba matnida tasdiqlanmadi (yuqoridagi izohga qarang)");
-  if (claimGuard.truncated === true) lowReasons.push('javob uzilib qoldi');
+  const lowReasonsRu = [];
+  const why = (uz, ru) => { lowReasons.push(uz); lowReasonsRu.push(ru); };
+  if (chunks.length === 0) why("qidirilgan manbalarda tegishli norma topilmadi", 'в просмотренных источниках норма не найдена');
+  if (unverified.length) why(`${unverified.map(a => `${a}-modda`).join(', ')} iqtibosi qidirilgan manbalarda tasdiqlanmadi`, `ссылка на ${unverified.map(a => `ст. ${a}`).join(', ')} в просмотренных источниках не подтверждена`);
+  if (citationCheck !== 'ok') why("iqtiboslarni tekshirish bajarilmadi", 'проверка ссылок не выполнена');
+  if (!groundedToNamedSource && chunks.length) why("javob kontekstdagi hujjatlarga to'liq bog'lanmadi", 'ответ не полностью опирается на найденные документы');
+  if (lexCheckWeak) {
+    if (lexCrossCheck.status === 'insufficient') why("Lex.uz matni bilan mustaqil tekshiruvga dalil yetarli bo'lmadi", 'для независимой проверки по тексту Lex.uz не хватило данных');
+    else why("Lex.uz matni bilan mustaqil tekshiruv bajarilmadi", 'независимая проверка по тексту Lex.uz не выполнена');
+  }
+  if (claimGuard.status === 'unverified') why("aniq qiymatlarni tekshiruvchi model ishlamadi", 'модель проверки точных значений не сработала');
+  else if (claimGuard.status === 'partial') why("ba'zi aniq qiymatlar manba matnida tasdiqlanmadi (yuqoridagi izohga qarang)", 'некоторые точные значения не подтверждены текстом источника (см. примечание выше)');
+  if (claimGuard.truncated === true) why('javob uzilib qoldi', 'ответ был прерван');
   if (confidence === 'low') {
     console.log(`[TG-AGENT] low confidence — chunks=${chunks.length} unverified=[${unverified.join(', ')}] reasons=${lowReasons.length}`);
   }
@@ -704,6 +711,9 @@ TELEGRAM FORMATI (majburiy):
       citationCheck,
       semanticCheck: claimGuard.status,
       lowReasons,
+      lowReasonsRu,
+      // the answer's language: the system lines around it follow it
+      lang,
       aspects: aspects.found || {},
       claimGuard: {
         status: claimGuard.status,
@@ -1327,7 +1337,9 @@ Agar texnik uzilish yuz bersa, limitingiz avtomatik tiklanadi.`,
   if (answer.substantive === false) {
     if (D.releaseDailyAnswer) await D.releaseDailyAnswer(chatId, quota).catch(() => {});
     else await releaseDailyAiAnswer(chatId, quota);
-    const reply = "Savolingiz bo'yicha javobning huquqiy asosi yoki aniq ma'lumotlarini (modda, muddat, summa, hisoblash) manbada tasdiqlay olmadim, shuning uchun taxminiy javob yubormayman. Savolingiz yuristga yuborildi. Bu javob uchun AI kreditingiz hisobdan yechilmadi."
+    const reply = ((answer.meta && answer.meta.lang) === 'ru'
+      ? 'Я не смог подтвердить по источнику правовое основание или точные данные ответа (статья, срок, сумма, расчёт), поэтому не отправляю предположительный ответ. Ваш вопрос передан юристу. Кредит за этот ответ не списан.'
+      : "Savolingiz bo'yicha javobning huquqiy asosi yoki aniq ma'lumotlarini (modda, muddat, summa, hisoblash) manbada tasdiqlay olmadim, shuning uchun taxminiy javob yubormayman. Savolingiz yuristga yuborildi. Bu javob uchun AI kreditingiz hisobdan yechilmadi.")
       + (answer.text.includes('⚠️') ? `\n\n${answer.text.slice(answer.text.indexOf('⚠️')).trim()}` : '');
     console.log(`[TG-AGENT] chat=${chatId} claims unverified, nothing substantive — escalated, credit released`);
     return complete({
@@ -1344,27 +1356,31 @@ Agar texnik uzilish yuz bersa, limitingiz avtomatik tiklanadi.`,
   // A low-confidence answer is still shown — with an honest banner — because
   // silence helps nobody. What changes is that it is labelled as preliminary
   // and a human is put on it.
-  const banner = lowConfidence
-    ? `\n\n⚠️ _Bu dastlabki javob: ${(answer.meta && answer.meta.lowReasons && answer.meta.lowReasons.length ? answer.meta.lowReasons : ["ba'zi normalarni tekshirilgan manbalardan tasdiqlay olmadim"]).join('; ')}. Yurist ko'rib chiqib, aniqlashtiradi._`
-    : '';
+  const ru = (answer.meta && answer.meta.lang) === 'ru';
+  const reasons = answer.meta && (ru ? answer.meta.lowReasonsRu : answer.meta.lowReasons);
+  const banner = !lowConfidence ? '' : ru
+    ? `\n\n⚠️ _Это предварительный ответ: ${(reasons && reasons.length ? reasons : ['некоторые нормы не удалось подтвердить по проверенным источникам']).join('; ')}. Юрист проверит и уточнит._`
+    : `\n\n⚠️ _Bu dastlabki javob: ${(reasons && reasons.length ? reasons : ["ba'zi normalarni tekshirilgan manbalardan tasdiqlay olmadim"]).join('; ')}. Yurist ko'rib chiqib, aniqlashtiradi._`;
 
   const allowance = quota.source === 'test'
     ? `\n\n${testModeNote(testAccount, currentRequestSpend())}`
     : quota.source === 'paid'
-    ? `\n\n🎟 Oldin sotib olingan javob krediti ishlatildi. Qolgan kreditlar: ${quota.paidCredits || 0}.`
+    ? (ru ? `\n\n🎟 Использован ранее купленный кредит. Осталось кредитов: ${quota.paidCredits || 0}.` : `\n\n🎟 Oldin sotib olingan javob krediti ishlatildi. Qolgan kreditlar: ${quota.paidCredits || 0}.`)
     : quota.source === 'staff' || quota.legacy
       ? ''
       : quota.kind === 'trial' || quota.plan === 'sinov'
         ? (quota.remaining > 0
-          ? `\n\n🎁 Sinov: yana ${quota.remaining} ta huquqiy savol qoldi (bir martalik, yangilanmaydi).`
-          : `\n\n🎁 Sinovdagi huquqiy savollar tugadi. Davom etish uchun tarif tanlang: ${TARIFF_URL}`)
-        : `\n\n📊 ${quota.plan ? quota.plan[0].toUpperCase() + quota.plan.slice(1) : 'Tarif'}: yana ${quota.remaining} ta huquqiy savol${quota.endsAt ? ` (davr ${tashkentDay(quota.endsAt)} gacha)` : ''}.`;
+          ? (ru ? `\n\n🎁 Sinov: осталось ${quota.remaining} правовых вопроса (разово, не обновляется).` : `\n\n🎁 Sinov: yana ${quota.remaining} ta huquqiy savol qoldi (bir martalik, yangilanmaydi).`)
+          : (ru ? `\n\n🎁 Вопросы тарифа Sinov закончились. Чтобы продолжить, выберите тариф: ${TARIFF_URL}` : `\n\n🎁 Sinovdagi huquqiy savollar tugadi. Davom etish uchun tarif tanlang: ${TARIFF_URL}`))
+        : (ru
+          ? `\n\n📊 ${quota.plan ? quota.plan[0].toUpperCase() + quota.plan.slice(1) : 'Тариф'}: осталось ${quota.remaining} правовых вопросов${quota.endsAt ? ` (период до ${tashkentDay(quota.endsAt)})` : ''}.`
+          : `\n\n📊 ${quota.plan ? quota.plan[0].toUpperCase() + quota.plan.slice(1) : 'Tarif'}: yana ${quota.remaining} ta huquqiy savol${quota.endsAt ? ` (davr ${tashkentDay(quota.endsAt)} gacha)` : ''}.`);
   const nextActions = buildLegalNextActions({
     question: groundedQuestion,
     answer: answer.text,
     topic: answer.meta && answer.meta.topic,
   });
-  const reply = answer.text + banner + DISCLAIMER + allowance;
+  const reply = answer.text + banner + (ru ? DISCLAIMER_RU : DISCLAIMER) + allowance;
 
   await remember(answer.text, 0);
   await setConversationState(chatId, 'awaiting_next_action', {
@@ -1396,9 +1412,23 @@ Agar texnik uzilish yuz bersa, limitingiz avtomatik tiklanadi.`,
   });
 }
 
+/**
+ * The answer's Markdown in the form Telegram's legacy Markdown shows
+ * (2026-10-13: "[**Об обществах ... (ЗРУ-1137)**](url)" arrived with the
+ * asterisks as text - Telegram does not parse bold inside a link label, and
+ * its bold is one asterisk, not two):
+ *   [**label**](url) -> [label](url)   (no * or _ inside a link label)
+ *   **bold**         -> *bold*
+ */
+function toTelegramMarkdown(text = '') {
+  return String(text || '')
+    .replace(/\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)/gu, (m, label, url) => `[${label.replace(/[*_]/gu, '').trim()}](${url})`)
+    .replace(/\*\*([^*\n]+?)\*\*/gu, '*$1*');
+}
+
 /** Split a reply that exceeds Telegram's message limit, preferring paragraph breaks. */
 function splitForTelegram(text, limit = TG_LIMIT) {
-  const s = String(text || '');
+  const s = toTelegramMarkdown(text);
   if (s.length <= limit) return [s];
   const parts = [];
   let rest = s;
@@ -1418,6 +1448,7 @@ module.exports = {
   initTelegramAgent,
   handleUserMessage,
   splitForTelegram,
+  toTelegramMarkdown,
   isReady,
   // exported for tests
   classifyIntent,
