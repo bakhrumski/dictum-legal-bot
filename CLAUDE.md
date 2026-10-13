@@ -304,6 +304,11 @@ Known state of the suites (Sept 2026):
   words, never "hisob…" in a legal question ("hisoblash" once routed wage
   questions to password reset). `/testmode` (master only, in memory, auto-off after 12 h) lifts that for one
   chat so the owner can try the bot, voice included, from his own account.
+  Since 2026-10-13 a master in /testmode asks with no Sinov, limit or credit,
+  like the test account below (`resolveMasterTestMode`): master role read
+  from the database, own private chat, the 12 h session as the window, its
+  own budget `TG_MASTER_TESTMODE_BUDGET_USD` ($5); `TG_MASTER_TESTMODE_UNLIMITED=off`
+  restores the limits.
   Separately, one ordinary (role `user`) account can be a test account
   (`src/bot/test-account.js`, `TG_TEST_ACCOUNT_*`): by the Telegram user id
   linked in `admins.telegram_user_id`, never a username; no daily limit or
