@@ -1007,6 +1007,27 @@ app.get('/api/admin/coverage-gaps', requireMasterAdmin, async (req, res) => {
   }
 });
 
+// Most-asked questions by legal field (master only, read only, no AI):
+// src/rag/top-questions.js - the lawyer's worklist for the verified Q&A bank.
+//   GET /api/admin/top-questions?days=90&perTopic=50[&format=csv]
+app.get('/api/admin/top-questions', requireMasterAdmin, async (req, res) => {
+  try {
+    const topQuestions = require('../rag/top-questions');
+    const report = await topQuestions.buildReport(pool, { days: req.query.days, perTopic: req.query.perTopic });
+    res.setHeader('Cache-Control', 'no-store');
+    logAudit(req, 'admin.top_questions', 'report', `${report.days} days`);
+    if (String(req.query.format || '').toLowerCase() === 'csv') {
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="top-savollar-${report.days}kun.csv"`);
+      return res.send(topQuestions.toCsv(report));
+    }
+    res.json(report);
+  } catch (err) {
+    console.error('[top-questions] error:', err.message);
+    res.status(500).json({ error: 'Hisobotni tuzib bo\'lmadi' });
+  }
+});
+
 // Per-request AI usage and cost (master only): src/ai/usage-report.js.
 require('../ai/usage-report').mountUsageReportRoutes(app, { requireMasterAdmin, pool, ledger: usageLedger });
 
@@ -4207,6 +4228,10 @@ try {
     buildTopicPrompt,
     classifyLegalTopic,
     searchKorpus,
+    // the web chat's gates for sending a lawyer-verified answer as is
+    korpusVerbatimAllowed: (question, hit) => !isFailedAnswer(hit.answer)
+      && !hasCriticalTermMismatch(question, hit.question)
+      && !hasAnswerTopicMismatch(question, hit.answer),
     findAttorneys: findMatchingAttorneys,
     getAttorneyContact: revealAttorneyContactAfterConsent,
     recordAgentEvent: recordTelegramAgentEvent,

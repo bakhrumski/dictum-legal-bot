@@ -131,7 +131,10 @@ async function test(name, fn) {
  *   answer   — the generated answer text
  *   chunks   — retrieved corpus chunks (empty => low confidence)
  *   unverified — article numbers the citation check flags
- *   korpus   — a lawyer-verified answer to return from qa-korpus
+ *   korpus   — a lawyer-verified answer to return from qa-korpus (the
+ *              real searchKorpus shape: { match, answer, question })
+ *   korpusMatch — 'verbatim' (default) or 'context'
+ *   korpusGate  — korpusVerbatimAllowed; default allows, null = not injected
  */
 function deps(o = {}) {
   const calls = { answer: 0, intent: 0, korpus: 0, attorneys: 0, attorneyCriteria: null, contacts: 0, events: 0, quota: 0, release: 0, shadow: 0, shadowPayload: null, lexCrossCheck: 0, retrieval: null };
@@ -142,6 +145,7 @@ function deps(o = {}) {
       return { text: JSON.stringify(o.intent || { intent: 'huquqiy_savol', missing: [] }) };
     },
     callAI: async (messages, options = {}) => {
+      if (options.endpoint !== '/tg-agent/claim-check') calls.lastSystem = messages[0] && messages[0].text;
       // The claim verifier (legal-claim-guard) is a separate call; o.claimVerdict
       // answers it per claim text, o.claimVerifierError makes it fail.
       if (options.endpoint === '/tg-agent/claim-check') {
@@ -165,7 +169,8 @@ function deps(o = {}) {
       : () => ({ total: 1, unverified: o.unverified || [] }),
     buildTopicPrompt: () => 'SYSTEM',
     classifyLegalTopic: async () => o.topic || 'mehnat',
-    searchKorpus: o.korpus ? async () => { calls.korpus++; return { corrected_answer: o.korpus }; } : null,
+    searchKorpus: o.korpus ? async () => { calls.korpus++; return { match: o.korpusMatch || 'verbatim', similarity: 0.95, answer: o.korpus, question: o.korpusQuestion || 'Mehnat shartnomasi qanday bekor qilinadi?' }; } : null,
+    korpusVerbatimAllowed: o.korpusGate === null ? undefined : (o.korpusGate || (() => true)),
     embeddingApiKey: o.korpus ? 'key' : null,
     findAttorneys: async (criteria) => {
       calls.attorneys++;
@@ -857,6 +862,34 @@ function stubMemory(clarifyCount = 0) {
     assert.strictEqual(r.meta.path, 'qa-korpus');
     assert.ok(r.meta.reservationId, 'delivery must receive the reservation ID to finalize later');
     assert.strictEqual(d.calls.answer, 0, 'must not pay for generation when a verified answer exists');
+  });
+
+  await test('qa-korpus: a context match (or a verbatim hit the gates refuse, or no gate) is grounding only, named as a similar question\'s answer - never sent as is', async () => {
+    const verified = "Mehnat kodeksi, 100-moddasiga ko'ra yurist tomonidan tasdiqlangan javob berildi.";
+    const chunks = [{ law_name: 'Mehnat kodeksi', document_number: "O'RQ-798", article_numbers: ['100'], source_url: 'https://lex.uz/docs/-6257288', chunk_text: '100-modda. Tasdiqlangan norma.' }];
+    for (const [why, extra] of [
+      ['context match', { korpusMatch: 'context' }],
+      ['the gates refuse it', { korpusGate: () => false }],
+      ['no gate injected', { korpusGate: null }],
+    ]) {
+      const d = deps({ korpus: verified, chunks, korpusQuestion: 'Mehnat shartnomasi ish beruvchi tashabbusi bilan bekor qilinadimi?', ...extra });
+      agent.initTelegramAgent(d);
+      const r = await agent.handleUserMessage({ chatId: 1, text: 'Mehnat shartnomasi qanday bekor qilinadi?' });
+      assert.notStrictEqual(r.meta && r.meta.path, 'qa-korpus', why);
+      assert.strictEqual(d.calls.answer >= 1, true, `${why}: generated`);
+      assert.ok(/O'XSHASH SAVOL VA JAVOB DATA/u.test(d.calls.lastSystem) && d.calls.lastSystem.includes(verified) && d.calls.lastSystem.includes('ish beruvchi tashabbusi'), `${why}: grounding with the similar question`);
+      stubMemory();
+    }
+  });
+
+  await test('qa-korpus: the gate gets the asker\'s question and the stored question and answer', async () => {
+    const seen = [];
+    const d = deps({ korpus: "Mehnat kodeksi, 100-moddasiga ko'ra yurist tomonidan tasdiqlangan javob berildi.", korpusGate: (q, hit) => { seen.push([q, hit.question, hit.answer.slice(0, 13)]); return true; },
+      chunks: [{ law_name: 'Mehnat kodeksi', document_number: "O'RQ-798", article_numbers: ['100'], source_url: 'https://lex.uz/docs/-6257288', chunk_text: '100-modda.' }] });
+    agent.initTelegramAgent(d);
+    await agent.handleUserMessage({ chatId: 1, text: 'Mehnat shartnomasi qanday bekor qilinadi?' });
+    assert.deepStrictEqual(seen, [['Mehnat shartnomasi qanday bekor qilinadi?', 'Mehnat shartnomasi qanday bekor qilinadi?', 'Mehnat kodeks']]);
+    stubMemory();
   });
 
   await test('a legacy lawyer answer without canonical Lex citations is regenerated under the current contract', async () => {

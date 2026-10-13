@@ -468,12 +468,26 @@ async function generateAnswer(question, turns) {
   // ── 1. Lawyer-verified answer bank first ────────────────────────────────
   // A human-approved answer beats anything generated, but legacy rows still
   // pass through current Lex.uz citation enrichment before being sent.
+  // searchKorpus (src/rag/qa-korpus.js) returns the text as `answer` with a
+  // match kind; until 2026-10-13 this read `corrected_answer`, a field it
+  // never returns, so the bot never used the bank. As on the web chat:
+  //   - verbatim (>= 0.92) is sent as is only when it passes the same gates
+  //     (no failure phrase, no key-term difference between the questions,
+  //     the answer on the asker's subject) - korpusVerbatimAllowed, injected
+  //     from server.js; without it nothing is sent as is;
+  //   - context (>= 0.78), or a verbatim hit that fails a gate, is grounding
+  //     for the generated answer only, named as a similar question's answer.
   let korpusAnswer = '';
+  let korpusGround = null;
   if (D.searchKorpus && D.embeddingApiKey) {
     try {
       const hit = await D.searchKorpus(question, { apiKey: D.embeddingApiKey });
-      if (hit && hit.corrected_answer && String(hit.corrected_answer).trim().length > 40) {
-        korpusAnswer = String(hit.corrected_answer).trim();
+      const text = hit ? String(hit.answer || hit.corrected_answer || '').trim() : '';
+      if (text.length > 40) {
+        const allowed = hit.match === 'verbatim' && typeof D.korpusVerbatimAllowed === 'function'
+          && D.korpusVerbatimAllowed(question, { ...hit, answer: text }) === true;
+        if (allowed) korpusAnswer = text;
+        else korpusGround = { question: String(hit.question || '').trim(), answer: text };
       }
     } catch (e) {
       console.warn('[TG-AGENT] qa-korpus lookup failed:', e.message);
@@ -546,7 +560,8 @@ async function generateAnswer(question, turns) {
   const systemPrompt = (D.buildTopicPrompt
     ? D.buildTopicPrompt(topic, ragContext, question)
     : `Siz O'zbekiston qonunchiligi bo'yicha yuridik maslahatchisiz. Faqat quyidagi KONTEKSTga tayaning va modda raqamlarini o'ylab topmang.\n\nKONTEKST:\n${ragContext}`)
-    + (korpusAnswer ? `\n\nYURIST TASDIQLAGAN JAVOB DATA (mazmunini saqlang, lekin joriy iqtibos formatida yozing):\n${korpusAnswer}` : '');
+    + (korpusAnswer ? `\n\nYURIST TASDIQLAGAN JAVOB DATA (mazmunini saqlang, lekin joriy iqtibos formatida yozing):\n${korpusAnswer}` : '')
+    + (!korpusAnswer && korpusGround ? `\n\nYURIST TASDIQLAGAN O'XSHASH SAVOL VA JAVOB DATA (boshqa, o'xshash savolga berilgan; faqat shu savolga mos kelgan qismini ishlating, farq qiladigan shart yoki maqom bo'lsa ochiq ayting):\nSavol: ${korpusGround.question}\nJavob: ${korpusGround.answer}` : '');
 
   const hist = historyToText(turns);
   const messages = [
