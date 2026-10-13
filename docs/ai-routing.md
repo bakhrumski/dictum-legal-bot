@@ -51,6 +51,18 @@ Legal opinion's second model: `OPINION_FALLBACK_MODEL` (e.g.
 fail, before Gemini. Sinov's opinion model is `OPINION_MODEL_SINOV`; a
 failure there goes to the cheap lane (GPT-6 Luna), never to Sol.
 
+Master's test model (2026-10-13, `src/ai/test-model.js`): the dashboard's
+master-only "🧪" picker sends `X-JAI-Test-Model` (one of
+`zai/glm-5.3-flash`, `deepseek/deepseek-flash`, `deepseek/deepseek-v4-pro`,
+`openai/gpt-6-luna`, `openai/gpt-6-sol`) on that tab's API requests. The
+server applies it only for an account that is master in the database, for
+that one request: `callOpenAI` / `callOpenAIStream` and the explanation
+router ask for that model (chat, legal opinion, analysis, explanation,
+drafts and their helpers); a long document's digest keeps the production
+model. The chain behind it is unchanged and the ledger shows who answered
+(`testModel` annotation). Customers, Telegram, OCR / vision, embeddings and
+the hybrid pipeline are never affected. No env change.
+
 Without DeepSeek (no key, or `DEEPSEEK_ROUTING=off`) the chains are as
 before: VoiceLab first only when `LLM_PROVIDER=voicelab` and
 `VOICELAB_API_KEY` are set, and the lane is in `VOICELAB_LANES`.
