@@ -415,6 +415,12 @@ function excerptFromLines(value = '', partNumber = '', articleRef = '') {
     const head = articleHeadingRx(articleRef);
     const at = raw.findIndex(l => head.test(l));
     if (at >= 0) raw = raw.slice(at + 1);
+    else {
+      // an item ("17. Texnopark rezidenti:"): from its own line, which holds its text
+      const ref = String(articleRef).replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+      const item = raw.findIndex(l => new RegExp(`^\\s*[*#>\\s-]*${ref}\\.\\s+\\S`, 'u').test(l));
+      if (item >= 0) return cleanFragmentLine(raw[item]);
+    }
   }
   const lines = raw
     .map(cleanFragmentLine)
@@ -425,10 +431,24 @@ function excerptFromLines(value = '', partNumber = '', articleRef = '') {
   const picked = Number.isFinite(requested) && requested > 0 && requested <= lines.length
     ? lines[requested - 1]
     : lines[0];
-  if (picked.length <= 150) return picked;
-  const shortened = picked.slice(0, 150);
-  const boundary = shortened.lastIndexOf(' ');
-  return (boundary > 70 ? shortened.slice(0, boundary) : shortened).trim();
+  // the whole line: textFragmentFor marks it from its start to its end
+  return picked.length <= 1500 ? picked : picked.slice(0, picked.lastIndexOf(' ', 1500) > 70 ? picked.lastIndexOf(' ', 1500) : 1500).trim();
+}
+
+/**
+ * The Text Fragment of one provision line, marked whole (2026-10-13, owner:
+ * a competitor's link opened the item highlighted from its first word to its
+ * last): a short line as it is, a long one as "start,end" - its first 8 and
+ * last 6 words. A term's own comma or edge hyphen is encoded, so it is never
+ * read as the range comma or a prefix/suffix mark.
+ */
+function textFragmentFor(line = '') {
+  const text = String(line || '').replace(/\s+/gu, ' ').trim();
+  if (!text) return '';
+  const term = t => encodeTextFragment(t).replace(/^-|-$/gu, '%2D');
+  const words = text.split(' ');
+  if (text.length <= 120 || words.length < 16) return term(text);
+  return `${term(words.slice(0, 8).join(' '))},${term(words.slice(-6).join(' '))}`;
 }
 
 /**
@@ -491,8 +511,12 @@ function buildLexDeepLink(chunk = {}, opts = {}) {
   if (!excerpt) {
     excerpt = excerptFromLines(chunk.childText || chunk.chunk_text || chunk.parentText || '', '', articleRef);
   }
-  if (!excerpt && articleRef) excerpt = `${articleRef}-modda`;
-  return excerpt ? `${baseUrl}#:~:text=${encodeTextFragment(excerpt)}` : baseUrl;
+  if (!excerpt && articleRef) return `${baseUrl}#:~:text=${encodeTextFragment(`${articleRef}-modda`)}`;
+  if (!excerpt) return baseUrl;
+  // a Cyrillic line is found only on the Cyrillic page (/docs/N), never on
+  // the Latin one (/docs/-N) it was moved to
+  const page = /[\u0400-\u04ff]/u.test(excerpt) ? baseUrl.replace(/(lex\.uz\/)(?:uz\/)?docs\/-(\d+)/iu, '$1docs/$2') : baseUrl;
+  return `${page}#:~:text=${textFragmentFor(excerpt)}`;
 }
 
 function stripGeneratedSourceSections(value = '') {
@@ -1220,6 +1244,7 @@ module.exports = {
   normalizeLexSourceUrl,
   linkBareArticleRefs,
   encodeTextFragment,
+  textFragmentFor,
   encodeFragmentBrackets,
   uzPartNumber,
   tidyAroundLinks,

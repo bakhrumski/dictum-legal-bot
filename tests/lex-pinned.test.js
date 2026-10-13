@@ -43,9 +43,12 @@ const page = (title, body, extra = {}) => ({ title, body, metadata: { source_url
     const { buildLexResearchPlan } = require('../src/rag/legal-research-playbook');
     const plan = buildLexResearchPlan('Men IT park rezidentiman. Chet ellik mutaxassis olib kelmoqchiman, tasdiqnoma kerakmi?', 'mehnat');
     const pinned = plan.filter(s => s.pinnedDocs);
-    assert.strictEqual(pinned.length, 1);
-    assert.strictEqual(pinned[0].kind, 'status-act-pinned');
-    assert.deepStrictEqual(pinned[0].pinnedDocs.map(d => [d.url, d.label]), [['https://lex.uz/docs/-4422250', 'VMQ-589, 15.07.2019']]);
+    assert.strictEqual(pinned.length, 2, 'VMQ-589 and, for a foreign specialist, VMQ-86');
+    assert.ok(pinned.every(p => p.kind === 'status-act-pinned'));
+    assert.deepStrictEqual(pinned.map(p => [p.pinnedDocs[0].url, p.pinnedDocs[0].label]), [['https://lex.uz/docs/-4422250', 'VMQ-589, 15.07.2019'], ['https://lex.uz/docs/-5871129', 'VMQ-86, 22.02.2022']]);
+    assert.deepStrictEqual([pinned[1].pinnedDocs[0].expectedNumber, pinned[1].pinnedDocs[0].expectedDate, pinned[1].pinnedDocs[0].expectedTitles], ['86', '2022-02-22', []]);
+    const taxOnly = buildLexResearchPlan('IT park rezidentlari qanday soliq imtiyozlariga ega?', 'soliq').filter(s => s.pinnedDocs);
+    assert.deepStrictEqual(taxOnly.map(p => p.pinnedDocs[0].label), ['VMQ-589, 15.07.2019'], 'VMQ-86 only with a foreign specialist');
     assert.ok(pinned[0].pinnedDocs[0].expectedTitles.length === 2 && /технологик парки/u.test(pinned[0].pinnedDocs[0].expectedTitles[1]), 'Latin and Cyrillic title');
     assert.ok(!plan.some(s => /589/u.test(s.query)), 'no act-number query: Cabinet numbers repeat every year');
     const other = buildLexResearchPlan('Yashnobod innovatsion texnoparki rezidentiman, chet ellik mutaxassis olsam bo\'ladimi?', 'mehnat');
@@ -90,6 +93,23 @@ const page = (title, body, extra = {}) => ({ title, body, metadata: { source_url
     assert.strictEqual(mod.titleMostlyMatches(TITLE_2019, TITLE_2019), true);
     assert.strictEqual(mod.titleMostlyMatches(TITLE_2019, TITLE_2023), false);
     assert.strictEqual(mod.titleMostlyMatches(TITLE_2019, "Axborot texnologiyalari to'g'risida"), false);
+  });
+
+  await test('an act pinned without a title (VMQ-86) is kept only when its own number AND date are on the page', async () => {
+    const url = 'https://lex.uz/docs/-5871129';
+    const pinnedDocs = [{ url, expectedTitle: '', expectedTitles: [], expectedNumber: '86', expectedDate: '2022-02-22' }];
+    const body = "Vazirlar Mahkamasining qarori\nToshkent sh., 2022-yil 22-fevral, 86-son\n...chet ellik mutaxassislar ... texnologik park rezidentlari ...";
+    let { mod } = liveSearch({ [url]: { title: "Ayrim davlat xizmatlarini ko'rsatishning ma'muriy reglamentlarini tasdiqlash to'g'risida", body, metadata: { source_url: url, is_active: true, adoption_date: '2022-02-22', document_number: '86' } } });
+    let r = await mod.searchLexUz('tasdiqnoma', { scoreText: 'IT park chet ellik mutaxassis tasdiqnoma', includeRegistry: false, pinnedDocs, maxDocs: 1 });
+    assert.strictEqual(r.length, 1);
+    assert.ok(/reglamentlarini/u.test(r[0].lawName), 'the page\'s own title when none was pinned');
+    // the same number of another year, or the date with another number: refused
+    ({ mod } = liveSearch({ [url]: { title: 'Boshqa qaror', body: '2023-yil 14-mart, 86-son', metadata: { source_url: url, is_active: true, adoption_date: '2023-03-14', document_number: '86' } } }));
+    assert.strictEqual((await mod.searchLexUz('x', { scoreText: 'mutaxassis', includeRegistry: false, pinnedDocs, maxDocs: 1 })).length, 0);
+    ({ mod } = liveSearch({ [url]: { title: 'Boshqa qaror', body: '22.02.2022, 91-son', metadata: { source_url: url, is_active: true, adoption_date: '2022-02-22', document_number: '91' } } }));
+    assert.strictEqual((await mod.searchLexUz('x', { scoreText: 'mutaxassis', includeRegistry: false, pinnedDocs, maxDocs: 1 })).length, 0);
+    assert.strictEqual(mod.identityMatches({ title: 'X', body: '№ 86 ... 22.02.2022', metadata: {} }, '86', '2022-02-22'), true, 'from the page text');
+    assert.strictEqual(mod.identityMatches({ title: 'X', body: '№ 860 ... 22.02.2022', metadata: {} }, '86', '2022-02-22'), false);
   });
 
   delete require.cache[require.resolve('../src/rag/fetch-lex')];

@@ -129,6 +129,17 @@ const SPECIAL_STATUS_QUERIES = Object.freeze([
       label: 'VMQ-589, 15.07.2019',
       url: 'https://lex.uz/docs/-4422250', // confirmed by the owner, 2026-10-13
       title: "Dasturiy mahsulotlar va axborot texnologiyalari texnologik parki faoliyatini tashkil etish chora-tadbirlari to'g'risida",
+    }, {
+      // the state service of the labour-activity confirmation, whose
+      // exemptions name IT Park residents' foreign specialists (owner,
+      // 2026-10-13, after the DeepSeek app cited it). Its title was not
+      // confirmed, so the page is accepted by its own number AND date.
+      label: 'VMQ-86, 22.02.2022',
+      url: 'https://lex.uz/docs/-5871129', // confirmed by the owner, 2026-10-13
+      number: '86',
+      date: '2022-02-22',
+      query: "mehnat faoliyatini amalga oshirish huquqini beruvchi tasdiqnoma davlat xizmati",
+      onlyWithForeignSpecialist: true,
     }],
   },
   {
@@ -212,12 +223,18 @@ function buildLexResearchPlan(question = '', topic = '') {
   }
   // a named special status: its known act by address (identity = the page's
   // own title; a repealed or historical page is skipped) - never by number
+  const foreignSpecialist = FOREIGN_SPECIALIST.test(String(original || '').toLocaleLowerCase('uz'));
   for (const status of specialStatuses(original)) {
     for (const act of status.pinnedActs || []) {
+      if (act.onlyWithForeignSpecialist && !foreignSpecialist) continue;
       const before = steps.length;
-      pushResearchStep(steps, seen, act.title, 'status-act-pinned', 1, false, []);
-      // the page may be in Latin or Cyrillic script: both forms are accepted
-      if (steps.length > before) steps[steps.length - 1].pinnedDocs = [{ url: act.url, expectedTitle: act.title, expectedTitles: [act.title, translitQueryToCyr(act.title)], label: act.label }];
+      pushResearchStep(steps, seen, act.title || act.query, 'status-act-pinned', 1, false, []);
+      if (steps.length === before) continue;
+      // the page may be in Latin or Cyrillic script: both title forms are
+      // accepted; an act pinned without a title is accepted by number and date
+      steps[steps.length - 1].pinnedDocs = [act.title
+        ? { url: act.url, expectedTitle: act.title, expectedTitles: [act.title, translitQueryToCyr(act.title)], label: act.label }
+        : { url: act.url, expectedTitle: '', expectedTitles: [], expectedNumber: act.number, expectedDate: act.date, label: act.label }];
     }
   }
   for (const concept of concepts) {

@@ -117,8 +117,9 @@ async function searchLexUz(query, opts = {}) {
   // fallback, not a reason to fill every slot with broad codes/laws before the
   // implementing act is even inspected.
   const pinnedCandidates = (Array.isArray(pinnedDocs) ? pinnedDocs : [])
-    .filter(d => d && d.url && d.expectedTitle)
-    .map(d => ({ url: canonicalLexUrl(d.url), expectedTitle: d.expectedTitle, expectedTitles: d.expectedTitles || [d.expectedTitle], source: 'lex.uz-pinned' }));
+    .filter(d => d && d.url && (d.expectedTitle || (d.expectedNumber && d.expectedDate)))
+    .map(d => ({ url: canonicalLexUrl(d.url), expectedTitle: d.expectedTitle || '', expectedTitles: d.expectedTitles || (d.expectedTitle ? [d.expectedTitle] : []),
+      expectedNumber: d.expectedNumber || null, expectedDate: d.expectedDate || null, source: 'lex.uz-pinned' }));
   const candidates = [...pinnedCandidates, ...dynamicCandidates, ...registryCandidates].filter(candidate => {
     if (!candidate.url || seenCandidates.has(candidate.url)) return false;
     seenCandidates.add(candidate.url);
@@ -153,8 +154,10 @@ async function searchLexUz(query, opts = {}) {
 
       // a pinned act is the act itself, so most of its title must be there
       // (one shared word is enough for a registry entry, not for this)
-      if (candidate.source === 'lex.uz-pinned' && !candidate.expectedTitles.some(t => titleMostlyMatches(t, doc.title || ''))) {
-        console.warn(`[LEX-LIVE] Pinned act title mismatch, skipped: "${candidate.expectedTitle}" -> "${doc.title || ''}"`);
+      if (candidate.source === 'lex.uz-pinned' && (candidate.expectedTitles.length
+        ? !candidate.expectedTitles.some(t => titleMostlyMatches(t, doc.title || ''))
+        : !identityMatches(doc, candidate.expectedNumber, candidate.expectedDate))) {
+        console.warn(`[LEX-LIVE] Pinned act identity mismatch, skipped: "${candidate.expectedTitle || `${candidate.expectedNumber}, ${candidate.expectedDate}`}" -> "${doc.title || ''}"`);
         continue;
       }
       if (candidate.source !== 'lex.uz-pinned' && candidate.expectedTitle && !titlesMatch(candidate.expectedTitle, doc.title || '')) {
@@ -450,6 +453,23 @@ function titlesMatch(expected = '', actual = '') {
 }
 
 /** At least 60% of the expected title's words are in the page's own title. */
+/**
+ * A pinned act without a confirmed title: its own number AND its date must be
+ * on the page (metadata, or the head / signature block). One alone is not
+ * enough - Cabinet numbers restart every year.
+ */
+function identityMatches(doc = {}, number = '', date = '') {
+  if (!number || !date) return false;
+  const meta = doc.metadata || {};
+  const text = `${doc.title || ''}\n${String(doc.body || '').slice(0, 1500)}\n${String(doc.body || '').slice(-1000)}`;
+  const n = String(number).replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+  const [y, m, d] = String(date).split('-');
+  const numberOk = String(meta.document_number || '').replace(/\D/gu, '') === String(number).replace(/\D/gu, '')
+    || new RegExp(`(?:№|N)\\s*${n}(?!\\d)|(?<!\\d)${n}\\s*[-\u2013]\\s*(?:son|сон|сонли|sonli)`, 'iu').test(text);
+  const dateOk = meta.adoption_date === date || text.includes(`${d}.${m}.${y}`);
+  return numberOk && dateOk;
+}
+
 function titleMostlyMatches(expected = '', actual = '') {
   const expectedWords = comparableWords(expected);
   const actualSet = new Set(comparableWords(actual));
@@ -585,6 +605,7 @@ function formatLexSearchResults(results, language = 'uz') {
 module.exports = {
   searchLexUz,
   titleMostlyMatches,
+  identityMatches,
   buildLexSearchUrl,
   formatLexSearchResults,
   parseSearchResults,

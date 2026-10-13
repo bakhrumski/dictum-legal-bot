@@ -571,7 +571,9 @@ test('Uzbek links go to the Latin text (/docs/-N); /uz/docs/-N and Russian links
   // Russian text (an id of its own): the text decides (owner, 2026-10-13)
   const cyr = 'Ўзбекистон Республикасининг Фуқаролик кодекси. 135-модда. Ҳуқуқ ва мажбуриятлар';
   const ru = 'Гражданский кодекс Республики Узбекистан. Статья 135. Права и обязанности участников';
-  assert.strictEqual(buildLexDeepLink({ source_url: 'https://lex.uz/docs/97664', chunk_text: cyr }, {}).split('#')[0], 'https://lex.uz/docs/-97664');
+  // a Cyrillic line is highlighted only on the Cyrillic page (2026-10-13); an anchor id goes to the Latin one
+  assert.strictEqual(buildLexDeepLink({ source_url: 'https://lex.uz/docs/97664', chunk_text: cyr }, {}).split('#')[0], 'https://lex.uz/docs/97664');
+  assert.strictEqual(buildLexDeepLink({ source_url: 'https://lex.uz/docs/97664', chunk_text: cyr, lex_element_id: '5000001' }, {}), 'https://lex.uz/docs/-97664#-5000001');
   assert.strictEqual(buildLexDeepLink({ source_url: 'https://lex.uz/docs/97664', chunk_text: 'Fuqarolik kodeksi 135-modda. Huquq va majburiyatlar ishtirokchilari' }, {}).split('#')[0], 'https://lex.uz/docs/-97664');
   assert.strictEqual(buildLexDeepLink({ source_url: 'https://lex.uz/docs/97664', chunk_text: ru }, {}).split('#')[0], 'https://lex.uz/docs/97664', 'Russian: kept');
   assert.strictEqual(buildLexDeepLink({ source_url: 'https://lex.uz/uz/docs/-5013007', lex_element_id: '-5013954' }, { articleRef: '48' }), 'https://lex.uz/uz/docs/-5013007#-5013954');
@@ -681,6 +683,24 @@ test('Telegram: the model\'s own disclaimer line goes, the bot\'s one stays; a l
   for (const keep of ['Javob berish muddati 10 kun; yurist bilan kelishing.', 'Javob SIfatli; yurist']) assert.strictEqual(stripModelDisclaimer(keep), keep);
   const src = require('fs').readFileSync(require('path').join(__dirname, '../src/agents/telegram-agent.js'), 'utf8');
   assert.ok(/const reply = stripModelDisclaimer\(answer\.text\) \+ banner/u.test(src));
+});
+
+test('a provision is highlighted whole: a long line as start,end; a Cyrillic line on the Cyrillic page; commas and edge hyphens inside a term encoded (2026-10-13)', () => {
+  const { textFragmentFor } = require('../src/rag/citation-utils');
+  const item = 'Ўзбекистон Республикаси ҳудудида меҳнат фаолиятини амалга ошириш ҳуқуқи тасдиқномаларини олмасдан туриб чет эллик мутахассисларни жалб этиш;';
+  const chunk = { source_url: 'https://lex.uz/docs/-4422250', law_name: 'Технопарк', chunk_text: item };
+  const url = buildLexDeepLink(chunk, {});
+  const [page, frag] = url.split('#:~:text=');
+  assert.strictEqual(page, 'https://lex.uz/docs/4422250', 'the Cyrillic page');
+  const [start, end] = frag.split(',');
+  assert.deepStrictEqual([decodeURIComponent(start), decodeURIComponent(end)], ['Ўзбекистон Республикаси ҳудудида меҳнат фаолиятини амалга ошириш ҳуқуқи', 'туриб чет эллик мутахассисларни жалб этиш;']);
+  assert.strictEqual(frag.split(',').length, 2, 'one range comma');
+  assert.strictEqual(textFragmentFor('Qisqa band, vergul bilan.'), 'Qisqa%20band%2C%20vergul%20bilan.', 'short: whole, its comma encoded');
+  assert.ok(!/,/u.test(textFragmentFor('Bir, ikki, uch, to\'rt, besh, olti, yetti, sakkiz, to\'qqiz, o\'n, o\'n bir, o\'n ikki, o\'n uch, o\'n to\'rt, o\'n besh, o\'n olti so\'z').replace(/^[^,]*,/u, '')), 'only the range comma is raw');
+  assert.strictEqual(textFragmentFor('-boshida'), '%2Dboshida');
+  // "17-band" opens at the item: its own line, never the lines before it
+  const band = { source_url: 'https://lex.uz/docs/-4422250', law_name: 'Texnopark', chunk_text: "16. Shartnomaning shakli tasdiqlanadi.\n17. Texnopark rezidenti:\nchet ellik mutaxassislarni jalb etish;" };
+  assert.strictEqual(decodeURIComponent(buildLexDeepLink(band, { articleRef: '17' }).split('#:~:text=')[1]), '17. Texnopark rezidenti:');
 });
 
 console.log(`\n${passed} citation deep-link tests passed.\n`);
