@@ -8782,7 +8782,15 @@
                     var ta = box.querySelector('textarea[data-q="' + q.id + '"]');
                     val = ta ? ta.value.trim() : '';
                 }
-                if (!val) { document.getElementById('gateSurveyStatus').textContent = 'Iltimos, barcha savollarga javob bering.'; return; }
+                // a question marked "(ixtiyoriy)" may stay empty (it used to
+                // block sending, with the notice below the fold - 2026-10-13)
+                if (!val && /ixtiyoriy/i.test(q.question_text || '')) continue;
+                if (!val) {
+                    var st = document.getElementById('gateSurveyStatus');
+                    st.textContent = 'Iltimos, barcha majburiy savollarga javob bering.';
+                    st.scrollIntoView({ block: 'nearest' });
+                    return;
+                }
                 answers.push({ questionId: q.id, answer: val });
             }
             document.getElementById('gateSurveyStatus').textContent = 'Yuborilmoqda...';
