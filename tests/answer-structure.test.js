@@ -84,6 +84,10 @@ test('wired: the chat prompt asks for both; web chat returns followUpQuestions a
   assert.ok(/followUpQuestions: followUp\.questions/u.test(tg) && /Yana so'rashingiz mumkin/u.test(tg));
   const { toTelegramMarkdown } = require('../src/agents/telegram-agent');
   assert.strictEqual(toTelegramMarkdown('> «Norma matni»'), '▎ «Norma matni»');
+  // room for the quote and the next questions (2026-10-13): 1 400 by default, env in bounds
+  const { telegramAnswerMaxTokens } = require('../src/agents/telegram-agent');
+  assert.deepStrictEqual([telegramAnswerMaxTokens({}), telegramAnswerMaxTokens({ TG_ANSWER_MAX_TOKENS: '2000' }), telegramAnswerMaxTokens({ TG_ANSWER_MAX_TOKENS: '99999' })], [1400, 2000, 1400]);
+  assert.ok(/maxTokens: telegramAnswerMaxTokens\(\), endpoint: '\/tg-agent\/answer'/u.test(tg));
   const ws = fs.readFileSync(path.join(__dirname, '../src/workspace/legal-answer-generator.js'), 'utf8');
   assert.ok(/extractFollowUpQuestions\(reply\)\.text/u.test(ws));
   const html = fs.readFileSync(path.join(__dirname, '../public/dashboard.html'), 'utf8');

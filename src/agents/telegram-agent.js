@@ -87,6 +87,12 @@ const HISTORY_TURNS    = 8;
 const HISTORY_TTL_H    = 48;
 const TG_LIMIT         = 3900;  // Telegram hard limit is 4096; leave headroom
 
+/** The Telegram answer cap (DeepSeek gets it x2, src/ai/deepseek.js). */
+function telegramAnswerMaxTokens(env = process.env) {
+  const n = Number.parseInt(env.TG_ANSWER_MAX_TOKENS || '', 10);
+  return Number.isFinite(n) && n >= 300 && n <= 4000 ? n : 1400;
+}
+
 const DISCLAIMER = "\n\n_Javob SI tomonidan tayyorlandi va yuridik kuchga ega emas. Muhim masalalarda yurist bilan maslahatlashing._";
 // a Russian question gets the system lines in Russian too (2026-10-13: a
 // Russian answer ended with Uzbek notes, quota and lawyer lines)
@@ -599,7 +605,9 @@ TELEGRAM FORMATI (majburiy):
   // path, so they should not run on a more expensive tier than the dashboard.
   const res = await D.callAI(messages, {
     model: D.chatModel || undefined,
-    useSearch: false, maxTokens: 900, endpoint: '/tg-agent/answer',
+    // 900 left no room for the law's quote and the next questions (#456;
+    // 2026-10-13, owner: raise it). TG_ANSWER_MAX_TOKENS (env) sets it.
+    useSearch: false, maxTokens: telegramAnswerMaxTokens(), endpoint: '/tg-agent/answer',
   });
   // the suggested next questions leave the answer (answer-structure.js)
   const followUp = require('../rag/answer-structure').extractFollowUpQuestions(String(res.text || '').trim());
@@ -1462,6 +1470,7 @@ function splitForTelegram(text, limit = TG_LIMIT) {
 
 module.exports = {
   initTelegramAgent,
+  telegramAnswerMaxTokens,
   stripModelDisclaimer,
   handleUserMessage,
   splitForTelegram,
