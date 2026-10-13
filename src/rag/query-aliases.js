@@ -50,6 +50,12 @@ function expandLegalQueryAliases(query) {
     aliases.push("yonida olib yurishi biometrik pasport ID-karta planshet orqali tekshiriladi talab etilmaydi");
   }
 
+  // "IT park" in a question: the acts say "Texnopark" / "dasturiy mahsulotlar
+  // va axborot texnologiyalari texnologik parki" (VMQ-589), 2026-10-13
+  if (/(?:^|[^\p{L}])(?:it|ит)[\s-]?(?:park|парк)|texnopark|технопарк/u.test(lower)) {
+    aliases.push('Texnopark rezidenti dasturiy mahsulotlar va axborot texnologiyalari texnologik parki');
+  }
+
   // LLC questions asked in Russian (2026-10-01: "отчуждение доли в уставном
   // фонде ООО" retrieved no LLC law at all, and the answer cited a repealed one).
   // (\b is ASCII-only in JS, so Cyrillic word edges are written out.)

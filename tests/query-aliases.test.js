@@ -26,4 +26,9 @@ const fallback = buildCorpusOnlyAnswer("Pravam yonimda emas", [{
 assert.match(fallback, /asosli ko'rinmaydi/i);
 assert.match(fallback, /https:\/\/lex\.uz\/docs\/-5953883/);
 
+// "IT park" -> the acts' own term (VMQ-589), 2026-10-13
+assert.match(expandLegalQueryAliases('Men IT park rezidentiman, chet ellik mutaxassis olsam bo\'ladimi?'), /Texnopark rezidenti/);
+assert.match(expandLegalQueryAliases('IT-park'), /texnologik parki/);
+assert.doesNotMatch(expandLegalQueryAliases('kredit parametrlari'), /Texnopark/);
+
 console.log('query aliases and corpus fallback: OK');

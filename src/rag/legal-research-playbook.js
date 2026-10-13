@@ -103,10 +103,41 @@ function buildExactActQueryVariants(value = '') {
   return variants;
 }
 
+// A special status the asker names (2026-10-13: "Men IT park rezidentiman ..."
+// was answered from the Labour Code alone, while VMQ-589 (Texnopark nizomi,
+// 17-band) lets a resident hire foreign specialists without the permit). The
+// acts call it by their own term, which the user rarely uses, and the
+// general query drops "IT" as too short. Each status adds its official
+// terms as concept queries (first, so the 15-step cap keeps them) and the
+// act numbers as search HYPOTHESES only: an act is used only after Lex.uz
+// confirms its own number and the result is ranked by the question.
+const SPECIAL_STATUS_QUERIES = Object.freeze([
+  {
+    status: 'it-park',
+    test: /(?:^|[^\p{L}])(?:it|ит|ай[\s-]?ти)[\s-]?(?:park|парк)|texnopark|технопарк|texnologik\s+park|технологик\s+парк|it\s+parki/iu,
+    concepts: ['Texnopark rezidenti', 'dasturiy mahsulotlar va axborot texnologiyalari texnologik parki'],
+    withForeignSpecialist: 'Texnopark rezidenti chet ellik mutaxassislarni jalb etish tasdiqnoma',
+    actHypotheses: ['VMQ-589'],
+  },
+]);
+
+const FOREIGN_SPECIALIST = /(?:xorij|chet\s*el)[\p{L}'\u2019\u02bb-]*.*mutaxassis|mutaxassis.*(?:xorij|chet\s*el)/iu;
+
+/** The special statuses a question names (see SPECIAL_STATUS_QUERIES). */
+function specialStatuses(question = '') {
+  const normalized = String(question || '').toLocaleLowerCase('uz');
+  return SPECIAL_STATUS_QUERIES.filter(s => s.test.test(normalized));
+}
+
 function buildConceptQueries(question = '') {
   const normalized = String(question || '').toLocaleLowerCase('uz');
   const queries = [];
-  if (/(?:xorij|chet\s*el)[\p{L}'\u2019\u02bb-]*.*mutaxassis|mutaxassis.*(?:xorij|chet\s*el)/iu.test(normalized)) {
+  const foreignSpecialist = FOREIGN_SPECIALIST.test(normalized);
+  for (const s of specialStatuses(question)) {
+    if (foreignSpecialist && s.withForeignSpecialist) queries.push(s.withForeignSpecialist);
+    queries.push(...s.concepts);
+  }
+  if (foreignSpecialist) {
     queries.push(/yuqori\s+malakali/iu.test(normalized)
       ? 'yuqori malakali chet ellik mutaxassis'
       : 'malakali chet ellik mutaxassis');
@@ -158,6 +189,15 @@ function buildLexResearchPlan(question = '', topic = '') {
   for (const exact of buildExactActQueryVariants(original)) {
     const prefix = buildExactActQueryVariants(exact).length ? canonicalQueryPrefix(exact.split('-')[0]) : '';
     pushResearchStep(steps, seen, exact, 'exact-act', 1, false, prefix ? [prefix] : []);
+  }
+  // a named special status: its act numbers as search hypotheses (identity
+  // confirmed by Lex.uz, ranked by the question) - never cited unconfirmed
+  for (const status of specialStatuses(original)) {
+    for (const act of status.actHypotheses || []) {
+      for (const exact of buildExactActQueryVariants(act)) {
+        pushResearchStep(steps, seen, exact, 'status-act-hypothesis', 1, false, [canonicalQueryPrefix(exact.split('-')[0])]);
+      }
+    }
   }
   for (const concept of concepts) {
     pushResearchStep(steps, seen, concept, 'official-concept', 2, steps.every(step => !step.includeRegistry));
@@ -444,6 +484,8 @@ module.exports = {
   scoreLexResearchResult,
   buildExactActQueryVariants,
   buildConceptQueries,
+  specialStatuses,
+  SPECIAL_STATUS_QUERIES,
   translitQueryToCyr,
   significantTerms,
 };

@@ -183,6 +183,23 @@ test('AI query planning adds official terminology as search hypotheses, never ev
     < merged.indexOf(merged.find(step => step.kind === 'natural-language')));
 });
 
+test('a named special status (IT park) searches the acts\' own term and its act number as a hypothesis, ahead of the general queries', () => {
+  const { buildLexResearchPlan, specialStatuses } = require('../src/rag/legal-research-playbook');
+  const q = 'Men IT park rezidentiman. Men kompaniyamga chet ellik mutaxassis olib kelmoqchiman. Qandaydir tasdiqnoma hujjat qilishim kerakmi?';
+  const plan = buildLexResearchPlan(q, 'mehnat');
+  assert.ok(plan.length <= 15);
+  const queries = plan.map(step => step.query);
+  for (const expected of ['VMQ-589', 'Texnopark rezidenti chet ellik mutaxassislarni jalb etish tasdiqnoma', 'Texnopark rezidenti', 'dasturiy mahsulotlar va axborot texnologiyalari texnologik parki', 'malakali chet ellik mutaxassis']) {
+    assert.ok(queries.includes(expected), expected);
+  }
+  const hypothesis = plan.find(step => step.query === 'VMQ-589');
+  assert.deepStrictEqual([hypothesis.kind, hypothesis.preferredPrefixes], ['status-act-hypothesis', ['VMQ']]);
+  assert.ok(queries.indexOf('Texnopark rezidenti') < queries.indexOf(q), 'before the general queries (kept by the 15-step cap)');
+  for (const phrase of ['IT-park rezidenti', 'itpark', 'Texnopark', 'ИТ парк резиденти', 'технопарк']) assert.strictEqual(specialStatuses(phrase).length, 1, phrase);
+  for (const phrase of ['kredit parametrlari', 'avtomobil parkovkasi', 'limit park', 'chet ellik mutaxassis']) assert.strictEqual(specialStatuses(phrase).length, 0, phrase);
+  assert.ok(!buildLexResearchPlan('chet ellik mutaxassis tasdiqnomasi kerakmi?', 'mehnat').some(step => /Texnopark|589/u.test(step.query)), 'no status, no extra queries');
+});
+
 test('foreign-specialist questions fan out to the official statutory concept', () => {
   const cases = [
     {
