@@ -346,6 +346,8 @@ function createWorkspaceLegalAnswerGenerator(dependencies) {
         endpoint: '/api/workspaces/assistant',
       });
       reply = normalizeResponseForUser(result.text);
+      // Workspace shows no next-question buttons: the block is taken out
+      reply = require('../rag/answer-structure').extractFollowUpQuestions(reply).text;
     }
 
     const primaryUsage = result.usage;

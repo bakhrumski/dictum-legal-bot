@@ -198,6 +198,15 @@ Known state of the suites (Sept 2026):
   found and names up to 4 missing acts as lex.uz terms (never a number
   alone, never another site), searched within `LEX_FOLLOWUP_MAX_MS`; any
   failure keeps round one.
+  Answer layout (2026-10-13, `src/rag/answer-structure.js`, no AI; the
+  sections stay Huquqiy asos / Tahlil / Xulosa): a `> «...»` quote of the
+  law is kept only when its words are in a retrieved source word for word
+  (spaces, case, apostrophe forms aside; "..." parts in order in one
+  source), shown in the source's own words with a "lex.uz ↗" link that
+  highlights it, else removed and counted (`rag.quotes`); quote lines are
+  set aside while citations are linked. The `KEYINGI SAVOLLAR:` block (max
+  2) leaves the answer: web chat `followUpQuestions` buttons, Telegram a
+  short list, Workspace drops it.
   `src/rag/question-aspects.js` splits a question into deadline,
   compensation, evidence and remedy and runs a light corpus search for each
   (Telegram, web chat, Workspace).

@@ -601,7 +601,9 @@ TELEGRAM FORMATI (majburiy):
     model: D.chatModel || undefined,
     useSearch: false, maxTokens: 900, endpoint: '/tg-agent/answer',
   });
-  let text = String(res.text || '').trim();
+  // the suggested next questions leave the answer (answer-structure.js)
+  const followUp = require('../rag/answer-structure').extractFollowUpQuestions(String(res.text || '').trim());
+  let text = followUp.text;
   let repealedActs = [];
   if (D.hydrateMentionedOfficialActChunks) {
     const hydrated = await D.hydrateMentionedOfficialActChunks(text, chunks, { topic });
@@ -711,6 +713,7 @@ TELEGRAM FORMATI (majburiy):
     meta: {
       path: 'rag',
       topic,
+      followUpQuestions: followUp.questions,
       chunks: chunks.length,
       unverified,
       // citationCheck is the format check only (are the cited articles in the
@@ -1387,7 +1390,11 @@ Agar texnik uzilish yuz bersa, limitingiz avtomatik tiklanadi.`,
     answer: answer.text,
     topic: answer.meta && answer.meta.topic,
   });
-  const reply = stripModelDisclaimer(answer.text) + banner + (ru ? DISCLAIMER_RU : DISCLAIMER) + allowance;
+  const nextQuestions = (answer.meta && Array.isArray(answer.meta.followUpQuestions) ? answer.meta.followUpQuestions : []).slice(0, 2);
+  const nextQuestionsText = nextQuestions.length
+    ? `\n\n💬 ${ru ? 'Можно также спросить:' : "Yana so'rashingiz mumkin:"}\n${nextQuestions.map(q => `• ${q}`).join('\n')}`
+    : '';
+  const reply = stripModelDisclaimer(answer.text) + nextQuestionsText + banner + (ru ? DISCLAIMER_RU : DISCLAIMER) + allowance;
 
   await remember(answer.text, 0);
   await setConversationState(chatId, 'awaiting_next_action', {
@@ -1430,7 +1437,9 @@ Agar texnik uzilish yuz bersa, limitingiz avtomatik tiklanadi.`,
 function toTelegramMarkdown(text = '') {
   return String(text || '')
     .replace(/\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)/gu, (m, label, url) => `[${label.replace(/[*_]/gu, '').trim()}](${url})`)
-    .replace(/\*\*([^*\n]+?)\*\*/gu, '*$1*');
+    .replace(/\*\*([^*\n]+?)\*\*/gu, '*$1*')
+    // a quote of the law: Telegram's Markdown has no blockquote
+    .replace(/^[ \t]*>[ \t]?/gmu, '▎ ');
 }
 
 /** Split a reply that exceeds Telegram's message limit, preferring paragraph breaks. */
