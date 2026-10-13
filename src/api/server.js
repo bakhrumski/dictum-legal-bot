@@ -71,6 +71,10 @@ const {
   parseLexQueryPlannerResponse,
   mergeLexResearchPlans,
   selectLexResearchResults,
+  lexFollowUpMode,
+  shouldRunLexFollowUp,
+  buildLexFollowUpPrompt,
+  parseLexFollowUpResponse,
 } = require('../rag/legal-research-playbook');
 const {
   buildLegalResearchPolicyPrefix,
@@ -3846,9 +3850,9 @@ async function tryDeepSeek(messages, options, requestedModel, onToken) {
   const route = explicit ? requestedModel : (options.lane || requestedModel);
   if (!deepseek.routes(route)) return null;
   if (!(await paidModelsAllowed())) return null;
-  const maxTokens = deepseek.maxTokensFor(options.maxTokens || 8192);
-  // an explicit 'deepseek/deepseek-v4-pro' picks that model; anything else is deepseek-flash
+  // an explicit 'deepseek/deepseek-v4-pro' (or '-flash-thinking') picks that model; anything else is deepseek-flash
   const dsModel = deepseek.modelFor(explicit ? requestedModel : null);
+  const maxTokens = deepseek.maxTokensFor(options.maxTokens || 8192, dsModel);
   const label = `deepseek/${dsModel}`;
   try {
     const r = await usageLedger.track({ provider: 'deepseek', model: label, endpoint: options.endpoint, userId: options.userId || null, detail: options.detail || null, ...(onToken ? { retryTransient: 0 } : {}),
@@ -5275,23 +5279,61 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
         console.warn(`[LEX-PLAN] AI query planning failed; deterministic plan retained: ${error.message}`);
       }
     }
-    const [tavilyRes, lexRes] = await Promise.all([
+    const runLexSteps = (steps) => Promise.all(steps.map(async (step) => ({
+      step,
+      results: await searchLexUz(step.query, {
+        topic,
+        scoreText: originalQuestion,
+        includeRegistry: step.includeRegistry,
+        preferredPrefixes: step.preferredPrefixes,
+        pinnedDocs: step.pinnedDocs,
+        maxDocs: step.maxDocs,
+        maxChars: 4000,
+      }).catch(() => []),
+    })));
+    const [tavilyRes, lexGroups] = await Promise.all([
       allowWeb ? webSearch(query).catch(() => []) : Promise.resolve([]),
-      Promise.all(lexPlan.map(async (step) => ({
-        step,
-        results: await searchLexUz(step.query, {
-          topic,
-          scoreText: originalQuestion,
-          includeRegistry: step.includeRegistry,
-          preferredPrefixes: step.preferredPrefixes,
-          pinnedDocs: step.pinnedDocs,
-          maxDocs: step.maxDocs,
-          maxChars: 4000,
-        }).catch(() => []),
-      }))).then((groups) => selectLexResearchResults(groups, originalQuestion, 6)),
+      runLexSteps(lexPlan),
     ]);
     webResults = tavilyRes;
-    lexLiveResults = lexRes;
+    lexLiveResults = selectLexResearchResults(lexGroups, originalQuestion, 6);
+    // A second, bounded round (legal-research-playbook lexFollowUpMode): the
+    // model reads what was found and names what is still missing; lex.uz only,
+    // one round, a few searches, a time limit. Any failure keeps round one.
+    const followUpMode = lexFollowUpMode();
+    if (shouldRunLexFollowUp({ mode: followUpMode, needsWebSearch, firstRound: lexLiveResults, question: originalQuestion })) {
+      const started = Date.now();
+      const limitMs = Math.max(3000, Number(process.env.LEX_FOLLOWUP_MAX_MS) || 25000);
+      try {
+        const planner = String(process.env.LEX_PLANNER_LANE || 'cheap').toLowerCase() === 'standard' ? callAI : callCheapAI;
+        const followUp = await planner(
+          [{ role: 'user', text: buildLexFollowUpPrompt(originalQuestion, lexLiveResults) }],
+          { useSearch: false, maxTokens: 500, temperature: 0, endpoint: '/rag/lex-plan-followup', detail: { round: 2 } }
+        );
+        const { steps } = parseLexFollowUpResponse(followUp && followUp.text, {
+          already: lexPlan.map(st => st.query),
+          max: Number(process.env.LEX_FOLLOWUP_QUERIES) || 4,
+        });
+        const left = limitMs - (Date.now() - started);
+        if (steps.length && left > 1000) {
+          let timer;
+          const groups2 = await Promise.race([
+            runLexSteps(steps),
+            new Promise(resolve => { timer = setTimeout(() => resolve(null), left); }),
+          ]).finally(() => clearTimeout(timer));
+          if (groups2) {
+            const before = new Set(lexLiveResults.map(r => r.url));
+            lexLiveResults = selectLexResearchResults([...lexGroups, ...groups2], originalQuestion, 8);
+            const added = lexLiveResults.filter(r => !before.has(r.url)).length;
+            console.log(`[LEX-FOLLOWUP] ${steps.length} searches, ${added} new documents kept (${Date.now() - started} ms)`);
+          } else {
+            console.warn(`[LEX-FOLLOWUP] time limit ${limitMs} ms reached; round one kept`);
+          }
+        }
+      } catch (error) {
+        console.warn(`[LEX-FOLLOWUP] failed; round one kept: ${error.message}`);
+      }
+    }
     // Not awaited: suggesting what the corpus lacked must not slow the
     // answer. Eval runs (mode=full) are not real questions and suggest nothing.
     if (lexLiveResults.length && opts.demandSource !== 'eval') {

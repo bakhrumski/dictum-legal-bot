@@ -31,6 +31,17 @@
  *              completion_tokens_details.reasoning_tokens is part of
  *              completion_tokens - nothing is added twice
  *
+ * Thinking variant (2026-10-13, owner: the DeepSeek app's "V4.1-Flash High"
+ * answered the IT Park question better): 'deepseek/deepseek-flash-thinking'
+ * is the same API model, deepseek-flash, with thinking enabled at
+ * reasoning_effort high (api-docs.deepseek.com/guides/thinking_mode: thinking
+ * ignores temperature, so none is sent). Reasoning is billed as output and
+ * counts against max_tokens, so the cap gets DEEPSEEK_THINKING_EXTRA_TOKENS
+ * (default 16 000) on top, at most DEEPSEEK_THINKING_MAX_TOKENS (32 000), and
+ * the timeout is DEEPSEEK_THINKING_TIMEOUT_MS (240 s). reasoning_content is
+ * never shown or used as the answer. Explicit id only (test picker,
+ * MODEL_TELEGRAM, OPINION_MODEL...); never the default.
+ *
  * Chosen after the provider evaluation of 2026-10-12 (docs/quality/
  * provider-eval-plan.md): on the 54 260-char agreement it kept every
  * condition of the evidence table at an answer cap of 6 000 tokens and was
@@ -42,7 +53,10 @@ const URL = 'https://api.deepseek.com/chat/completions';
 const MODEL = 'deepseek-flash';
 // the models a caller may name as 'deepseek/<model>' (listed on the account,
 // priced in model-pricing.js); any other id goes to the default
-const MODELS = Object.freeze(['deepseek-flash', 'deepseek-v4-pro']);
+const MODELS = Object.freeze(['deepseek-flash', 'deepseek-v4-pro', 'deepseek-flash-thinking']);
+// our ids that are an API model with thinking on
+const THINKING = Object.freeze({ 'deepseek-flash-thinking': { model: 'deepseek-flash', effort: 'high' } });
+const isThinking = model => Object.prototype.hasOwnProperty.call(THINKING, String(model || '').toLowerCase());
 
 /** The DeepSeek model for a requested id: 'deepseek/deepseek-v4-pro' names it, anything else is the default. */
 function modelFor(id) {
@@ -65,15 +79,22 @@ function routes(modelOrLane) {
   return true;
 }
 
-/** The cap sent to DeepSeek for a caller's cap. */
-function maxTokensFor(requested) {
+/** The cap sent to DeepSeek for a caller's cap (a thinking model gets room for its reasoning on top). */
+function maxTokensFor(requested, model = MODEL) {
   const n = v => { const x = Number(v); return Number.isFinite(x) && x > 0 ? x : null; };
   const base = n(requested) || 8192;
   const factor = n(process.env.DEEPSEEK_MAX_TOKENS_FACTOR) || 2;
   const cap = n(process.env.DEEPSEEK_MAX_TOKENS_CAP) || 16000;
-  return Math.max(16, Math.min(cap, Math.round(base * Math.max(1, factor))));
+  const answer = Math.max(16, Math.min(cap, Math.round(base * Math.max(1, factor))));
+  if (!isThinking(model)) return answer;
+  const extra = n(process.env.DEEPSEEK_THINKING_EXTRA_TOKENS) || 16000;
+  const max = n(process.env.DEEPSEEK_THINKING_MAX_TOKENS) || 32000;
+  return Math.min(max, answer + extra);
 }
-const timeoutMs = () => { const n = Number(process.env.DEEPSEEK_TIMEOUT_MS); return Number.isFinite(n) && n > 0 ? n : 120000; };
+const timeoutMs = (model) => {
+  const n = Number(isThinking(model) ? process.env.DEEPSEEK_THINKING_TIMEOUT_MS : process.env.DEEPSEEK_TIMEOUT_MS);
+  return Number.isFinite(n) && n > 0 ? n : (isThinking(model) ? 240000 : 120000);
+};
 
 function usageOf(u) {
   if (!u) return {};
@@ -91,31 +112,35 @@ function usageOf(u) {
  * key, a timeout or an empty answer (the router then falls back).
  */
 function buildBody(messages, { maxTokens = 6000, temperature = 0.2, responseFormat = null, stream = false, model = MODEL } = {}) {
+  const ours = MODELS.includes(model) ? model : MODEL;
+  const think = THINKING[ours];
   const body = {
-    model: MODELS.includes(model) ? model : MODEL,
+    model: think ? think.model : ours,
     messages: (messages || []).map(m => ({ role: m.role === 'model' ? 'assistant' : (m.role || 'user'), content: m.content !== undefined ? m.content : (m.text || '') })),
-    thinking: { type: 'disabled' },
-    temperature: temperature == null ? 0.2 : temperature,
+    thinking: { type: think ? 'enabled' : 'disabled' },
     max_tokens: Math.max(16, Number(maxTokens) || 6000),
   };
+  if (think) body.reasoning_effort = think.effort;
+  else body.temperature = temperature == null ? 0.2 : temperature;
   if (responseFormat) body.response_format = responseFormat;
   if (stream) { body.stream = true; body.stream_options = { include_usage: true }; }
   return body;
 }
 
-async function post(body, fetchImpl) {
-  const name = body.model;
+async function post(body, fetchImpl, ours = body.model) {
+  const name = ours;
+  const ms = timeoutMs(ours);
   const key = apiKey();
   if (!key) throw Object.assign(new Error('DEEPSEEK_API_KEY sozlanmagan'), { code: 'NO_KEY' });
   let resp;
   try {
     resp = await (fetchImpl || fetch)(URL, {
-      method: 'POST', redirect: 'error', signal: AbortSignal.timeout(timeoutMs()),
+      method: 'POST', redirect: 'error', signal: AbortSignal.timeout(ms),
       headers: { 'Content-Type': 'application/json', Accept: body.stream ? 'text/event-stream' : 'application/json', Authorization: `Bearer ${key}` },
       body: JSON.stringify(body),
     });
   } catch (e) {
-    const err = new Error(e && (e.name === 'TimeoutError' || e.name === 'AbortError') ? `DeepSeek ${name} timed out after ${timeoutMs()}ms` : `DeepSeek ${name} request failed`);
+    const err = new Error(e && (e.name === 'TimeoutError' || e.name === 'AbortError') ? `DeepSeek ${name} timed out after ${ms}ms` : `DeepSeek ${name} request failed`);
     err.status = e && (e.name === 'TimeoutError' || e.name === 'AbortError') ? 408 : undefined;
     throw err;
   }
@@ -130,10 +155,14 @@ async function post(body, fetchImpl) {
   return resp;
 }
 
+// the id the provider returned; a thinking variant keeps our id so the reply
+// and the ledger tell it apart from plain deepseek-flash
+const providerLabel = (ours, returned) => `deepseek/${isThinking(ours) ? ours : (returned || ours)}`;
+
 async function chatCompletion(messages, { maxTokens = 6000, temperature = 0.2, responseFormat = null, call = null, fetchImpl = null, model = MODEL } = {}) {
   const body = buildBody(messages, { maxTokens, temperature, responseFormat, model });
-  const name = body.model;
-  const resp = await post(body, fetchImpl);
+  const name = MODELS.includes(model) ? model : MODEL;
+  const resp = await post(body, fetchImpl, name);
   const data = await resp.json();
   const choice = Array.isArray(data.choices) ? data.choices[0] : null;
   const text = choice && choice.message && typeof choice.message.content === 'string' ? choice.message.content : '';
@@ -141,7 +170,7 @@ async function chatCompletion(messages, { maxTokens = 6000, temperature = 0.2, r
   const usage = usageOf(data.usage);
   if (call) call.usage({ ...usage, modelReturned: data.model || null, finishReason, truncated: finishReason === 'length' });
   if (!text.trim()) throw Object.assign(new Error(`DeepSeek ${name} empty response (finish_reason: ${finishReason || '?'})`), { code: 'EMPTY_RESPONSE', usage });
-  return { text, provider: `deepseek/${data.model || name}`, truncated: finishReason === 'length', usage };
+  return { text, provider: providerLabel(name, data.model), truncated: finishReason === 'length', usage };
 }
 
 /**
@@ -151,8 +180,8 @@ async function chatCompletion(messages, { maxTokens = 6000, temperature = 0.2, r
  */
 async function chatCompletionStream(messages, { maxTokens = 6000, temperature = 0.2, call = null, fetchImpl = null, model: requested = MODEL } = {}, onToken = () => {}) {
   const body = buildBody(messages, { maxTokens, temperature, stream: true, model: requested });
-  const name = body.model;
-  const resp = await post(body, fetchImpl);
+  const name = MODELS.includes(requested) ? requested : MODEL;
+  const resp = await post(body, fetchImpl, name);
   if (!resp.body) throw new Error(`DeepSeek ${name} stream has no body`);
   const decoder = new TextDecoder();
   let buf = '', text = '', finishReason = null, model = null, usage = {};
@@ -185,7 +214,7 @@ async function chatCompletionStream(messages, { maxTokens = 6000, temperature = 
   if (call) call.usage({ ...usage, modelReturned: model, finishReason, truncated: finishReason === 'length' });
   if (!text) throw Object.assign(new Error(`DeepSeek ${name} stream returned no text`), { code: 'EMPTY_RESPONSE' });
   if (!finishReason) throw Object.assign(new Error(`DeepSeek ${name} stream ended with no finish_reason`), { partialStream: true });
-  return { text, provider: `deepseek/${model || name}`, truncated: finishReason === 'length', usage };
+  return { text, provider: providerLabel(name, model), truncated: finishReason === 'length', usage };
 }
 
-module.exports = { chatCompletion, chatCompletionStream, routes, enabled, maxTokensFor, modelFor, MODEL, MODELS, URL, _internal: { usageOf, buildBody } };
+module.exports = { chatCompletion, chatCompletionStream, routes, enabled, maxTokensFor, modelFor, isThinking, MODEL, MODELS, THINKING, URL, _internal: { usageOf, buildBody } };

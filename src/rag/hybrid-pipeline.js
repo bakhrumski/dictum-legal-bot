@@ -165,7 +165,7 @@ async function callOpenAIModel(model, messages, { temperature = 0.2, maxTokens =
     const started = Date.now();
     const dsLabel = `deepseek/${deepseek.modelFor(model)}`;
     try {
-      const r = await deepseek.chatCompletion(messages, { temperature, maxTokens: deepseek.maxTokensFor(maxTokens), responseFormat, model: deepseek.modelFor(model) });
+      const r = await deepseek.chatCompletion(messages, { temperature, maxTokens: deepseek.maxTokensFor(maxTokens, deepseek.modelFor(model)), responseFormat, model: deepseek.modelFor(model) });
       const u = r.usage || {};
       return {
         text: r.text, provider: r.provider, model: r.provider, providerName: 'deepseek', billedModel: dsLabel,

@@ -431,7 +431,7 @@ test('dashboard, Telegram, drafting and opinion paths inherit the policy compose
   assert.ok(server.includes('buildLexResearchPlan(originalQuestion, topic)'));
   assert.ok(server.includes('buildLexQueryPlannerPrompt(originalQuestion, topic)'));
   assert.ok(server.includes('mergeLexResearchPlans(aiLexPlan, deterministicLexPlan)'));
-  assert.ok(server.includes('selectLexResearchResults(groups, originalQuestion, 6)'));
+  assert.ok(server.includes('selectLexResearchResults(lexGroups, originalQuestion, 6)'));
   assert.ok(server.includes('buildLegalResearchPolicyPrefix()'));
   // the opinion prompt lives in src/rag/legal-opinion.js (shared with the offline evaluation)
   const opinion = fs.readFileSync(path.join(__dirname, '..', 'src', 'rag', 'legal-opinion.js'), 'utf8');

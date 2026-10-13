@@ -35,7 +35,13 @@ Pro most of them at about a quarter of the cost, deepseek-flash the fewest.
 Paid opinions therefore stay on Sol; `OPINION_MODEL=deepseek/deepseek-v4-pro`
 (env, no deploy) moves them to V4 Pro (thinking off, cap 7 000 x 2, peak
 price 1.32 / 0.044 / 3.96 per 1M in `model-pricing.js`), Sol behind it.
-`deepseek/<model>` accepts only `deepseek-flash` and `deepseek-v4-pro`.
+`deepseek/<model>` accepts only `deepseek-flash`, `deepseek-v4-pro` and
+`deepseek-flash-thinking`. `deepseek-flash` is DeepSeek-V4.1-Flash (since
+2026-09-10, api-docs.deepseek.com); `deepseek-flash-thinking` is the same API
+model with thinking on at effort high (2026-10-13; reasoning billed as
+output, cap + `DEEPSEEK_THINKING_EXTRA_TOKENS` 16 000, at most
+`DEEPSEEK_THINKING_MAX_TOKENS` 32 000, timeout `DEEPSEEK_THINKING_TIMEOUT_MS`
+240 s; reasoning text never used). Explicit id only.
 
 GLM (Z.AI, `src/ai/zai.js`, 2026-10-12): opt-in only, for trials on the
 platform. A call goes to `glm-5.3-flash` only when its id is
@@ -53,7 +59,7 @@ failure there goes to the cheap lane (GPT-6 Luna), never to Sol.
 
 Master's test model (2026-10-13, `src/ai/test-model.js`): the dashboard's
 master-only "🧪" picker sends `X-JAI-Test-Model` (one of
-`zai/glm-5.3-flash`, `deepseek/deepseek-flash`, `deepseek/deepseek-v4-pro`,
+`zai/glm-5.3-flash`, `deepseek/deepseek-flash`, `deepseek/deepseek-flash-thinking`, `deepseek/deepseek-v4-pro`,
 `openai/gpt-6-luna`, `openai/gpt-6-sol`) on that tab's API requests. The
 server applies it only for an account that is master in the database, for
 that one request: `callOpenAI` / `callOpenAIStream` and the explanation
@@ -88,6 +94,7 @@ straight to Gemini, so a failing helper call no longer costs three more calls.
 | topic | `/rag/classify-topic` | `callCheapAI` |
 | query_rewrite | `/rag/query-rewrite` | `callCheapAI` |
 | retrieval_plan | `/rag/lex-query-plan` | `callCheapAI` (since 2026-10-04; `LEX_PLANNER_LANE=standard` restores `callAI`) |
+| retrieval_plan | `/rag/lex-plan-followup` | same lane: the second lex.uz round (2026-10-13), `LEX_FOLLOWUP` weak (default) / always / off, `LEX_FOLLOWUP_QUERIES` 4 (max 6), `LEX_FOLLOWUP_MAX_MS` 25 000 |
 | retrieval_grade | `/rag/corrective-grade` | `callCheapAI` (default since 2026-10-04); `RAG_CORRECTIVE_MODE=standard` restores `callAI` |
 | answer | `/tg-agent/answer`, `/api/legal-chat` | `callAI` with `MODELS.chat` / `MODEL_TELEGRAM` |
 | cross_check | `*/lex-cross-check` | `callAI` with the chat model |
