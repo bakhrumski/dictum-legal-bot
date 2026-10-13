@@ -5302,9 +5302,18 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
     // model reads what was found and names what is still missing; lex.uz only,
     // one round, a few searches, a time limit. Any failure keeps round one.
     const followUpMode = lexFollowUpMode();
-    if (shouldRunLexFollowUp({ mode: followUpMode, needsWebSearch, firstRound: lexLiveResults, question: originalQuestion })) {
+    // The round never eats the time the answer and its checks need: past
+    // AI_REQUEST_MAX_MS no call starts, the claim check included (2026-10-13:
+    // a Telegram answer came back "tekshiruvchi model ishlamadi" after the
+    // round was added). It runs only with LEX_FOLLOWUP_RESERVE_MS (60 s) left.
+    const store = usageLedger.current();
+    const leftMs = store && store.budget ? store.budget.maxMs - (Date.now() - store.startedAt) : Infinity;
+    const reserveMs = Math.max(0, Number(process.env.LEX_FOLLOWUP_RESERVE_MS) || 60000);
+    if (leftMs - reserveMs < 5000) {
+      console.log(`[LEX-FOLLOWUP] skipped: ${Math.round(leftMs / 1000)} s left in the request, ${reserveMs / 1000} s kept for the answer and its checks`);
+    } else if (shouldRunLexFollowUp({ mode: followUpMode, needsWebSearch, firstRound: lexLiveResults, question: originalQuestion })) {
       const started = Date.now();
-      const limitMs = Math.max(3000, Number(process.env.LEX_FOLLOWUP_MAX_MS) || 25000);
+      const limitMs = Math.min(leftMs - reserveMs, Math.max(3000, Number(process.env.LEX_FOLLOWUP_MAX_MS) || 25000));
       try {
         const planner = String(process.env.LEX_PLANNER_LANE || 'cheap').toLowerCase() === 'standard' ? callAI : callCheapAI;
         const followUp = await planner(
