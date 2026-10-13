@@ -6675,7 +6675,13 @@ app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, t
     // and no attached document. Placed AFTER the verified/korpus overrides so
     // a master correction always beats a stale cached answer. ANSWER_CACHE=off
     // disables (useful while testing prompt changes).
+    // A master's test model (src/ai/test-model.js) neither reads nor writes
+    // the cache: the key has no model in it, so a cached answer would be
+    // shown as the test model's (2026-10-13: DeepSeek Flash and GPT-6 Sol
+    // "answered" with GLM's and Luna's cached text), and a test answer must
+    // never be served to customers.
     const cacheable = process.env.ANSWER_CACHE !== 'off'
+      && !testModel.current()
       && !hasDocument
       && (!Array.isArray(history) || history.length === 0);
     // The key carries the corpus revision and the prompt-policy versions, so

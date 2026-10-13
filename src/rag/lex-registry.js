@@ -377,6 +377,14 @@ const LEX_REGISTRY = {
       enforcement_date: null
     },
     {
+      // Texnopark nizomi: 17-band - a resident may hire foreign specialists
+      // without the labour permit (owner, 2026-10-13, lex.uz screenshot)
+      doc_id: 'vmq-589-texnopark-nizomi',
+      law_name: "Dasturiy mahsulotlar va axborot texnologiyalari texnologik parki faoliyatini tashkil etish chora-tadbirlari to'g'risida (VMQ-589, 15.07.2019)",
+      lex_url: 'https://lex.uz/docs/-4422250',     // [VMQ-589 — VERIFY: id from a web search result, 2026-10-13]
+      enforcement_date: '2019-07-15'
+    },
+    {
       doc_id: 'raqamli-iqtisodiyot-farmoni',
       law_name: "IT Park va raqamli iqtisodiyot imtiyozlari (PF-6013)",
       lex_url: 'https://lex.uz/docs/-4896093',     // [FARMONI — VERIFY]

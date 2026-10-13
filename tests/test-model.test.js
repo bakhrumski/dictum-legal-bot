@@ -101,6 +101,7 @@ const through = (mw, { header, session, master = true }) => new Promise((resolve
     assert.ok(/if \(testModel\.current\(\)\) opinionModel = testModel\.current\(\);/u.test(src));
     assert.ok(/callOpenAI, testModel: testModel\.current,/u.test(src), 'explanation router');
     assert.ok(/app\.get\('\/api\/admin\/test-models', requireMasterAdmin,/u.test(src));
+    assert.ok(/const cacheable = process\.env\.ANSWER_CACHE !== 'off'\s*&& !testModel\.current\(\)/u.test(src), 'a test model neither reads nor writes the answer cache');
     assert.deepStrictEqual(tm.TEST_MODELS.map(m => m.id), ['zai/glm-5.3-flash', 'deepseek/deepseek-flash', 'deepseek/deepseek-v4-pro', 'openai/gpt-6-luna', 'openai/gpt-6-sol']);
   });
 
