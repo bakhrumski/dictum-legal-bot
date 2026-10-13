@@ -5331,9 +5331,15 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
       document_number: r.metadata && r.metadata.document_number,
       law_name: r.lawName || r.title,
       metadata: r.metadata,
+      head: r.head,
+      tail: r.tail,
+      source_url: r.url,
     }) || null,
     ownDocumentNumber: r.ownDocumentNumber || null,
     metadata: r.metadata || {},
+    // the page's head and tail: the act form and number for its label
+    head: r.head || '',
+    tail: r.tail || '',
   })).filter(r => r.source_url);
 
   // Parent-child rows keep the exact qism/article anchor, while live Lex.uz

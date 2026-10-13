@@ -366,12 +366,21 @@ function isStructuralLine(value = '') {
   if (/^\[[^\]]+\]$/u.test(line)) return true;
   if (/^\d+[\u2070\u00B9\u00B2\u00B3\u2074-\u2079]*\s*[-\u2013\u2014]?\s*(?:modda|\u043C\u043E\u0434\u0434\u0430)\b/iu.test(line)) return true;
   if (/^\d+(?:\s*[-\u2013\u2014]\s*\d+)?\s*[-\u2013\u2014]?\s*qism\s*:?$/iu.test(line)) return true;
+  // a chapter, section or paragraph heading is not a provision (2026-10-13:
+  // a link to article 21 opened "3-bob. Jamiyatning ustav fondi")
+  if (/^(?:\d+[\u2070\u00B9\u00B2\u00B3\u2074-\u2079]*\s*[-\u2013\u2014]?\s*(?:bob|bo['\u2018\u2019\u02bb]?lim|paragraf|боб|бўлим|параграф)\b|(?:глава|раздел|параграф|§)\s*\d)/iu.test(line)) return true;
   return false;
 }
 
-function excerptFromLines(value = '', partNumber = '') {
-  const lines = String(value || '')
-    .split(/\r?\n/u)
+function excerptFromLines(value = '', partNumber = '', articleRef = '') {
+  let raw = String(value || '').split(/\r?\n/u);
+  // the lines of the cited article, when the text holds its heading
+  if (articleRef) {
+    const head = new RegExp(`^\\s*[*#>\\s-]*${String(articleRef).replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}\\s*[-\\u2013\\u2014]?\\s*(?:modda|\\u043C\\u043E\\u0434\\u0434\\u0430)\\b|^\\s*[*#>\\s-]*(?:\\u0421\\u0442\\u0430\\u0442\\u044C\\u044F)\\s*${String(articleRef).replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}\\b`, 'iu');
+    const at = raw.findIndex(l => head.test(l));
+    if (at >= 0) raw = raw.slice(at + 1);
+  }
+  const lines = raw
     .map(cleanFragmentLine)
     .filter(line => line && !isStructuralLine(line));
   if (lines.length === 0) return '';
@@ -416,9 +425,10 @@ function buildLexDeepLink(chunk = {}, opts = {}) {
     return articleRef ? `${baseUrl}#:~:text=${encodeURIComponent(`Статья ${articleRef}`)}` : baseUrl;
   }
   const resolvedAnchors = chunk.lex_anchor_ids || chunk.lexAnchorIds || {};
-  const resolvedId = requestedPart
-    ? resolvedAnchors[`${articleRef}:${requestedPart}`]
-    : resolvedAnchors[articleRef];
+  // the qism's own anchor, else the article's: an article anchor is closer
+  // than any text excerpt (2026-10-13: 21-modda 1-qism had no qism anchor and
+  // the excerpt opened a chapter heading)
+  const resolvedId = (requestedPart && resolvedAnchors[`${articleRef}:${requestedPart}`]) || resolvedAnchors[articleRef];
   if (/^-?\d+$/u.test(String(resolvedId || ''))) {
     return `${baseUrl}#${anchor(resolvedId)}`;
   }
@@ -435,10 +445,10 @@ function buildLexDeepLink(chunk = {}, opts = {}) {
 
   let excerpt = '';
   if (requestedPart && chunk.parentText) {
-    excerpt = excerptFromLines(chunk.parentText, requestedPart);
+    excerpt = excerptFromLines(chunk.parentText, requestedPart, articleRef);
   }
   if (!excerpt) {
-    excerpt = excerptFromLines(chunk.childText || chunk.chunk_text || chunk.parentText || '', '');
+    excerpt = excerptFromLines(chunk.childText || chunk.chunk_text || chunk.parentText || '', '', articleRef);
   }
   if (!excerpt && articleRef) excerpt = `${articleRef}-modda`;
   return excerpt ? `${baseUrl}#:~:text=${encodeURIComponent(excerpt)}` : baseUrl;
@@ -555,6 +565,23 @@ function normalizeOfficialDocumentIdentifier(value = '', context = '') {
   return inferredPrefix ? `${inferredPrefix}-${number[0]}` : number[0];
 }
 
+// A registry act's public number by its lex.uz id (lex-registry.js
+// document_number), for a chunk whose own number came without its prefix.
+let registryNumbers = null;
+function registryDocumentNumber(url = '') {
+  if (!registryNumbers) {
+    registryNumbers = new Map();
+    try {
+      for (const law of require('./lex-registry').getAllLaws()) {
+        const id = (String(law.lex_url || '').match(/docs\/-?(\d+)/u) || [])[1];
+        if (id && law.document_number) registryNumbers.set(id, law.document_number);
+      }
+    } catch (_) { /* no registry: no fallback */ }
+  }
+  const id = (String(url || '').match(/lex\.uz\/(?:uz\/|ru\/)?docs\/-?(\d+)/iu) || [])[1];
+  return id ? registryNumbers.get(id) || '' : '';
+}
+
 function getChunkDocumentIdentifier(chunk = {}) {
   const metadata = chunk.metadata || {};
   const context = [
@@ -562,16 +589,27 @@ function getChunkDocumentIdentifier(chunk = {}) {
     chunk.act_form || chunk.actForm,
     metadata.act_form || metadata.actForm,
     metadata.publication,
+    // the page's own head and tail (live lex.uz results): a law's heading
+    // "O'ZBEKISTON RESPUBLIKASINING QONUNI" and its "O'RQ-1137-son" give the
+    // prefix a bare "1137" lacks (2026-10-13: labels showed "(1137)")
+    chunk.head,
+    chunk.tail,
   ].filter(Boolean).join(' ');
   const own = chunk.ownDocumentNumber || chunk.own_document_number || metadata.ownDocumentNumber;
   if (own) {
     const normalizedOwn = normalizeOfficialDocumentIdentifier(own, context);
     if (normalizedOwn) return normalizedOwn;
   }
-  return normalizeOfficialDocumentIdentifier(
+  const normalized = normalizeOfficialDocumentIdentifier(
     chunk.document_number || chunk.documentNumber || metadata.document_number || metadata.documentNumber || '',
     context
   );
+  // still a bare number: the registry's public number for this act, if any
+  if (/^\d+$/u.test(String(normalized || ''))) {
+    const fromRegistry = registryDocumentNumber(chunk.source_url || chunk.sourceUrl);
+    if (fromRegistry && fromRegistry.replace(/\D/gu, '') === normalized) return fromRegistry;
+  }
+  return normalized;
 }
 
 /** "Трудовой кодекс (ЗРУ-798), статья 561" -> "Трудовой кодекс, статья 561". */
@@ -982,10 +1020,14 @@ function citationLanguageForText(text = '') {
 
 // An article cited with no act (2026-10-13: "закреплено также в статье 9
 // (пункт о праве передать свою долю)" - the reader cannot tell which law).
-// When the answer links exactly ONE lex.uz document and that document's
-// retrieved text has the article, the reference gets that act and its link;
-// otherwise it is marked as having no named source. A reference with an act
-// name or number in its sentence is left to the other steps.
+// The reference gets an act and its link when one is certain:
+//   1. the answer already links this article number for exactly one act
+//      (2026-10-13: "21-modda ... 3-qismi" after "O'RQ-1137, 21-modda" was
+//      marked because the answer also cited the Civil Code) - that link;
+//   2. else the answer links exactly ONE document and its retrieved text
+//      has the article - a link to it.
+// Otherwise it is marked as having no named source. A reference with an
+// act name or number in its sentence is left to the other steps.
 const BARE_ARTICLE = {
   ru: /(?:^|[^\p{L}])((?:стать[яеиюёй]{1,2}|ст\.)\s*(\d{1,4}))(?![\d\p{L}])/giu,
   uz: /(?:^|[^\p{L}\d])((\d{1,4})\s*[-\u2013\u2014]\s*modda(?:si|sida|siga|sining|ning|ga|da|dan)?)(?![\p{L}])/giu,
@@ -1002,6 +1044,17 @@ function linkBareArticleRefs(text = '', chunks = [], lang = 'uz') {
     if (!docs.has(id)) docs.set(id, l[1].replace(/[*_]/gu, '').split(',')[0].trim());
   }
   const single = docs.size === 1 ? [...docs.entries()][0] : null;
+  // article numbers each linked act is already cited for: number -> links
+  const citedFor = new Map();
+  for (const l of links) {
+    const label = l[1].replace(/[*_]/gu, '');
+    const nums = [...label.matchAll(/(\d{1,4})\s*[-\u2013\u2014]\s*modda|(?:статья|ст\.)\s*(\d{1,4})/giu)].map(x => x[1] || x[2]);
+    for (const n of nums) {
+      const list = citedFor.get(n) || [];
+      list.push({ id: lexDocumentIdentity(l[2]), url: l[2], act: label.split(',')[0].trim() });
+      citedFor.set(n, list);
+    }
+  }
   const docChunks = single ? (chunks || []).filter(ch => {
     const raw = ch && (ch.source_url || ch.sourceUrl);
     return raw && lexDocumentIdentity(normalizeLexSourceUrl(raw, lang, lexDocScript(raw, chunkScriptText(ch)))) === single[0];
@@ -1024,9 +1077,13 @@ function linkBareArticleRefs(text = '', chunks = [], lang = 'uz') {
     const sentence = value.slice(start, endDot < 0 ? value.length : after + endDot);
     if (ACT_NEAR.test(sentence.replace(ref, ' ')) || /\]\(https?:/u.test(value.slice(at, at + ref.length + 160).split(/[.\n]/u)[0])) continue;
     const article = normalizeArticleRef(m[2]);
-    const chunk = docChunks.find(ch => getChunkArticleRefs(ch).includes(article));
+    const already = citedFor.get(article) || [];
+    const sameAct = already.length && already.every(x => x.id === already[0].id) ? already[0] : null;
+    const chunk = sameAct ? null : docChunks.find(ch => getChunkArticleRefs(ch).includes(article));
     let replacement;
-    if (chunk) {
+    if (sameAct) {
+      replacement = `[**${sameAct.act}, ${ru ? `статья ${article}` : `${article}-modda`}**](${sameAct.url})`;
+    } else if (chunk) {
       const url = buildLexDeepLink(chunk, { lang, articleRef: article });
       replacement = url ? `[**${single[1]}, ${ru ? `статья ${article}` : `${article}-modda`}**](${url})` : null;
     }
@@ -1037,13 +1094,30 @@ function linkBareArticleRefs(text = '', chunks = [], lang = 'uz') {
   return out + value.slice(last);
 }
 
+// What the model wrote around an act name stays after the name becomes a
+// link (2026-10-13: "Respublikasining [act (O'RQ-1137), 21-modda](url)»gi
+// Qonuni (O'RQ-1137)"): the quote marks around the link, the "gi" of
+// «...»gi, and the number the label already shows are removed.
+const LINK = String.raw`\[[^\]\n]+\]\([^)\s]+\)`;
+function tidyAroundLinks(value = '') {
+  return String(value || '')
+    // «[link]»gi Qonuni / [link]»gi Qonuni -> [link] Qonuni
+    .replace(new RegExp(String.raw`(?:[«"\u201c\u201e]\s*)?(${LINK})\s*[»"\u201d]\s*-?\s*gi(?=\s+\p{L})`, 'gu'), '$1')
+    // «[link]» / "[link]"; a lone » or « at the link
+    .replace(new RegExp(String.raw`[«"\u201c\u201e]\s*(${LINK})\s*[»"\u201d]`, 'gu'), '$1')
+    .replace(new RegExp(String.raw`(${LINK})[»\u201d]`, 'gu'), '$1')
+    .replace(new RegExp(String.raw`[«\u201c\u201e](${LINK})`, 'gu'), '$1')
+    // the number the label already shows, right after it: "[... (O'RQ-1137) ...](url) Qonuni (O'RQ-1137)"
+    .replace(new RegExp(String.raw`(\[[^\]\n]*\(((?:O['\u02bb\u02bc\u2018\u2019\u0060]?RQ|PQ|PF|VMQ|ЗРУ|ПП|УП|ПКМ)-\d+)\)[^\]\n]*\]\([^)\s]+\))(\s+(?:Qonun|Farmon|Qaror|Закон|Указ|Постановлени)\p{L}*)?\s*\(\2\)`, 'gu'), '$1$3');
+}
+
 function normalizeLegalAnswerCitations(replyText = '', chunks = [], lang = 'uz') {
   const linked = linkCitationsInMarkdown(
     stripRawLexAttributions(stripGeneratedSourceSections(replyText)),
     chunks,
     lang
   );
-  return linkBareArticleRefs(stripDuplicateOfficialIdentifierWrappers(
+  return tidyAroundLinks(linkBareArticleRefs(stripDuplicateOfficialIdentifierWrappers(
     collapseDuplicateLexCitations(
       linkRemainingGroundedActMentions(
       upgradeLinkedCitationIdentifiers(linked, chunks, lang),
@@ -1051,7 +1125,7 @@ function normalizeLegalAnswerCitations(replyText = '', chunks = [], lang = 'uz')
       lang
       )
     )
-  ), chunks, lang);
+  ), chunks, lang));
 }
 
 /**
@@ -1101,4 +1175,5 @@ module.exports = {
   lexDocScript,
   normalizeLexSourceUrl,
   linkBareArticleRefs,
+  tidyAroundLinks,
 };

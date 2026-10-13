@@ -623,4 +623,35 @@ test('Telegram Markdown: no asterisks inside a link label, bold with one asteris
   assert.strictEqual(toTelegramMarkdown('_Javob SI tomonidan tayyorlandi_'), '_Javob SI tomonidan tayyorlandi_', 'italics kept');
 });
 
+test('a link opens its article: the qism anchor, else the article anchor, else the article\'s own lines - never a chapter heading (2026-10-13)', () => {
+  const ch = { source_url: 'https://lex.uz/docs/-8151376', law_name: "Mas'uliyati cheklangan jamiyatlar to'g'risida",
+    chunk_text: "3-bob. Jamiyatning ustav fondi (ustav kapitali)\n20-modda. Ustav fondi\nUstav fondi ishtirokchilar hissalaridan iborat.\n21-modda. Ulushni o'tkazish\nIshtirokchi o'z ulushini boshqa ishtirokchiga o'tkazishga haqli." };
+  const excerpt = buildLexDeepLink(ch, { articleRef: '21', partNumber: '1' });
+  assert.ok(!/bob/u.test(decodeURIComponent(excerpt)) && /Ishtirokchi%20o'z%20ulushini/u.test(excerpt), excerpt);
+  assert.strictEqual(buildLexDeepLink({ ...ch, lex_anchor_ids: { 21: '-8152381' } }, { articleRef: '21', partNumber: '1' }), 'https://lex.uz/docs/-8151376#-8152381', 'the article anchor when the qism has none');
+  assert.strictEqual(buildLexDeepLink({ ...ch, lex_anchor_ids: { 21: '-8152381', '21:3': '-8152390' } }, { articleRef: '21', partNumber: '3' }), 'https://lex.uz/docs/-8151376#-8152390', 'the qism anchor first');
+});
+
+test('a bare law number gets its prefix from the page head or the registry: never "(1137)" (2026-10-13)', () => {
+  const { getChunkDocumentIdentifier, canonicalCitationActLabel } = require('../src/rag/citation-utils');
+  const name = "Mas'uliyati cheklangan jamiyatlar to'g'risida";
+  assert.strictEqual(getChunkDocumentIdentifier({ law_name: name, document_number: '1137', source_url: 'https://lex.uz/docs/-8151376' }), "O'RQ-1137", 'registry');
+  assert.strictEqual(getChunkDocumentIdentifier({ law_name: 'X', document_number: '55', head: "O'ZBEKISTON RESPUBLIKASINING QONUNI\nX to'g'risida" }), "O'RQ-55", 'page head');
+  assert.strictEqual(getChunkDocumentIdentifier({ law_name: 'X', document_number: '55' }), '55', 'no evidence: not guessed');
+  assert.strictEqual(canonicalCitationActLabel(name, { document_number: '1137', source_url: 'https://lex.uz/docs/-8151376' }), `${name} (O'RQ-1137)`);
+});
+
+test('an article already linked for one act gets that link; quotes, "gi" and a repeated number around a link go (2026-10-13)', () => {
+  const { linkBareArticleRefs, tidyAroundLinks } = require('../src/rag/citation-utils');
+  const t = "Tartib [**MChJ to'g'risida (O'RQ-1137), 21-modda**](https://lex.uz/docs/-8151376#-8152381) bilan. Korporativ shartnoma [**Fuqarolik kodeksi (1-qism), 358¹-modda**](https://lex.uz/docs/-111181#-5) bilan. Bitim yozma tuziladi (21-modda 3-qismi). 99-moddada boshqa.";
+  const out = linkBareArticleRefs(t, [], 'uz');
+  assert.ok(out.includes("tuziladi ([**MChJ to'g'risida (O'RQ-1137), 21-modda**](https://lex.uz/docs/-8151376#-8152381) 3-qismi)"), out);
+  assert.ok(out.includes("99-moddada (manbasi ko'rsatilmagan)"), 'still marked when no act is certain');
+  assert.strictEqual(tidyAroundLinks("Respublikasining [**MChJ (O'RQ-1137), 21-modda**](https://lex.uz/docs/-8151376#-1)»gi Qonuni (O'RQ-1137) bilan."), "Respublikasining [**MChJ (O'RQ-1137), 21-modda**](https://lex.uz/docs/-8151376#-1) Qonuni bilan.");
+  assert.strictEqual(tidyAroundLinks("«[**MChJ (O'RQ-1137)**](https://lex.uz/docs/-8151376)»gi Qonunning"), "[**MChJ (O'RQ-1137)**](https://lex.uz/docs/-8151376) Qonunning");
+  assert.strictEqual(tidyAroundLinks('Закон «[**Об обществах (ЗРУ-1137)**](https://lex.uz/docs/8152146)» устанавливает.'), 'Закон [**Об обществах (ЗРУ-1137)**](https://lex.uz/docs/8152146) устанавливает.');
+  const plain = "Oddiy «qo'shtirnoq» va [havola](https://lex.uz/docs/-1) qoladi.";
+  assert.strictEqual(tidyAroundLinks(plain), plain, 'quotes not at a link stay');
+});
+
 console.log(`\n${passed} citation deep-link tests passed.\n`);

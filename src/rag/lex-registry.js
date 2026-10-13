@@ -334,6 +334,8 @@ const LEX_REGISTRY = {
       // O'RQ-1137, the current LLC law (owner, 2026-10-01). The old
       // /uz/docs/5765406 returned 404, so the law was never ingested.
       lex_url: 'https://lex.uz/docs/-8151376',        // [QONUN]
+      // its public number, so a label never shows a bare "(1137)"
+      document_number: "O'RQ-1137",
       enforcement_date: null
     },
     {
