@@ -50,6 +50,7 @@ const { mergePrioritizedResults, isHighConfidenceKeywordMatch, isGuaranteedKeywo
 const { webSearch, formatWebResults } = require('../rag/web-search');
 const { searchLexUz, formatLexSearchResults } = require('../rag/lex-live-search');
 const usageLedger = require('../ai/usage-ledger');
+const testModel = require('../ai/test-model');
 const modelPricing = require('../ai/model-pricing');
 const { oauthRedirectUri, canonicalAuthRedirect } = require('../auth/oauth-host');
 const { guardLegalAnswer } = require('../rag/legal-claim-guard');
@@ -397,6 +398,13 @@ app.use((req, res, next) => {
 // Every API request is one usage-ledger request: the AI calls it makes share
 // a request_id (src/ai/usage-ledger.js). A request with no AI call leaves no row.
 app.use('/api/', usageLedger.expressScope('web'));
+// A master's own test model (dashboard "🧪 Sinov modeli", header
+// X-JAI-Test-Model): applied only for an account that is master in the
+// database, for that one request (src/ai/test-model.js); ignored otherwise.
+app.use('/api/', testModel.createMiddleware({
+  verifyMaster: require('../rag/document-explain-route').createVerifyMaster(pool),
+  onApplied: (model) => usageLedger.annotate({ testModel: model }),
+}));
 // A test entitlement (pilot) has one total AI budget (src/ai/test-budget.js):
 // a request of that account reserves its per-request limit before its first
 // AI call. Every other account is untouched (a cached id set, no query).
@@ -784,6 +792,13 @@ const AB_QUESTIONS = [
   { q: "Nikohni bekor qilishda mol-mulk qanday taqsimlanadi?", topic: 'oila' },
   { q: "Ma'muriy huquqbuzarlik ishi bo'yicha shikoyat muddati qancha?", topic: 'mamuriy' },
 ];
+
+// The models the dashboard's master-only "🧪 Sinov modeli" picker offers
+// (src/ai/test-model.js); the header is checked again on every request.
+app.get('/api/admin/test-models', requireMasterAdmin, (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ header: 'X-JAI-Test-Model', models: testModel.TEST_MODELS });
+});
 
 app.get('/api/admin/model-ab', requireMasterAdmin, async (req, res) => {
   const modelA = req.query.a || MODELS.standard;
@@ -3522,6 +3537,8 @@ async function callGeminiOnce(messages, options, call) {
 // so in practice every streamed answer was served by the FALLBACK provider.
 // This restores the intended routing for streamed answers too.
 async function callOpenAIStream(messages, options = {}, onToken) {
+  // a master's own test model for this request (src/ai/test-model.js)
+  options = testModel.apply(options);
   return usageLedger.withChain(async () => {
     const viaZai = await tryZai(messages, options, options.model || MODELS.standard, onToken);
     if (viaZai) return viaZai;
@@ -3896,6 +3913,8 @@ async function paidModelsAllowed() {
 }
 
 async function callOpenAI(messages, options = {}) {
+  // a master's own test model for this request (src/ai/test-model.js)
+  options = testModel.apply(options);
   return usageLedger.withChain(async () => {
     const viaZai = await tryZai(messages, options, options.model || MODELS.standard);
     if (viaZai) return viaZai;
@@ -7177,6 +7196,9 @@ app.post('/api/draft/legal-opinion', requireAuth, require('../ai/ai-trigger').re
       return;
     }
     if (!opinionModel) opinionModel = paidOpinionModel;
+    // a master's test model: named as the requested model, so the log and
+    // the downgrade flag compare against what was asked for
+    if (testModel.current()) opinionModel = testModel.current();
 
     const lang = lexLangForText(documentText);
     // Relevance diagnostics: if an opinion ever comes out unrelated to the
@@ -7555,7 +7577,7 @@ app.post('/api/draft/legal-opinion/rate', requireAuth, async (req, res) => {
 // deepseek-flash, then GPT-6 Luna, then the last resort (src/ai/explain-router.js,
 // 2026-10-12; EXPLAIN_PROVIDER=default restores the cheap lane).
 const callExplainAI = require('../ai/explain-router').createExplainAI({
-  usageLedger, modelPricing, deepseek: require('../ai/deepseek'), callOpenAI,
+  usageLedger, modelPricing, deepseek: require('../ai/deepseek'), callOpenAI, testModel: testModel.current,
   paidAllowed: async () => paidProviderConfigured() && await paidModelsAllowed(),
   spendAllowed: () => paidModelsAllowed(),
   lastResort: callGeminiLastResort, callDefault: callCheapAI,

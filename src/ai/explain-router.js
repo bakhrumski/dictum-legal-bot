@@ -41,9 +41,17 @@ function routing(env = process.env) {
  * callDefault is the previous route (callCheapAI) for EXPLAIN_PROVIDER=default.
  */
 function createExplainAI(deps) {
-  const { usageLedger, modelPricing, deepseek, callOpenAI, paidAllowed, spendAllowed = paidAllowed, lastResort, callDefault, log = console } = deps;
+  const { usageLedger, modelPricing, deepseek, callOpenAI, paidAllowed, spendAllowed = paidAllowed, lastResort, callDefault, log = console, testModel = () => null } = deps;
   return async function callExplainAI(messages, options = {}) {
     const cfg = routing();
+    // a master's own test model (src/ai/test-model.js): through callOpenAI,
+    // which asks for it, at this route's caps - DeepSeek's 6 000 (callOpenAI
+    // doubles a deepseek/ or zai/ cap) or GPT-6's 8 000
+    const tm = testModel();
+    if (tm) {
+      const halved = /^(deepseek|zai)\//u.test(tm);
+      return callOpenAI(messages, { ...options, model: tm, lane: 'cheap', maxTokens: halved ? Math.round(cfg.deepseekMaxTokens / 2) : cfg.fallbackMaxTokens, useSearch: false });
+    }
     if (cfg.provider !== 'deepseek') return callDefault(messages, options);
     return usageLedger.withChain(async () => {
       // the same daily paid-spend ceiling as every paid model

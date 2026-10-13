@@ -266,6 +266,10 @@ Known state of the suites (Sept 2026):
   `openai/gpt-6-sol`; `OPINION_MODEL`, `OPINION_MODEL_<PLAN>` and
   `OPINION_FALLBACK_MODEL` pick the models. A provider error is scrubbed of
   the key before it is logged.
+  A master can try any of them on the platform with no env change: the
+  dashboard's "🧪" picker (`public/js/test-model.js`) sends
+  `X-JAI-Test-Model`, applied by `src/ai/test-model.js` only for a database
+  master and that one request (digest excluded); customers never see it.
 - `src/ai/voicelab-speech.js` — Telegram voice via VoiceLab (`@voicelab/sdk`).
   STT: a voice note is transcribed, echoed back ("🎙 Savolingiz: …") and
   answered by the agent like typed text; on by default with the key
