@@ -1194,8 +1194,26 @@ function linkBareArticleRefs(text = '', chunks = [], lang = 'uz') {
 // Qonuni (O'RQ-1137)"): the quote marks around the link, the "gi" of
 // «...»gi, and the number the label already shows are removed.
 const LINK = String.raw`\[[^\]\n]+\]\([^)\s]+\)`;
+// "Title ([**Title (VMQ-734)**](url))" - the model wrote the title, the
+// identifier was linked with the full title: the title once, as the link
+// (2026-10-13)
+function dropTitleBeforeLink(value = '') {
+  const norm = t => String(t || '').toLocaleLowerCase('uz').replace(/[ʻʼ‘’`'"“”«»]/gu, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  return String(value || '').replace(/\(\s*(\[(\**)([^\]\n]+?)\s*\(([^()\]\n]+-\d+[^()\]\n]*)\)\2\]\([^)\s]+\))\s*\)/gu, (whole, link, _b, title, _id, offset, all) => {
+    const before = all.slice(Math.max(0, offset - title.length - 20), offset);
+    const t = norm(title);
+    if (t.length < 15) return whole;
+    // the words just before the "(" end with the same title
+    const words = before.replace(/\s+$/u, '');
+    for (let cut = 0; cut <= 20 && cut < words.length; cut++) {
+      if (norm(words.slice(cut)) === t) return `\u0000CUT${words.length - cut}\u0000${link}`;
+    }
+    return whole;
+  }).replace(/([\s\S]*?)\u0000CUT(\d+)\u0000/gu, (m, head, n) => head.replace(/\s+$/u, '').slice(0, Math.max(0, head.replace(/\s+$/u, '').length - Number(n))).replace(/\s+$/u, '') + ' ');
+}
+
 function tidyAroundLinks(value = '') {
-  return String(value || '')
+  return dropTitleBeforeLink(String(value || ''))
     // «[link]»gi Qonuni / [link]»gi Qonuni -> [link] Qonuni
     .replace(new RegExp(String.raw`(?:[«"\u201c\u201e]\s*)?(${LINK})\s*[»"\u201d]\s*-?\s*gi(?=\s+\p{L})`, 'gu'), '$1')
     // «[link]» / "[link]"; a lone » or « at the link
