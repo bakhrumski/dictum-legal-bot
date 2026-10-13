@@ -30,5 +30,7 @@ assert.match(fallback, /https:\/\/lex\.uz\/docs\/-5953883/);
 assert.match(expandLegalQueryAliases('Men IT park rezidentiman, chet ellik mutaxassis olsam bo\'ladimi?'), /Texnopark rezidenti/);
 assert.match(expandLegalQueryAliases('IT-park'), /texnologik parki/);
 assert.doesNotMatch(expandLegalQueryAliases('kredit parametrlari'), /Texnopark/);
+// another technopark is not taken for IT Park
+assert.doesNotMatch(expandLegalQueryAliases('Yashnobod innovatsion texnoparki rezidenti'), /dasturiy mahsulotlar|IT Park/);
 
 console.log('query aliases and corpus fallback: OK');

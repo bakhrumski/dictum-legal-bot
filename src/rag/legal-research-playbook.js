@@ -111,13 +111,27 @@ function buildExactActQueryVariants(value = '') {
 // terms as concept queries (first, so the 15-step cap keeps them) and the
 // act numbers as search HYPOTHESES only: an act is used only after Lex.uz
 // confirms its own number and the result is ranked by the question.
+// IT Park is ONE technopark (owner, 2026-10-13): its acts (VMQ-589) call it
+// "Texnopark" as their own defined term, but a question that only says
+// "texnopark" may mean another one (Yashnobod, an industrial technopark...).
+// So IT Park words get IT Park's terms and act hypothesis; a bare
+// "texnopark" gets only the general term, no act assumed.
+const IT_PARK = /(?:^|[^\p{L}])(?:it|ит|ай[\s-]?ти)[\s-]?(?:park|парк)|dasturiy\s+mahsulotlar\s+va\s+axborot\s+texnologiyalari\s+texnologik\s+park|дастурий\s+маҳсулотлар\s+ва\s+ахборот\s+технологиялари\s+технологик\s+парк/iu;
 const SPECIAL_STATUS_QUERIES = Object.freeze([
   {
     status: 'it-park',
-    test: /(?:^|[^\p{L}])(?:it|ит|ай[\s-]?ти)[\s-]?(?:park|парк)|texnopark|технопарк|texnologik\s+park|технологик\s+парк|it\s+parki/iu,
-    concepts: ['Texnopark rezidenti', 'dasturiy mahsulotlar va axborot texnologiyalari texnologik parki'],
-    withForeignSpecialist: 'Texnopark rezidenti chet ellik mutaxassislarni jalb etish tasdiqnoma',
+    test: IT_PARK,
+    concepts: ['dasturiy mahsulotlar va axborot texnologiyalari texnologik parki', 'IT Park rezidenti'],
+    withForeignSpecialist: 'IT Park texnopark rezidenti chet ellik mutaxassislarni jalb etish tasdiqnoma',
     actHypotheses: ['VMQ-589'],
+  },
+  {
+    status: 'technopark',
+    // any other technopark: the general term only
+    test: { test: q => !IT_PARK.test(q) && /texnopark|технопарк|texnologik\s+park|технологик\s+парк/iu.test(q) },
+    concepts: ['texnopark rezidenti', 'texnopark rezidentlari imtiyozlari'],
+    withForeignSpecialist: 'texnopark rezidenti chet ellik mutaxassislarni jalb etish',
+    actHypotheses: [],
   },
 ]);
 
