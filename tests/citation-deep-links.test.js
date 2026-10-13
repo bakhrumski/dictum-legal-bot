@@ -627,7 +627,7 @@ test('a link opens its article: the qism anchor, else the article anchor, else t
   const ch = { source_url: 'https://lex.uz/docs/-8151376', law_name: "Mas'uliyati cheklangan jamiyatlar to'g'risida",
     chunk_text: "3-bob. Jamiyatning ustav fondi (ustav kapitali)\n20-modda. Ustav fondi\nUstav fondi ishtirokchilar hissalaridan iborat.\n21-modda. Ulushni o'tkazish\nIshtirokchi o'z ulushini boshqa ishtirokchiga o'tkazishga haqli." };
   const excerpt = buildLexDeepLink(ch, { articleRef: '21', partNumber: '1' });
-  assert.ok(!/bob/u.test(decodeURIComponent(excerpt)) && /Ishtirokchi%20o'z%20ulushini/u.test(excerpt), excerpt);
+  assert.ok(!/bob/u.test(decodeURIComponent(excerpt)) && /Ishtirokchi%20o%27z%20ulushini/u.test(excerpt), excerpt);
   assert.strictEqual(buildLexDeepLink({ ...ch, lex_anchor_ids: { 21: '-8152381' } }, { articleRef: '21', partNumber: '1' }), 'https://lex.uz/docs/-8151376#-8152381', 'the article anchor when the qism has none');
   assert.strictEqual(buildLexDeepLink({ ...ch, lex_anchor_ids: { 21: '-8152381', '21:3': '-8152390' } }, { articleRef: '21', partNumber: '3' }), 'https://lex.uz/docs/-8151376#-8152390', 'the qism anchor first');
 });
@@ -652,6 +652,35 @@ test('an article already linked for one act gets that link; quotes, "gi" and a r
   assert.strictEqual(tidyAroundLinks('Закон «[**Об обществах (ЗРУ-1137)**](https://lex.uz/docs/8152146)» устанавливает.'), 'Закон [**Об обществах (ЗРУ-1137)**](https://lex.uz/docs/8152146) устанавливает.');
   const plain = "Oddiy «qo'shtirnoq» va [havola](https://lex.uz/docs/-1) qoladi.";
   assert.strictEqual(tidyAroundLinks(plain), plain, 'quotes not at a link stay');
+});
+
+test('a Text Fragment never carries a raw bracket; "Qonun, 21-modda, birinchi qism" is a citation; the qism line comes from a chunk that starts the article (2026-10-13)', () => {
+  const { normalizeLegalAnswerCitations, encodeFragmentBrackets, uzPartNumber } = require('../src/rag/citation-utils');
+  const article = "21-modda. Ulushni boshqa shaxsga o'tkazish\nJamiyat ishtirokchisi jamiyatning ustav fondidagi (ustav kapitalidagi) oʻz ulushini jamiyatning bir yoxud bir necha ishtirokchisiga sotishga haqli.\nIshtirokchi oʻz ulushini uchinchi shaxslarga ustavda nazarda tutilgan hollarda sotishi mumkin.\nUlushni begonalashtirish toʻgʻrisidagi bitim oddiy yozma shaklda tuziladi.";
+  const chunks = [{ source_url: 'https://lex.uz/docs/-8151376', law_name: "Mas'uliyati cheklangan jamiyatlar to'g'risida", document_number: "O'RQ-1137", article_number: '21', chunk_text: article }];
+  const out = normalizeLegalAnswerCitations("Tartib Mas'uliyati cheklangan jamiyatlar to'g'risida (O'RQ-1137) Qonun, 21-modda, birinchi qism bilan belgilanadi. Shakli (Mas'uliyati cheklangan jamiyatlar to'g'risida (O'RQ-1137), 21-modda, 3-qism).", chunks, 'uz');
+  const links = [...out.matchAll(/\[\*\*([^\]]+)\*\*\]\(([^\s]+?)\)(?=[\s).,]|$)/gu)];
+  assert.deepStrictEqual(links.map(l => l[1]), ["Mas'uliyati cheklangan jamiyatlar to'g'risida (O'RQ-1137), 21-modda, 1-qism", "Mas'uliyati cheklangan jamiyatlar to'g'risida (O'RQ-1137), 21-modda, 3-qism"], out);
+  for (const [, , url] of links) assert.ok(!/[()]/u.test(url), url);
+  assert.ok(decodeURIComponent(links[0][2]).includes('#:~:text=Jamiyat ishtirokchisi jamiyatning ustav fondidagi (ustav kapitalidagi)'));
+  assert.ok(decodeURIComponent(links[1][2]).includes('#:~:text=Ulushni begonalashtirish'), 'qism 3, not qism 1');
+  assert.ok(out.includes(' bilan belgilanadi.') && !/\) Qonun, 21/u.test(out));
+  // a lone child clause is never counted into qism lines
+  const child = [{ ...chunks[0], articleNumber: '21', chunk_text: 'Ishtirokchi oʻz ulushini uchinchi shaxslarga sotishi mumkin.' }];
+  assert.ok(decodeURIComponent(normalizeLegalAnswerCitations("(Mas'uliyati cheklangan jamiyatlar to'g'risida (O'RQ-1137), 21-modda, 3-qism)", child, 'uz')).includes('#:~:text=Ishtirokchi'));
+  // an old (cached) link with raw brackets: encoded, the link stays whole
+  assert.strictEqual(encodeFragmentBrackets('[a](https://lex.uz/docs/-1#:~:text=fondidagi%20(ustav%20kapitalidagi)%20o) va (b)'), '[a](https://lex.uz/docs/-1#:~:text=fondidagi%20%28ustav%20kapitalidagi%29%20o) va (b)');
+  assert.deepStrictEqual(['birinchi', 'Uchinchi', "to'rtinchi", 'oʻninchi', '2', 'qism'].map(uzPartNumber), ['1', '3', '4', '10', '2', '']);
+});
+
+test('Telegram: the model\'s own disclaimer line goes, the bot\'s one stays; a legal sentence with "javob" and "yurist" is kept (2026-10-13)', () => {
+  const { stripModelDisclaimer } = require('../src/agents/telegram-agent');
+  assert.strictEqual(stripModelDisclaimer("Xulosa\n\nMumkin.\n\nOgohlantirish: javob AI tahlili asosida; muhim qarorlar uchun litsenziyalangan yuristga murojaat qiling.\n\n⚠️ Manba matniga mos kelmadi: x."), "Xulosa\n\nMumkin.\n\n⚠️ Manba matniga mos kelmadi: x.");
+  assert.strictEqual(stripModelDisclaimer('> ⚠️ Bu javob AI tahlili asosida. Muhim qarorlar uchun litsenziyalangan yuristga murojaat qiling.\nA'), 'A');
+  assert.strictEqual(stripModelDisclaimer('Ответ подготовлен на основе анализа ИИ; обратитесь к юристу.\nB'), 'B');
+  for (const keep of ['Javob berish muddati 10 kun; yurist bilan kelishing.', 'Javob SIfatli; yurist']) assert.strictEqual(stripModelDisclaimer(keep), keep);
+  const src = require('fs').readFileSync(require('path').join(__dirname, '../src/agents/telegram-agent.js'), 'utf8');
+  assert.ok(/const reply = stripModelDisclaimer\(answer\.text\) \+ banner/u.test(src));
 });
 
 console.log(`\n${passed} citation deep-link tests passed.\n`);

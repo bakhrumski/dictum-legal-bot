@@ -90,6 +90,13 @@ const TG_LIMIT         = 3900;  // Telegram hard limit is 4096; leave headroom
 const DISCLAIMER = "\n\n_Javob SI tomonidan tayyorlandi va yuridik kuchga ega emas. Muhim masalalarda yurist bilan maslahatlashing._";
 // a Russian question gets the system lines in Russian too (2026-10-13: a
 // Russian answer ended with Uzbek notes, quota and lawyer lines)
+// The model's own disclaimer line ("Ogohlantirish: javob AI tahlili asosida
+// ... yuristga murojaat qiling", asked for by the web prompt) is dropped:
+// the bot adds its own, and the answer showed both (2026-10-13).
+const MODEL_DISCLAIMER = /^[ \t>*_]*(?:⚠️?\s*)?(?:\*{0,2}(?:Ogohlantirish|Eslatma|Diqqat|Предупреждение|Примечание)\*{0,2}\s*:?\s*)?(?:bu\s+)?(?:javob|ответ)(?!\p{L})[^\n]{0,40}(?<!\p{L})(?:AI|SI|ИИ|sun['ʼʻ’]?iy\s+intellekt|искусственн\p{L}*\s+интеллект\p{L}*)(?!\p{L})[^\n]*(?:yurist|юрист)[^\n]*$/gimu;
+function stripModelDisclaimer(text = '') {
+  return String(text || '').replace(MODEL_DISCLAIMER, '').replace(/\n{3,}/gu, '\n\n').trim();
+}
 const DISCLAIMER_RU = "\n\n_Ответ подготовлен ИИ и не имеет юридической силы. По важным вопросам проконсультируйтесь с юристом._";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1380,7 +1387,7 @@ Agar texnik uzilish yuz bersa, limitingiz avtomatik tiklanadi.`,
     answer: answer.text,
     topic: answer.meta && answer.meta.topic,
   });
-  const reply = answer.text + banner + (ru ? DISCLAIMER_RU : DISCLAIMER) + allowance;
+  const reply = stripModelDisclaimer(answer.text) + banner + (ru ? DISCLAIMER_RU : DISCLAIMER) + allowance;
 
   await remember(answer.text, 0);
   await setConversationState(chatId, 'awaiting_next_action', {
@@ -1446,6 +1453,7 @@ function splitForTelegram(text, limit = TG_LIMIT) {
 
 module.exports = {
   initTelegramAgent,
+  stripModelDisclaimer,
   handleUserMessage,
   splitForTelegram,
   toTelegramMarkdown,

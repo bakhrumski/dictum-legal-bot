@@ -338,17 +338,49 @@ function normalizePartNumber(value = '') {
  * The value is used only to choose a Lex.uz destination; it does not create a
  * citation that was not already grounded by selectRelevantSourceRefs().
  */
+// "birinchi qism" as well as "1-qism" (2026-10-13: "21-modda, birinchi qism"
+// was not read as a citation and the act was linked to its first page)
+const UZ_ORDINALS = ['birinchi', 'ikkinchi', 'uchinchi', "to['\u2018\u2019\u02bb\u02bc]?rtinchi", 'beshinchi', 'oltinchi', 'yettinchi', 'sakkizinchi', "to['\u2018\u2019\u02bb\u02bc]?qqizinchi", "o['\u2018\u2019\u02bb\u02bc]?ninchi"];
+const UZ_ORDINAL_WORD = `(?:${UZ_ORDINALS.join('|')})`;
+function uzPartNumber(word = '') {
+  const w = String(word || '').trim().toLocaleLowerCase('uz');
+  if (/^\d+$/u.test(w)) return w;
+  const i = UZ_ORDINALS.findIndex(o => new RegExp(`^${o}$`, 'u').test(w));
+  return i >= 0 ? String(i + 1) : '';
+}
+
+/**
+ * A Text Fragment as a URL fragment: encodeURIComponent leaves ( ) ! ' *
+ * as they are, and a ")" in the URL ends a Markdown link (2026-10-13: the
+ * excerpt "(ustav kapitalidagi)" cut every link to 21-modda at its first
+ * ")", and the page opened at the top).
+ */
+function encodeTextFragment(text = '') {
+  return encodeURIComponent(String(text || '')).replace(/[()!'*]/gu, c => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+}
+
+/** Old links (cache) with raw brackets inside their Text Fragment: encoded. */
+function encodeFragmentBrackets(value = '') {
+  let out = String(value || '');
+  for (let i = 0; i < 5; i++) {
+    const next = out.replace(/(#:~:text=[^\s()\]]*)\(([^\s()\]]*)\)/gu, '$1%28$2%29');
+    if (next === out) break;
+    out = next;
+  }
+  return out;
+}
+
 function findCitationPartNumber(text = '', articleRef = '') {
   const ref = normalizeArticleRef(articleRef);
   if (!ref) return '';
   const escaped = ref.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const rx = new RegExp(
     `${escaped}(?!\\d)\\s*[-\u2013\u2014]?\\s*modda[\\p{L}'\u2019]*` +
-    `\\s*,?\\s*(\\d+)(?:\\s*[-\u2013\u2014]\\s*\\d+)?\\s*[-\u2013\u2014]?\\s*qism[\\p{L}'\u2019]*`,
+    `\\s*,?\\s*(\\d+|${UZ_ORDINAL_WORD})(?:\\s*[-\u2013\u2014]\\s*\\d+)?\\s*[-\u2013\u2014]?\\s*qism[\\p{L}'\u2019]*`,
     'iu'
   );
   const match = rx.exec(String(text || ''));
-  return match ? match[1] : '';
+  return match ? uzPartNumber(match[1]) : '';
 }
 
 function cleanFragmentLine(value = '') {
@@ -372,11 +404,15 @@ function isStructuralLine(value = '') {
   return false;
 }
 
+function articleHeadingRx(articleRef = '') {
+  return new RegExp(`^\\s*[*#>\\s-]*${String(articleRef).replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}\\s*[-\\u2013\\u2014]?\\s*(?:modda|\\u043C\\u043E\\u0434\\u0434\\u0430)\\b|^\\s*[*#>\\s-]*(?:\\u0421\\u0442\\u0430\\u0442\\u044C\\u044F)\\s*${String(articleRef).replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}\\b`, 'iu');
+}
+
 function excerptFromLines(value = '', partNumber = '', articleRef = '') {
   let raw = String(value || '').split(/\r?\n/u);
   // the lines of the cited article, when the text holds its heading
   if (articleRef) {
-    const head = new RegExp(`^\\s*[*#>\\s-]*${String(articleRef).replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}\\s*[-\\u2013\\u2014]?\\s*(?:modda|\\u043C\\u043E\\u0434\\u0434\\u0430)\\b|^\\s*[*#>\\s-]*(?:\\u0421\\u0442\\u0430\\u0442\\u044C\\u044F)\\s*${String(articleRef).replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}\\b`, 'iu');
+    const head = articleHeadingRx(articleRef);
     const at = raw.findIndex(l => head.test(l));
     if (at >= 0) raw = raw.slice(at + 1);
   }
@@ -422,7 +458,7 @@ function buildLexDeepLink(chunk = {}, opts = {}) {
     // a Russian page: its own /ru/docs/ URL, or a /docs/<id> whose text is Russian
     const russianPage = /lex\.uz\/ru\/docs\//iu.test(baseUrl) || lexDocScript(rawUrl, chunkScriptText(chunk)) === 'ru';
     if (!russianPage) return buildLexDeepLink(chunk, { ...opts, lang: 'uz' });
-    return articleRef ? `${baseUrl}#:~:text=${encodeURIComponent(`Статья ${articleRef}`)}` : baseUrl;
+    return articleRef ? `${baseUrl}#:~:text=${encodeTextFragment(`Статья ${articleRef}`)}` : baseUrl;
   }
   const resolvedAnchors = chunk.lex_anchor_ids || chunk.lexAnchorIds || {};
   // the qism's own anchor, else the article's: an article anchor is closer
@@ -444,14 +480,19 @@ function buildLexDeepLink(chunk = {}, opts = {}) {
   }
 
   let excerpt = '';
-  if (requestedPart && chunk.parentText) {
-    excerpt = excerptFromLines(chunk.parentText, requestedPart, articleRef);
+  // the qism's own line: from the whole article, or from the chunk when it
+  // starts the article (its heading is there), never from a lone child
+  const chunkText = String(chunk.chunk_text || '');
+  const wholeArticle = chunk.parentText
+    || (articleRef && chunkText.split(/\r?\n/u).some(l => articleHeadingRx(articleRef).test(l)) ? chunkText : '');
+  if (requestedPart && wholeArticle) {
+    excerpt = excerptFromLines(wholeArticle, requestedPart, articleRef);
   }
   if (!excerpt) {
     excerpt = excerptFromLines(chunk.childText || chunk.chunk_text || chunk.parentText || '', '', articleRef);
   }
   if (!excerpt && articleRef) excerpt = `${articleRef}-modda`;
-  return excerpt ? `${baseUrl}#:~:text=${encodeURIComponent(excerpt)}` : baseUrl;
+  return excerpt ? `${baseUrl}#:~:text=${encodeTextFragment(excerpt)}` : baseUrl;
 }
 
 function stripGeneratedSourceSections(value = '') {
@@ -825,13 +866,16 @@ function linkCitationsInMarkdown(replyText = '', chunks = [], lang = 'uz') {
         // (Mehnat kodeksini tasdiqlash to'g'risida (O'RQ-798)), 561-modda" -
         // used to stop the article from being linked at all.
         `(?:\\s*\\([^()\\[\\]]*(?:\\([^()\\[\\]]*\\)[^()\\[\\]]*)*\\))?` +
+        // the legal form after the name or its number: "(O'RQ-1137) Qonun, 21-modda"
+        `(?:\\s+(?:qonun|kodeks|farmon|qaror|nizom)[\\p{L}'\u2019]*)?` +
         `(?:ning)?\\s*,?\\s*(?:\\*{0,2})?(` +
         `${escaped}(?!\\d)\\s*[-\u2013\u2014]?\\s*(modda|band)[\\p{L}'\u2019]*` +
-        `(?:\\s*,?\\s*(?:\\*{0,2})?(?:(\\d+)(?:\\s*[-\u2013\u2014]\\s*\\d+)?\\s*[-\u2013\u2014]?\\s*qism[\\p{L}'\u2019]*|tegishli\\s+(?:qism|band))(?:(?:\\*{0,2}))?)?` +
+        `(?:\\s*,?\\s*(?:\\*{0,2})?(?:(\\d+|${UZ_ORDINAL_WORD})(?:\\s*[-\u2013\u2014]\\s*\\d+)?\\s*[-\u2013\u2014]?\\s*qism[\\p{L}'\u2019]*|tegishli\\s+(?:qism|band))(?:(?:\\*{0,2}))?)?` +
         `)(?:\\*{0,2})?`,
         'giu'
       );
-      output = output.replace(rx, (match, prefix, _lawName, citation, locatorType, partNumber) => {
+      output = output.replace(rx, (match, prefix, _lawName, citation, locatorType, partWord) => {
+        const partNumber = partWord ? uzPartNumber(partWord) : '';
         const url = buildLexDeepLink(record.chunk, {
           lang,
           articleRef: ref,
@@ -1113,7 +1157,7 @@ function tidyAroundLinks(value = '') {
 
 function normalizeLegalAnswerCitations(replyText = '', chunks = [], lang = 'uz') {
   const linked = linkCitationsInMarkdown(
-    stripRawLexAttributions(stripGeneratedSourceSections(replyText)),
+    stripRawLexAttributions(stripGeneratedSourceSections(encodeFragmentBrackets(replyText))),
     chunks,
     lang
   );
@@ -1175,5 +1219,8 @@ module.exports = {
   lexDocScript,
   normalizeLexSourceUrl,
   linkBareArticleRefs,
+  encodeTextFragment,
+  encodeFragmentBrackets,
+  uzPartNumber,
   tidyAroundLinks,
 };
