@@ -308,6 +308,11 @@ async function checkQuota(adminId, db = pool) {
 
 const PAID_PLANS = new Set(['silver', 'gold', 'platinum']);
 const SURVEY_GRACE_MS = 7 * 24 * 60 * 60 * 1000;  // survey due 7 days after anchor
+// The weekly survey is OFF unless FREE_SURVEY=on (owner, 2026-10-13: switched
+// off - it blocked free use and its optional question stopped the form from
+// being sent). Off: no SURVEY_REQUIRED, no due date, no reminder; the
+// channel gate is unchanged.
+const surveyOn = () => String(process.env.FREE_SURVEY || 'off').trim().toLowerCase() === 'on';
 const CHANNEL_GRACE_MS = (parseInt(process.env.CHANNEL_GRACE_DAYS || '0', 10)) * 24 * 60 * 60 * 1000; // mandatory immediately by default
 const CHANNEL_REVERIFY_MS = 24 * 60 * 60 * 1000;   // re-check membership at most daily
 
@@ -386,7 +391,7 @@ async function checkFreeAccess(adminId) {
     }
     return { allowed: false, code: 'CHANNEL_REQUIRED', state: 'channel_required', telegramLinked: !!row.telegram_user_id };
   }
-  if (Date.now() >= surveyDue && !row.survey_completed_at) {
+  if (surveyOn() && Date.now() >= surveyDue && !row.survey_completed_at) {
     return { allowed: false, code: 'SURVEY_REQUIRED', state: 'survey_required', surveyDueAt: new Date(surveyDue).toISOString() };
   }
   return {
@@ -395,7 +400,8 @@ async function checkFreeAccess(adminId) {
     telegramUsername: row.telegram_username || null,
     channelVerified: true,
     surveyCompleted: !!row.survey_completed_at,
-    surveyDueAt: new Date(surveyDue).toISOString(),
+    // null while the survey is off: the dashboard shows no reminder
+    surveyDueAt: surveyOn() ? new Date(surveyDue).toISOString() : null,
   };
 }
 
