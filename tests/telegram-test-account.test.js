@@ -119,6 +119,24 @@ function fakeDb({ admins = [], spend = { known_usd: 0, unknown_calls: 0, calls: 
     });
   });
 
+  await test('master /testmode: no Sinov or limit, only for a database master in its own private chat, inside the session, with its own budget (2026-10-13)', async () => {
+    const start = NOW - 3600e3, end = start + 12 * 3600e3;
+    const base = { chatId: ID, fromUserId: ID, chatType: 'private', isMaster: true, startedAt: start, expiresAt: end };
+    const db = fakeDb({ spend: { known_usd: 0.4, unknown_calls: 2, calls: 20, requests: 4 } });
+    const m = await t.resolveMasterTestMode(db, base, {}, NOW);
+    assert.deepStrictEqual([m.kind, m.budgetUsd, m.adminId, m.exhausted], ['master', 5, null, false]);
+    assert.ok(Math.abs(m.spend.committedUsd - 0.5) < 1e-9, 'unknown cost is not $0');
+    assert.strictEqual(t.ledgerPool(m).label, 'master test mode');
+    for (const [over, why] of [[{ isMaster: false }, 'not a master'], [{ chatType: 'group' }, 'not private'], [{ fromUserId: '999' }, 'another sender'], [{ expiresAt: NOW - 1 }, 'session ended']]) {
+      assert.strictEqual(await t.resolveMasterTestMode(fakeDb(), { ...base, ...over }, {}, NOW), null, why);
+    }
+    assert.strictEqual(await t.resolveMasterTestMode(fakeDb(), base, { TG_MASTER_TESTMODE_UNLIMITED: 'off' }, NOW), null, 'off switch');
+    assert.strictEqual((await t.resolveMasterTestMode(fakeDb({ spend: { known_usd: 2, unknown_calls: 0, calls: 5, requests: 1 } }), base, { TG_MASTER_TESTMODE_BUDGET_USD: '2' }, NOW)).exhausted, true);
+    assert.strictEqual(await t.resolveMasterTestMode(fakeDb({ fail: true }), base, {}, NOW), null, 'a database error means ordinary limits');
+    const bot = require('fs').readFileSync(require('path').join(__dirname, '../src/bot/bot.js'), 'utf8');
+    assert.ok(/if \(!account && inAdminTestMode\(chat\.id\)\)/u.test(bot) && /isMaster: !!\(linked && isMasterRole\(linked\.role\)\)/u.test(bot), 'role from the database, only in test mode');
+  });
+
   await test('the note and /balance keep known spend apart from the reserve for unknown cost, and show the end time', () => {
     const account = { until: '2026-10-06T05:00:00.000Z', budgetUsd: 5, unknownCallUsd: 0.05, exhausted: false, spend: { knownUsd: 0.01879245, unknownCalls: 8 } };
     const balance = t.balanceText(account);

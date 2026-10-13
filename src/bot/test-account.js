@@ -122,10 +122,45 @@ async function resolveTestAccount(db, { chatId, fromUserId, chatType = 'private'
   }
 }
 
+/**
+ * A master in /testmode (2026-10-13, owner: the master's own Telegram had
+ * used its one-time Sinov and could not test). While test mode is on in the
+ * master's private chat, the master asks with no Sinov, daily limit or
+ * credit - exactly as the test account above: every check, the
+ * one-answer-at-a-time rule and the per-request limits stay, and the
+ * session's AI spend in that chat has its own total budget
+ * (TG_MASTER_TESTMODE_BUDGET_USD, default 5; unknown cost priced at
+ * TG_TEST_UNKNOWN_CALL_USD, never $0). The window is the test-mode session
+ * (12 h). The caller has checked, in the database, that the linked account
+ * is a master. TG_MASTER_TESTMODE_UNLIMITED=off restores the old limits.
+ */
+async function resolveMasterTestMode(db, { chatId, fromUserId, chatType = 'private', isMaster = false, startedAt, expiresAt } = {}, env = process.env, now = Date.now()) {
+  if (String(env.TG_MASTER_TESTMODE_UNLIMITED || '').toLowerCase() === 'off') return null;
+  if (!isMaster || chatType !== 'private' || fromUserId == null || String(chatId) !== String(fromUserId)) return null;
+  if (!(Number(expiresAt) > now) || !(Number(startedAt) <= now)) return null;
+  const cfg = {
+    userId: String(chatId),
+    since: new Date(Number(startedAt)).toISOString(),
+    until: new Date(Number(expiresAt)).toISOString(),
+    budgetUsd: num(env.TG_MASTER_TESTMODE_BUDGET_USD, 5),
+    unknownCallUsd: num(env.TG_TEST_UNKNOWN_CALL_USD, 0.05),
+  };
+  if (!(cfg.budgetUsd > 0)) return null;
+  try {
+    // the chat's rows only: the master's web work is not this budget
+    const spend = await testAccountSpend(db, cfg, null);
+    return { kind: 'master', userId: cfg.userId, adminId: null, since: cfg.since, until: cfg.until,
+      budgetUsd: cfg.budgetUsd, unknownCallUsd: cfg.unknownCallUsd, spend, exhausted: spend.exhausted };
+  } catch (error) {
+    console.warn('[TG-TEST] master test mode check failed; ordinary limits apply:', error.message);
+    return null;
+  }
+}
+
 /** The ledger's shared budget for a resolved test account. */
 function ledgerPool(account) {
   return {
-    label: LABEL,
+    label: account.kind === 'master' ? 'master test mode' : LABEL,
     limitUsd: account.budgetUsd,
     spentUsd: account.spend.committedUsd,
     unknownCallUsd: account.unknownCallUsd,
@@ -177,4 +212,4 @@ function balanceText(account) {
   ].filter(Boolean).join('\n');
 }
 
-module.exports = { MAX_HOURS, testAccountConfig, testAccountSpend, resolveTestAccount, ledgerPool, testModeNote, balanceText, budgetLines, tashkentTime };
+module.exports = { MAX_HOURS, testAccountConfig, testAccountSpend, resolveTestAccount, resolveMasterTestMode, ledgerPool, testModeNote, balanceText, budgetLines, tashkentTime };

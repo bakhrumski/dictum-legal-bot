@@ -46,9 +46,25 @@ function voiceToTextEnabled() {
 
 async function testAccountFor(msgOrQuery) {
   const chat = (msgOrQuery.message && msgOrQuery.message.chat) || msgOrQuery.chat || {};
-  const account = await testAccounts.resolveTestAccount(pool, {
+  let account = await testAccounts.resolveTestAccount(pool, {
     chatId: chat.id, chatType: chat.type, fromUserId: msgOrQuery.from && msgOrQuery.from.id,
   });
+  // a master in /testmode: no Sinov, limit or credit, its own budget
+  // (src/bot/test-account.js resolveMasterTestMode); the role is read from
+  // the database on every message
+  if (!account && inAdminTestMode(chat.id)) {
+    try {
+      const linked = await getLinkedAccount(pool, chat.id, privateSenderId(msgOrQuery));
+      const expiresAt = adminTestMode.get(chat.id);
+      account = await testAccounts.resolveMasterTestMode(pool, {
+        chatId: chat.id, chatType: chat.type, fromUserId: msgOrQuery.from && msgOrQuery.from.id,
+        isMaster: !!(linked && isMasterRole(linked.role)), startedAt: expiresAt - TEST_MODE_TTL_MS, expiresAt,
+      });
+    } catch (e) {
+      console.warn('[TG-TEST] master test mode lookup failed; ordinary limits apply:', e.message);
+      account = null;
+    }
+  }
   if (account) {
     usageLedger.useSharedBudget(testAccounts.ledgerPool(account));
     usageLedger.annotate({ testMode: true });
@@ -464,7 +480,9 @@ bot.onText(/^\/testmode(?:@\w+)?(?:\s+(on|off))?\s*$/i, async (msg, match) => {
       bot.sendMessage(chatId,
         '🧪 Test rejimi yoqildi (12 soat).\n\n' +
         'Endi bot sizni oddiy foydalanuvchi deb ko\'radi: matnli yoki ovozli savol yuboring — AI javob beradi. ' +
-        'Limitlar ham oddiy foydalanuvchinikidek hisoblanadi.\n\n' +
+        (String(process.env.TG_MASTER_TESTMODE_UNLIMITED || '').toLowerCase() === 'off'
+          ? 'Limitlar ham oddiy foydalanuvchinikidek hisoblanadi.\n\n'
+          : `Sinov, kunlik limit va kredit hisoblanmaydi; tekshiruvlar saqlanadi. Shu sessiyaning AI budjeti: $${Number(process.env.TG_MASTER_TESTMODE_BUDGET_USD) > 0 ? Number(process.env.TG_MASTER_TESTMODE_BUDGET_USD) : 5}.\n\n`) +
         'Admin bildirishnomalari odatdagidek keladi.\n/testmode off — o\'chirish');
     } else {
       adminTestMode.delete(chatId);
