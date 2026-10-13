@@ -193,6 +193,11 @@ Known state of the suites (Sept 2026):
   6 000-token cap, then GPT-6 Luna at 8 000, then Gemini
   (`src/ai/explain-router.js`; `EXPLAIN_PROVIDER=default` for the lane
   routing below).
+  Live lex.uz search runs a second, bounded round (2026-10-13,
+  `LEX_FOLLOWUP` weak / always / off): one cheap call reads what round one
+  found and names up to 4 missing acts as lex.uz terms (never a number
+  alone, never another site), searched within `LEX_FOLLOWUP_MAX_MS`; any
+  failure keeps round one.
   `src/rag/question-aspects.js` splits a question into deadline,
   compensation, evidence and remedy and runs a light corpus search for each
   (Telegram, web chat, Workspace).
@@ -260,8 +265,10 @@ Known state of the suites (Sept 2026):
   Explicit ids pick a provider for side-by-side tests: `voicelab/<model>`
   (VoiceLab, needs only the key, never falls back) and `openai/<model>`
   (bypasses VoiceLab), e.g. `/api/admin/model-ab?a=voicelab/aisha-comet&b=openai/gpt-5.6-luna`.
-- `src/ai/deepseek.js` (first for text since #442; `deepseek/deepseek-v4-pro`
-  by explicit id) and `src/ai/zai.js` (GLM, explicit `zai/glm-5.3-flash`
+- `src/ai/deepseek.js` (first for text since #442; `deepseek-flash` is
+  V4.1 Flash since 2026-09-10; `deepseek/deepseek-v4-pro` and
+  `deepseek/deepseek-flash-thinking` - thinking on, effort high - by explicit
+  id only) and `src/ai/zai.js` (GLM, explicit `zai/glm-5.3-flash`
   only): see `docs/ai-routing.md`. Legal opinion: paid plans on
   `openai/gpt-6-sol`; `OPINION_MODEL`, `OPINION_MODEL_<PLAN>` and
   `OPINION_FALLBACK_MODEL` pick the models. A provider error is scrubbed of

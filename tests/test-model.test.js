@@ -102,7 +102,7 @@ const through = (mw, { header, session, master = true }) => new Promise((resolve
     assert.ok(/callOpenAI, testModel: testModel\.current,/u.test(src), 'explanation router');
     assert.ok(/app\.get\('\/api\/admin\/test-models', requireMasterAdmin,/u.test(src));
     assert.ok(/const cacheable = process\.env\.ANSWER_CACHE !== 'off'\s*&& !testModel\.current\(\)/u.test(src), 'a test model neither reads nor writes the answer cache');
-    assert.deepStrictEqual(tm.TEST_MODELS.map(m => m.id), ['zai/glm-5.3-flash', 'deepseek/deepseek-flash', 'deepseek/deepseek-v4-pro', 'openai/gpt-6-luna', 'openai/gpt-6-sol']);
+    assert.deepStrictEqual(tm.TEST_MODELS.map(m => m.id), ['zai/glm-5.3-flash', 'deepseek/deepseek-flash', 'deepseek/deepseek-flash-thinking', 'deepseek/deepseek-v4-pro', 'openai/gpt-6-luna', 'openai/gpt-6-sol']);
   });
 
   await test('dashboard: the picker script loads first and adds the header only to the page\'s own /api/ requests', () => {

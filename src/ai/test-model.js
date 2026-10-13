@@ -23,7 +23,8 @@ const { AsyncLocalStorage } = require('async_hooks');
 const HEADER = 'x-jai-test-model';
 const TEST_MODELS = Object.freeze([
   { id: 'zai/glm-5.3-flash', label: 'GLM-5.3 Flash' },
-  { id: 'deepseek/deepseek-flash', label: 'DeepSeek Flash' },
+  { id: 'deepseek/deepseek-flash', label: 'DeepSeek V4.1 Flash' },
+  { id: 'deepseek/deepseek-flash-thinking', label: 'DeepSeek V4.1 Flash (thinking)' },
   { id: 'deepseek/deepseek-v4-pro', label: 'DeepSeek V4 Pro' },
   { id: 'openai/gpt-6-luna', label: 'GPT-6 Luna' },
   { id: 'openai/gpt-6-sol', label: 'GPT-6 Sol' },

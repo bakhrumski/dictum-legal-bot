@@ -318,6 +318,81 @@ function parseLexQueryPlannerResponse(value = '') {
   return steps;
 }
 
+/**
+ * A second, bounded lex.uz round (2026-10-13, owner: the DeepSeek app's
+ * agent found the act that lists the exemption - a state-service regulation
+ * - after reading its first results). One model call reads the question and
+ * what the first round found (titles and an opening excerpt, no answer) and
+ * names what is still missing as lex.uz search terms; nothing else is
+ * searched (lex.uz only, never another site). Bounded: LEX_FOLLOWUP_QUERIES
+ * (default 4, at most 6) searches of 2 documents, one round, a time limit in
+ * the caller. A query is a title or a term, never an act number alone:
+ * Cabinet numbers repeat every year (the VMQ-589 lesson).
+ *
+ * LEX_FOLLOWUP: 'weak' (default) - only when the corpus was graded weak or
+ * the first round kept fewer than 3 documents or the question names a
+ * special status; 'always'; 'off'.
+ */
+function lexFollowUpMode(env = process.env) {
+  const v = String(env.LEX_FOLLOWUP || 'weak').trim().toLowerCase();
+  return ['off', 'always'].includes(v) ? v : 'weak';
+}
+
+function shouldRunLexFollowUp({ mode = 'weak', needsWebSearch = false, firstRound = [], question = '' } = {}) {
+  if (mode === 'off') return false;
+  if (mode === 'always') return true;
+  return !!needsWebSearch || (firstRound || []).length < 3 || specialStatuses(question).length > 0;
+}
+
+function buildLexFollowUpPrompt(question = '', firstRound = []) {
+  const safeQuestion = escapeXml(String(question || '').slice(0, 3000));
+  const found = (firstRound || []).slice(0, 8).map((r, i) => {
+    const title = String(r.lawName || r.title || '').replace(/\s+/gu, ' ').slice(0, 220);
+    const excerpt = String(r.content || '').replace(/\s+/gu, ' ').slice(0, 300);
+    return `${i + 1}. ${escapeXml(title)}\n   ${escapeXml(excerpt)}`;
+  }).join('\n') || "(hech narsa topilmadi)";
+  return `Siz Lex.uz qidiruv yordamchisiz. Huquqiy javob BERMANG.
+
+Savolga to'liq javob berish uchun birinchi qidiruv topgan hujjatlar yetarlimi? Yetmasa, Lex.uz'da yana nimani qidirish kerakligini ayting: masalan, istisno yoki imtiyozni sanab o'tgan hujjat, davlat xizmati reglamenti yoki ma'muriy reglament, nizom, yangi o'zgartirish, topilgan hujjat havola qilgan hujjat.
+
+Faqat JSON qaytaring:
+{"enough": true|false, "queries": [{"query": "hujjat nomi yoki 2-8 so'zli rasmiy atama", "why": "nima uchun kerak (qisqa)"}]}
+
+Qoidalar:
+- Ko'pi bilan 4 ta query; yetarli bo'lsa {"enough": true, "queries": []}.
+- Query hujjat nomi yoki rasmiy atama bo'lsin; faqat raqam (masalan "VMQ-86") YOZMANG - Vazirlar Mahkamasi qarorlari raqami har yili takrorlanadi; sana yoki nom bilan yozing.
+- Topilgan hujjatni qayta qidirmang. Boshqa sayt, URL yoki uydirma hujjat yozmang.
+
+<user_question_data>${safeQuestion}</user_question_data>
+<found_documents>
+${found}
+</found_documents>`;
+}
+
+function parseLexFollowUpResponse(value = '', { already = [], max = 4 } = {}) {
+  let raw = String(value || '').replace(/```(?:json)?/giu, '').trim();
+  const start = raw.indexOf('{');
+  const end = raw.lastIndexOf('}');
+  if (start < 0 || end <= start) return { enough: false, steps: [] };
+  let parsed;
+  try { parsed = JSON.parse(raw.slice(start, end + 1)); } catch (_) { return { enough: false, steps: [] }; }
+  const limit = Math.max(0, Math.min(6, Number(max) || 4));
+  const seen = new Set((already || []).map(q => String(q || '').replace(/\s+/gu, ' ').trim().toLocaleLowerCase('uz')));
+  const steps = [];
+  for (const item of (Array.isArray(parsed && parsed.queries) ? parsed.queries : [])) {
+    if (steps.length >= limit) break;
+    const query = String(item && item.query || '').replace(/\s+/gu, ' ').trim().slice(0, 180);
+    // a number alone (or a URL) is not a search: numbers repeat every year
+    if (query.length < 6 || /https?:|www\./iu.test(query)) continue;
+    if (!/\p{L}{4,}/u.test(query.replace(/\b(?:PQ|PF|VMQ|O['‘’ʻ]?RQ|son|sonli|qaror\p{L}*|farmon\p{L}*)\b/giu, ''))) continue;
+    const key = query.toLocaleLowerCase('uz');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    steps.push({ query, kind: 'follow-up', maxDocs: 2, includeRegistry: false, preferredPrefixes: [], why: String(item && item.why || '').slice(0, 200) });
+  }
+  return { enough: parsed && parsed.enough === true && steps.length === 0, steps };
+}
+
 function mergeLexResearchPlans(aiPlan = [], deterministicPlan = [], limit = 22) {
   const merged = [];
   const seen = new Set();
@@ -497,6 +572,10 @@ function buildLexResearchQueries(question = '', topic = '') {
 
 module.exports = {
   PLAYBOOK_PATH,
+  lexFollowUpMode,
+  shouldRunLexFollowUp,
+  buildLexFollowUpPrompt,
+  parseLexFollowUpResponse,
   getUniversalLegalResearchPlaybook,
   getPlaybookVersion,
   buildQuestionResearchDirective,

@@ -36,6 +36,8 @@ const MODEL_PRICING = Object.freeze({
   // cost - an over-statement, never an under-statement.
   'deepseek/deepseek-flash': Object.freeze({ in: 0.30, out: 1.20, cached: 0.006 }),
   'deepseek/deepseek-v4-pro': Object.freeze({ in: 1.32, out: 3.96, cached: 0.044 }),
+  // the same API model with thinking on (reasoning is billed as output)
+  'deepseek/deepseek-flash-thinking': Object.freeze({ in: 0.30, out: 1.20, cached: 0.006 }),
   // Z.AI (docs.z.ai/guides/overview/pricing, 2026-10-12): GLM-5.3-Flash;
   // reasoning is billed as output (no separate field in usage)
   'zai/glm-5.3-flash': Object.freeze({ in: 0.15, out: 0.50, cached: 0.03 }),
@@ -106,7 +108,7 @@ const PRICE_SOURCE_OF = Object.freeze({
   'gpt-6-astra': 'openai_2026_09_23', 'gpt-6-sol': 'openai_2026_09_23', 'gpt-6-luna': 'openai_2026_09_23',
   'text-embedding-3-small': 'openai_2026_08_11',
   'voicelab/aisha-comet': 'voicelab_2026_09_23', 'voicelab/aisha-orbit': 'voicelab_2026_09_23', 'voicelab/aisha-halo': 'voicelab_2026_09_23',
-  'deepseek/deepseek-flash': 'deepseek_2026_10_12', 'deepseek/deepseek-v4-pro': 'deepseek_2026_10_12',
+  'deepseek/deepseek-flash': 'deepseek_2026_10_12', 'deepseek/deepseek-v4-pro': 'deepseek_2026_10_12', 'deepseek/deepseek-flash-thinking': 'deepseek_2026_10_12',
   'zai/glm-5.3-flash': 'zai_2026_10_12',
 });
 
