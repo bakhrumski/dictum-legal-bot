@@ -183,21 +183,26 @@ test('AI query planning adds official terminology as search hypotheses, never ev
     < merged.indexOf(merged.find(step => step.kind === 'natural-language')));
 });
 
-test('a named special status (IT park) searches the acts\' own term and its act number as a hypothesis, ahead of the general queries', () => {
+test('IT Park gets its own terms and VMQ-589 as a hypothesis; another technopark only the general term, no act assumed', () => {
   const { buildLexResearchPlan, specialStatuses } = require('../src/rag/legal-research-playbook');
   const q = 'Men IT park rezidentiman. Men kompaniyamga chet ellik mutaxassis olib kelmoqchiman. Qandaydir tasdiqnoma hujjat qilishim kerakmi?';
   const plan = buildLexResearchPlan(q, 'mehnat');
   assert.ok(plan.length <= 15);
   const queries = plan.map(step => step.query);
-  for (const expected of ['VMQ-589', 'Texnopark rezidenti chet ellik mutaxassislarni jalb etish tasdiqnoma', 'Texnopark rezidenti', 'dasturiy mahsulotlar va axborot texnologiyalari texnologik parki', 'malakali chet ellik mutaxassis']) {
+  for (const expected of ['VMQ-589', 'IT Park texnopark rezidenti chet ellik mutaxassislarni jalb etish tasdiqnoma', 'dasturiy mahsulotlar va axborot texnologiyalari texnologik parki', 'IT Park rezidenti', 'malakali chet ellik mutaxassis']) {
     assert.ok(queries.includes(expected), expected);
   }
   const hypothesis = plan.find(step => step.query === 'VMQ-589');
   assert.deepStrictEqual([hypothesis.kind, hypothesis.preferredPrefixes], ['status-act-hypothesis', ['VMQ']]);
-  assert.ok(queries.indexOf('Texnopark rezidenti') < queries.indexOf(q), 'before the general queries (kept by the 15-step cap)');
-  for (const phrase of ['IT-park rezidenti', 'itpark', 'Texnopark', 'ИТ парк резиденти', 'технопарк']) assert.strictEqual(specialStatuses(phrase).length, 1, phrase);
-  for (const phrase of ['kredit parametrlari', 'avtomobil parkovkasi', 'limit park', 'chet ellik mutaxassis']) assert.strictEqual(specialStatuses(phrase).length, 0, phrase);
-  assert.ok(!buildLexResearchPlan('chet ellik mutaxassis tasdiqnomasi kerakmi?', 'mehnat').some(step => /Texnopark|589/u.test(step.query)), 'no status, no extra queries');
+  assert.ok(queries.indexOf('IT Park rezidenti') < queries.indexOf(q), 'before the general queries (kept by the 15-step cap)');
+  const status = phrase => specialStatuses(phrase).map(s => s.status).join(',');
+  for (const phrase of ['IT-park rezidenti', 'itpark', 'ИТ парк резиденти', 'Dasturiy mahsulotlar va axborot texnologiyalari texnologik parki rezidenti']) assert.strictEqual(status(phrase), 'it-park', phrase);
+  for (const phrase of ['Texnopark', 'Yashnobod innovatsion texnoparki', 'технопарк резиденти', 'sanoat texnologik parki']) assert.strictEqual(status(phrase), 'technopark', phrase);
+  for (const phrase of ['kredit parametrlari', 'avtomobil parkovkasi', 'limit park', 'chet ellik mutaxassis']) assert.strictEqual(status(phrase), '', phrase);
+  const other = buildLexResearchPlan('Yashnobod innovatsion texnoparki rezidentiman, chet ellik mutaxassis olsam tasdiqnoma kerakmi?', 'mehnat').map(step => step.query);
+  assert.ok(other.includes('texnopark rezidenti') && other.includes('texnopark rezidenti chet ellik mutaxassislarni jalb etish'));
+  assert.ok(!other.some(x => /589|IT Park|dasturiy mahsulotlar/u.test(x)), 'another technopark is not taken for IT Park');
+  assert.ok(!buildLexResearchPlan('chet ellik mutaxassis tasdiqnomasi kerakmi?', 'mehnat').some(step => /texnopark|589/iu.test(step.query)), 'no status, no extra queries');
 });
 
 test('foreign-specialist questions fan out to the official statutory concept', () => {

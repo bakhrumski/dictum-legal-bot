@@ -50,10 +50,11 @@ function expandLegalQueryAliases(query) {
     aliases.push("yonida olib yurishi biometrik pasport ID-karta planshet orqali tekshiriladi talab etilmaydi");
   }
 
-  // "IT park" in a question: the acts say "Texnopark" / "dasturiy mahsulotlar
-  // va axborot texnologiyalari texnologik parki" (VMQ-589), 2026-10-13
-  if (/(?:^|[^\p{L}])(?:it|ит)[\s-]?(?:park|парк)|texnopark|технопарк/u.test(lower)) {
-    aliases.push('Texnopark rezidenti dasturiy mahsulotlar va axborot texnologiyalari texnologik parki');
+  // "IT park" in a question: its acts say "dasturiy mahsulotlar va axborot
+  // texnologiyalari texnologik parki" and call it "Texnopark" (VMQ-589),
+  // 2026-10-13. A bare "texnopark" may be another technopark: not mapped.
+  if (/(?:^|[^\p{L}])(?:it|ит)[\s-]?(?:park|парк)/u.test(lower)) {
+    aliases.push('IT Park dasturiy mahsulotlar va axborot texnologiyalari texnologik parki Texnopark rezidenti');
   }
 
   // LLC questions asked in Russian (2026-10-01: "отчуждение доли в уставном
