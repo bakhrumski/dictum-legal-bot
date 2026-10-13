@@ -1179,13 +1179,38 @@ function tidyAroundLinks(value = '') {
     .replace(new RegExp(String.raw`(\[[^\]\n]*\(((?:O['\u02bb\u02bc\u2018\u2019\u0060]?RQ|PQ|PF|VMQ|ЗРУ|ПП|УП|ПКМ)-\d+)\)[^\]\n]*\]\([^)\s]+\))(\s+(?:Qonun|Farmon|Qaror|Закон|Указ|Постановлени)\p{L}*)?\s*\(\2\)`, 'gu'), '$1$3');
 }
 
+/**
+ * The highlight link of a verified quote (answer-structure.js): its source's
+ * page in the answer's language, the Cyrillic page for Cyrillic words, from
+ * the quote's first words to its last (parts skipped with "..." included).
+ */
+function lexQuoteLink(chunk = {}, parts = [], lang = 'uz') {
+  const raw = String(chunk.source_url || chunk.sourceUrl || '');
+  let base = normalizeLexSourceUrl(raw, lang, lexDocScript(raw, chunkScriptText(chunk)));
+  if (!base || !parts.length) return '';
+  if (parts.some(p => /[\u0400-\u04ff]/u.test(p))) base = base.replace(/(lex\.uz\/)(?:uz\/)?docs\/-(\d+)/iu, '$1docs/$2');
+  if (parts.length === 1) return `${base}#:~:text=${textFragmentFor(parts[0])}`;
+  const term = t => encodeTextFragment(t).replace(/^-|-$/gu, '%2D');
+  const first = parts[0].replace(/\s+/gu, ' ').trim().split(' ').slice(0, 8).join(' ');
+  const last = parts[parts.length - 1].replace(/\s+/gu, ' ').trim().split(' ').slice(-6).join(' ');
+  return `${base}#:~:text=${term(first)},${term(last)}`;
+}
+
 function normalizeLegalAnswerCitations(replyText = '', chunks = [], lang = 'uz') {
+  return normalizeLegalAnswerCitationsDetailed(replyText, chunks, lang).text;
+}
+
+/** The answer with its citations linked and its quotes checked: { text, quotes }. */
+function normalizeLegalAnswerCitationsDetailed(replyText = '', chunks = [], lang = 'uz') {
+  const structure = require('./answer-structure');
+  // the law's own words are set aside: nothing is linked or marked inside them
+  const { text: withoutQuotes, held } = structure.protectQuotes(encodeFragmentBrackets(replyText));
   const linked = linkCitationsInMarkdown(
-    stripRawLexAttributions(stripGeneratedSourceSections(encodeFragmentBrackets(replyText))),
+    stripRawLexAttributions(stripGeneratedSourceSections(withoutQuotes)),
     chunks,
     lang
   );
-  return tidyAroundLinks(linkBareArticleRefs(stripDuplicateOfficialIdentifierWrappers(
+  const body = tidyAroundLinks(linkBareArticleRefs(stripDuplicateOfficialIdentifierWrappers(
     collapseDuplicateLexCitations(
       linkRemainingGroundedActMentions(
       upgradeLinkedCitationIdentifiers(linked, chunks, lang),
@@ -1194,6 +1219,8 @@ function normalizeLegalAnswerCitations(replyText = '', chunks = [], lang = 'uz')
       )
     )
   ), chunks, lang));
+  const restored = structure.restoreQuotes(body, held, chunks, (chunk, parts) => lexQuoteLink(chunk, parts, lang));
+  return { text: restored.text, quotes: restored.report };
 }
 
 /**
@@ -1244,6 +1271,8 @@ module.exports = {
   normalizeLexSourceUrl,
   linkBareArticleRefs,
   encodeTextFragment,
+  lexQuoteLink,
+  normalizeLegalAnswerCitationsDetailed,
   textFragmentFor,
   encodeFragmentBrackets,
   uzPartNumber,

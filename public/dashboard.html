@@ -3383,6 +3383,16 @@
             cursor: pointer; border-bottom: 1px solid var(--border-1);
         }
         .next-step:last-child { border-bottom: none; }
+        /* Suggested next questions under a legal answer (answer-structure.js) */
+        .legal-followups { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+        .legal-followup {
+            display: block; width: 100%; text-align: left; cursor: pointer;
+            padding: 9px 12px; border: 1px solid var(--border-1); border-radius: 10px;
+            background: transparent; color: var(--navy-700); font-family: inherit; font-size: 14px; line-height: 1.4;
+        }
+        .legal-followup::before { content: '↳ '; color: var(--text-muted); }
+        .legal-followup:hover { border-color: var(--navy-500); color: var(--navy-500); }
+        [data-theme="dark"] .legal-followup { color: var(--brass-300); }
         .next-step:hover { color: var(--navy-500); }
         [data-theme="dark"] .next-step { color: var(--brass-300); }
 
@@ -13989,6 +13999,15 @@
                 }).join('') + '</div></div>';
         }
 
+        // Suggested next questions (the server takes them out of the answer):
+        // a click asks one through the normal chat path.
+        function renderLegalFollowUps(questions) {
+            if (!Array.isArray(questions) || !questions.length) return '';
+            return '<div class="legal-followups">' + questions.slice(0, 2).map(function (q) {
+                return '<button type="button" class="legal-followup" data-q="' + escapeHtml(String(q)).replace(/"/g, '&quot;') + '" onclick="askFollowUp(this.getAttribute(\'data-q\'))">' + escapeHtml(String(q)) + '</button>';
+            }).join('') + '</div>';
+        }
+
         async function runLegalNextAction(groupId, index, button) {
             var group = legalNextActionStore[groupId];
             var action = group && group.actions[index];
@@ -14013,7 +14032,7 @@
         // animation) and the streaming path (instant: tokens already streamed
         // live, so the finished bubble renders markdown immediately).
         function renderAiChatReply(data, currentQuestion, messagesEl, instant) {
-            aiChatHistory.push({ role: 'model', text: data.reply, nextActions: data.nextActions || [] });
+            aiChatHistory.push({ role: 'model', text: data.reply, nextActions: data.nextActions || [], followUpQuestions: data.followUpQuestions || [] });
             // Only excerpts of an attached document were used (one chat unit);
             // a full analysis is its own service (tariffs v2).
             var docScopeHtml = (data.documentScope && data.documentScope.note)
@@ -14092,7 +14111,7 @@
 
             var qaIdAttr = (data.qaBank && data.qaBank.id) ? (' data-qa-id="' + data.qaBank.id + '"') : '';
             var twId = 'tw_' + Date.now();
-            var nextActionsHtml = renderLegalNextActions(data.nextActions || [], currentQuestion, data.reply);
+            var nextActionsHtml = renderLegalFollowUps(data.followUpQuestions || []) + renderLegalNextActions(data.nextActions || [], currentQuestion, data.reply);
             messagesEl.innerHTML += '<div class="ai-chat-msg ai"' + qaIdAttr + ' data-raw="' + escapeHtml(data.reply).replace(/"/g,'&quot;') + '" data-q="' + escapeHtml(currentQuestion).replace(/"/g,'&quot;') + '"><div class="ai-analysis-content" id="' + twId + '"></div>' + docScopeHtml + nextActionsHtml + ragBadge + actionsHtml + verifyRow + '</div>';
             var twEl = document.getElementById(twId);
             if (twEl) {

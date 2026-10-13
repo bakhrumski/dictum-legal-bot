@@ -32,6 +32,7 @@ const {
   getChunkDocumentIdentifier,
   canonicalCitationActLabel,
   normalizeLegalAnswerCitations,
+  normalizeLegalAnswerCitationsDetailed,
   hasCanonicalOfficialCitations,
 } = require('../rag/citation-utils');
 const { buildLegalNextActions } = require('../services/legal-next-actions');
@@ -5600,6 +5601,8 @@ Konstitutsiyadagi iqtibos uslubiga amal qiling. Alohida "Manbalar" bo'limi yarat
 
 **Xulosa** — 1-2 gap. Savol uchun ENG MUHIM amaliy natija va tavsiya.
 
+${require('../rag/answer-structure').promptRules(lexLangForText(userQuestion))}
+
 Sarlavhalarni faqat **qalin** markdown ko'rinishida yozing. "DEFINITSIYA SAVOLI" yoki ichki ko'rsatma matnini javobga chiqarmang.`;
 
   const researchDirective = buildQuestionResearchDirective({
@@ -6914,6 +6917,7 @@ app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, t
     //   {type:'done', ...}     — final normalized reply + meta (JSON-response shape)
     //   {type:'error', error}  — terminal failure after headers were sent
     let displayReply, finalProvider;
+    let followUpQuestions = [];
     let answerTruncated = false;
     const hasAiProvider = !!(paidProviderConfigured() || process.env.GEMINI_API_KEY);
     if (!hasAiProvider) {
@@ -6962,6 +6966,16 @@ app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, t
       displayReply = normalizeResponseForUser(aiResult.text);
       finalProvider = aiResult.provider;
       answerTruncated = aiResult.truncated === true;
+    }
+    // The suggested next questions leave the answer text and are returned
+    // apart (answer-structure.js); the page shows them as buttons.
+    {
+      const fu = require('../rag/answer-structure').extractFollowUpQuestions(displayReply);
+      followUpQuestions = fu.questions;
+      if (fu.text !== displayReply) {
+        displayReply = fu.text;
+        if (sse) sse({ type: 'replace', text: displayReply });
+      }
     }
 
     // ── GEMINI FALLBACK: if RAG-constrained answer failed, let Gemini answer freely ──
@@ -7109,7 +7123,12 @@ app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, t
     // than merely loading the legal document at its first page.
     const citationLanguage = lexLangForText(message);
     await hydrateLexAnchors(ragChunks, displayReply);
-    displayReply = normalizeLegalAnswerCitations(displayReply, ragChunks, citationLanguage);
+    {
+      // quotes of the law are kept only when found word for word (answer-structure.js)
+      const normalized = normalizeLegalAnswerCitationsDetailed(displayReply, ragChunks, citationLanguage);
+      displayReply = normalized.text;
+      ragMeta = Object.assign({}, ragMeta || {}, { quotes: normalized.quotes });
+    }
     // An act that is no longer in force is named to the user, with its
     // replacement when known (superseded-acts.js).
     displayReply = appendRepealedNotice(displayReply, { repealed: mentionedActs.repealed }, citationLanguage);
@@ -7130,6 +7149,7 @@ app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, t
       policyVersions,
       qaBank: qaMatchInfo,
       nextActions: buildLegalNextActions({ question: message, answer: displayReply, topic }),
+      followUpQuestions,
       // what of an attached document was used, and under which service
       documentScope: documentScope ? { ...documentScope, note: documentJob.excerptNote(documentScope, documentScope.analysisUnits) || null } : null,
     };

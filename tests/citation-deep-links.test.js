@@ -682,7 +682,7 @@ test('Telegram: the model\'s own disclaimer line goes, the bot\'s one stays; a l
   assert.strictEqual(stripModelDisclaimer('Ответ подготовлен на основе анализа ИИ; обратитесь к юристу.\nB'), 'B');
   for (const keep of ['Javob berish muddati 10 kun; yurist bilan kelishing.', 'Javob SIfatli; yurist']) assert.strictEqual(stripModelDisclaimer(keep), keep);
   const src = require('fs').readFileSync(require('path').join(__dirname, '../src/agents/telegram-agent.js'), 'utf8');
-  assert.ok(/const reply = stripModelDisclaimer\(answer\.text\) \+ banner/u.test(src));
+  assert.ok(/const reply = stripModelDisclaimer\(answer\.text\) \+ nextQuestionsText \+ banner/u.test(src));
 });
 
 test('a provision is highlighted whole: a long line as start,end; a Cyrillic line on the Cyrillic page; commas and edge hyphens inside a term encoded (2026-10-13)', () => {
