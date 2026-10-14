@@ -752,4 +752,5 @@ function mountAnalyzerRoutes(app, deps) {
   console.log('[ANALYZE] OCR & analyzer routes mounted');
 }
 
-module.exports = { mountAnalyzerRoutes, callVisionOCR, pageText };
+// readers: for the master's side-by-side OCR comparison (/api/admin/ocr/compare)
+module.exports = { mountAnalyzerRoutes, callVisionOCR, pageText, readers };

@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>OCR solishtirish — JuristAI</title>
+<link rel="stylesheet" href="/app/fonts.css">
+<link rel="stylesheet" href="/app/app.css">
+<style>
+  body{overflow:auto}
+  .page{max-width:1280px;margin:0 auto;padding:32px 20px 60px}
+  h1{font-size:28px;margin-bottom:6px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:18px 0}
+  .row select,.row input[type=file]{height:40px;border:1px solid var(--line);border-radius:10px;padding:0 10px;background:var(--surface)}
+  .cols{display:grid;grid-template-columns:minmax(0,.9fr) 1fr 1fr;gap:16px;align-items:start}
+  @media(max-width:1000px){.cols{grid-template-columns:1fr}}
+  .box{border:1px solid var(--line);border-radius:14px;background:var(--surface);padding:18px;min-height:160px}
+  .box h3{font-size:16px;font-weight:500;margin-bottom:4px}
+  .box .meta{font-size:12.5px;color:var(--muted);margin-bottom:12px;line-height:1.5}
+  .box pre{white-space:pre-wrap;font:inherit;font-size:13.5px;line-height:1.55;margin:0;max-height:70vh;overflow:auto}
+  .prev img{max-width:100%;border-radius:8px;display:block}
+  .err{color:var(--bad)}
+  .tot{margin-top:18px;font-size:13.5px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>OCR solishtirish</h1>
+  <p class="muted">Bitta skan Gemini 2.5 Flash va VoiceLab vision'ga bir xil buyruq bilan yuboriladi. Faqat master uchun. PDF faqat Gemini'da o‘qiladi (VoiceLab PDF qabul qilmaydi).</p>
+  <div class="row">
+    <input type="file" id="f" accept="image/jpeg,image/png,image/webp,application/pdf">
+    <select id="lang"><option value="uzb+rus">O‘zbek + rus</option><option value="uzb">O‘zbek (lotin)</option><option value="rus">Rus</option><option value="eng">Ingliz</option></select>
+    <button class="pill sm" id="go" disabled>Solishtirish</button>
+    <span class="muted" id="st" style="font-size:13px"></span>
+  </div>
+  <div class="cols">
+    <div class="box prev" id="p"><h3>Asl skan</h3><div class="meta">—</div></div>
+    <div class="box" id="g"><h3>Gemini</h3><div class="meta">—</div></div>
+    <div class="box" id="v"><h3>VoiceLab</h3><div class="meta">—</div></div>
+  </div>
+  <div class="tot" id="tot"></div>
+</div>
+<script>
+(function () {
+  var file = null, runs = [];
+  var $ = function (s) { return document.querySelector(s); };
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function usd(x) { return x == null ? 'narx noma’lum' : '$' + x.toFixed(4) + ' (≈' + Math.round(x * 12000) + ' so‘m)'; }
+  $('#f').onchange = function () {
+    file = this.files[0] || null; $('#go').disabled = !file;
+    if (!file) return;
+    var p = $('#p'); p.innerHTML = '<h3>Asl skan</h3><div class="meta">' + esc(file.name) + ' · ' + Math.round(file.size / 1024) + ' KB</div>';
+    if (/^image\//.test(file.type)) { var img = new Image(); img.src = URL.createObjectURL(file); p.appendChild(img); }
+    else p.insertAdjacentHTML('beforeend', '<p class="muted">PDF — ko‘rinish yo‘q</p>');
+  };
+  function show(el, title, r) {
+    var h = '<h3>' + title + '</h3>';
+    if (!r || !r.ok) { el.innerHTML = h + '<div class="meta err">' + esc(r && r.error || 'xato') + (r && r.ms ? ' · ' + (r.ms / 1000).toFixed(1) + ' s' : '') + '</div>'; return; }
+    h += '<div class="meta">' + esc(r.provider) + ' · ' + (r.ms / 1000).toFixed(1) + ' s · ' + r.chars + ' belgi · ' + usd(r.costUsd) + (r.calls > 1 ? ' · ' + r.calls + ' chaqiruv' : '') + '</div>';
+    h += '<pre>' + esc(r.text || '(bo‘sh)') + '</pre>';
+    el.innerHTML = h;
+  }
+  $('#go').onclick = async function () {
+    if (!file) return;
+    var fd = new FormData(); fd.append('file', file, file.name); fd.append('lang', $('#lang').value);
+    this.disabled = true; $('#st').textContent = 'Yuborilmoqda…';
+    $('#g .meta').textContent = $('#v .meta').textContent = 'kutilmoqda…';
+    try {
+      var res = await fetch('/api/admin/ocr/compare', { method: 'POST', body: fd, credentials: 'same-origin' });
+      var d = await res.json().catch(function () { return {}; });
+      if (!res.ok) { $('#st').textContent = (res.status === 401 || res.status === 403) ? 'Master sifatida kiring' : (d.error || ('Xato ' + res.status)); return; }
+      show($('#g'), 'Gemini', d.gemini); show($('#v'), 'VoiceLab (' + esc(d.voicelabModel || '') + ')', d.voicelab);
+      $('#st').textContent = d.kind === 'pdf' ? d.pages + ' sahifali PDF' : 'Rasm';
+      runs.push({ n: file.name, g: d.gemini, v: d.voicelab });
+      var sum = function (k) { return runs.reduce(function (a, r) { return a + (r[k] && r[k].ok && r[k].costUsd != null ? r[k].costUsd : 0); }, 0); };
+      $('#tot').textContent = 'Shu oynada ' + runs.length + ' ta sinov: Gemini jami ' + usd(sum('g')) + ' · VoiceLab jami ' + usd(sum('v'));
+    } catch (e) { $('#st').textContent = 'Tarmoq xatosi'; }
+    finally { this.disabled = false; }
+  };
+})();
+</script>
+</body>
+</html>

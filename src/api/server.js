@@ -720,6 +720,62 @@ app.post('/api/admin/stt/compare', require('../auth/same-origin').requireSameOri
   res.json({ gemini: g, voicelab: v, primary: require('../ai/stt').primary(), note: "Narx: /api/admin/ai-usage/report (stage 'stt')" });
 });
 
+// ── OCR comparison (master): one image to Gemini and VoiceLab vision ─────────
+//   POST /api/admin/ocr/compare  multipart {file (image or PDF), lang: uzb+rus|uzb|rus|eng}
+//   -> per engine: text, ms, cost (known USD or null), tokens. The same
+//   prompt and cap as real OCR (src/ocr/routes.js readers). A PDF goes to
+//   Gemini only: VoiceLab vision does not take PDFs.
+const ocrCompareUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ok = /^image\/(jpeg|png|webp)$/i.test(file.mimetype) || file.mimetype === 'application/pdf' || /\.(jpe?g|png|webp|pdf)$/i.test(file.originalname || '');
+    cb(ok ? null : new Error('Rasm (JPG, PNG, WebP) yoki PDF kerak'), ok);
+  },
+});
+app.post('/api/admin/ocr/compare', require('../auth/same-origin').requireSameOrigin, requireMasterAdmin, (req, res, next) => {
+  ocrCompareUpload.single('file')(req, res, (err) => err ? res.status(400).json({ error: err.message }) : next());
+}, async (req, res) => {
+  if (!req.file || !req.file.buffer || !req.file.buffer.length) return res.status(400).json({ error: 'Fayl kerak' });
+  const scanLimits = require('../ocr/scan-limits');
+  const { readers, callVisionOCR } = require('../ocr/routes');
+  const isPdf = req.file.mimetype === 'application/pdf' || /\.pdf$/i.test(req.file.originalname || '');
+  const mime = isPdf ? 'application/pdf' : (/^image\//.test(req.file.mimetype) ? req.file.mimetype : 'image/jpeg');
+  const lang = ['uzb+rus', 'uzb', 'rus', 'eng'].includes(req.body.lang) ? req.body.lang : 'uzb+rus';
+  const prompt = scanLimits.VISION_PROMPT(scanLimits.LANG_HINTS[lang] || '');
+  // each engine in its own request scope, so its cost is its own
+  const run = (label, fn) => usageLedger.runWithRequest({ service: 'web', kind: `ocr-compare ${label}`, userIdOf: () => req.session.adminId }, async (store) => {
+    const t = Date.now();
+    try {
+      const out = await fn();
+      return { ok: true, provider: out.provider, text: out.text, chars: out.text.length, ms: Date.now() - t,
+        costUsd: store.shared.unknownCostCalls ? null : Number(store.shared.knownCostUsd.toFixed(6)), calls: store.shared.calls, unknownCostCalls: store.shared.unknownCostCalls };
+    } catch (e) {
+      return { ok: false, error: String(e.message || e).slice(0, 400), ms: Date.now() - t, costUsd: Number(store.shared.knownCostUsd.toFixed(6)) };
+    } finally {
+      usageLedger.finishRequest(store, { outcome: 'ocr_compare' }).catch(() => {});
+    }
+  });
+  let pages = 1;
+  if (isPdf) {
+    try { const { PDFDocument } = require('pdf-lib'); pages = (await PDFDocument.load(req.file.buffer, { ignoreEncryption: true })).getPageCount(); }
+    catch (e) { return res.status(400).json({ error: 'PDF o‘qilmadi: ' + e.message.slice(0, 120) }); }
+    if (pages > 10) return res.status(400).json({ error: 'Solishtirish uchun 10 sahifagacha PDF yuklang' });
+  }
+  const gemini = process.env.GEMINI_API_KEY
+    ? run('gemini', async () => isPdf
+      ? callVisionOCR(req.file.buffer, mime, lang, { pages }).then(r => ({ provider: r.provider || 'Gemini Vision', text: String(r.text || '') }))
+      : readers.gemini({ data: req.file.buffer, mimeType: mime, prompt, cap: scanLimits.OCR_SINGLE_PAGE_CAP }))
+    : Promise.resolve({ ok: false, error: 'GEMINI_API_KEY yo‘q' });
+  const vl = isPdf ? Promise.resolve({ ok: false, error: 'VoiceLab vision PDF qabul qilmaydi (faqat rasm)' })
+    : voicelab.routes('vision') || process.env.VOICELAB_API_KEY
+      ? run('voicelab', () => readers.voicelab({ data: req.file.buffer, mimeType: mime, prompt }))
+      : Promise.resolve({ ok: false, error: 'VoiceLab kaliti yo‘q' });
+  const [g, v] = await Promise.all([gemini, vl]);
+  res.json({ gemini: g, voicelab: v, pages, kind: isPdf ? 'pdf' : 'image',
+    voicelabModel: `voicelab/${voicelab.modelFor('vision')}`, route: require('../ocr/scan-limits').ocrProviders({ kind: isPdf ? 'pdf' : 'image' }) });
+});
+
 // ── VoiceLab speech checks (master only) ─────────────────────────────────────
 // The voice list is where a custom cloned voice's id is found, to go into
 // VOICELAB_TTS_VOICE_ID. The TTS preview plays any text in any voice right in
