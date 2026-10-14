@@ -12956,7 +12956,11 @@
                 });
                 var d = await r.json();
                 var typing = document.getElementById('aiChatTyping'); if (typing) typing.remove();
-                if (!r.ok || !d.html) { docInfoCard('❌ ' + escapeHtml(d.error || 'Hujjat yaratib bo\'lmadi — qayta urinib ko\'ring')); return; }
+                if (!r.ok || !d.html) {
+                    docInfoCard('❌ ' + escapeHtml(d.message || d.error || 'Hujjat yaratib bo\'lmadi — qayta urinib ko\'ring') +
+                        (d.upgradeUrl ? ' <a href="/tariff.html">Tariflar</a>' : ''));
+                    return;
+                }
                 renderDocMessage({ rawTitle: docType, html: d.html });
                 if (continuation && continuation.workspaceId) {
                     try {
@@ -13368,7 +13372,9 @@
                 if (typeof collectSessionDocs === 'function' && collectSessionDocs().length) {
                     clearInterval(wait);
                     explainFromAttachment();
-                } else if (tries > 60) {
+                } else if (tries > 60 && !(typeof aiAttachments !== 'undefined' && aiAttachments.some(function (a) { return a.status === 'processing'; }) && tries < 600)) {
+                    // a scan waiting on its confirm card (or a long OCR) is still
+                    // processing: keep waiting for it (up to 5 min), not 30 s
                     clearInterval(wait);
                     if (label) label.textContent = '❌ Fayldan matn ajratib bo\'lmadi';
                 }
@@ -13480,7 +13486,8 @@
         async function tplDeleteMine(id) {
             if (!confirm('Shablon o\'chirilsinmi?')) return;
             try {
-                await fetch('/api/templates/mine/' + id, { method: 'DELETE', credentials: 'same-origin' });
+                var delRes = await fetch('/api/templates/mine/' + id, { method: 'DELETE', credentials: 'same-origin' });
+                if (!delRes.ok) { var delErr = await delRes.json().catch(function () { return {}; }); alert(delErr.message || delErr.error || 'Shablonni o\'chirib bo\'lmadi'); }
                 tplEditorHome();
             } catch (e) { alert(e.message); }
         }
@@ -13868,11 +13875,16 @@
 
             // Document context = conversation-persistent docs + newly attached.
             // Follow-up questions keep working against the same document(s).
-            var allDocs = sessionDocs.concat(readyDocs.map(function (a) { return { name: a.name, text: a.text, scanId: a.scanId || null }; }));
+            var allDocs = sessionDocs.concat(readyDocs.map(function (a) { return { name: a.name, text: a.text, docTicket: a.docTicket || null, scanId: a.scanId || null }; }));
             // typed documents go as text; scans as ids (their text is on the server)
-            var documentText = allDocs.filter(function (d) { return !d.scanId; }).map(function (d) {
+            var typedDocs = allDocs.filter(function (d) { return !d.scanId; });
+            // One typed document goes as its own text with its signed ticket, so the
+            // server sizes it by the real page count (the ticket is bound to that exact
+            // text); several are joined under their names and re-measured by the server.
+            var documentText = typedDocs.length === 1 ? typedDocs[0].text : typedDocs.map(function (d) {
                 return '【' + d.name + '】\n' + d.text;
             }).join('\n\n');
+            var chatDocTicket = typedDocs.length === 1 ? (typedDocs[0].docTicket || null) : null;
             var scanIds = allDocs.filter(function (d) { return d.scanId; }).map(function (d) { return { id: d.scanId, name: d.name }; });
             var attachLine = readyDocs.length
                 ? '<div class="ai-msg-files">' + readyDocs.map(function (a) {
@@ -13887,7 +13899,7 @@
             input.style.height = 'auto';
             // Newly sent docs persist for the rest of the conversation
             // (removable via the × on their "suhbatda" chip).
-            readyDocs.forEach(function (a) { sessionDocs.push({ name: a.name, text: a.text, scanId: a.scanId || null, pages: a.pages || null, chars: a.chars || null }); });
+            readyDocs.forEach(function (a) { sessionDocs.push({ name: a.name, text: a.text, docTicket: a.docTicket || null, scanId: a.scanId || null, pages: a.pages || null, chars: a.chars || null }); });
             aiAttachments = aiAttachments.filter(function (a) { return a.status !== 'ready'; });
             renderAttachChips();
 
@@ -13924,6 +13936,7 @@
                             topics: selectedTopics.length > 0 ? selectedTopics : null,
                             autoDetect: topicAutoDetect === true,
                             documentText: documentText || null,
+                            docTicket: chatDocTicket,
                             scanIds: scanIds.length ? scanIds : null,
                             confirmedUnits: confirmedUnits,
                             confirmedJob: confirmedJob,
@@ -14694,6 +14707,8 @@
 
                 currentAiSessionId = session.id;
                 aiChatHistory = session.messages || [];
+                // documents belong to the chat they were attached in (as in createNewAiChat)
+                if (typeof aiAttachments !== 'undefined') { aiAttachments = []; sessionDocs = []; docActionsUsed = { opinion: false, explain: false }; renderAttachChips(); }
                 if (typeof invalidateExplainTrace === 'function') invalidateExplainTrace();
                 selectedDatabases = session.databases || ['lex.uz'];
                 // Force-set topic without toggle (selectTopic toggles if same topic)
@@ -14763,7 +14778,7 @@
                 });
                 // Find and activate
                 document.querySelectorAll('.ai-history-item').forEach(function(el) {
-                    if (el.getAttribute('onclick') && el.getAttribute('onclick').indexOf(sessionId) > -1) {
+                    if (el.getAttribute('onclick') === 'openAiChatSession(' + sessionId + ')') {
                         el.classList.add('active');
                     }
                 });

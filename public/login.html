@@ -387,7 +387,10 @@
         function setRegType(type) {
             document.querySelector('.register-form').setAttribute('data-type', type);
             document.querySelectorAll('.type-toggle button').forEach(b => b.classList.remove('active'));
-            event.target.classList.add('active');
+            // the clicked button, without relying on the non-standard global `event` (Firefox)
+            document.querySelectorAll('.type-toggle button').forEach(function (b) {
+                if ((b.getAttribute('onclick') || '').indexOf("'" + type + "'") > -1) b.classList.add('active');
+            });
             document.getElementById('privacyCheck').checked = false;
             document.getElementById('ofertaCheck').checked = false;
             document.getElementById('privacyError').style.display = 'none';
@@ -575,7 +578,8 @@
                     }
                     try { localStorage.setItem('jai-login-method', 'password'); } catch (_) {}
                     if (data.twofa) { show2faStep(data.token); return; }
-                    window.location.href = '/dashboard.html';
+                    // keep ?redirect= and workspace invites, as the Telegram flow does
+                    window.location.href = (typeof postAuthDestination === 'function') ? postAuthDestination('/dashboard.html') : '/dashboard.html';
                 } else {
                     errorDiv.textContent = data.error || 'Kirish xato';
                     if (data.botUrl) {
@@ -624,7 +628,7 @@
                         body: JSON.stringify({ token: token, code: code })
                     });
                     var d = await r.json();
-                    if (r.ok && d.success) { window.location.href = '/dashboard.html'; return; }
+                    if (r.ok && d.success) { window.location.href = (typeof postAuthDestination === 'function') ? postAuthDestination('/dashboard.html') : '/dashboard.html'; return; }
                     if (d.expired) { location.reload(); return; }
                     document.getElementById('twofaErr').textContent = d.error || 'Kod noto\'g\'ri';
                     btn.disabled = false; btn.textContent = 'Tasdiqlash';
@@ -677,6 +681,11 @@
             }
         })();
 
+        // Password recovery state (declared BEFORE the page-load IIFE below, which
+        // writes recoveryToken for ?recover= links; a later `let` threw a TDZ error)
+        let recoveryToken = '';
+        let recoveryUsername = '';
+
         // Handle ?recover=TOKEN and ?error= in URL on page load
         (function() {
             const params = new URLSearchParams(window.location.search);
@@ -716,9 +725,6 @@
             if (err) history.replaceState({}, '', '/login.html');
         })();
 
-        // Password recovery state
-        let recoveryToken = '';
-        let recoveryUsername = '';
 
         // Telegram-based recovery (no username needed — bot identifies by telegram_user_id)
         let _tgRecovPollInterval = null;
@@ -1000,6 +1006,7 @@
                 otpError.style.display = 'block';
                 return;
             }
+            var verifyBtnHtml = verifyBtn.innerHTML;
             verifyBtn.disabled = true;
             verifyBtn.textContent = '...';
             try {
@@ -1015,13 +1022,13 @@
                     otpError.textContent = data.error || 'Xatolik yuz berdi';
                     otpError.style.display = 'block';
                     verifyBtn.disabled = false;
-                    verifyBtn.textContent = '✓';
+                    verifyBtn.innerHTML = verifyBtnHtml;
                 }
             } catch(err) {
                 otpError.textContent = 'Xatolik: ' + err.message;
                 otpError.style.display = 'block';
                 verifyBtn.disabled = false;
-                verifyBtn.textContent = '✓';
+                verifyBtn.innerHTML = verifyBtnHtml;
             }
         }
 
@@ -1079,6 +1086,7 @@
                 otpError.style.display = 'block';
                 return;
             }
+            var verifyBtnHtml = verifyBtn.innerHTML;
             verifyBtn.disabled = true;
             verifyBtn.textContent = '...';
             try {
@@ -1096,13 +1104,13 @@
                         : (data.error || 'Xatolik yuz berdi');
                     otpError.style.display = 'block';
                     verifyBtn.disabled = false;
-                    verifyBtn.textContent = '✓';
+                    verifyBtn.innerHTML = verifyBtnHtml;
                 }
             } catch(err) {
                 otpError.textContent = 'Xatolik: ' + err.message;
                 otpError.style.display = 'block';
                 verifyBtn.disabled = false;
-                verifyBtn.textContent = '✓';
+                verifyBtn.innerHTML = verifyBtnHtml;
             }
         }
 </script>

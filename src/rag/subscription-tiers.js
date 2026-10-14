@@ -912,8 +912,11 @@ function enforceQuota(endpoint, { failClosed = false, service: forced, units = 1
             : 'Bepul foydalanish uchun rasmiy Telegram kanalimizga obuna bo\'ling.',
         });
       }
-      const workspaceId = /\/workspaces?\//u.test(String(req.originalUrl || req.url || '')) && req.params && /^[0-9a-f-]{36}$/iu.test(String(req.params.id || ''))
-        ? req.params.id : null;
+      // Workspace routes name the parameter :workspaceId (src/workspace/routes.js);
+      // reading only :id recorded every Workspace AI request without its workspace.
+      const wsParam = req.params ? (req.params.workspaceId || req.params.id) : null;
+      const workspaceId = /\/workspaces?\//u.test(String(req.originalUrl || req.url || '')) && /^[0-9a-f-]{36}$/iu.test(String(wsParam || ''))
+        ? wsParam : null;
       const r = await meterJob(req, res, { service, units: typeof units === 'function' ? units(req) : units, endpoint, workspaceId });
       if (!r.allowed) return;
       passed = true;

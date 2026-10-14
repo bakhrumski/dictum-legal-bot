@@ -1398,10 +1398,14 @@ app.post('/api/free-access/survey-submit', requireAuth, async (req, res) => {
   }
 });
 
+// Where a signed-in user lands. APP_HOME=/app/ switches to the new app shell
+// (public/app/); unset keeps the old dashboard, so the switch is an env change.
+const APP_HOME = /^\/[\w\-./]*$/u.test(process.env.APP_HOME || '') ? process.env.APP_HOME : '/dashboard.html';
+
 // Redirect root
 app.get('/', (req, res) => {
   if (req.session.isAuthenticated) {
-    res.redirect('/dashboard.html');
+    res.redirect(APP_HOME);
   } else {
     // Public landing page for visitors (CTAs lead to /login.html)
     res.sendFile('index.html', { root: 'public' });
@@ -9549,16 +9553,23 @@ require('../auth/telegram-auth-routes').mountTelegramAuthRoutes(app, {
 // Closed for now (owner, 2026-10-03: users could not register with Google;
 // sign-in stays Telegram and username/password). GOOGLE_AUTH_ENABLED=true and
 // the Google client keys turn it back on; the login page asks /api/auth/options.
+const { mountTelegramLoginRoutes, telegramLoginOptions } = require('../auth/telegram-login');
+// Where sign-in errors go back to: the new app's page when APP_HOME is the new app.
+const LOGIN_PAGE = APP_HOME.startsWith('/app') ? '/app/kirish.html' : '/login.html';
 function googleAuthEnabled() {
   return process.env.GOOGLE_AUTH_ENABLED === 'true' && Boolean(process.env.GOOGLE_CLIENT_ID);
 }
 
 app.get('/api/auth/options', (req, res) => {
-  res.json({ google: googleAuthEnabled() });
+  res.json({ google: googleAuthEnabled(), telegram: telegramLoginOptions() });
 });
 
+// One-step Telegram Login (oauth.telegram.org); TELEGRAM_LOGIN_ENABLED=true
+// after BotFather /setdomain for the auth bot (src/auth/telegram-login.js).
+mountTelegramLoginRoutes(app, { pool, logAudit, appHome: APP_HOME.startsWith('/app') ? APP_HOME : null });
+
 app.get('/auth/google', (req, res) => {
-  if (!googleAuthEnabled()) return res.redirect('/login.html?error=google_disabled');
+  if (!googleAuthEnabled()) return res.redirect(LOGIN_PAGE + '?error=google_disabled');
   const clientId = process.env.GOOGLE_CLIENT_ID;
   if (!clientId) return res.status(503).send('Google OAuth not configured');
   // Start on the host Google will return to, or the session that holds the
@@ -9586,13 +9597,13 @@ app.get('/auth/google', (req, res) => {
 });
 
 app.get('/auth/google/callback', async (req, res) => {
-  if (!googleAuthEnabled()) return res.redirect('/login.html?error=google_disabled');
+  if (!googleAuthEnabled()) return res.redirect(LOGIN_PAGE + '?error=google_disabled');
   const { code, state } = req.query;
   // Each failure says why in the log (no code, token or e-mail is logged), so
   // a "Google bilan kira olmayapman" report can be traced.
   if (!code) {
     console.warn(`[Google OAuth] no code (${String(req.query.error || 'none').slice(0, 40)}) host=${req.get('host')}`);
-    return res.redirect(req.query.error === 'access_denied' ? '/login.html?error=google_cancelled' : '/login.html?error=google_failed');
+    return res.redirect(req.query.error === 'access_denied' ? LOGIN_PAGE + '?error=google_cancelled' : LOGIN_PAGE + '?error=google_failed');
   }
   const expected = req.session && req.session.googleOAuth;
   if (req.session) delete req.session.googleOAuth;          // one use only
@@ -9600,7 +9611,7 @@ app.get('/auth/google/callback', async (req, res) => {
       || !crypto.timingSafeEqual(Buffer.from(state), Buffer.from(expected.state))
       || Date.now() - expected.ts > 10 * 60 * 1000) {
     console.warn(`[Google OAuth] state check failed: ${!expected ? 'no state in this session (host or cookie mismatch)' : 'state mismatch or expired'} host=${req.get('host')}`);
-    return res.redirect('/login.html?error=google_failed');
+    return res.redirect(LOGIN_PAGE + '?error=google_failed');
   }
   try {
     const clientId = process.env.GOOGLE_CLIENT_ID;
@@ -9616,7 +9627,7 @@ app.get('/auth/google/callback', async (req, res) => {
     const tokenData = await tokenRes.json();
     if (!tokenData.access_token) {
       console.warn(`[Google OAuth] token exchange failed: ${String(tokenData.error || tokenRes.status).slice(0, 60)} (redirect_uri ${redirectUri})`);
-      return res.redirect('/login.html?error=google_failed');
+      return res.redirect(LOGIN_PAGE + '?error=google_failed');
     }
 
     const userRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
@@ -9627,7 +9638,7 @@ app.get('/auth/google/callback', async (req, res) => {
     const { sub: googleId, email, name, given_name, family_name } = profile;
     if (!googleId || !email) {
       console.warn('[Google OAuth] profile without id or e-mail');
-      return res.redirect('/login.html?error=google_failed');
+      return res.redirect(LOGIN_PAGE + '?error=google_failed');
     }
 
     const mode = expected.mode || 'login';
@@ -9636,7 +9647,7 @@ app.get('/auth/google/callback', async (req, res) => {
 
     // ── RECOVER mode: find account and issue reset token, never create ──
     if (mode === 'recover') {
-      if (!user) return res.redirect('/login.html?error=google_account_not_found');
+      if (!user) return res.redirect(LOGIN_PAGE + '?error=google_account_not_found');
       const resetToken = require('crypto').randomBytes(20).toString('hex');
       const { verificationTokens } = require('../verification-store');
       verificationTokens.set('pwreset_' + resetToken, { adminId: user.id, expiresAt: Date.now() + 15 * 60 * 1000 });
@@ -9651,7 +9662,7 @@ app.get('/auth/google/callback', async (req, res) => {
       );
       if (abuseCheck.rows.length > 0) {
         console.warn('[Google OAuth] new account refused: this Google account already used the trial');
-        return res.redirect('/login.html?error=sinov_used');
+        return res.redirect(LOGIN_PAGE + '?error=sinov_used');
       }
 
       // ── Strict Sinov abuse: block by device fingerprint (cross-account detection) ──
@@ -9663,7 +9674,7 @@ app.get('/auth/google/callback', async (req, res) => {
         );
         if (fpAbuse.rows.length > 0) {
           console.warn('[Google OAuth] new account refused: another account on this device already used the trial');
-          return res.redirect('/login.html?error=sinov_used');
+          return res.redirect(LOGIN_PAGE + '?error=sinov_used');
         }
       }
 
@@ -9693,10 +9704,10 @@ app.get('/auth/google/callback', async (req, res) => {
     req.session.username = user.username;
     req.session.fullName = user.full_name;
     await new Promise((ok, fail) => req.session.save(e => e ? fail(e) : ok()));
-    res.redirect('/dashboard.html');
+    res.redirect(APP_HOME);
   } catch (err) {
     console.error('[Google OAuth]', err.message);
-    res.redirect('/login.html?error=google_failed');
+    res.redirect(LOGIN_PAGE + '?error=google_failed');
   }
 });
 

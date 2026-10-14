@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en" data-root="../">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>JuristAI — AI legal assistant for the laws of Uzbekistan</title>
+<meta name="description" content="Ask in plain words. JuristAI answers from current Uzbek law and shows the source.">
+<!--seo-->
+<meta name="robots" content="noindex">
+<link rel="canonical" href="https://juristai.uz/en/">
+<link rel="alternate" hreflang="uz" href="https://juristai.uz/">
+<link rel="alternate" hreflang="ru" href="https://juristai.uz/ru/">
+<link rel="alternate" hreflang="en" href="https://juristai.uz/en/">
+<link rel="alternate" hreflang="x-default" href="https://juristai.uz/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="JuristAI">
+<meta property="og:locale" content="en_US">
+<meta property="og:locale:alternate" content="uz_UZ">
+<meta property="og:locale:alternate" content="ru_RU">
+<meta property="og:url" content="https://juristai.uz/en/">
+<meta property="og:title" content="JuristAI — AI legal assistant for the laws of Uzbekistan">
+<meta property="og:description" content="Ask in plain words. JuristAI answers from current Uzbek law and shows the source.">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"JuristAI","url":"https://juristai.uz/","sameAs":["https://www.instagram.com/bakhrom_abdimuminov/","https://www.linkedin.com/in/bakhrom-abdimuminov-0a479218a/"]}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","inLanguage":"en","mainEntity":[{"@type":"Question","name":"How reliable are the answers?","acceptedAnswer":{"@type":"Answer","text":"Every answer rests on the current text of the law and shows its source. You can open the source and check it yourself."}},{"@type":"Question","name":"Does JuristAI replace a lawyer?","acceptedAnswer":{"@type":"Answer","text":"No. Answers are for information. For a complex matter you can find a specialist in the attorney directory."}},{"@type":"Question","name":"Where is my data stored?","acceptedAnswer":{"@type":"Answer","text":"On servers in Uzbekistan, encrypted. It is never shared with third parties."}},{"@type":"Question","name":"Do I need to pay to start?","acceptedAnswer":{"@type":"Answer","text":"No. The free plan requires no card."}},{"@type":"Question","name":"How is it different from ChatGPT?","acceptedAnswer":{"@type":"Answer","text":"JuristAI works only with the laws of Uzbekistan: it finds the answer in the current text on lex.uz, checks every term and amount against the source and links the article."}},{"@type":"Question","name":"Which languages does it support?","acceptedAnswer":{"@type":"Answer","text":"Uzbek, Russian and English. On the website and in the Telegram bot."}},{"@type":"Question","name":"Can a voice message be turned into text?","acceptedAnswer":{"@type":"Answer","text":"Yes. Record a meeting or a voice instruction — JuristAI prepares the text, a summary, tasks and next steps. Minutes come with your plan or are bought separately."}}]}</script>
+<!--/seo-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&display=swap">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27%233D6BF2%27/%3E%3Cpath d=%27M19 8v11a4.5 4.5 0 0 1-9 0%27 fill=%27none%27 stroke=%27%23fff%27 stroke-width=%273%27 stroke-linecap=%27round%27/%3E%3C/svg%3E">
+<link rel="stylesheet" href="../css/style.css?v=40">
+</head>
+<body>
+
+<header class="nav" id="nav">
+  <nav class="nav-l" aria-label="Asosiy">
+    <a href="#imkoniyatlar" data-i18n="nav.features">Features</a>
+    <a href="#kimlar" data-i18n="nav.audience">Who it’s for</a>
+    <a href="#xavfsizlik" data-i18n="nav.security">Security</a>
+    <a href="tariflar.html" data-i18n="nav.pricing">Pricing</a>
+  </nav>
+  <a class="brand" href="index.html" aria-label="JuristAI">JURISTAI</a>
+  <div class="nav-r">
+    <div class="lang" role="group" aria-label="Til / Язык / Language">
+      <button type="button" data-lang="uz">UZ</button>
+      <button type="button" data-lang="ru">RU</button>
+      <button type="button" data-lang="en">EN</button>
+    </div>
+    <a class="login" data-link="login" href="#" data-i18n="nav.login">Log in</a>
+    <a class="pill" href="/app/kirish.html" data-link="signup"><span data-i18n="cta.start">Start free</span><i>→</i></a>
+    <button type="button" class="burger" id="burger" aria-label="Menyu" aria-expanded="false" aria-controls="mnav"><span></span><span></span></button>
+  </div>
+  <div class="mnav" id="mnav" hidden>
+    <a href="#imkoniyatlar" data-i18n="nav.features">Features</a>
+    <a href="#kimlar" data-i18n="nav.audience">Who it’s for</a>
+    <a href="#xavfsizlik" data-i18n="nav.security">Security</a>
+    <a href="tariflar.html" data-i18n="nav.pricing">Pricing</a>
+    <a data-link="login" href="#" data-i18n="nav.login">Log in</a>
+    <a class="pill" href="/app/kirish.html" data-link="signup"><span data-i18n="cta.start">Start free</span><i>→</i></a>
+  </div>
+</header>
+
+<main>
+  <!-- 1. HERO — video F1 -->
+  <section class="hero">
+    <video class="bg" data-video="F1" muted loop playsinline preload="metadata" aria-hidden="true"></video>
+    <div class="hero-shade"></div>
+    <div class="hero-in">
+      <h1 data-i18n="hero.title">The law, one question away.</h1>
+      <div class="hero-sub">
+        <p data-i18n="hero.sub">A source-cited AI lawyer for Uzbekistan’s legislation</p>
+        <a class="pill" href="/app/kirish.html" data-link="signup"><span data-i18n="cta.start">Start free</span><i>→</i></a>
+        <a class="hero-how" href="#platforma"><span data-i18n="hero.how">How it works</span> ↓</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. ASOS -->
+  <section class="trust" aria-label="Asos">
+    <span class="label" data-i18n="trust.label">Built on</span>
+    <span data-i18n="trust.src">Built on the lex.uz database</span>
+    <span data-i18n="trust.docs">50,000+ legal acts</span>
+    <span data-i18n="trust.daily">Updated daily</span>
+    <span data-i18n="trust.areas">13+ areas of law</span>
+  </section>
+
+  <!-- 3. OLTI QATLAM — skrollda qotadi; video Q1 tayyor bo'lgach almashtiriladi -->
+  <section class="pin" id="platforma">
+    <div class="pin-in">
+      <div class="center">
+        <h2 data-i18n="layers.title">One platform, six layers</h2>
+        <p class="lede" data-i18n="layers.sub">See where an answer comes from: from the text of the law to a finished opinion.</p>
+      </div>
+      <div class="stackrow">
+        <div class="layers" id="layers"></div>
+        <div class="iso" id="iso" aria-hidden="true"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. IMKONIYATLAR — videolar P1, P2, P3, P5, P7 -->
+  <section class="sec" id="imkoniyatlar">
+    <h2 data-i18n="features.title">From question to finished document.</h2>
+    <p class="lede" data-i18n="features.sub">Seven tools, one place.</p>
+    <div class="tools" id="tools"></div>
+  </section>
+
+  <!-- 4b. KO'NIKMALAR — "/" bilan chaqiriladigan ish usullari -->
+  <section class="sec sk-sec" id="konikmalar">
+    <div class="sk-top">
+      <div class="sk-tx">
+        <div class="kicker" data-i18n="sk.kicker">Skills</div>
+        <h2 data-i18n="sk.title">The chat works your way.</h2>
+        <p class="lede" data-i18n="sk.sub">A skill teaches the chat how you do the work. Your standards, procedures and style are written once and applied every time.</p>
+        <ul class="vz-ul" data-li="sk.pts"></ul>
+        <a class="pill ghost sk-more" href="ai-chat.html#konikmalar"><span data-i18n="features.more">Read more</span></a>
+      </div>
+      <div class="sk-demo" aria-hidden="true"></div>
+    </div>
+    <div class="sk-wall" data-rows="1" aria-hidden="true"></div>
+  </section>
+
+  <!-- 4c. OVOZLI YOZUV — muloqot yoziladi, matn, xulosa, topshiriqlar, hujjat tavsiyasi -->
+  <section class="sec sk-sec px-sec" id="ovozli-yozuv">
+    <div class="sk-top">
+      <div class="sk-tx">
+        <div class="kicker" data-i18n="vd.kicker">Voice recording</div>
+        <h2 data-i18n="vd.title">The meeting ends — the summary is ready.</h2>
+        <p class="lede" data-i18n="vd.sub">Record a meeting, consultation or voice instruction. JuristAI transcribes it, pulls out the key points, tasks and next steps, and suggests a draft document when one is needed.</p>
+        <ul class="vz-ul" data-li="vd.pts"></ul>
+        <a class="pill ghost sk-more" href="tariflar.html#tarif-savollar"><span data-i18n="features.more">Read more</span></a>
+      </div>
+      <div class="vd-demo" aria-hidden="true"></div>
+    </div>
+  </section>
+
+  <!-- 4d. TELEGRAM — platforma hisobi Telegram'ga ulanadi, amallar bot ichida -->
+  <section class="sec sk-sec px-sec" id="telegram">
+    <div class="sk-top rev">
+      <div class="sk-tx">
+        <div class="kicker" data-i18n="tgd.kicker">Telegram</div>
+        <h2 data-i18n="tgd.title">The platform works in Telegram too.</h2>
+        <p class="lede" data-i18n="tgd.sub">Link your account once: ask questions, send documents and voice notes, get answers and notifications in Telegram. One plan, shared limits and chats.</p>
+        <ul class="vz-ul" data-li="tgd.pts"></ul>
+        <a class="pill ghost sk-more" href="ai-chat.html#qayerda"><span data-i18n="features.more">Read more</span></a>
+      </div>
+      <div class="tgd-demo" aria-hidden="true"></div>
+    </div>
+  </section>
+
+  <!-- 5. KIMLAR UCHUN -->
+  <section class="sec center" id="kimlar">
+    <h2 data-i18n-html="aud.title">Every field.<br>Every task.</h2>
+    <div class="tabs" id="aud" role="tablist"></div>
+    <div class="aud-body" id="audbody"></div>
+  </section>
+
+  <!-- 6. RAQAMLAR — video F2 -->
+  <section class="band">
+    <video class="bg" data-video="F2" muted loop playsinline preload="none" aria-hidden="true"></video>
+    <div class="hero-shade"></div>
+    <div class="band-in">
+      <h2 data-i18n="band.title">Answers grounded in the current text of the law</h2>
+      <div class="stats">
+        <div><b>50 000+</b><span data-i18n="band.s1">legal acts in the database</span></div>
+        <div><b>13+</b><span data-i18n="band.s2">areas of law</span></div>
+        <div><b>3</b><span data-i18n="band.s3">languages: Uzbek, Russian, English</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7. QARASH -->
+  <section class="sec" id="qarash">
+    <div class="letter">
+      <img class="letter-ph" src="../img/founder.webp" alt="" width="450" height="545" loading="lazy">
+      <div class="letter-tx">
+        <div class="kicker" data-i18n="vision.kicker">Our vision</div>
+        <p class="statement" data-i18n="vision.text">Knowing the law should not be a privilege. Every citizen and every lawyer should reach the current text of the law in an instant.</p>
+        <p data-i18n="vision.p1">As a lawyer I have seen the same thing many times: people lose not because they have no right, but because they could not find the right provision in time. The law is public, yet hard to reach.</p>
+        <p data-i18n="vision.p2">JuristAI was built to close that distance. Every answer rests on the current text of the law and comes with its source, so you can check it yourself.</p>
+        <p data-i18n="vision.p3">We are not trying to replace lawyers. Our aim is a clear answer for citizens and a faster, more precise working tool for lawyers.</p>
+        <p class="who"><b data-i18n="vision.name">Bakhrom Abdimuminov</b><span data-i18n="vision.who">Founder, JuristAI</span></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8. XAVFSIZLIK -->
+  <section class="sec" id="xavfsizlik">
+    <h2 data-i18n="sec.title">Your data is protected.</h2>
+    <div class="grid">
+      <div><svg class="sic" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="6" rx="1.5"/><rect x="4" y="14" width="16" height="6" rx="1.5"/><path d="M7.5 7h.01M7.5 17h.01"/></svg><h3 data-i18n="sec.c0h">Servers in Uzbekistan</h3><p data-i18n="sec.c0p">Data is stored on servers located in the country.</p></div>
+      <div><svg class="sic" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><h3 data-i18n="sec.c1h">Encryption</h3><p data-i18n="sec.c1p">Connections and stored data are encrypted.</p></div>
+      <div><svg class="sic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6z"/><path d="m9 12 2.2 2.200L15 10.4"/></svg><h3 data-i18n="sec.c2h">Your data stays yours</h3><p data-i18n="sec.c2p">Never shared with third parties. May be used only to improve the JuristAI model.</p></div>
+      <div><svg class="sic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="14" r="4"/><path d="m11 11 8-8M16 6l2.5 2.500M14 8l2 2"/></svg><h3 data-i18n="sec.c3h">Passwordless sign-in</h3><p data-i18n="sec.c3p">Through Telegram or Google, in seconds.</p></div>
+    </div>
+  </section>
+
+  <!-- 8a. SAVOLLAR -->
+  <section class="sec" id="savollar">
+    <h2 data-i18n="faq.title">Common questions.</h2>
+    <div class="faq">
+      <details><summary data-i18n="faq.q1">How reliable are the answers?</summary><p data-i18n="faq.a1">Every answer rests on the current text of the law and shows its source. You can open the source and check it yourself.</p></details>
+      <details><summary data-i18n="faq.q2">Does JuristAI replace a lawyer?</summary><p data-i18n="faq.a2">No. Answers are for information. For a complex matter you can find a specialist in the attorney directory.</p></details>
+      <details><summary data-i18n="faq.q3">Where is my data stored?</summary><p data-i18n="faq.a3">On servers in Uzbekistan, encrypted. It is never shared with third parties.</p></details>
+      <details><summary data-i18n="faq.q4">Do I need to pay to start?</summary><p data-i18n="faq.a4">No. The free plan requires no card.</p></details>
+      <details><summary data-i18n="faq.q5">How is it different from ChatGPT?</summary><p data-i18n="faq.a5">JuristAI works only with the laws of Uzbekistan: it finds the answer in the current text on lex.uz, checks every term and amount against the source and links the article.</p></details>
+      <details><summary data-i18n="faq.q6">Which languages does it support?</summary><p data-i18n="faq.a6">Uzbek, Russian and English. On the website and in the Telegram bot.</p></details>
+      <details><summary data-i18n="faq.q7">Can a voice message be turned into text?</summary><p data-i18n="faq.a7">Yes. Record a meeting or a voice instruction — JuristAI prepares the text, a summary, tasks and next steps. Minutes come with your plan or are bought separately.</p></details>
+    </div>
+  </section>
+  <!-- 9. YAKUNIY CHAQIRIQ -->
+  <section class="cta">
+    <h2 data-i18n="final.title">Have a legal question?</h2>
+    <p data-i18n="final.sub">Try it free right now. No card needed.</p>
+    <a class="pill" href="/app/kirish.html" data-link="signup"><span data-i18n="cta.start">Start free</span><i>→</i></a>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="foot-cols">
+    <div><b data-i18n="foot.product">Product</b><a href="#imkoniyatlar" data-i18n="nav.features">Features</a><a href="tariflar.html" data-i18n="nav.pricing">Pricing</a><a data-link="telegram" href="#">Telegram bot</a></div>
+    <div><b data-i18n="foot.company">Company</b><a href="#qarash" data-i18n="foot.about">About</a><a href="#xavfsizlik" data-i18n="nav.security">Security</a><a data-link="contact" href="#" data-i18n="foot.contact">Contact</a><a data-link="login" href="#" data-i18n="nav.login">Log in</a></div>
+    <div><b data-i18n="foot.legal">Legal</b><a data-link="offer" href="#" data-i18n="foot.offer">Offer</a><a data-link="privacy" href="#" data-i18n="foot.privacy">Privacy</a><a data-link="terms" href="#" data-i18n="foot.terms">Terms</a></div>
+    <div><b data-i18n="foot.social">Social</b><a data-link="telegram" href="#">Telegram</a><a data-link="instagram" target="_blank" rel="noopener" href="https://www.instagram.com/bakhrom_abdimuminov/">Instagram</a><a data-link="linkedin" target="_blank" rel="noopener" href="https://www.linkedin.com/in/bakhrom-abdimuminov-0a479218a/">LinkedIn</a></div>
+  </div>
+  <p class="disclaimer" data-i18n="foot.disclaimer">Note: JuristAI’s answers are for information only and do not replace formal legal advice.</p>
+  <p class="copy">© 2026 JuristAI <button type="button" class="motion-t" id="motion"></button></p>
+</footer>
+
+<script src="../js/i18n.js?v=40"></script>
+<script src="../js/main.js?v=40"></script>
+</body>
+</html>

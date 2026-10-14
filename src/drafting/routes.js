@@ -244,6 +244,18 @@ function mountDraftingRoutes(app, deps) {
     }
   });
 
+  // ── GET /api/templates/mine — this user's uploaded templates ──
+  // Registered before /api/templates/:id: otherwise "mine" is taken as an id
+  // and the list always 404s (personal templates never showed).
+  app.get('/api/templates/mine', requireAuth, async (req, res) => {
+    try {
+      const all = await dbListTemplates(req.session.adminId);
+      res.json({ templates: all.filter(t => t.isMine), max: MAX_OWN_TEMPLATES });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // ── GET /api/templates/:id — full single template (slug or numeric id) ──
   app.get('/api/templates/:id', requireAuth, async (req, res) => {
     try {
@@ -478,15 +490,6 @@ Rules:
 
   const MAX_OWN_TEMPLATES = parseInt(process.env.MAX_USER_TEMPLATES, 10) || 30;
 
-  // ── GET /api/templates/mine — this user's uploaded templates ──
-  app.get('/api/templates/mine', requireAuth, async (req, res) => {
-    try {
-      const all = await dbListTemplates(req.session.adminId);
-      res.json({ templates: all.filter(t => t.isMine), max: MAX_OWN_TEMPLATES });
-    } catch (e) {
-      res.status(500).json({ error: e.message });
-    }
-  });
 
   // ── POST /api/templates/analyze — upload a document, get a draft template ──
   // Nothing is saved here; the response is a proposal for the user to confirm.
