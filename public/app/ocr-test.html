@@ -13,7 +13,9 @@
   h1{font-size:28px;margin-bottom:6px}
   .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:18px 0}
   .row select,.row input[type=file]{height:40px;border:1px solid var(--line);border-radius:10px;padding:0 10px;background:var(--surface)}
-  .cols{display:grid;grid-template-columns:minmax(0,.9fr) 1fr 1fr;gap:16px;align-items:start}
+  .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;align-items:start}
+  .eng{display:inline-flex;gap:12px;flex-wrap:wrap;font-size:13.5px;color:var(--muted)} .eng label{display:inline-flex;gap:5px;align-items:center}
+  .cut{margin-top:10px;font-size:12px;color:var(--muted)} .cut pre{font-family:ui-monospace,monospace;font-size:11.5px;max-height:200px}
   @media(max-width:1000px){.cols{grid-template-columns:1fr}}
   .box{border:1px solid var(--line);border-radius:14px;background:var(--surface);padding:18px;min-height:160px}
   .box h3{font-size:16px;font-weight:500;margin-bottom:4px}
@@ -27,17 +29,16 @@
 <body>
 <div class="page">
   <h1>OCR solishtirish</h1>
-  <p class="muted">Bitta skan Gemini 2.5 Flash va VoiceLab vision'ga bir xil buyruq bilan yuboriladi. Faqat master uchun. PDF faqat Gemini'da o‘qiladi (VoiceLab PDF qabul qilmaydi).</p>
+  <p class="muted">Bitta skan tanlangan engine'larga bir xil buyruq bilan yuboriladi. Faqat master uchun. PDF faqat Gemini'da o‘qiladi (VoiceLab PDF qabul qilmaydi).</p>
   <div class="row">
     <input type="file" id="f" accept="image/jpeg,image/png,image/webp,application/pdf">
     <select id="lang"><option value="uzb+rus">O‘zbek + rus</option><option value="uzb">O‘zbek (lotin)</option><option value="rus">Rus</option><option value="eng">Ingliz</option></select>
+    <span class="eng"><label><input type="checkbox" value="gemini-2.5-flash" checked> Gemini 2.5 Flash</label><label><input type="checkbox" value="gemini-3.5-flash-lite" checked> Gemini 3.5 Flash-Lite</label><label><input type="checkbox" value="gemini-3.6-flash"> Gemini 3.6 Flash</label><label><input type="checkbox" value="voicelab" checked> VoiceLab</label></span>
     <button class="pill sm" id="go" disabled>Solishtirish</button>
     <span class="muted" id="st" style="font-size:13px"></span>
   </div>
-  <div class="cols">
+  <div class="cols" id="cols">
     <div class="box prev" id="p"><h3>Asl skan</h3><div class="meta">—</div></div>
-    <div class="box" id="g"><h3>Gemini</h3><div class="meta">—</div></div>
-    <div class="box" id="v"><h3>VoiceLab</h3><div class="meta">—</div></div>
   </div>
   <div class="tot" id="tot"></div>
 </div>
@@ -54,27 +55,33 @@
     if (/^image\//.test(file.type)) { var img = new Image(); img.src = URL.createObjectURL(file); p.appendChild(img); }
     else p.insertAdjacentHTML('beforeend', '<p class="muted">PDF — ko‘rinish yo‘q</p>');
   };
-  function show(el, title, r) {
-    var h = '<h3>' + title + '</h3>';
-    if (!r || !r.ok) { el.innerHTML = h + '<div class="meta err">' + esc(r && r.error || 'xato') + (r && r.ms ? ' · ' + (r.ms / 1000).toFixed(1) + ' s' : '') + '</div>'; return; }
-    h += '<div class="meta">' + esc(r.provider) + ' · ' + (r.ms / 1000).toFixed(1) + ' s · ' + r.chars + ' belgi · ' + usd(r.costUsd) + (r.calls > 1 ? ' · ' + r.calls + ' chaqiruv' : '') + '</div>';
-    h += '<pre>' + esc(r.text || '(bo‘sh)') + '</pre>';
-    el.innerHTML = h;
+  function box(r) {
+    var el = document.createElement('div'); el.className = 'box res';
+    var h = '<h3>' + esc(r.engine) + '</h3>';
+    if (!r.ok) {
+      h += '<div class="meta err">' + esc(r.error || 'xato') + (r.ms ? ' · ' + (r.ms / 1000).toFixed(1) + ' s' : '') + (r.costUsd != null && r.calls ? ' · ' + usd(r.costUsd) : '') + '</div>';
+      if (r.partialText) h += '<div class="cut">Kesilgan matnning oxiri' + (r.outTokens ? ' (' + r.outTokens + ' token' + (r.thoughtTokens ? ', thinking ' + r.thoughtTokens : '') + ')' : '') + ':<pre>' + esc(r.partialText) + '</pre></div>';
+    } else {
+      h += '<div class="meta">' + esc(r.provider) + ' · ' + (r.ms / 1000).toFixed(1) + ' s · ' + r.chars + ' belgi · ' + usd(r.costUsd) + (r.calls > 1 ? ' · ' + r.calls + ' chaqiruv' : '') + '</div><pre>' + esc(r.text || '(bo‘sh)') + '</pre>';
+    }
+    el.innerHTML = h; return el;
   }
   $('#go').onclick = async function () {
     if (!file) return;
-    var fd = new FormData(); fd.append('file', file, file.name); fd.append('lang', $('#lang').value);
+    var eng = Array.prototype.map.call(document.querySelectorAll('.eng input:checked'), function (i) { return i.value; });
+    if (!eng.length) { $('#st').textContent = 'Kamida bitta engine tanlang'; return; }
+    var fd = new FormData(); fd.append('file', file, file.name); fd.append('lang', $('#lang').value); fd.append('engines', eng.join(','));
     this.disabled = true; $('#st').textContent = 'Yuborilmoqda…';
-    $('#g .meta').textContent = $('#v .meta').textContent = 'kutilmoqda…';
+    Array.prototype.forEach.call(document.querySelectorAll('.res'), function (n) { n.remove(); });
     try {
       var res = await fetch('/api/admin/ocr/compare', { method: 'POST', body: fd, credentials: 'same-origin' });
       var d = await res.json().catch(function () { return {}; });
       if (!res.ok) { $('#st').textContent = (res.status === 401 || res.status === 403) ? 'Master sifatida kiring' : (d.error || ('Xato ' + res.status)); return; }
-      show($('#g'), 'Gemini', d.gemini); show($('#v'), 'VoiceLab (' + esc(d.voicelabModel || '') + ')', d.voicelab);
-      $('#st').textContent = d.kind === 'pdf' ? d.pages + ' sahifali PDF' : 'Rasm';
-      runs.push({ n: file.name, g: d.gemini, v: d.voicelab });
-      var sum = function (k) { return runs.reduce(function (a, r) { return a + (r[k] && r[k].ok && r[k].costUsd != null ? r[k].costUsd : 0); }, 0); };
-      $('#tot').textContent = 'Shu oynada ' + runs.length + ' ta sinov: Gemini jami ' + usd(sum('g')) + ' · VoiceLab jami ' + usd(sum('v'));
+      (d.results || []).forEach(function (r) { $('#cols').appendChild(box(r)); });
+      $('#st').textContent = (d.kind === 'pdf' ? d.pages + ' sahifali PDF' : 'Rasm') + ' · production OCR modeli: ' + d.productionModel;
+      runs.push(d.results || []);
+      var tot = {}; runs.forEach(function (rs) { rs.forEach(function (r) { if (r.costUsd != null) tot[r.engine] = (tot[r.engine] || 0) + r.costUsd; }); });
+      $('#tot').textContent = 'Shu oynada ' + runs.length + ' ta sinov, jami: ' + Object.keys(tot).map(function (k) { return k + ' ' + usd(tot[k]); }).join(' · ');
     } catch (e) { $('#st').textContent = 'Tarmoq xatosi'; }
     finally { this.disabled = false; }
   };

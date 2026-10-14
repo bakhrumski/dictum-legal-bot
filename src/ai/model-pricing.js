@@ -45,6 +45,12 @@ const MODEL_PRICING = Object.freeze({
   // audio input $2.00 / 1M (~$0.003 a minute), text output $12.00 / 1M
   // (~$0.002 a minute); public preview
   'gemini-3.5-transcribe': Object.freeze({ in: 2.00, out: 12.00, cached: null }),
+  // Gemini 3.5 Flash-Lite (GA, 2026-07): $0.30 in (text/image/video), $2.50
+  // out incl. thinking (ai.google.dev pricing, 2026-10-14)
+  'gemini-3.5-flash-lite': Object.freeze({ in: 0.30, out: 2.50, cached: 0.03 }),
+  // Gemini 3.6 Flash: $0.75 / $3.75 through 2026-12-31, then $1.50 / $7.50
+  // (ai.google.dev pricing, 2026-10-14) - re-check in January
+  'gemini-3.6-flash': Object.freeze({ in: 0.75, out: 3.75, cached: null }),
 });
 
 /**
@@ -116,6 +122,8 @@ const PRICE_SOURCE_OF = Object.freeze({
   'deepseek/deepseek-flash': 'deepseek_2026_10_12', 'deepseek/deepseek-v4-pro': 'deepseek_2026_10_12', 'deepseek/deepseek-flash-thinking': 'deepseek_2026_10_12',
   'zai/glm-5.3-flash': 'zai_2026_10_12',
   'gemini-3.5-transcribe': 'gemini_2026_10_14',
+  'gemini-3.5-flash-lite': 'gemini_2026_10_14',
+  'gemini-3.6-flash': 'gemini_2026_10_14',
 });
 
 /**

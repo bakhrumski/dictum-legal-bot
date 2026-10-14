@@ -720,11 +720,13 @@ app.post('/api/admin/stt/compare', require('../auth/same-origin').requireSameOri
   res.json({ gemini: g, voicelab: v, primary: require('../ai/stt').primary(), note: "Narx: /api/admin/ai-usage/report (stage 'stt')" });
 });
 
-// ── OCR comparison (master): one image to Gemini and VoiceLab vision ─────────
-//   POST /api/admin/ocr/compare  multipart {file (image or PDF), lang: uzb+rus|uzb|rus|eng}
-//   -> per engine: text, ms, cost (known USD or null), tokens. The same
-//   prompt and cap as real OCR (src/ocr/routes.js readers). A PDF goes to
-//   Gemini only: VoiceLab vision does not take PDFs.
+// ── OCR comparison (master): one scan to several engines side by side ──────
+//   POST /api/admin/ocr/compare  multipart {file (image or PDF), lang: uzb+rus|uzb|rus|eng,
+//        engines: comma list of Gemini model ids and/or 'voicelab' (default
+//        'gemini-2.5-flash,voicelab')}
+//   -> results[]: per engine text, ms, cost (known USD or null), and on a cut
+//   reading the tail of the cut text. Same prompt and cap as real OCR
+//   (src/ocr/routes.js readers). A PDF goes to Gemini only.
 const ocrCompareUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 20 * 1024 * 1024 },
@@ -733,6 +735,7 @@ const ocrCompareUpload = multer({
     cb(ok ? null : new Error('Rasm (JPG, PNG, WebP) yoki PDF kerak'), ok);
   },
 });
+const OCR_COMPARE_GEMINI = ['gemini-2.5-flash', 'gemini-3.5-flash-lite', 'gemini-3.6-flash'];
 app.post('/api/admin/ocr/compare', require('../auth/same-origin').requireSameOrigin, requireMasterAdmin, (req, res, next) => {
   ocrCompareUpload.single('file')(req, res, (err) => err ? res.status(400).json({ error: err.message }) : next());
 }, async (req, res) => {
@@ -743,37 +746,52 @@ app.post('/api/admin/ocr/compare', require('../auth/same-origin').requireSameOri
   const mime = isPdf ? 'application/pdf' : (/^image\//.test(req.file.mimetype) ? req.file.mimetype : 'image/jpeg');
   const lang = ['uzb+rus', 'uzb', 'rus', 'eng'].includes(req.body.lang) ? req.body.lang : 'uzb+rus';
   const prompt = scanLimits.VISION_PROMPT(scanLimits.LANG_HINTS[lang] || '');
-  // each engine in its own request scope, so its cost is its own
-  const run = (label, fn) => usageLedger.runWithRequest({ service: 'web', kind: `ocr-compare ${label}`, userIdOf: () => req.session.adminId }, async (store) => {
-    const t = Date.now();
-    try {
-      const out = await fn();
-      return { ok: true, provider: out.provider, text: out.text, chars: out.text.length, ms: Date.now() - t,
-        costUsd: store.shared.unknownCostCalls ? null : Number(store.shared.knownCostUsd.toFixed(6)), calls: store.shared.calls, unknownCostCalls: store.shared.unknownCostCalls };
-    } catch (e) {
-      return { ok: false, error: String(e.message || e).slice(0, 400), ms: Date.now() - t, costUsd: Number(store.shared.knownCostUsd.toFixed(6)) };
-    } finally {
-      usageLedger.finishRequest(store, { outcome: 'ocr_compare' }).catch(() => {});
-    }
-  });
+  const engines = String(req.body.engines || 'gemini-2.5-flash,voicelab').split(',').map(x => x.trim()).filter(x => x === 'voicelab' || OCR_COMPARE_GEMINI.includes(x)).slice(0, 4);
+  if (!engines.length) return res.status(400).json({ error: 'engines: ' + OCR_COMPARE_GEMINI.concat('voicelab').join(', ') });
   let pages = 1;
   if (isPdf) {
     try { const { PDFDocument } = require('pdf-lib'); pages = (await PDFDocument.load(req.file.buffer, { ignoreEncryption: true })).getPageCount(); }
     catch (e) { return res.status(400).json({ error: 'PDF o‘qilmadi: ' + e.message.slice(0, 120) }); }
     if (pages > 10) return res.status(400).json({ error: 'Solishtirish uchun 10 sahifagacha PDF yuklang' });
   }
-  const gemini = process.env.GEMINI_API_KEY
-    ? run('gemini', async () => isPdf
-      ? callVisionOCR(req.file.buffer, mime, lang, { pages }).then(r => ({ provider: r.provider || 'Gemini Vision', text: String(r.text || '') }))
-      : readers.gemini({ data: req.file.buffer, mimeType: mime, prompt, cap: scanLimits.OCR_SINGLE_PAGE_CAP }))
-    : Promise.resolve({ ok: false, error: 'GEMINI_API_KEY yo‘q' });
-  const vl = isPdf ? Promise.resolve({ ok: false, error: 'VoiceLab vision PDF qabul qilmaydi (faqat rasm)' })
-    : voicelab.routes('vision') || process.env.VOICELAB_API_KEY
-      ? run('voicelab', () => readers.voicelab({ data: req.file.buffer, mimeType: mime, prompt }))
-      : Promise.resolve({ ok: false, error: 'VoiceLab kaliti yo‘q' });
-  const [g, v] = await Promise.all([gemini, vl]);
-  res.json({ gemini: g, voicelab: v, pages, kind: isPdf ? 'pdf' : 'image',
-    voicelabModel: `voicelab/${voicelab.modelFor('vision')}`, route: require('../ocr/scan-limits').ocrProviders({ kind: isPdf ? 'pdf' : 'image' }) });
+  // each engine in its own request scope, so its cost is its own
+  const run = (engine, fn) => usageLedger.runWithRequest({ service: 'web', kind: `ocr-compare ${engine}`, userIdOf: () => req.session.adminId }, async (store) => {
+    const t = Date.now();
+    const cost = () => (store.shared.unknownCostCalls ? null : Number(store.shared.knownCostUsd.toFixed(6)));
+    try {
+      const out = await fn();
+      return { engine, ok: true, provider: out.provider, text: out.text, chars: out.text.length, ms: Date.now() - t, costUsd: cost(), calls: store.shared.calls };
+    } catch (e) {
+      return { engine, ok: false, error: String(e.message || e).slice(0, 400), ms: Date.now() - t, costUsd: cost(), calls: store.shared.calls,
+        partialText: e.partialText || null, outTokens: e.outTokens || null, thoughtTokens: e.thoughtTokens || null };
+    } finally {
+      usageLedger.finishRequest(store, { outcome: 'ocr_compare' }).catch(() => {});
+    }
+  });
+  const one = (engine) => {
+    if (engine === 'voicelab') {
+      if (isPdf) return { engine, ok: false, error: 'VoiceLab vision PDF qabul qilmaydi (faqat rasm)' };
+      if (!process.env.VOICELAB_API_KEY) return { engine, ok: false, error: 'VoiceLab kaliti yo‘q' };
+      return run(engine, () => readers.voicelab({ data: req.file.buffer, mimeType: mime, prompt }));
+    }
+    if (!process.env.GEMINI_API_KEY) return { engine, ok: false, error: 'GEMINI_API_KEY yo‘q' };
+    if (isPdf) {
+      const keep = process.env.GEMINI_OCR_MODEL;
+      // the PDF path reads page ranges through the chain; the model is its env setting
+      return run(engine, async () => {
+        process.env.GEMINI_OCR_MODEL = engine;
+        try { const r = await callVisionOCR(req.file.buffer, mime, lang, { pages }); return { provider: `${r.provider || 'Gemini'} (${engine})`, text: String(r.text || '') }; }
+        finally { if (keep === undefined) delete process.env.GEMINI_OCR_MODEL; else process.env.GEMINI_OCR_MODEL = keep; }
+      });
+    }
+    return run(engine, async () => { const r = await readers.gemini({ data: req.file.buffer, mimeType: mime, prompt, cap: scanLimits.OCR_SINGLE_PAGE_CAP, model: engine }); return { ...r, provider: `Gemini ${engine}` }; });
+  };
+  // a PDF switches the model through the environment: one engine at a time
+  let results;
+  if (isPdf) { results = []; for (const e of engines) results.push(await one(e)); }
+  else results = await Promise.all(engines.map(one));
+  res.json({ results, pages, kind: isPdf ? 'pdf' : 'image', voicelabModel: `voicelab/${voicelab.modelFor('vision')}`,
+    productionModel: process.env.GEMINI_OCR_MODEL || 'gemini-2.5-flash', route: scanLimits.ocrProviders({ kind: isPdf ? 'pdf' : 'image' }) });
 });
 
 // ── VoiceLab speech checks (master only) ─────────────────────────────────────

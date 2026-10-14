@@ -77,18 +77,24 @@ const truncated = (who) => Object.assign(new Error(`${who}: OCR output reached i
 
 const readers = {
   // Gemini Developer API; cap = the output budget of the pages in this call
-  async gemini({ data, mimeType, prompt, cap }) {
+  // model: GEMINI_OCR_MODEL (default gemini-2.5-flash, as before). Gemini 2.x
+  // turns thinking off with thinkingBudget 0; Gemini 3.x takes thinkingLevel
+  // (minimal is the lowest; it does not promise zero thinking tokens).
+  async gemini({ data, mimeType, prompt, cap, model }) {
+    const m = String(model || process.env.GEMINI_OCR_MODEL || 'gemini-2.5-flash').trim();
+    const thinkingConfig = /^gemini-2\./u.test(m) ? { thinkingBudget: 0 } : { thinkingLevel: 'minimal' };
     const body = {
       contents: [{ role: 'user', parts: [
         { inlineData: { mimeType, data: data.toString('base64') } },
         { text: prompt },
       ]}],
-      generationConfig: { temperature: 0.1, maxOutputTokens: cap, thinkingConfig: { thinkingBudget: 0 } },
+      generationConfig: { temperature: 0.1, maxOutputTokens: cap, thinkingConfig },
     };
-    const text = await usageLedger.track({ provider: 'gemini', model: 'gemini-2.5-flash', stage: 'ocr', bound: noBound }, async (call) => {
+    const text = await usageLedger.track({ provider: 'gemini', model: m, stage: 'ocr', bound: noBound }, async (call) => {
+      // the key goes in a header: a URL with ?key= ends up in proxy and error logs
       const resp = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(OCR_TIMEOUT_MS) }
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(m)}:generateContent`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': String(process.env.GEMINI_API_KEY || '') }, body: JSON.stringify(body), signal: AbortSignal.timeout(OCR_TIMEOUT_MS) }
       );
       if (!resp.ok) {
         const err = await resp.text().catch(() => '');
@@ -98,13 +104,17 @@ const readers = {
       call.usage({ ...usageLedger.usageFromGemini(json.usageMetadata), modelReturned: json.modelVersion || null });
       const cand = json.candidates?.[0] || {};
       // the text did not fit the cap: never hand on a cut reading
-      if (cand.finishReason === 'MAX_TOKENS') throw truncated('gemini');
+      if (cand.finishReason === 'MAX_TOKENS') {
+        // the cut text is kept on the error for diagnosis only (never used as a reading)
+        const partial = (cand.content?.parts || []).filter(p => p.text && !p.thought).map(p => p.text).join('');
+        throw Object.assign(truncated('gemini'), { partialText: partial.slice(-1500), outTokens: json.usageMetadata?.candidatesTokenCount || null, thoughtTokens: json.usageMetadata?.thoughtsTokenCount || null });
+      }
       const parts = cand.content?.parts || [];
       const out = parts.filter(p => p.text && !p.thought).map(p => p.text).join('').trim();
       if (!out) throw Object.assign(new Error('Gemini Vision returned empty text'), { code: 'OCR_EMPTY_REPLY', providerAnswered: true });
       return out;
     });
-    return { text, provider: 'Gemini Vision' };
+    return { text, provider: 'Gemini Vision', model: m };
   },
   // VoiceLab and OpenAI vision: images only, the cap they had before #411
   async voicelab({ data, mimeType, prompt }) {
