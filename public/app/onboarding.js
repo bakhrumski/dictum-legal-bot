@@ -8,7 +8,7 @@
   'use strict';
   var J = G.JAI, t = J.t, esc = J.esc;
   var ORDER = ['sinov', 'silver', 'gold', 'platinum'];
-  var CONTACT = 'https://t.me/juristAI_registration_bot';
+  function contact() { return J.botUrl('auth'); }
   var METHODS = [
     { id: 'click', name: 'Click', sub: 'click.uz', ic: 'C' },
     { id: 'payme', name: 'Payme', sub: 'payme.uz', ic: 'P' },
@@ -123,7 +123,7 @@
     m.el.querySelector('.modal').classList.add('sm');
     m.body.innerHTML = '<div class="done-ic">' + J.icon('check') + '</div><h2>' + esc(t('pay.sent')) + '</h2><p class="sub">' + esc(t('pay.sent.d')) + '</p>' +
       '<p class="muted" style="display:flex;align-items:center;gap:8px;margin-top:16px;font-size:13.5px"><span class="spin"></span>' + esc(t('pay.wait')) + '</p>' +
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:20px"><a class="pill" href="' + CONTACT + '" target="_blank" rel="noopener">' + esc(t('pay.tg')) + '</a>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:20px"><a class="pill" href="' + esc(contact()) + '" target="_blank" rel="noopener">' + esc(t('pay.tg')) + '</a>' +
       (trialOk ? '<button class="pill ghost" data-a="trial">' + esc(t('pl.trial')) + '</button>' : '') +
       '<button class="pill ghost" data-a="back">' + esc(t('pay.back')) + '</button></div>';
     J.$('[data-a=back]', m.body).onclick = function () { stop(); m.el.querySelector('.modal').classList.remove('sm'); showPlans(m, opts); };
@@ -163,7 +163,7 @@
     var m = J.modal({ cls: 'sm', html: '<h2>' + esc(t('limit.title')) + '</h2><p class="sub">' + esc(survey ? t('gate.survey') : t('gate.channel')) + '</p>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:20px">' +
       (survey ? '<a class="pill" href="/dashboard.html#ai">' + esc(t('gate.survey.btn')) + '</a>'
-              : '<a class="pill" target="_blank" rel="noopener" href="' + esc(st.channelUrl || CONTACT) + '">' + esc(t('gate.open')) + '</a><button class="pill ghost" data-a="chk">' + esc(t('gate.check')) + '</button>') +
+              : '<a class="pill" target="_blank" rel="noopener" href="' + esc(st.channelUrl || contact()) + '">' + esc(t('gate.open')) + '</a><button class="pill ghost" data-a="chk">' + esc(t('gate.check')) + '</button>') +
       '</div>' });
     var c = J.$('[data-a=chk]', m.body);
     if (c) c.onclick = async function () { var s = await J.api('/api/free-access/status'); if (s.ok && s.data.state !== 'channel_required') { m.close(); J.toast('✓'); } else J.toast(t('gate.channel')); };

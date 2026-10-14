@@ -5,8 +5,8 @@
 (function (w) {
   'use strict';
   var J = w.JAI, t = J.t, esc = J.esc, $ = J.$;
-  var BOT = 'yuristga_savolbot', HIDE = 'jai-tg-hide';
-  J.tg = { linked: null, bot: BOT, polling: false };
+  var HIDE = 'jai-tg-hide';
+  J.tg = { linked: null, bot: J.bots.legal, polling: false };
 
   J.tg.check = async function () {
     var r = await J.api('/api/free-access/telegram-status', { allow401: true });
@@ -41,7 +41,7 @@
     return '<ul class="tg-f">' + t('tg.feats').map(function (x) { return '<li>' + J.icon('check') + '<span>' + esc(x) + '</span></li>'; }).join('') + '</ul>';
   }
   function actions(compact) {
-    if (J.tg.linked) return '<a class="pill ghost" href="https://t.me/' + esc(J.tg.bot) + '" target="_blank" rel="noopener">' + esc(t('tg.open')) + '<i>→</i></a>';
+    if (J.tg.linked) return '<a class="pill ghost" href="https://t.me/' + esc(J.tg.bot || J.bots.legal) + '" target="_blank" rel="noopener">' + esc(t('tg.open')) + '<i>→</i></a>';
     if (J.tg.polling) return '<button class="pill ghost" disabled><span class="spin"></span> ' + esc(t('tg.waiting')) + '</button>';
     return '<button class="pill" data-a="tg-link">' + esc(t('tg.btn')) + '<i>→</i></button>' + (compact ? '<button class="pill ghost" data-a="tg-more">' + esc(t('tg.more')) + '</button>' : '');
   }

@@ -324,7 +324,7 @@
           '<div class="muted" style="font-size:13px">' + esc([a.organization_name, a.region].filter(Boolean).join(' · ')) + (exp ? ' · ' + esc(t('lw.exp', { y: exp })) : '') + '</div>' +
           '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">' + (a.practice_areas || []).slice(0, 4).map(function (x) { return '<span class="chip static" style="height:26px;font-size:12px">' + esc(x.name_uz) + '</span>'; }).join('') + '</div></div>' +
           '<div class="lw-side"><div class="tag">' + J.icon('shield') + esc(t('lw.lic')) + ' ' + esc(a.license_number || '') + '</div>' +
-          '<a class="pill sm ghost" target="_blank" rel="noopener" href="https://t.me/yuristga_savolbot?start=advokat">' + esc(t('lw.contact')) + '</a></div></div>';
+          '<a class="pill sm ghost" target="_blank" rel="noopener" href="' + esc(J.botUrl('legal', 'advokat')) + '">' + esc(t('lw.contact')) + '</a></div></div>';
       }).join('') : '<div class="empty-state">' + esc(t('lw.empty')) + '</div>';
     }
     form.onsubmit = function (e) { e.preventDefault(); load(); };
@@ -337,6 +337,8 @@
     if (wsLoaded) return wsLoaded;
     wsLoaded = new Promise(function (ok, no) {
       var css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/css/workspace.css'; document.head.appendChild(css);
+      // dashboard.css'dagi Jamoa uslublari, ilova shrifti va ranglarida (tools/build-ws-skin.js)
+      var skin = document.createElement('link'); skin.rel = 'stylesheet'; skin.href = '/app/ws-skin.css?v=1'; document.head.appendChild(skin);
       var s = document.createElement('script'); s.src = '/js/workspace.js'; s.onload = ok; s.onerror = no; document.body.appendChild(s);
     });
     return wsLoaded;

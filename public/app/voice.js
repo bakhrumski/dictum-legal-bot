@@ -60,7 +60,7 @@
       b.onclick = async function () {
         var r = await J.api('/api/tariff/interest', { method: 'POST', body: { plan: 'voice_minutes', minutes: +b.dataset.p } });
         m.close();
-        if (r.ok) J.toast(t('pay.sent')); else window.open('https://t.me/juristAI_registration_bot', '_blank', 'noopener');
+        if (r.ok) J.toast(t('pay.sent')); else window.open(J.botUrl('auth'), '_blank', 'noopener');
       };
     });
   }

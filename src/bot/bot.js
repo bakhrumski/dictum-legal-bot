@@ -102,8 +102,7 @@ const {
 // separate Justify integration; the bot no longer depends on it.
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
-const LEGAL_BOT_USERNAME = 'yuristga_savolbot';
-const AUTH_BOT_USERNAME = 'juristAI_registration_bot';
+const { LEGAL_BOT_USERNAME, AUTH_BOT_USERNAME } = require('../config/bot-usernames');
 const LEGAL_BOT_AUTH_FALLBACK_ENABLED = false;
 const PAID_ANSWER_STARS = Math.max(1, Number.parseInt(process.env.TG_PAID_ANSWER_STARS || '1', 10) || 1);
 const PAID_ANSWER_CREDITS = Math.max(1, Number.parseInt(process.env.TG_PAID_ANSWER_CREDITS || '4', 10) || 4);

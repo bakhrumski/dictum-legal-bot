@@ -119,7 +119,7 @@
     var r = await post('/api/reg-session');
     if (!r.ok || !r.data.token) { home(r.data.error || L.err); return; }
     token = r.data.token;
-    link = 'https://t.me/' + (r.data.botUsername || 'juristAI_registration_bot') + '?start=reg_' + token;
+    link = 'https://t.me/' + (r.data.botUsername || (window.JAI && JAI.bots ? JAI.bots.auth : 'juristAI_registration_bot')) + '?start=reg_' + token;
     window.open(link, '_blank', 'noopener');
     codeStep();
     watch();

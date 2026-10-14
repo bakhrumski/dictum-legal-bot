@@ -215,8 +215,8 @@ const AI_TIMEOUT_MS = Number(process.env.AI_TIMEOUT_MS) || 180000;
 const AI_STREAM_TIMEOUT_MS = Number(process.env.AI_STREAM_TIMEOUT_MS) || 300000;
 const SHORT_FETCH_TIMEOUT_MS = Number(process.env.SHORT_FETCH_TIMEOUT_MS) || 60000;
 // Keep public legal requests and platform authentication on separate bots.
-const LEGAL_BOT_USERNAME = 'yuristga_savolbot';
-const AUTH_BOT_USERNAME = 'juristAI_registration_bot';
+// Test bots on staging: LEGAL_BOT_USERNAME / REG_BOT_USERNAME (src/config/bot-usernames.js).
+const { LEGAL_BOT_USERNAME, AUTH_BOT_USERNAME } = require('../config/bot-usernames');
 
 // Prevent process crashes from unhandled errors
 // Logged with the stack: the message alone rarely says where it came from.
@@ -9561,7 +9561,8 @@ function googleAuthEnabled() {
 }
 
 app.get('/api/auth/options', (req, res) => {
-  res.json({ google: googleAuthEnabled(), telegram: telegramLoginOptions() });
+  res.json({ google: googleAuthEnabled(), telegram: telegramLoginOptions(),
+    bots: { legal: LEGAL_BOT_USERNAME, auth: AUTH_BOT_USERNAME } });
 });
 
 // One-step Telegram Login (oauth.telegram.org); TELEGRAM_LOGIN_ENABLED=true

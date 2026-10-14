@@ -67,7 +67,7 @@ body.locked .app{filter:blur(7px) saturate(.85);pointer-events:none;user-select:
 .side-sec{margin:18px 10px 6px;display:flex;justify-content:space-between;align-items:center}
 .side-sec a{font-size:12px;color:var(--muted)}
 .hist{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:1px;margin:0 -4px;padding:0 4px}
-.hist a{display:block;padding:7px 10px;border-radius:9px;font-size:13.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hist a{display:block;flex:none;padding:7px 10px;border-radius:9px;font-size:13.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hist a:hover,.hist a.on{background:var(--panel);color:var(--fg)}
 .hist .empty{padding:6px 10px;font-size:13px;color:var(--faint)}
 .usage{border:1px solid var(--line);border-radius:var(--r);padding:12px 12px 13px;margin:10px 0 8px;background:var(--surface)}

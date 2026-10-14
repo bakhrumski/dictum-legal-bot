@@ -68,6 +68,19 @@
   J.toLogin = function () { location.href = '/app/kirish.html?redirect=' + encodeURIComponent(location.pathname + location.hash); };
   J.errMsg = function (d) { d = d || {}; return d.message || (typeof d.error === 'string' && d.error.length > 3 && !/^[a-z_]+$/.test(d.error) ? d.error : '') || J.t('err.generic'); };
 
+  /* ---------- botlar ---------- */
+  // Production nomlari; staging o'z test botlarini /api/auth/options orqali beradi.
+  J.bots = { legal: 'yuristga_savolbot', auth: 'juristAI_registration_bot' };
+  J.botUrl = function (k, start) { return 'https://t.me/' + J.bots[k] + (start ? '?start=' + encodeURIComponent(start) : ''); };
+  J.loadBots = function () {
+    return fetch('/api/auth/options', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (d) {
+      var b = d && d.bots, ok = /^[A-Za-z][A-Za-z0-9_]{3,31}$/;
+      if (b && ok.test(b.legal || '')) J.bots.legal = b.legal;
+      if (b && ok.test(b.auth || '')) J.bots.auth = b.auth;
+      return d;
+    }).catch(function () { return null; });
+  };
+
   /* ---------- holat ---------- */
   J.S = { user: null, tariff: null, plans: null, sessions: [], persona: null, skillsMine: [] };
   try { J.S.persona = localStorage.getItem('jai-persona') || null; } catch (e) {}

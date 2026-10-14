@@ -1134,7 +1134,7 @@ Agar texnik uzilish yuz bersa, limitingiz avtomatik tiklanadi.`,
 
   // ── Account and authentication support ─────────────────────────────────
   if (intent.intent === 'hisob_yordam') {
-    const reply = "Ro'yxatdan o'tish, kirish, OTP va parolni tiklash uchun @juristAI_registration_bot yordam beradi.\n\nBotni ochib, kerakli amalni tanlang. Bu bot esa faqat huquqiy savollar uchun ishlaydi.";
+    const reply = "Ro'yxatdan o'tish, kirish, OTP va parolni tiklash uchun @" + require('../config/bot-usernames').AUTH_BOT_USERNAME + " yordam beradi.\n\nBotni ochib, kerakli amalni tanlang. Bu bot esa faqat huquqiy savollar uchun ishlaydi.";
     await remember(reply, 0);
     return complete({ handled: true, reply, action: 'account_help', escalate: false, meta: { intent: intent.intent } });
   }

@@ -376,6 +376,13 @@
     }
     async function save() {
       if (C.history.length < 2) return;
+      // birinchi saqlash tugamay ikkinchisi kelsa, ikkita bir xil suhbat yaratilmasin
+      if (C.saving) { C.saveAgain = true; return; }
+      C.saving = true;
+      try { await saveNow(); } finally { C.saving = false; }
+      if (C.saveAgain) { C.saveAgain = false; save(); }
+    }
+    async function saveNow() {
       var r = await J.api('/api/ai-chat-sessions', { method: 'POST', body: { id: C.id, title: C.title || C.history[0].text.slice(0, 60), databases: ['lex.uz'], topic: null, messages: C.history } });
       if (r.ok && r.data.id) {
         var isNew = !C.id; C.id = r.data.id;

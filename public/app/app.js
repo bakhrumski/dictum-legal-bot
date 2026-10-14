@@ -111,6 +111,8 @@
     if (document.documentElement.classList.contains('side-mini')) { $('#collapse').setAttribute('aria-expanded', 'false'); $('#collapse').title = t('side.expand'); }
     document.addEventListener('click', function (e) { if (document.body.classList.contains('nav-open') && !e.target.closest('.side') && !e.target.closest('#burger')) document.body.classList.remove('nav-open'); });
     $$('#scope button').forEach(function (b) { b.onclick = function () { J.go(b.dataset.s === 'team' ? '#/jamoa?ai' : '#/'); }; });
+    await J.loadBots();
+    J.tg.bot = J.bots.legal;
     var ok = await J.loadMe();
     if (!ok) return J.toLogin();
     // ishchi guruhga taklif: kirishdan oldin saqlangan bo'lsa, taklif sahifasiga
