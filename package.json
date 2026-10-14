@@ -62,7 +62,7 @@
     "test:workspace": "node tests/workspace-phase1.test.js && node tests/workspace-extract-text.test.js",
     "test:resilience": "node tests/provider-resilience.test.js && node tests/usage-ledger.test.js",
     "test:legal-regressions": "node tests/legal-claim-guard.test.js && node tests/legal-regressions.test.js",
-    "test:voicelab": "node tests/voicelab.test.js && node tests/voicelab-speech.test.js"
+    "test:voicelab": "node tests/voicelab.test.js && node tests/voicelab-speech.test.js && node tests/gemini-transcribe.test.js"
   },
   "keywords": [],
   "author": "",

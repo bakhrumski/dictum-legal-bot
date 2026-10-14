@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>STT solishtirish — JuristAI</title>
+<link rel="stylesheet" href="/app/fonts.css">
+<link rel="stylesheet" href="/app/app.css">
+<style>
+  body{overflow:auto}
+  .page{max-width:1080px;margin:0 auto;padding:32px 20px 60px}
+  h1{font-size:28px;margin-bottom:6px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:18px 0}
+  .row select,.row input[type=file]{height:40px;border:1px solid var(--line);border-radius:10px;padding:0 10px;background:var(--surface)}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:760px){.cols{grid-template-columns:1fr}}
+  .box{border:1px solid var(--line);border-radius:14px;background:var(--surface);padding:18px;min-height:160px}
+  .box h3{font-size:16px;font-weight:500;margin-bottom:4px}
+  .box .meta{font-size:12.5px;color:var(--muted);margin-bottom:12px}
+  .box pre{white-space:pre-wrap;font:inherit;font-size:14.5px;line-height:1.6;margin:0}
+  .seg{margin:0 0 8px}.seg b{font-weight:500;color:var(--muted);margin-right:6px}
+  details{margin-top:12px;font-size:12px;color:var(--muted)} details pre{font-family:ui-monospace,monospace;font-size:11.5px;max-height:240px;overflow:auto}
+  .err{color:var(--bad)}
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>STT solishtirish</h1>
+  <p class="muted">Bitta audio Gemini 3.5 Transcribe va VoiceLab'ga bir vaqtda yuboriladi. Faqat master uchun. Xarajat har biri uchun alohida yoziladi (stage: stt).</p>
+  <div class="row">
+    <input type="file" id="f" accept="audio/*">
+    <button class="pill ghost sm" id="rec">● Yozib olish</button>
+    <select id="lang"><option value="uz">O‘zbek (uz-UZ)</option><option value="ru">Rus (ru-RU)</option><option value="en">Ingliz</option><option value="auto">Avto (aralash)</option></select>
+    <label class="muted" style="font-size:14px"><input type="checkbox" id="dia"> Spikerlarni ajratish</label>
+    <button class="pill sm" id="go" disabled>Solishtirish</button>
+    <span class="muted" id="st" style="font-size:13px"></span>
+  </div>
+  <div class="cols">
+    <div class="box" id="g"><h3>Gemini 3.5 Transcribe</h3><div class="meta">—</div></div>
+    <div class="box" id="v"><h3>VoiceLab</h3><div class="meta">—</div></div>
+  </div>
+</div>
+<script>
+(function () {
+  var blob = null, name = 'audio', dur = 0, rec = null, chunks = [], t0 = 0;
+  var $ = function (s) { return document.querySelector(s); };
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function ready(b, n) { blob = b; name = n; $('#go').disabled = !b; probe(b); }
+  function probe(b) { var a = new Audio(); a.preload = 'metadata'; a.onloadedmetadata = function () { dur = isFinite(a.duration) ? a.duration : 0; $('#st').textContent = dur ? Math.round(dur) + ' soniya' : ''; }; a.src = URL.createObjectURL(b); }
+  $('#f').onchange = function () { var f = this.files[0]; if (f) ready(f, f.name); };
+  $('#rec').onclick = async function () {
+    if (rec) { rec.stop(); return; }
+    try {
+      var s = await navigator.mediaDevices.getUserMedia({ audio: true });
+      rec = new MediaRecorder(s); chunks = []; t0 = Date.now();
+      rec.ondataavailable = function (e) { chunks.push(e.data); };
+      rec.onstop = function () { s.getTracks().forEach(function (t) { t.stop(); }); var b = new Blob(chunks, { type: rec.mimeType || 'audio/webm' }); rec = null; $('#rec').textContent = '● Yozib olish'; ready(b, 'yozuv.webm'); dur = (Date.now() - t0) / 1000; };
+      rec.start(); $('#rec').textContent = '■ To‘xtatish';
+    } catch (e) { alert('Mikrofon ruxsati berilmadi'); }
+  };
+  function show(el, title, r) {
+    var h = '<h3>' + title + '</h3>';
+    if (!r || !r.ok) { el.innerHTML = h + '<div class="meta err">' + esc(r && r.error || 'xato') + '</div>'; return; }
+    h += '<div class="meta">' + esc(r.model) + ' · ' + (r.ms / 1000).toFixed(1) + ' s</div>';
+    if (r.segments && r.segments.length > 1) h += r.segments.map(function (s) { return '<p class="seg"><b>' + esc(s.speaker || '') + '</b>' + esc(s.text) + '</p>'; }).join('');
+    else h += '<pre>' + esc(r.text || '(bo‘sh)') + '</pre>';
+    if (r.raw) h += '<details><summary>Gemini xom javobi</summary><pre>' + esc(r.raw) + '</pre></details>';
+    el.innerHTML = h;
+  }
+  $('#go').onclick = async function () {
+    if (!blob) return;
+    var fd = new FormData(); fd.append('file', blob, name); fd.append('lang', $('#lang').value); fd.append('diarize', $('#dia').checked ? 'true' : 'false'); if (dur) fd.append('durationSec', String(Math.round(dur)));
+    this.disabled = true; $('#st').textContent = 'Yuborilmoqda…';
+    $('#g .meta').textContent = $('#v .meta').textContent = 'kutilmoqda…';
+    try {
+      var res = await fetch('/api/admin/stt/compare', { method: 'POST', body: fd, credentials: 'same-origin' });
+      var d = await res.json().catch(function () { return {}; });
+      if (!res.ok) { $('#st').textContent = (res.status === 401 || res.status === 403) ? 'Master sifatida kiring' : (d.error || ('Xato ' + res.status)); return; }
+      show($('#g'), 'Gemini 3.5 Transcribe', d.gemini); show($('#v'), 'VoiceLab', d.voicelab);
+      $('#st').textContent = 'Asosiy: ' + d.primary;
+    } catch (e) { $('#st').textContent = 'Tarmoq xatosi'; }
+    finally { this.disabled = false; }
+  };
+})();
+</script>
+</body>
+</html>

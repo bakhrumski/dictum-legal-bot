@@ -39,9 +39,10 @@ async function telegramIdentity(msgOrQuery) {
   return { telegramUserId: fromId, adminId };
 }
 
-// Voice notes become typed questions when VoiceLab STT is on (src/ai/voicelab-speech.js).
+// Voice notes become typed questions when an STT engine is on (src/ai/stt.js:
+// VoiceLab by default, Gemini 3.5 Transcribe with STT_PROVIDER=gemini).
 function voiceToTextEnabled() {
-  try { return require('../ai/voicelab-speech').sttEnabled(); } catch (_) { return false; }
+  try { return require('../ai/stt').sttEnabled(); } catch (_) { return false; }
 }
 
 async function testAccountFor(msgOrQuery) {
@@ -1522,7 +1523,7 @@ async function handleTelegramMessage(msg) {
     // the agent below — same grounding, same quota. The audio stays attached
     // for the human queue. Any failure leaves the old path untouched: the note
     // goes to the queue as '[Ovozli xabar]'.
-    const speech = require('../ai/voicelab-speech');
+    const speech = require('../ai/stt');
     if (speech.sttEnabled()) {
       try {
         await bot.sendChatAction(chatId, 'typing').catch(() => {});
@@ -1533,6 +1534,7 @@ async function handleTelegramMessage(msg) {
         const transcript = await speech.transcribe(audio, {
           filename: 'voice.ogg',
           contentType: msg.voice.mime_type || 'audio/ogg',
+          durationSec: msg.voice.duration,
         });
         if (transcript) {
           requestData.request_text = transcript;

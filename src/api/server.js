@@ -652,6 +652,74 @@ app.get('/api/admin/model-check', requireMasterAdmin, async (req, res) => {
   res.json(out);
 });
 
+// ── Speech to text: voice recordings (web app) and engine comparison ─────────
+// The engine is chosen in src/ai/stt.js (STT_PROVIDER=gemini | voicelab).
+//   POST /api/voice/transcribe   multipart {file, lang, durationSec}
+//        -> { segments:[{speaker,start,end,text}], keywords:[], durationSec, provider }
+//        Off unless VOICE_NOTES_ENABLED=true (501: the app keeps the recording
+//        as "pending"). Voice minutes are not metered yet, so ordinary users
+//        get it only with VOICE_NOTES_USERS=true; staff always.
+//   POST /api/admin/stt/compare  (master) multipart {file, lang, diarize}
+//        -> both engines side by side, with timings and Gemini's raw response
+const sttUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ok = /^audio\//.test(file.mimetype) || /\.(ogg|oga|opus|mp3|m4a|wav|webm|aac|flac)$/i.test(file.originalname || '');
+    cb(ok ? null : new Error('Faqat audio fayl'), ok);
+  },
+});
+const VOICE_MAX_SEC = 30 * 60;   // Gemini: 30 minutes per request with speaker diarization
+function audioMime(file) {
+  if (file.mimetype && file.mimetype !== 'application/octet-stream') return file.mimetype.split(';')[0];
+  const ext = String(file.originalname || '').split('.').pop().toLowerCase();
+  return { ogg: 'audio/ogg', oga: 'audio/ogg', opus: 'audio/opus', mp3: 'audio/mp3', m4a: 'audio/m4a', wav: 'audio/wav', webm: 'audio/webm', aac: 'audio/aac', flac: 'audio/flac' }[ext] || 'audio/ogg';
+}
+app.post('/api/voice/transcribe', require('../auth/same-origin').requireSameOrigin, requireAuth, (req, res, next) => {
+  sttUpload.single('file')(req, res, (err) => err ? res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'Fayl 25 MB dan katta' : err.message }) : next());
+}, async (req, res) => {
+  if (process.env.VOICE_NOTES_ENABLED !== 'true') return res.status(501).json({ error: 'voice_notes_disabled' });
+  const staff = req.session.role && req.session.role !== 'user';
+  if (!staff && process.env.VOICE_NOTES_USERS !== 'true') return res.status(403).json({ error: 'voice_notes_staff_only', message: "Ovozli yozuvlar hozircha sinovda." });
+  if (!req.file || !req.file.buffer || !req.file.buffer.length) return res.status(400).json({ error: 'Audio fayl kerak' });
+  const durationSec = Math.max(0, Math.round(Number(req.body.durationSec) || 0));
+  if (durationSec > VOICE_MAX_SEC) return res.status(413).json({ error: 'too_long', message: 'Yozuv 30 daqiqadan uzun. Uni qismlarga bo‘lib yuklang.' });
+  const stt = require('../ai/stt');
+  if (!stt.sttEnabled()) return res.status(501).json({ error: 'stt_not_configured' });
+  try {
+    const r = await stt.transcribeDetailed(req.file.buffer, {
+      contentType: audioMime(req.file), language: String(req.body.lang || 'uz'), diarize: true, durationSec: durationSec || undefined,
+      filename: req.file.originalname || 'audio',
+    });
+    const speakerNo = new Map();
+    const label = (s) => { if (!s) return '1'; if (!speakerNo.has(s)) speakerNo.set(s, String(speakerNo.size + 1)); return speakerNo.get(s); };
+    let segments = (r.segments || []).map(g => ({ speaker: label(g.speaker), start: g.start, end: g.end, text: g.text }));
+    if (!segments.length && r.text) segments = [{ speaker: '1', start: 0, end: durationSec || null, text: r.text }];
+    res.json({ segments, keywords: [], durationSec: durationSec || (segments.length ? segments[segments.length - 1].end : null), provider: r.provider });
+  } catch (e) {
+    console.error('[VOICE] transcribe:', e.message);
+    res.status(502).json({ error: 'stt_failed', message: "Yozuvni matnga aylantirib bo'lmadi. Keyinroq qayta urinib ko'ring." });
+  }
+});
+
+app.post('/api/admin/stt/compare', require('../auth/same-origin').requireSameOrigin, requireMasterAdmin, (req, res, next) => {
+  sttUpload.single('file')(req, res, (err) => err ? res.status(400).json({ error: err.message }) : next());
+}, async (req, res) => {
+  if (!req.file || !req.file.buffer || !req.file.buffer.length) return res.status(400).json({ error: 'Audio fayl kerak' });
+  const opts = { contentType: audioMime(req.file), language: String(req.body.lang || 'uz'), diarize: req.body.diarize === 'true',
+    durationSec: Number(req.body.durationSec) || undefined, filename: req.file.originalname || 'audio' };
+  const timed = async (fn) => { const t = Date.now(); try { return { ok: true, ...(await fn()), ms: Date.now() - t }; } catch (e) { return { ok: false, error: e.message.slice(0, 400), ms: Date.now() - t }; } };
+  const gemini = require('../ai/gemini-transcribe');
+  const voicelab = require('../ai/voicelab-speech');
+  const [g, v] = await Promise.all([
+    gemini.hasKey() ? timed(async () => { const r = await gemini.transcribeDetailed(req.file.buffer, opts); return { model: r.model, text: r.text, segments: r.segments, raw: JSON.stringify(r.raw).slice(0, 20000) }; })
+      : { ok: false, error: 'GEMINI_API_KEY yo‘q' },
+    voicelab.sttEnabled() ? timed(async () => ({ model: 'voicelab/stt', text: await voicelab.transcribe(req.file.buffer, opts) }))
+      : { ok: false, error: 'VoiceLab STT o‘chiq' },
+  ]);
+  res.json({ gemini: g, voicelab: v, primary: require('../ai/stt').primary(), note: "Narx: /api/admin/ai-usage/report (stage 'stt')" });
+});
+
 // ── VoiceLab speech checks (master only) ─────────────────────────────────────
 // The voice list is where a custom cloned voice's id is found, to go into
 // VOICELAB_TTS_VOICE_ID. The TTS preview plays any text in any voice right in
