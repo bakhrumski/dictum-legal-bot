@@ -373,7 +373,19 @@ app.use(['/api/legal-chat', '/api/analyze', '/api/draft', '/api/ai-chat'], aiLim
 // Public assets do not need a database-backed session. Serving them before the
 // session store keeps the landing, login, tariff and attorney-directory pages
 // available even when the database is restarting or at its connection limit.
+// Landing videos are too large for the repository (~140 MB). With
+// LANDING_VIDEO_BASE_URL set (e.g. a public Supabase Storage bucket:
+// https://<ref>.supabase.co/storage/v1/object/public/landing-videos), a request
+// for /videos/<file> is redirected there; a file kept in public/videos is
+// still served first, so nothing changes until the variable is set.
+const LANDING_VIDEO_BASE = String(process.env.LANDING_VIDEO_BASE_URL || '').trim().replace(/\/+$/, '');
 app.use(express.static('public'));
+if (/^https:\/\//.test(LANDING_VIDEO_BASE)) {
+  app.get(/^\/videos\/([A-Za-z0-9._-]+\.(?:mp4|webm|webp|jpg|png))$/, (req, res) => {
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.redirect(302, `${LANDING_VIDEO_BASE}/${req.params[0]}`);
+  });
+}
 
 // Session configuration — PostgreSQL store survives server restarts.
 // SESSION_SECRET should be set independently of JWT_SECRET (separate
