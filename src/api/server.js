@@ -9719,6 +9719,24 @@ app.get('/api/auth/options', (req, res) => {
     bots: { legal: LEGAL_BOT_USERNAME, auth: AUTH_BOT_USERNAME } });
 });
 
+// Landing settings chosen by a master admin in the dashboard (src/config/landing-config.js).
+const landingConfig = require('../config/landing-config');
+app.get('/api/landing-config', async (req, res) => {
+  res.set('Cache-Control', 'public, max-age=30');
+  res.json(await landingConfig.read(pool));
+});
+app.put('/api/admin/landing-config', requireMasterAdmin, require('../auth/same-origin').requireSameOrigin, async (req, res) => {
+  try {
+    const out = await landingConfig.write(pool, req.body || {}, req.session.adminId);
+    if (out.error) return res.status(400).json({ error: out.error, options: landingConfig.BG_OPTIONS });
+    logAudit(req, 'landing.settings', 'site_settings', 'landing:bg=' + out.settings.bg);
+    res.json(out.settings);
+  } catch (e) {
+    console.error('[LANDING] settings save failed:', e.message);
+    res.status(500).json({ error: 'save_failed' });
+  }
+});
+
 // One-step Telegram Login (oauth.telegram.org); TELEGRAM_LOGIN_ENABLED=true
 // after BotFather /setdomain for the auth bot (src/auth/telegram-login.js).
 mountTelegramLoginRoutes(app, { pool, logAudit, appHome: APP_HOME.startsWith('/app') ? APP_HOME : null });
@@ -10936,6 +10954,9 @@ async function runMigrations() {
       if (boot.created) console.log(`[AUTH] first master created: ${boot.username}`);
       else if (boot.reason !== 'master_exists') console.warn(`[AUTH] no master account: ${boot.reason}`);
     }
+
+    // Landing settings (master admin): site_settings key 'landing'
+    await require('../config/landing-config').ensureTable(pool);
 
     // Agent traces table — audit log for all AI agent runs
     await pool.query(`CREATE TABLE IF NOT EXISTS agent_traces (

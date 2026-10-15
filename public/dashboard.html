@@ -459,6 +459,7 @@
         #auditLogSection.collapsed .reg-section-body,
         #spendSection.collapsed .reg-section-body,
         #aiUsageSection.collapsed .reg-section-body,
+        #landingSection.collapsed .reg-section-body,
         #offersSection.collapsed .reg-section-body { display: none !important; }
 
         /* Hide chat wrapper button (chat is now a tab) */
@@ -7576,6 +7577,7 @@
             <button type="button" class="mg-card" data-mg-target="auditLogSection" aria-pressed="false" onclick="openManagementSection('auditLogSection', loadAuditLog, true)"><span>Xavfsizlik</span><small>Audit va muhim hodisalar</small></button>
             <button type="button" class="mg-card" data-mg-target="spendSection" aria-pressed="false" onclick="openManagementSection('spendSection', loadSpendReport, true)"><span>Xarajat</span><small>AI token va API sarfi</small></button>
             <button type="button" class="mg-card" id="aiUsageCard" data-mg-target="aiUsageSection" aria-pressed="false" onclick="openManagementSection('aiUsageSection', loadAiUsage, true)"><span>AI so'rovlar</span><small>Har so'rov: modellar, usage, xarajat</small></button>
+            <button type="button" class="mg-card" id="landingCard" style="display:none" data-mg-target="landingSection" aria-pressed="false" onclick="openManagementSection('landingSection', loadLandingAdmin, true)"><span>Landing</span><small>juristai.uz fon bezagi</small></button>
             <button type="button" class="mg-card" id="offersCard" data-mg-target="offersSection" aria-pressed="false" onclick="openManagementSection('offersSection', loadOffers, true)"><span>Chegirmalar</span><small>Individual tarif takliflari</small></button>
         </div>
         <script>
@@ -7782,6 +7784,26 @@
                     <input type="month" id="spendMonth" class="detail-select" style="width:auto;padding:5px 8px;" onchange="loadSpendReport()">
                 </div>
                 <div id="spendContent"><div class="reg-empty">Yuklash uchun bo'limni oching</div></div>
+            </div>
+        </div>
+
+        <!-- Landing sozlamalari — master only -->
+        <div class="reg-section collapsed" id="landingSection" style="margin-top:16px;display:none">
+            <div class="reg-section-header" onclick="openManagementSection('landingSection', loadLandingAdmin)">
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                    <h2>Landing sahifasi</h2>
+                </div>
+            </div>
+            <div class="reg-section-body">
+                <p style="font-size:13px;color:var(--text-secondary);margin:0 0 12px;">
+                    juristai.uz'dagi och rangli bo'limlarning fon bezagi. Saqlangach barcha tashrif buyuruvchilarga 30 soniya ichida ko'rinadi. Faqat Master Admin o'zgartiradi.
+                </p>
+                <div id="landingBgOptions" style="display:flex;flex-direction:column;gap:8px;max-width:420px"></div>
+                <div style="display:flex;gap:10px;align-items:center;margin-top:14px;">
+                    <button type="button" id="landingSaveBtn" class="btn btn-primary" onclick="saveLandingAdmin()" style="padding:7px 16px;border-radius:8px;">Saqlash</button>
+                    <span id="landingStatus" style="font-size:12px;color:var(--text-secondary);"></span>
+                </div>
             </div>
         </div>
 
@@ -8536,7 +8558,7 @@
                     spendSection.style.display = data.role === 'master' ? '' : 'none';
                 }
                 // Per-request AI usage: master only (the API refuses everyone else too)
-                ['aiUsageSection', 'aiUsageCard', 'offersSection', 'offersCard'].forEach(function (id) {
+                ['aiUsageSection', 'aiUsageCard', 'offersSection', 'offersCard', 'landingSection', 'landingCard'].forEach(function (id) {
                     const el = document.getElementById(id);
                     if (el) el.style.display = data.role === 'master' ? '' : 'none';
                 });
@@ -15655,6 +15677,46 @@
             } catch (e) {
                 box.innerHTML = '<div class="reg-empty">Yuklashda xatolik</div>';
             }
+        }
+
+        // Landing background decoration (PUT /api/admin/landing-config, master only)
+        const LANDING_BG = [['1', "To'r"], ['2', 'Nuqta'], ['3', "Rang dog'i"], ['5', '§ belgi'], ['0', 'Bezaksiz']];
+        let landingBgSaved = '1';
+        async function loadLandingAdmin() {
+            const box = document.getElementById('landingBgOptions');
+            const st = document.getElementById('landingStatus');
+            if (!box) return;
+            try {
+                const r = await fetch('/api/landing-config', { cache: 'no-store' });
+                const d = r.ok ? await r.json() : {};
+                landingBgSaved = String(d.bg || '1');
+            } catch (e) { if (st) st.textContent = 'Joriy sozlamani o\'qib bo\'lmadi'; }
+            box.innerHTML = LANDING_BG.map(function (o) {
+                return '<label style="display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--glass-border);border-radius:8px;cursor:pointer;font-size:14px">'
+                    + '<input type="radio" name="landingBg" value="' + o[0] + '"' + (o[0] === landingBgSaved ? ' checked' : '') + '>'
+                    + '<span style="flex:1">' + o[1] + (o[0] === landingBgSaved ? ' <small style="color:var(--text-muted)">(joriy)</small>' : '') + '</span>'
+                    + '<a href="/?bg=' + o[0] + '" target="_blank" rel="noopener" style="font-size:12px">Ko\'rish</a></label>';
+            }).join('');
+        }
+        async function saveLandingAdmin() {
+            const st = document.getElementById('landingStatus');
+            const btn = document.getElementById('landingSaveBtn');
+            const pick = document.querySelector('input[name="landingBg"]:checked');
+            if (!pick) return;
+            if (btn) btn.disabled = true;
+            if (st) st.textContent = 'Saqlanmoqda...';
+            try {
+                const r = await fetch('/api/admin/landing-config', {
+                    method: 'PUT', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ bg: pick.value })
+                });
+                if (!r.ok) throw new Error(r.status === 403 || r.status === 401 ? 'Ruxsat yo\'q' : 'Xato ' + r.status);
+                if (st) st.textContent = 'Saqlandi';
+                await loadLandingAdmin();
+            } catch (e) {
+                if (st) st.textContent = e.message || 'Saqlab bo\'lmadi';
+            } finally { if (btn) btn.disabled = false; }
         }
 
         function openManagementSection(sectionId, loader, forceOpen) {

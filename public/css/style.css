@@ -480,7 +480,8 @@ video.bg{position:absolute;inset:0;z-index:0;width:100%;height:100%;object-fit:c
 .band h2{font-size:clamp(28px,4vw,48px);max-width:20ch}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:32px;margin-top:56px}
 .stats b{display:block;font-weight:400;font-size:clamp(48px,7vw,84px);line-height:1;letter-spacing:-.04em;font-variant-numeric:tabular-nums}
-.stats span{display:block;color:var(--on-dark-muted);margin-top:12px;max-width:26ch}
+.stats span{display:block;color:#fff;font-size:clamp(16px,1.35vw,19px);font-weight:500;line-height:1.4;margin-top:14px;max-width:26ch;text-shadow:0 1px 2px rgba(0,0,0,.7),0 0 20px rgba(0,0,0,.55)}
+.stats b{text-shadow:0 2px 24px rgba(0,0,0,.35)}
 
 /* ---------- yakun va footer ---------- */
 .cta{background:var(--dark);color:#fff;text-align:center;padding:clamp(84px,11vw,150px) 20px}
@@ -653,15 +654,12 @@ video.bg{position:absolute;inset:0;z-index:0;width:100%;height:100%;object-fit:c
 body::after{content:"";position:fixed;inset:0;z-index:15;pointer-events:none;opacity:.035;mix-blend-mode:multiply;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
 
-/* ===== fon bezagi variantlari (sinov): html[data-bg="2|3|5|0"]; 1 = to'r (standart) ===== */
+/* ===== fon bezagi: html[data-bg="2|3|5|0"]; 1 = to'r (standart). Master Admin tanlaydi: /api/landing-config ===== */
 html[data-bg="2"] .pin-in::before,html[data-bg="2"] #kimlar::before,html[data-bg="2"] #xavfsizlik::before{background-image:radial-gradient(rgba(17,18,20,.16) 1px,transparent 1.6px);background-size:26px 26px}
 html[data-bg="3"] .pin-in::before,html[data-bg="3"] #kimlar::before,html[data-bg="3"] #xavfsizlik::before{background-image:radial-gradient(ellipse 46% 52% at 88% 12%,rgba(61,107,242,.11),transparent 70%),radial-gradient(ellipse 40% 46% at 6% 92%,rgba(61,107,242,.06),transparent 70%);background-size:auto;-webkit-mask-image:none;mask-image:none}
 html[data-bg="5"] .pin-in::before,html[data-bg="5"] #kimlar::before,html[data-bg="5"] #xavfsizlik::before{content:"§";background:none;-webkit-mask-image:none;mask-image:none;inset:auto 3% auto auto;top:50%;transform:translateY(-50%);font:400 min(78vh,640px)/1 Georgia,"Times New Roman",serif;color:rgba(17,18,20,.04)}
 html[data-bg="5"] #kimlar::before{right:auto;left:2%}
 html[data-bg="0"] .pin-in::before,html[data-bg="0"] #kimlar::before,html[data-bg="0"] #xavfsizlik::before{display:none}
-#bgtest{position:fixed;left:14px;bottom:14px;z-index:60;display:flex;align-items:center;gap:4px;background:#111214;color:#fff;border-radius:99px;padding:5px 6px 5px 12px;font:500 12px var(--sans);box-shadow:0 6px 20px rgba(0,0,0,.25)}
-#bgtest button{font:inherit;color:#fff;background:none;border:0;border-radius:99px;padding:5px 10px;cursor:pointer;opacity:.65}
-#bgtest button[aria-pressed="true"]{background:#fff;color:#111214;opacity:1}
 
 /* ===== ichki sahifa: AI huquqiy chat ===== */
 .tool .more{display:inline-block;margin-top:8px;font-size:15px;font-weight:500;color:var(--cta)}

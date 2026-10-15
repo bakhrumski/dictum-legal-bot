@@ -1105,14 +1105,20 @@
   window.addEventListener('resize', function () { navState(); fitStack(); pinScroll(); });
   navState(); pinScroll();
 
-  /* ---------- VAQTINCHA: fon bezagi variantlarini solishtirish paneli. Tanlangach shu blok o'chiriladi ---------- */
+  /* ---------- fon bezagi: Master Admin dashboard'da tanlanadi (GET /api/landing-config).
+     ?bg=0|1|2|3|5 faqat shu ochilgan sahifa uchun ko'rinish (master saqlashdan oldin solishtiradi). ---------- */
   (function () {
-    var opts = [['1', 'To‘r'], ['2', 'Nuqta'], ['3', 'Rang dog‘i'], ['5', '§ belgi'], ['0', 'Bezaksiz']], cur = '1';
-    try { cur = new URLSearchParams(location.search).get('bg') || localStorage.getItem('bg') || '1'; } catch (e) {}
-    var box = document.createElement('div'); box.id = 'bgtest'; box.innerHTML = '<span>Fon:</span>';
-    function set(v) { cur = v; document.documentElement.dataset.bg = v; try { localStorage.setItem('bg', v); } catch (e) {} $$('button', box).forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.v === v)); }); }
-    opts.forEach(function (o) { var b = document.createElement('button'); b.type = 'button'; b.dataset.v = o[0]; b.textContent = o[1]; b.addEventListener('click', function () { set(o[0]); }); box.appendChild(b); });
-    document.body.appendChild(box); set(cur);
+    var ok = { '0': 1, '1': 1, '2': 1, '3': 1, '5': 1 };
+    function apply(v) { if (ok[v]) document.documentElement.dataset.bg = v; }
+    var preview = null;
+    try { preview = new URLSearchParams(location.search).get('bg'); } catch (e) {}
+    if (preview && ok[preview]) { apply(preview); return; }
+    apply('1');
+    if (!window.fetch) return;
+    fetch('/api/landing-config', { credentials: 'omit' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { if (d && d.bg != null) apply(String(d.bg)); })
+      .catch(function () {});
   })();
 
   /* ---------- skroll to'xtaganda yaqin turgan bo'lim chegarasi ekran tepasiga tortiladi ---------- */
