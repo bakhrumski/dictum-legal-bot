@@ -198,6 +198,8 @@
   }
 
   /* ---------------- natija kartasi ---------------- */
+  // Word 2016/2019 (EdgeHTML) has no TextDecoder / streamed body: the answer then comes whole, as JSON
+  var CAN_STREAM = !!(window.TextDecoder && window.ReadableStream && window.Response && Response.prototype && 'body' in Response.prototype);
   var busy = false, ctrl = null;
   function setBusy(v) { busy = v; $$('.act, #selGo, #chatGo').forEach(function (b) { b.disabled = v; }); }
   function card(title, where) {
@@ -212,11 +214,11 @@
   /** /api/legal-chat (SSE). Qaytaradi: { reply } yoki null (xato kartada ko'rsatilgan) */
   function askLegal(el, payload) {
     var body = { message: payload.message, history: payload.history || [], databases: ['lex.uz'], topic: null, topics: null, autoDetect: true,
-      documentText: payload.documentText || null, docTicket: null, scanIds: null, confirmedJob: payload.confirmedJob || null, stream: true };
+      documentText: payload.documentText || null, docTicket: null, scanIds: null, confirmedJob: payload.confirmedJob || null, stream: CAN_STREAM };
     if (body.documentText && body.documentText.length > 900000) { fail(el, "Hujjat juda katta (900 000 belgidan ortiq). Bir qismini belgilab, \"Tanlangan matn\" orqali yuboring."); return Promise.resolve(null); }
-    ctrl = new AbortController(); setBusy(true);
+    ctrl = window.AbortController ? new AbortController() : null; setBusy(true);
     var st = $('.st', el), live = $('.live', el), acc = '';
-    return api('/api/legal-chat', { method: 'POST', body: body, signal: ctrl.signal }).then(function (res) {
+    return api('/api/legal-chat', { method: 'POST', body: body, signal: ctrl ? ctrl.signal : undefined }).then(function (res) {
       if (res.status === 401) { setBusy(false); store.set(''); show('connect'); toast("Ulanish muddati tugagan. Akkauntni qayta ulang."); el.remove(); return null; }
       var ct = res.headers.get('Content-Type') || '';
       if (!res.ok || ct.indexOf('event-stream') < 0) {
@@ -414,6 +416,12 @@
       } catch (e) {}
     }
     boot();
+  }
+  if (!window.fetch || !window.Promise) {
+    // Internet Explorer engine (Word 2016 MSI and older): the pane cannot run here
+    document.getElementById('vConnect').hidden = false;
+    document.getElementById('vConnect').innerHTML = '<h1>Word versiyasi eski</h1><p class="muted">Bu Word ichki brauzeri (Internet Explorer) JuristAI panelini ishlata olmaydi. Word Online (office.com) yoki Microsoft 365 Word\'dan foydalaning.</p>';
+    return;
   }
   if (window.Office && Office.onReady) Office.onReady(start); else start(null);
   window.__jaiWord = { md: md, splitProposal: splitProposal, wordHtml: wordHtml };
