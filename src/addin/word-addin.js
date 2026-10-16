@@ -185,10 +185,11 @@ function addinCorsAllowed(req) {
 const ADDIN_CORS = Object.freeze({ origin: true, credentials: false, methods: ['GET', 'POST'], allowedHeaders: ['Authorization', 'Content-Type', 'Accept'], maxAge: 600 });
 
 /** /gdocs/panel.js — the task pane's markup for the Google Docs sidebar (one source: public/word/taskpane.html). */
-function panelScript(html) {
+function panelScript(html, base = '') {
   const a = html.indexOf('<body>');
   const b = html.indexOf('<script src="/word/taskpane.js');
-  const markup = html.slice(a + 6, b).trim();
+  // images by absolute URL: the sidebar page is not on this host
+  const markup = html.slice(a + 6, b).trim().replace(/ src="\/(?!\/)/g, ` src="${String(base).replace(/\/+$/, '')}/`);
   return 'document.body.insertAdjacentHTML("afterbegin", ' + JSON.stringify(markup).replace(/<\//g, '<\\/') + ');\n';
 }
 
@@ -312,7 +313,7 @@ function mountManifest(app) {
       const html = fs.readFileSync(path.join(__dirname, '..', '..', 'public', 'word', 'taskpane.html'), 'utf8');
       res.set('Content-Type', 'application/javascript; charset=utf-8');
       res.set('Cache-Control', 'public, max-age=300');
-      res.send(panelScript(html));
+      res.send(panelScript(html, baseUrlOf(req)));
     } catch (e) {
       res.status(500).type('application/javascript').send('/* panel unavailable */');
     }

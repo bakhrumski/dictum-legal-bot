@@ -51,6 +51,10 @@
     _blocksOf: blocksOf
   };
 
+  // panel markup'idagi /word/... rasmlar shu serverdan yuklansin (sidebar googleusercontent'da turadi)
+  var base = String(window.JAI_BASE || '').replace(/\/+$/, '');
+  Array.prototype.forEach.call(document.querySelectorAll('img[src^="/"]'), function (img) { img.src = base + img.getAttribute('src'); });
+
   // Word'ga oid matnlar
   var h1 = document.querySelector('#vConnect h1'); if (h1) h1.textContent = 'Google Docs uchun JuristAI';
   var tip = document.querySelector('#selPrev'); if (tip) tip.textContent = 'Hujjatda bandni belgilang.';

@@ -153,6 +153,9 @@ function res() {
     assert.ok(js.includes('vMain') && !js.includes('taskpane.js'));
     const real = w.panelScript(require('fs').readFileSync(require('path').join(__dirname, '..', 'public', 'word', 'taskpane.html'), 'utf8'));
     assert.ok(real.includes('chatInput') && real.includes('pairCode') && !/<script/i.test(real));
+    const withBase = w.panelScript(require('fs').readFileSync(require('path').join(__dirname, '..', 'public', 'word', 'taskpane.html'), 'utf8'), 'https://juristai-staging.onrender.com');
+    assert.ok(withBase.includes('src=\\"https://juristai-staging.onrender.com/word/assets/wordmark-light.png\\"'), 'wordmark by absolute URL');
+    assert.ok(!/src=\\"\/word/.test(withBase));
   });
 
   await test('pane assets may be loaded by the Google sidebar', () => {
