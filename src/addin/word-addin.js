@@ -207,13 +207,13 @@ function manifestXml(base, { id, name = 'JuristAI' } = {}) {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0" xmlns:ov="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="TaskPaneApp">
   <Id>${guid}</Id>
-  <Version>1.0.0.0</Version>
+  <Version>1.0.1.0</Version>
   <ProviderName>JuristAI</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="${label}"/>
   <Description DefaultValue="O'zbekiston qonunchiligi asosida hujjat tahlili, savol-javob va tahrir takliflari (lex.uz manbalari bilan)."/>
-  <IconUrl DefaultValue="${b}/word/assets/icon-32.png"/>
-  <HighResolutionIconUrl DefaultValue="${b}/word/assets/icon-64.png"/>
+  <IconUrl DefaultValue="${b}/word/assets/icon-32.png?v=2"/>
+  <HighResolutionIconUrl DefaultValue="${b}/word/assets/icon-64.png?v=2"/>
   <SupportUrl DefaultValue="${b}/"/>
   <AppDomains>
     <AppDomain>${b}</AppDomain>
@@ -273,9 +273,9 @@ function manifestXml(base, { id, name = 'JuristAI' } = {}) {
     </Hosts>
     <Resources>
       <bt:Images>
-        <bt:Image id="Icon.16x16" DefaultValue="${b}/word/assets/icon-16.png"/>
-        <bt:Image id="Icon.32x32" DefaultValue="${b}/word/assets/icon-32.png"/>
-        <bt:Image id="Icon.80x80" DefaultValue="${b}/word/assets/icon-80.png"/>
+        <bt:Image id="Icon.16x16" DefaultValue="${b}/word/assets/icon-16.png?v=2"/>
+        <bt:Image id="Icon.32x32" DefaultValue="${b}/word/assets/icon-32.png?v=2"/>
+        <bt:Image id="Icon.80x80" DefaultValue="${b}/word/assets/icon-80.png?v=2"/>
       </bt:Images>
       <bt:Urls>
         <bt:Url id="Commands.Url" DefaultValue="${b}/word/commands.html"/>
