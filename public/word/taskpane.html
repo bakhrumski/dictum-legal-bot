@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>JuristAI — Word</title>
+<link rel="stylesheet" href="/app/fonts.css">
+<link rel="stylesheet" href="/word/taskpane.css?v=1">
+<script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+</head>
+<body>
+<header class="top">
+  <span class="brand">JURISTAI</span>
+  <div class="who" id="who" hidden>
+    <span class="who-n" id="whoName"></span>
+    <button type="button" class="link" id="logout">Chiqish</button>
+  </div>
+</header>
+
+<!-- Ulanmagan -->
+<main id="vConnect" class="view" hidden>
+  <h1>Word uchun JuristAI</h1>
+  <p class="muted">Hujjatni O'zbekiston qonunchiligi asosida tahlil qiling, tanlangan band bo'yicha savol bering va tahrir takliflarini to'g'ridan-to'g'ri hujjatga qo'ying.</p>
+  <button type="button" class="pill wide" id="connect">JuristAI akkauntini ulash</button>
+  <div id="pairBox" class="card" hidden>
+    <p class="muted sm">Brauzerda JuristAI'ga kiring va shu kodni tasdiqlang:</p>
+    <div class="code" id="pairCode">——————</div>
+    <button type="button" class="pill wide" id="openLink">Brauzerda ochish</button>
+    <p class="muted xs">Havola ochilmasa, manzilni brauzerga kiriting:<br><span class="url" id="pairUrl"></span></p>
+    <p class="muted xs" id="pairState">Tasdiqlash kutilmoqda…</p>
+  </div>
+  <p class="err" id="connectErr" hidden></p>
+</main>
+
+<!-- Ulangan -->
+<main id="vMain" class="view" hidden>
+  <nav class="tabs" role="tablist">
+    <button type="button" role="tab" data-tab="doc" aria-selected="true">Hujjat</button>
+    <button type="button" role="tab" data-tab="sel" aria-selected="false">Tanlangan</button>
+    <button type="button" role="tab" data-tab="chat" aria-selected="false">Chat</button>
+  </nav>
+
+  <section class="tab" data-pane="doc">
+    <p class="muted sm">Butun hujjat JuristAI'ga yuboriladi. Uzun hujjat tahlili tarif limitidan bir necha birlik oladi; oldin narxi so'raladi.</p>
+    <div class="acts">
+      <button type="button" class="act" data-doc="risk"><b>Xavf tahlili</b><small>Xavfli bandlar, yetishmayotgan shartlar, tavsiyalar</small></button>
+      <button type="button" class="act" data-doc="opinion"><b>Yuridik xulosa</b><small>Hujjat bo'yicha rasmiy uslubdagi xulosa</small></button>
+      <button type="button" class="act" data-doc="explain"><b>Oddiy tilda tushuntirish</b><small>Asosiy mazmun, majburiyatlar, muddatlar</small></button>
+    </div>
+    <div class="out" id="outDoc"></div>
+  </section>
+
+  <section class="tab" data-pane="sel" hidden>
+    <div class="selbox">
+      <div class="selhead"><span class="kicker">Tanlangan matn</span><button type="button" class="link" id="selRefresh">Yangilash</button></div>
+      <div class="selprev" id="selPrev">Word'da bandni belgilang.</div>
+    </div>
+    <div class="seg" role="radiogroup">
+      <button type="button" data-mode="ask" aria-pressed="true">Savol</button>
+      <button type="button" data-mode="edit" aria-pressed="false">Tahrir taklifi</button>
+    </div>
+    <div id="presets" class="chips" hidden>
+      <button type="button" class="chip" data-p="Bandni amaldagi qonunchilikka moslashtiring.">Qonunga moslashtirish</button>
+      <button type="button" class="chip" data-p="Bandni aniqroq va bir ma'noli yozing.">Aniqroq yozish</button>
+      <button type="button" class="chip" data-p="Bandni mening tarafim manfaatini kuchliroq himoya qiladigan qilib yozing.">Tarafimni himoya qilish</button>
+      <button type="button" class="chip" data-p="Bandni rasmiy-huquqiy uslubda qayta yozing.">Rasmiy uslub</button>
+    </div>
+    <textarea id="selInput" rows="3" placeholder="Bu band bo'yicha savolingiz…"></textarea>
+    <button type="button" class="pill wide" id="selGo">So'rash</button>
+    <div class="out" id="outSel"></div>
+  </section>
+
+  <section class="tab" data-pane="chat" hidden>
+    <div id="chatLog" class="chatlog"></div>
+    <label class="chk"><input type="checkbox" id="chatDoc" checked> Hujjat matnini kontekstga qo'shish</label>
+    <textarea id="chatInput" rows="3" placeholder="Savolingizni yozing…"></textarea>
+    <div class="row">
+      <button type="button" class="pill" id="chatGo">Yuborish</button>
+      <button type="button" class="link" id="chatNew">Yangi suhbat</button>
+    </div>
+  </section>
+
+</main>
+
+<div id="toast" class="toast" hidden></div>
+<script src="/word/taskpane.js?v=1"></script>
+</body>
+</html>

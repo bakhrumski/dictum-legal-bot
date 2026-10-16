@@ -313,6 +313,11 @@ app.set('trust proxy', 1);
 // inline-handler refactor (tracked in the security roadmap).
 const helmet = require('helmet');
 app.use(helmet({ contentSecurityPolicy: false }));
+// Word add-in (public/word/): the task pane is framed by Word on the web, and
+// its manifest is generated for the host it is downloaded from.
+const wordAddin = require('../addin/word-addin');
+app.use(wordAddin.wordFrameHeaders);
+wordAddin.mountManifest(app);
 
 // CORS: the app is same-origin (dashboard served from this server). A wide-open
 // `cors()` on a cookie-authenticated API invites cross-origin abuse; only the
@@ -407,6 +412,12 @@ const sessionMiddleware = session({
     secure: 'auto',    // HTTPS-only when the request is HTTPS (trust proxy set above)
   }
 });
+// A Word task pane signs in with its own token (Authorization: Bearer jai_…)
+// on a short list of routes; it gets a plain session object for that request
+// and express-session below leaves it alone (src/addin/word-addin.js).
+const wordBearer = wordAddin.createBearerAuth(pool);
+app.locals.addinForget = wordBearer.forget;
+app.use(wordBearer);
 app.use((req, res, next) => {
   const publicDataRoute = req.method === 'GET'
     && (req.path === '/api/attorneys' || req.path === '/api/practice-areas');
@@ -9719,6 +9730,9 @@ app.get('/api/auth/options', (req, res) => {
     bots: { legal: LEGAL_BOT_USERNAME, auth: AUTH_BOT_USERNAME } });
 });
 
+// Word add-in: pairing, tokens, connections (src/addin/word-addin.js)
+wordAddin.mountRoutes(app, { pool, requireAuth, requireSameOrigin: require('../auth/same-origin').requireSameOrigin, logAudit, rateLimit });
+
 // Landing settings chosen by a master admin in the dashboard (src/config/landing-config.js).
 const landingConfig = require('../config/landing-config');
 app.get('/api/landing-config', async (req, res) => {
@@ -10955,6 +10969,8 @@ async function runMigrations() {
       else if (boot.reason !== 'master_exists') console.warn(`[AUTH] no master account: ${boot.reason}`);
     }
 
+    // Word add-in tokens (src/addin/word-addin.js)
+    await wordAddin.ensureTables(pool);
     // Landing settings (master admin): site_settings key 'landing'
     await require('../config/landing-config').ensureTable(pool);
 
