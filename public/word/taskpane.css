@@ -39,7 +39,7 @@ p{margin:0 0 12px}
 .url{word-break:break-all;color:var(--fg)}
 .err{color:var(--bad);font-size:13px}
 
-.tabs{display:flex;gap:4px;padding:3px;background:var(--panel);border-radius:99px;margin-bottom:14px}
+.tabs{display:flex;gap:4px;padding:3px;background:var(--panel);border-radius:99px;margin-bottom:14px;position:sticky;top:52px;z-index:4;box-shadow:0 0 0 6px var(--bg)}
 .tabs button{flex:1;border:0;background:none;border-radius:99px;padding:7px 4px;font-size:13px;cursor:pointer;color:var(--muted)}
 .tabs button[aria-selected="true"]{background:var(--surface);color:var(--fg);box-shadow:0 1px 3px rgba(0,0,0,.08)}
 
