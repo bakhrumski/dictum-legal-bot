@@ -131,6 +131,37 @@ function res() {
     assert.ok(!/juristai\.uz/.test(a));
   });
 
+  await test('Google Docs sidebar origin may call only the add-in routes, without cookies', () => {
+    const g = 'https://n-abc123def-0lu-script.googleusercontent.com';
+    const mk = (method, path, extra = {}) => ({ method, path, headers: { origin: g, ...extra } });
+    assert.ok(w.addinCorsAllowed(mk('POST', '/api/legal-chat')));
+    assert.ok(w.addinCorsAllowed(mk('OPTIONS', '/api/legal-chat', { 'access-control-request-method': 'POST' })));
+    assert.ok(w.addinCorsAllowed(mk('POST', '/api/addin/pair')));
+    assert.ok(w.addinCorsAllowed(mk('GET', '/api/addin/pair/' + 'a'.repeat(64))));
+    assert.ok(w.addinCorsAllowed(mk('GET', '/api/user-info')));
+    assert.ok(!w.addinCorsAllowed(mk('GET', '/api/requests')));
+    assert.ok(!w.addinCorsAllowed(mk('POST', '/api/addin/pair/approve')), 'approval stays on the site');
+    assert.ok(!w.addinCorsAllowed(mk('POST', '/api/admin/landing-config')));
+    assert.ok(!w.addinCorsAllowed({ method: 'POST', path: '/api/legal-chat', headers: { origin: 'https://evil.googleusercontent.com.attacker.io' } }));
+    assert.ok(!w.addinCorsAllowed({ method: 'POST', path: '/api/legal-chat', headers: { origin: 'http://n-abc-script.googleusercontent.com' } }));
+    assert.strictEqual(w.ADDIN_CORS.credentials, false);
+  });
+
+  await test('the sidebar markup comes from the Word pane page, without its scripts', () => {
+    const js = w.panelScript('<html><body>\n<header>A</header><main id="vMain"></main>\n<script src="/word/taskpane.js?v=3"></script></body></html>');
+    assert.ok(js.startsWith('document.body.insertAdjacentHTML("afterbegin", '));
+    assert.ok(js.includes('vMain') && !js.includes('taskpane.js'));
+    const real = w.panelScript(require('fs').readFileSync(require('path').join(__dirname, '..', 'public', 'word', 'taskpane.html'), 'utf8'));
+    assert.ok(real.includes('chatInput') && real.includes('pairCode') && !/<script/i.test(real));
+  });
+
+  await test('pane assets may be loaded by the Google sidebar', () => {
+    const r = res(); w.wordFrameHeaders({ path: '/gdocs/host.js' }, r, () => {});
+    assert.strictEqual(r.headers['Cross-Origin-Resource-Policy'], 'cross-origin');
+    const r2 = res(); w.wordFrameHeaders({ path: '/api/user-info' }, r2, () => {});
+    assert.ok(!r2.headers['Cross-Origin-Resource-Policy']);
+  });
+
   console.log(failed ? `\n${failed} failed` : '\nall passed');
   process.exit(failed ? 1 : 0);
 })();

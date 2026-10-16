@@ -323,12 +323,13 @@ wordAddin.mountManifest(app);
 // `cors()` on a cookie-authenticated API invites cross-origin abuse; only the
 // explicitly configured origins (e.g. a future mobile app) are allowed.
 const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
-app.use(cors({
-  origin: (origin, cb) => {
-    if (!origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true); // same-origin / curl
-    return cb(null, false); // cross-origin browsers: no CORS headers
-  },
-  credentials: true,
+// The Google Docs sidebar (googleusercontent.com) may call only the add-in's
+// token routes, without cookies (src/addin/word-addin.js addinCorsAllowed).
+app.use(cors((req, cb) => {
+  if (wordAddin.addinCorsAllowed(req)) return cb(null, wordAddin.ADDIN_CORS);
+  const origin = req.header('Origin');
+  // same-origin / curl, or an explicitly configured origin; other browsers get no CORS headers
+  cb(null, { origin: !origin || ALLOWED_ORIGINS.includes(origin), credentials: true });
 }));
 
 // Body limits: uploads go through multer (multipart), so no JSON route needs

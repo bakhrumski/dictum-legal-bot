@@ -154,13 +154,42 @@ function createBearerAuth(pool, { cacheMs = 60 * 1000 } = {}) {
   return bearerAuth;
 }
 
-/** X-Frame-Options would keep the task pane out of Word on the web. */
+/**
+ * X-Frame-Options would keep the task pane out of Word on the web; the
+ * Google Docs sidebar (a googleusercontent.com page) loads the pane's
+ * script and style from here, which Cross-Origin-Resource-Policy would block.
+ */
 function wordFrameHeaders(req, res, next) {
+  if (req.path.startsWith('/word/') || req.path.startsWith('/gdocs/')) res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   if (req.path.startsWith('/word/')) {
     res.removeHeader('X-Frame-Options');
     res.setHeader('Content-Security-Policy', "frame-ancestors 'self' https://*.officeapps.live.com https://*.office.com https://*.office365.com https://*.office.net https://*.microsoft.com https://*.cloud.microsoft https://*.sharepoint.com https://*.live.com");
   }
   next();
+}
+
+// Google Docs sidebar (Apps Script HtmlService) runs on such an origin
+const GOOGLE_SANDBOX_ORIGIN = /^https:\/\/[a-z0-9-]+-script\.googleusercontent\.com$/;
+
+/** CORS for the Google Docs sidebar: only its own routes, never with cookies. */
+function addinCorsAllowed(req) {
+  const origin = req.headers && req.headers.origin;
+  if (!origin || !GOOGLE_SANDBOX_ORIGIN.test(origin)) return false;
+  const method = req.method === 'OPTIONS' ? String(req.headers['access-control-request-method'] || '').toUpperCase() : req.method;
+  const path = req.path;
+  if (BEARER_PATHS.has(method + ' ' + path)) return true;
+  if (method === 'POST' && path === '/api/addin/pair') return true;
+  if (method === 'GET' && /^\/api\/addin\/pair\/[a-f0-9]{64}$/.test(path)) return true;
+  return false;
+}
+const ADDIN_CORS = Object.freeze({ origin: true, credentials: false, methods: ['GET', 'POST'], allowedHeaders: ['Authorization', 'Content-Type', 'Accept'], maxAge: 600 });
+
+/** /gdocs/panel.js — the task pane's markup for the Google Docs sidebar (one source: public/word/taskpane.html). */
+function panelScript(html) {
+  const a = html.indexOf('<body>');
+  const b = html.indexOf('<script src="/word/taskpane.js');
+  const markup = html.slice(a + 6, b).trim();
+  return 'document.body.insertAdjacentHTML("afterbegin", ' + JSON.stringify(markup).replace(/<\//g, '<\\/') + ');\n';
 }
 
 function guidFor(base) {
@@ -276,6 +305,18 @@ function baseUrlOf(req) {
 
 /** /word/manifest.xml — no session needed; mount before the session middleware. */
 function mountManifest(app) {
+  const path = require('path');
+  const fs = require('fs');
+  app.get('/gdocs/panel.js', (req, res) => {
+    try {
+      const html = fs.readFileSync(path.join(__dirname, '..', '..', 'public', 'word', 'taskpane.html'), 'utf8');
+      res.set('Content-Type', 'application/javascript; charset=utf-8');
+      res.set('Cache-Control', 'public, max-age=300');
+      res.send(panelScript(html));
+    } catch (e) {
+      res.status(500).type('application/javascript').send('/* panel unavailable */');
+    }
+  });
   app.get('/word/manifest.xml', (req, res) => {
     const base = baseUrlOf(req);
     res.set('Content-Type', 'application/xml; charset=utf-8');
@@ -351,4 +392,5 @@ module.exports = {
   BEARER_PATHS, PAIR_TTL_MS, TOKEN_TTL_DAYS, CODE_LEN,
   sha256, newCode, normCode, newToken, ensureTables, createPairings, issueToken, loadAccount,
   createBearerAuth, wordFrameHeaders, manifestXml, guidFor, mountManifest, mountRoutes,
+  addinCorsAllowed, ADDIN_CORS, GOOGLE_SANDBOX_ORIGIN, panelScript,
 };

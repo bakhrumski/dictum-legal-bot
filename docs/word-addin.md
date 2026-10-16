@@ -36,3 +36,27 @@ Manifest: `https://<host>/word/manifest.xml` (generated for the host it is downl
 
 Store listing (AppSource) is a separate step: it needs a privacy policy URL, a support URL
 and Microsoft's validation.
+
+# Google Docs (sidebar, Apps Script)
+
+Files: `addins/gdocs/Code.gs`, `addins/gdocs/Sidebar.html`, `public/gdocs/host.js`; the pane
+itself is the same `public/word/taskpane.js` (markup served as `/gdocs/panel.js` from
+`taskpane.html`), so both editors get every change from the server.
+
+- The sidebar runs on a `*-script.googleusercontent.com` origin. CORS is open to that origin
+  only for the add-in's token routes and pairing, never with cookies; pane assets under `/word/`
+  and `/gdocs/` carry `Cross-Origin-Resource-Policy: cross-origin`.
+- Google Docs has no API for suggestion mode or anchored comments: "Tahrir belgisi bilan"
+  leaves the old text struck through in red and puts the new text after it, underlined in blue.
+  The comment button is hidden. Answers are inserted as paragraphs / headings / numbered items
+  with bold text and lex.uz links kept.
+- `@OnlyCurrentDoc`: the script can open only the document it is used in.
+
+## Install for testing
+1. Open a Google Doc → **Extensions → Apps Script** (Расширения → Apps Script).
+2. Replace `Code.gs` with `addins/gdocs/Code.gs`; add an HTML file named `Sidebar` with
+   `addins/gdocs/Sidebar.html`. Check `JURISTAI_BASE` at the top of `Code.gs`. Save.
+3. Reload the document → menu **JuristAI → Panelni ochish** → allow the permissions once.
+
+Publishing for everyone (Google Workspace Marketplace) needs a Google Cloud project, an OAuth
+consent screen, a privacy policy and Google's review.

@@ -1,4 +1,4 @@
-/* JuristAI — Word task pane.
+/* JuristAI — Word task pane (va Google Docs yon paneli: window.JAI_HOST + window.JAI_BASE, public/gdocs/).
    Kirish: qurilmani ulash (POST /api/addin/pair → brauzerda /word/ulash.html → token).
    Server: POST /api/legal-chat (SSE), GET /api/user-info, POST /api/addin/logout — hammasi "Authorization: Bearer". */
 (function () {
@@ -23,6 +23,7 @@
   function has14() { try { return inWord && Office.context.requirements.isSetSupported('WordApi', '1.4'); } catch (e) { return false; } }
   function needWord() { if (!inWord || typeof Word === 'undefined') throw new Error("Bu amal faqat Word ichida ishlaydi."); }
   function openBrowser(url) {
+    if (window.JAI_HOST && window.JAI_HOST.openBrowser) { window.JAI_HOST.openBrowser(url); return; }
     try {
       if (inWord && Office.context.requirements.isSetSupported('OpenBrowserWindowApi', '1.1')) { Office.context.ui.openBrowserWindow(url); return; }
     } catch (e) {}
@@ -78,13 +79,23 @@
     }
   };
 
+  /* ---------------- hujjat muhiti: Word (standart) yoki tashqi (Google Docs) ---------------- */
+  var BASE = String(window.JAI_BASE || '').replace(/\/+$/, '');
+  var docReady = false;
+  var host = window.JAI_HOST || {
+    name: 'word',
+    bodyText: W.bodyText, selection: W.selection, replace: W.replace, comment: W.comment,
+    insertAnswer: function (reply, r) { return W.insertAfter(wordHtml(r)); },
+    caps: function () { var y = has14(); return { track: y, comment: y, trackLabel: 'Track Changes bilan qo\'yish', noTrackLabel: 'Almashtirish (Track Changes yo\'q)' }; }
+  };
+
   /* ---------------- API ---------------- */
   function api(path, opts) {
     opts = opts || {};
     var headers = { 'Accept': 'application/json' };
     var tok = store.get(); if (tok) headers.Authorization = 'Bearer ' + tok;
     if (opts.body) headers['Content-Type'] = 'application/json';
-    return fetch(path, { method: opts.method || (opts.body ? 'POST' : 'GET'), headers: headers, body: opts.body ? JSON.stringify(opts.body) : undefined, credentials: 'omit', signal: opts.signal });
+    return fetch(BASE + path, { method: opts.method || (opts.body ? 'POST' : 'GET'), headers: headers, body: opts.body ? JSON.stringify(opts.body) : undefined, credentials: 'omit', signal: opts.signal });
   }
   function jsonOf(res) { return res.json().catch(function () { return {}; }); }
 
@@ -107,7 +118,7 @@
   function stopPoll() { if (pollT) { clearInterval(pollT); pollT = null; } }
   $('#connect').onclick = function () {
     var btn = this; btn.disabled = true; $('#connectErr').hidden = true;
-    fetch('/api/addin/pair', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}', credentials: 'omit' })
+    fetch(BASE + '/api/addin/pair', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}', credentials: 'omit' })
       .then(function (res) { return jsonOf(res).then(function (d) { if (!res.ok) throw new Error(d.message || d.error || ('Xato ' + res.status)); return d; }); })
       .then(function (p) {
         $('#pairBox').hidden = false; $('#pairCode').textContent = p.code; $('#pairUrl').textContent = p.connectUrl;
@@ -118,7 +129,7 @@
         stopPoll();
         pollT = setInterval(function () {
           if (Date.now() > until) { stopPoll(); expired(); return; }
-          fetch('/api/addin/pair/' + p.pairId, { credentials: 'omit', cache: 'no-store' }).then(jsonOf).then(function (d) {
+          fetch(BASE + '/api/addin/pair/' + p.pairId, { credentials: 'omit', cache: 'no-store' }).then(jsonOf).then(function (d) {
             if (d.status === 'approved' && d.token) { stopPoll(); store.set(d.token); $('#pairBox').hidden = true; btn.disabled = false; toast('Akkaunt ulandi'); boot(); }
             else if (d.status === 'expired') { stopPoll(); expired(); }
           }).catch(function () {});
@@ -268,7 +279,7 @@
     var url = null, label = null;
     if (d.code === 'QUOTA_EXCEEDED' || d.code === 'PLAN_REQUIRED' || d.code === 'NOT_IN_PLAN' || d.upgradeUrl) { url = '/tariflar.html'; label = 'Tariflarni ko\'rish'; }
     else if (d.code === 'CHANNEL_REQUIRED' || d.code === 'SURVEY_REQUIRED') { url = '/app/'; label = 'Saytda davom etish'; }
-    if (url) { var b = h('<div class="btns"><button type="button" class="pill sm"></button></div>'); b.firstChild.textContent = label; b.firstChild.onclick = function () { openBrowser(location.origin + url); }; $('.body', el).appendChild(b); }
+    if (url) { var b = h('<div class="btns"><button type="button" class="pill sm"></button></div>'); b.firstChild.textContent = label; b.firstChild.onclick = function () { openBrowser((BASE || location.origin) + url); }; $('.body', el).appendChild(b); }
   }
   function costConfirm(el, d, payload) {
     $('.steps', el).remove();
@@ -292,7 +303,7 @@
     body.innerHTML = '<div class="md">' + r.html + '</div>' + srcHtml(r.sources);
     var b = h('<div class="btns"><button type="button" class="pill sm ghost" data-a="ins">Hujjatga qo\'yish</button><button type="button" class="pill sm ghost" data-a="cp">Nusxa</button></div>');
     $('[data-a=cp]', b).onclick = function () { copyText(reply.replace(/<!--[\s\S]*?-->/g, '')).then(function () { toast('Nusxa olindi'); }); };
-    $('[data-a=ins]', b).onclick = function () { W.insertAfter(wordHtml(r)).then(function () { toast("Kursor joyidan keyin qo'yildi"); }).catch(function (e) { toast(e.message || "Qo'yib bo'lmadi"); }); };
+    $('[data-a=ins]', b).onclick = function () { host.insertAnswer(reply, r).then(function () { toast("Kursor joyidan keyin qo'yildi"); }).catch(function (e) { toast(e.message || "Qo'yib bo'lmadi"); }); };
     (extraBtns || []).forEach(function (x) { b.insertBefore(x, b.firstChild); });
     body.appendChild(b);
     return r;
@@ -308,7 +319,7 @@
     b.onclick = function () {
       if (busy) return;
       var p = DOC_PROMPTS[b.dataset.doc];
-      W.bodyText().then(function (text) {
+      host.bodyText().then(function (text) {
         if (!text.trim()) { toast("Hujjat bo'sh."); return; }
         var el = card(p[0], $('#outDoc'));
         return askLegal(el, { message: p[1], documentText: text }).then(function (d) { if (d) renderReply(el, d.reply || ''); });
@@ -319,11 +330,11 @@
   /* ---------------- 2. Tanlangan matn ---------------- */
   var mode = 'ask', selT = null;
   function refreshSel() {
-    if (!inWord) return;
-    W.selection().then(function (s) {
+    if (!docReady) return;
+    host.selection().then(function (s) {
       var p = $('#selPrev');
       if (s.text.trim()) { p.textContent = s.text.length > 600 ? s.text.slice(0, 600) + '…' : s.text; p.classList.add('has'); }
-      else { p.textContent = "Word'da bandni belgilang."; p.classList.remove('has'); }
+      else { p.textContent = "Hujjatda bandni belgilang."; p.classList.remove('has'); }
     }).catch(function () {});
   }
   $('#selRefresh').onclick = refreshSel;
@@ -352,8 +363,8 @@
     if (busy) return;
     var q = $('#selInput').value.trim();
     if (!q) { toast(mode === 'edit' ? "Qanday o'zgartirish kerakligini yozing." : 'Savolni yozing.'); return; }
-    W.selection().then(function (s) {
-      if (!s.text.trim()) { toast("Avval Word'da bandni belgilang."); return; }
+    host.selection().then(function (s) {
+      if (!s.text.trim()) { toast("Avval Hujjatda bandni belgilang."); return; }
       selT = s;
       var el = card(mode === 'edit' ? 'Tahrir taklifi' : 'Tanlangan matn bo\'yicha', $('#outSel'));
       var editMode = mode === 'edit';
@@ -370,10 +381,12 @@
         var why = plainOf(prop.rest).slice(0, 1800);
         var sv = s;
         function guard(fn) { return function () { fn().then(function () { toast('Hujjatga kiritildi'); }).catch(function (e) { toast((e && e.message) || "Kiritib bo'lmadi. Bandni qayta belgilang."); }); }; }
-        $('[data-a=track]', box).onclick = guard(function () { return W.replace(sv, prop.text, { track: true, comment: 'JuristAI: ' + why }); });
-        $('[data-a=rep]', box).onclick = guard(function () { return W.replace(sv, prop.text, {}); });
-        $('[data-a=com]', box).onclick = guard(function () { return W.comment(sv, 'JuristAI taklifi:\n' + prop.text + (why ? '\n\nIzoh: ' + why : '')); });
-        if (!has14()) { $('[data-a=com]', box).remove(); $('[data-a=track]', box).textContent = 'Almashtirish (Track Changes yo\'q)'; }
+        $('[data-a=track]', box).onclick = guard(function () { return host.replace(sv, prop.text, { track: true, comment: 'JuristAI: ' + why }); });
+        $('[data-a=rep]', box).onclick = guard(function () { return host.replace(sv, prop.text, {}); });
+        $('[data-a=com]', box).onclick = guard(function () { return host.comment(sv, 'JuristAI taklifi:\n' + prop.text + (why ? '\n\nIzoh: ' + why : '')); });
+        var cp = host.caps();
+        $('[data-a=track]', box).textContent = cp.track ? cp.trackLabel : cp.noTrackLabel;
+        if (!cp.comment) $('[data-a=com]', box).remove();
         $('.body', el).insertBefore(box, $('.body', el).querySelector('.btns'));
       });
     }).catch(function (e) { toast(e.message || "Tanlovni o'qib bo'lmadi"); });
@@ -386,7 +399,7 @@
     if (busy) return;
     var q = $('#chatInput').value.trim(); if (!q) return;
     var withDoc = $('#chatDoc').checked;
-    (withDoc && inWord ? W.bodyText() : Promise.resolve('')).then(function (text) {
+    (withDoc && docReady ? host.bodyText() : Promise.resolve('')).then(function (text) {
       $('#chatInput').value = '';
       var log = $('#chatLog');
       log.appendChild(h('<div class="ubub"></div>')).textContent = q;
@@ -406,13 +419,18 @@
 
   /* ---------------- start ---------------- */
   var selDeb;
+  function onSel() { clearTimeout(selDeb); selDeb = setTimeout(function () { if (!$('[data-pane=sel]').hidden) refreshSel(); }, 350); }
   function start(info) {
+    if (window.JAI_HOST) {
+      docReady = true;
+      if (window.JAI_HOST.onSelection) window.JAI_HOST.onSelection(onSel);
+      boot(); return;
+    }
     inWord = !!(info && info.host && typeof Word !== 'undefined' && String(info.host).toLowerCase().indexOf('word') > -1);
+    docReady = inWord;
     if (inWord) {
       try {
-        Office.context.document.addHandlerAsync(Office.EventType.DocumentSelectionChanged, function () {
-          clearTimeout(selDeb); selDeb = setTimeout(function () { if (!$('[data-pane=sel]').hidden) refreshSel(); }, 350);
-        });
+        Office.context.document.addHandlerAsync(Office.EventType.DocumentSelectionChanged, onSel);
       } catch (e) {}
     }
     boot();
@@ -423,6 +441,6 @@
     document.getElementById('vConnect').innerHTML = '<h1>Word versiyasi eski</h1><p class="muted">Bu Word ichki brauzeri (Internet Explorer) JuristAI panelini ishlata olmaydi. Word Online (office.com) yoki Microsoft 365 Word\'dan foydalaning.</p>';
     return;
   }
-  if (window.Office && Office.onReady) Office.onReady(start); else start(null);
-  window.__jaiWord = { md: md, splitProposal: splitProposal, wordHtml: wordHtml };
+  if (!window.JAI_HOST && window.Office && Office.onReady) Office.onReady(start); else start(null);
+  window.__jaiWord = { md: md, splitProposal: splitProposal, wordHtml: wordHtml, plainOf: plainOf };
 })();
