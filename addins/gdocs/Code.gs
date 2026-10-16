@@ -10,7 +10,10 @@
 var JURISTAI_BASE = 'https://juristai-staging.onrender.com';
 
 function onOpen(e) {
-  DocumentApp.getUi().createMenu('JuristAI').addItem('Panelni ochish', 'showSidebar').addToUi();
+  DocumentApp.getUi().createMenu('JuristAI')
+    .addItem('Panelni ochish', 'showSidebar')
+    .addItem('Katta oynada ochish', 'showWide')
+    .addToUi();
 }
 function onInstall(e) { onOpen(e); }
 
@@ -19,6 +22,14 @@ function showSidebar() {
   t.base = JURISTAI_BASE;
   var html = t.evaluate().setTitle('JuristAI').setSandboxMode(HtmlService.SandboxMode.IFRAME);
   DocumentApp.getUi().showSidebar(html);
+}
+
+/** Google yon panelining eni o'zgarmaydi (300 px); keng ish uchun hujjat ustida suriladigan oyna */
+function showWide() {
+  var t = HtmlService.createTemplateFromFile('Sidebar');
+  t.base = JURISTAI_BASE;
+  var html = t.evaluate().setTitle('JuristAI').setWidth(640).setHeight(760).setSandboxMode(HtmlService.SandboxMode.IFRAME);
+  DocumentApp.getUi().showModelessDialog(html, 'JuristAI');
 }
 
 /* ---------- panel chaqiradigan funksiyalar (google.script.run) ---------- */
