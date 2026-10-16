@@ -28,7 +28,7 @@ function showSidebar() {
 function showWide() {
   var t = HtmlService.createTemplateFromFile('Sidebar');
   t.base = JURISTAI_BASE;
-  var html = t.evaluate().setTitle('JuristAI').setWidth(640).setHeight(760).setSandboxMode(HtmlService.SandboxMode.IFRAME);
+  var html = t.evaluate().setTitle('JuristAI').setWidth(500).setHeight(720).setSandboxMode(HtmlService.SandboxMode.IFRAME);
   DocumentApp.getUi().showModelessDialog(html, 'JuristAI');
 }
 
