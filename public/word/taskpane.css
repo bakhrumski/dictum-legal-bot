@@ -89,3 +89,9 @@ textarea:focus{outline:none;border-color:var(--cta)}
 .btns{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
 .note{font-size:13px;color:var(--muted)}
 .toast{position:fixed;left:12px;right:12px;bottom:12px;z-index:20;background:var(--fg);color:var(--bg);border-radius:12px;padding:10px 14px;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.2)}
+.review{display:flex;flex-direction:column;gap:6px;margin-bottom:6px}
+.act.primary{border-color:var(--cta);background:var(--soft)}
+.act.primary b{color:var(--fg)}
+.review .link{align-self:flex-start;font-size:12.5px}
+.sect{margin:16px 0 8px}
+.done{font-size:13.5px;margin-bottom:8px}

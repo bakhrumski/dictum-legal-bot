@@ -13,6 +13,20 @@ Files: `public/word/` (task pane, connect page, icons), `src/addin/word-addin.js
 - **Chat**: a conversation, optionally with the document as context.
 - Any answer can be inserted after the cursor, formatted, with its lex.uz sources.
 
+## In the document itself
+- **Hujjatda ko'rib chiqish** (Hujjat tab): one analysis request asks for each finding as
+  `### IZOH n` with `IQTIBOS / MUAMMO / ASOS / TAVSIYA / YANGI MATN` (public/word/shared.js
+  `REVIEW_PROMPT`, `parseReview`). Each quote is searched in the document (whole quote, then
+  shorter starts; punctuation and spacing ignored) and gets a Word comment there; with the
+  checkbox, `YANGI MATN` replaces the quote under Track Changes. Missing terms and quotes not
+  found are commented on the first paragraph. "Izohlarni o'chirish" removes JuristAI comments.
+  Google Docs: found quotes are highlighted, notes go to a "JuristAI izohlari" section at the end.
+- **Right-click menu** (Word, `ContextMenuText`): Qonunga moslashtirish / Aniqroq yozish /
+  Tarafimni himoya qilish / Izoh berish run `public/word/commands.js` without opening the pane:
+  a "JuristAI: ishlanmoqda…" comment appears at once, then the fix goes in under Track Changes
+  and the comment shows why. Uses the pane's token; not connected → the comment says so.
+  Re-upload the manifest after this change (version 1.1).
+
 ## Sign-in
 The pane cannot rely on the site cookie inside Word, so it pairs: the pane shows a 6-character
 code and opens `/word/ulash.html?code=…` in the browser; the signed-in person confirms it there.

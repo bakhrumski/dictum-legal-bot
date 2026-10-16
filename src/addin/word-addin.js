@@ -187,7 +187,7 @@ const ADDIN_CORS = Object.freeze({ origin: true, credentials: false, methods: ['
 /** /gdocs/panel.js — the task pane's markup for the Google Docs sidebar (one source: public/word/taskpane.html). */
 function panelScript(html, base = '') {
   const a = html.indexOf('<body>');
-  const b = html.indexOf('<script src="/word/taskpane.js');
+  const b = html.indexOf('<script src="/word/');
   // images by absolute URL: the sidebar page is not on this host
   const markup = html.slice(a + 6, b).trim().replace(/ src="\/(?!\/)/g, ` src="${String(base).replace(/\/+$/, '')}/`);
   return 'document.body.insertAdjacentHTML("afterbegin", ' + JSON.stringify(markup).replace(/<\//g, '<\\/') + ');\n';
@@ -208,7 +208,7 @@ function manifestXml(base, { id, name = 'JuristAI' } = {}) {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0" xmlns:ov="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="TaskPaneApp">
   <Id>${guid}</Id>
-  <Version>1.0.1.0</Version>
+  <Version>1.1.0.0</Version>
   <ProviderName>JuristAI</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="${label}"/>
@@ -269,6 +269,84 @@ function manifestXml(base, { id, name = 'JuristAI' } = {}) {
               </Group>
             </OfficeTab>
           </ExtensionPoint>
+          <ExtensionPoint xsi:type="ContextMenu">
+            <OfficeMenu id="ContextMenuText">
+              <Control xsi:type="Menu" id="JuristAI.Ctx">
+                <Label resid="Ctx.Label"/>
+                <Supertip>
+                  <Title resid="Ctx.Label"/>
+                  <Description resid="Ctx.Tip"/>
+                </Supertip>
+                <Icon>
+                  <bt:Image size="16" resid="Icon.16x16"/>
+                  <bt:Image size="32" resid="Icon.32x32"/>
+                  <bt:Image size="80" resid="Icon.80x80"/>
+                </Icon>
+                <Items>
+                  <Item id="JuristAI.Ctx.Fix">
+                    <Label resid="Ctx.Fix"/>
+                    <Supertip>
+                      <Title resid="Ctx.Fix"/>
+                      <Description resid="Ctx.Fix.Tip"/>
+                    </Supertip>
+                    <Icon>
+                      <bt:Image size="16" resid="Icon.16x16"/>
+                      <bt:Image size="32" resid="Icon.32x32"/>
+                      <bt:Image size="80" resid="Icon.80x80"/>
+                    </Icon>
+                    <Action xsi:type="ExecuteFunction">
+                      <FunctionName>jaiFix</FunctionName>
+                    </Action>
+                  </Item>
+                  <Item id="JuristAI.Ctx.Clear">
+                    <Label resid="Ctx.Clear"/>
+                    <Supertip>
+                      <Title resid="Ctx.Clear"/>
+                      <Description resid="Ctx.Clear.Tip"/>
+                    </Supertip>
+                    <Icon>
+                      <bt:Image size="16" resid="Icon.16x16"/>
+                      <bt:Image size="32" resid="Icon.32x32"/>
+                      <bt:Image size="80" resid="Icon.80x80"/>
+                    </Icon>
+                    <Action xsi:type="ExecuteFunction">
+                      <FunctionName>jaiClear</FunctionName>
+                    </Action>
+                  </Item>
+                  <Item id="JuristAI.Ctx.Protect">
+                    <Label resid="Ctx.Protect"/>
+                    <Supertip>
+                      <Title resid="Ctx.Protect"/>
+                      <Description resid="Ctx.Protect.Tip"/>
+                    </Supertip>
+                    <Icon>
+                      <bt:Image size="16" resid="Icon.16x16"/>
+                      <bt:Image size="32" resid="Icon.32x32"/>
+                      <bt:Image size="80" resid="Icon.80x80"/>
+                    </Icon>
+                    <Action xsi:type="ExecuteFunction">
+                      <FunctionName>jaiProtect</FunctionName>
+                    </Action>
+                  </Item>
+                  <Item id="JuristAI.Ctx.Explain">
+                    <Label resid="Ctx.Explain"/>
+                    <Supertip>
+                      <Title resid="Ctx.Explain"/>
+                      <Description resid="Ctx.Explain.Tip"/>
+                    </Supertip>
+                    <Icon>
+                      <bt:Image size="16" resid="Icon.16x16"/>
+                      <bt:Image size="32" resid="Icon.32x32"/>
+                      <bt:Image size="80" resid="Icon.80x80"/>
+                    </Icon>
+                    <Action xsi:type="ExecuteFunction">
+                      <FunctionName>jaiExplain</FunctionName>
+                    </Action>
+                  </Item>
+                </Items>
+              </Control>
+            </OfficeMenu>
+          </ExtensionPoint>
         </DesktopFormFactor>
       </Host>
     </Hosts>
@@ -287,10 +365,20 @@ function manifestXml(base, { id, name = 'JuristAI' } = {}) {
         <bt:String id="GetStarted.Title" DefaultValue="JuristAI Word'da"/>
         <bt:String id="Group.Label" DefaultValue="${label}"/>
         <bt:String id="Button.Label" DefaultValue="${label}"/>
+        <bt:String id="Ctx.Label" DefaultValue="${label}"/>
+        <bt:String id="Ctx.Fix" DefaultValue="Qonunga moslashtirish"/>
+        <bt:String id="Ctx.Clear" DefaultValue="Aniqroq yozish"/>
+        <bt:String id="Ctx.Protect" DefaultValue="Tarafimni himoya qilish"/>
+        <bt:String id="Ctx.Explain" DefaultValue="Izoh berish"/>
       </bt:ShortStrings>
       <bt:LongStrings>
         <bt:String id="GetStarted.Description" DefaultValue="Bosh sahifadagi JuristAI tugmasini bosing va akkauntingizni ulang."/>
         <bt:String id="Button.Tooltip" DefaultValue="Hujjat tahlili, tanlangan band bo'yicha savol va tahrir takliflari."/>
+        <bt:String id="Ctx.Tip" DefaultValue="Belgilangan band bo'yicha JuristAI: tuzatish Track Changes bilan, sababi izohda."/>
+        <bt:String id="Ctx.Fix.Tip" DefaultValue="Bandni amaldagi qonunchilikka moslashtiradi (Track Changes bilan, asosi izohda)."/>
+        <bt:String id="Ctx.Clear.Tip" DefaultValue="Bandni aniqroq va bir ma'noli qilib qayta yozadi (Track Changes bilan)."/>
+        <bt:String id="Ctx.Protect.Tip" DefaultValue="Bandni sizning tarafingiz manfaatini kuchliroq himoya qiladigan qilib yozadi."/>
+        <bt:String id="Ctx.Explain.Tip" DefaultValue="Band nimani anglatishi, xavflari va tegishli qonun normalari — izoh sifatida."/>
       </bt:LongStrings>
     </Resources>
   </VersionOverrides>

@@ -3,7 +3,7 @@
    Server: POST /api/legal-chat (SSE), GET /api/user-info, POST /api/addin/logout — hammasi "Authorization: Bearer". */
 (function () {
   'use strict';
-  var TOKEN_KEY = 'juristai-word-token';
+  var TOKEN_KEY = (window.JAIShared && window.JAIShared.TOKEN_KEY) || 'juristai-word-token';
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -68,6 +68,57 @@
       if (!has14()) return Promise.reject(new Error("Bu Word versiyasida izoh qo'shib bo'lmaydi."));
       return Word.run(saved.range, function (ctx) { saved.range.insertComment(text); return ctx.sync(); });
     },
+    /** ko'rib chiqish natijasini hujjatga yozadi: har bir muammo o'z joyiga izoh (WordApi 1.4) yoki sariq belgi;
+        edits: iqtibos to'liq topilsa, tuzatish Track Changes bilan kiritiladi */
+    review: function (items, o) {
+      needWord(); o = o || {};
+      var S = window.JAIShared, api14 = has14();
+      return Word.run(async function (ctx) {
+        var doc = ctx.document, body = doc.body;
+        var head = body.paragraphs.getFirst().getRange('Whole');
+        var found = items.map(function (it) {
+          var q = String(it.quote || '').replace(/\s+/g, ' ').trim();
+          return S.needles(q).map(function (n) {
+            var rc = body.search(S.wordSearchText(n), { matchCase: false, ignorePunct: true, ignoreSpace: true });
+            rc.load('items');
+            return { rc: rc, full: n === q };
+          });
+        });
+        await ctx.sync();
+        var prev = null;
+        if (o.edits && api14) {
+          doc.load('changeTrackingMode'); await ctx.sync();
+          prev = doc.changeTrackingMode; doc.changeTrackingMode = 'TrackAll'; await ctx.sync();
+        }
+        var out = items.map(function (it, i) {
+          var hit = null;
+          found[i].some(function (f) { if (f.rc.items.length) { hit = f; return true; } return false; });
+          var where = hit ? 'found' : (it.quote ? 'missing' : 'general'), edited = false;
+          var target = hit ? hit.rc.items[0] : head;
+          var text = S.commentText(it);
+          if (where === 'missing') text = '«' + it.quote.slice(0, 120) + '» (matnda aniq topilmadi)\n' + text;
+          if (where === 'general') text = text.replace(/^JuristAI: /, 'JuristAI (yetishmayotgan shart): ');
+          if (hit && o.edits && api14 && it.newText && hit.full) { target = target.insertText(it.newText, 'Replace'); edited = true; }
+          if (api14) target.insertComment(text); else if (hit) target.font.highlightColor = 'Yellow';
+          return { where: where, edited: edited };
+        });
+        await ctx.sync();
+        if (prev != null && prev !== 'TrackAll') { doc.changeTrackingMode = prev; await ctx.sync(); }
+        return out;
+      });
+    },
+    /** JuristAI qo'ygan izohlarni o'chiradi (Track Changes tuzatishlari Word'ning o'zida qabul/rad qilinadi) */
+    removeReview: function () {
+      needWord();
+      if (!has14()) return Promise.reject(new Error("Bu Word versiyasida izohlar bilan ishlab bo'lmaydi."));
+      return Word.run(async function (ctx) {
+        var cs = ctx.document.body.getComments(); cs.load('items/content'); await ctx.sync();
+        var n = 0;
+        cs.items.forEach(function (c) { if (/^(«[^»]*» \(matnda aniq topilmadi\)\n)?JuristAI[ :(]/.test(c.content || '')) { c.delete(); n++; } });
+        await ctx.sync();
+        return n;
+      });
+    },
     /** javobni kursor (tanlov) dan keyin formatlangan holda qo'yadi */
     insertAfter: function (html) {
       needWord();
@@ -85,8 +136,14 @@
   var host = window.JAI_HOST || {
     name: 'word',
     bodyText: W.bodyText, selection: W.selection, replace: W.replace, comment: W.comment,
+    review: W.review, removeReview: W.removeReview,
     insertAnswer: function (reply, r) { return W.insertAfter(wordHtml(r)); },
-    caps: function () { var y = has14(); return { track: y, comment: y, trackLabel: 'Track Changes bilan qo\'yish', noTrackLabel: 'Almashtirish (Track Changes yo\'q)' }; }
+    caps: function () {
+      var y = has14();
+      return { track: y, comment: y, trackLabel: 'Track Changes bilan qo\'yish', noTrackLabel: 'Almashtirish (Track Changes yo\'q)',
+        reviewSub: y ? 'Har bir xavfli band hoshiyada izoh bilan belgilanadi' : 'Xavfli bandlar sariq rang bilan belgilanadi',
+        reviewEdits: y ? 'Tuzatishlarni Track Changes bilan kiritish' : '', reviewClear: y };
+    }
   };
 
   /* ---------------- API ---------------- */
@@ -309,7 +366,62 @@
     return r;
   }
 
-  /* ---------------- 1. Hujjat ---------------- */
+  /* ---------------- 1. Hujjat: hujjatning o'zida ko'rib chiqish ---------------- */
+  function setupReview() {
+    var cp = host.caps();
+    if (!host.review) { $('#review').hidden = true; return; }
+    $('#revSub').textContent = cp.reviewSub || '';
+    if (cp.reviewEdits) $('#revEditsL').textContent = cp.reviewEdits; else $('#revEditsRow').hidden = true;
+    $('#revClear').hidden = !cp.reviewClear;
+  }
+  $('#revGo').onclick = function () {
+    if (busy) return;
+    var S = window.JAIShared, edits = !$('#revEditsRow').hidden && $('#revEdits').checked;
+    host.bodyText().then(function (text) {
+      if (!text.trim()) { toast("Hujjat bo'sh."); return; }
+      var el = card("Hujjatda ko'rib chiqish", $('#outDoc'));
+      return askLegal(el, { message: S.REVIEW_PROMPT, documentText: text }).then(function (d) {
+        if (!d) return;
+        var reply = d.reply || '', pr = S.parseReview(reply);
+        if (!pr.items.length) {
+          renderReply(el, reply);
+          $('.body', el).insertBefore(h('<p class="note">Javobdan alohida izohlar ajratilmadi, shuning uchun u panelda ko\'rsatildi.</p>'), $('.body', el).firstChild);
+          return;
+        }
+        var st = $('.st', el); if (st) st.textContent = "Hujjatga izohlar qo'yilmoqda…";
+        setBusy(true);
+        return host.review(pr.items, { edits: edits }).then(function (res) {
+          setBusy(false); reviewDone(el, pr, res, reply);
+        }).catch(function (e) { setBusy(false); renderReply(el, reply); toast((e && e.message) || "Izohlarni qo'yib bo'lmadi"); });
+      });
+    }).catch(function (e) { toast(e.message || "Hujjatni o'qib bo'lmadi"); });
+  };
+  function reviewDone(el, pr, res, reply) {
+    var s = $('.steps', el); if (s) s.remove();
+    var n = res.length, ed = 0, miss = [];
+    res.forEach(function (r, i) { if (r.edited) ed++; if (r.where === 'missing') miss.push(pr.items[i]); });
+    var r = md(pr.summary || '');
+    var src = md(reply).sources;
+    var body = $('.body', el);
+    body.innerHTML = '<p class="done"><b>' + n + ' ta izoh</b> hujjatga qo\'yildi' + (ed ? ', <b>' + ed + ' tasi</b> tuzatish bilan (Track Changes)' : '') + '.</p>' +
+      (miss.length ? '<p class="note">' + miss.length + ' ta iqtibos matnda aniq topilmadi — ularning izohi hujjat boshida turibdi.</p>' : '') +
+      (pr.summary ? '<div class="md">' + r.html + '</div>' : '') + srcHtml(src);
+    var b = h('<div class="btns"><button type="button" class="pill sm ghost" data-a="full">To\'liq javob</button></div>');
+    if (host.caps().reviewClear) {
+      var c = h('<button type="button" class="pill sm ghost">Izohlarni o\'chirish</button>');
+      c.onclick = clearReview; b.appendChild(c);
+    }
+    $('[data-a=full]', b).onclick = function () { renderReply(el, reply); };
+    body.appendChild(b);
+  }
+  function clearReview() {
+    if (!host.removeReview) return;
+    host.removeReview().then(function (k) { toast(k ? k + ' ta JuristAI izohi o\'chirildi' : "JuristAI izohlari topilmadi"); })
+      .catch(function (e) { toast(e.message || "O'chirib bo'lmadi"); });
+  }
+  $('#revClear').onclick = clearReview;
+
+  /* ---------------- 1. Hujjat: panelda javob ---------------- */
   var DOC_PROMPTS = {
     risk: ['Xavf tahlili', 'Ushbu hujjatni to‘liq tahlil qiling: xavfli bandlar, yetishmayotgan shartlar va tavsiyalar.'],
     opinion: ['Yuridik xulosa', 'Ushbu hujjat bo‘yicha yuridik xulosa tayyorlang.'],
@@ -349,15 +461,10 @@
   });
   $$('#presets .chip').forEach(function (c) { c.onclick = function () { $('#selInput').value = c.dataset.p; $('#selInput').focus(); }; });
 
-  var EDIT_FORMAT = "\n\nJavobni quyidagi tartibda bering:\n1) Qisqa izoh: nima o‘zgardi va nega, tegishli qonun normasi va manbasi bilan.\n2) Bandning yangi matni — faqat quyidagi belgilar orasida, boshqa hech narsa qo‘shmasdan:\n<<<YANGI_MATN\n(bandning to‘liq yangi matni)\nYANGI_MATN>>>";
-  function splitProposal(reply) {
-    var m = String(reply).match(/<<<\s*YANGI_MATN\s*\n?([\s\S]*?)\n?\s*YANGI_MATN\s*>>>/);
-    if (m) return { text: m[1].trim(), rest: reply.replace(m[0], '').trim() };
-    var f = String(reply).match(/```(?:\w+)?\n([\s\S]*?)```/);
-    if (f) return { text: f[1].trim(), rest: reply.replace(f[0], '').trim() };
-    return null;
-  }
-  function plainOf(s) { return String(s).replace(/<!--[\s\S]*?-->/g, '').replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '$1 ($2)').replace(/\*\*|__|`/g, '').replace(/^#{1,6}\s+/gm, '').trim(); }
+  var EDIT_FORMAT = window.JAIShared.EDIT_FORMAT;
+  function splitProposal(reply) { return window.JAIShared.splitProposal(reply); }
+
+  function plainOf(s) { return window.JAIShared.plainOf(s); }
 
   $('#selGo').onclick = function () {
     if (busy) return;
@@ -424,10 +531,11 @@
     if (window.JAI_HOST) {
       docReady = true;
       if (window.JAI_HOST.onSelection) window.JAI_HOST.onSelection(onSel);
-      boot(); return;
+      setupReview(); boot(); return;
     }
     inWord = !!(info && info.host && typeof Word !== 'undefined' && String(info.host).toLowerCase().indexOf('word') > -1);
     docReady = inWord;
+    setupReview();
     if (inWord) {
       try {
         Office.context.document.addHandlerAsync(Office.EventType.DocumentSelectionChanged, onSel);

@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex">
 <title>JuristAI — Word</title>
 <link rel="stylesheet" href="/app/fonts.css">
-<link rel="stylesheet" href="/word/taskpane.css?v=2">
+<link rel="stylesheet" href="/word/taskpane.css?v=3">
 <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
 </head>
 <body>
@@ -43,6 +43,12 @@
 
   <section class="tab" data-pane="doc">
     <p class="muted sm">Butun hujjat JuristAI'ga yuboriladi. Uzun hujjat tahlili tarif limitidan bir necha birlik oladi; oldin narxi so'raladi.</p>
+    <div class="review" id="review">
+      <button type="button" class="act primary" id="revGo"><b>Hujjatda ko'rib chiqish</b><small id="revSub">Har bir xavfli band hoshiyada izoh bilan belgilanadi</small></button>
+      <label class="chk" id="revEditsRow"><input type="checkbox" id="revEdits"> <span id="revEditsL">Tuzatishlarni Track Changes bilan kiritish</span></label>
+      <button type="button" class="link" id="revClear">JuristAI izohlarini o'chirish</button>
+    </div>
+    <p class="kicker sect">Javob panelda</p>
     <div class="acts">
       <button type="button" class="act" data-doc="risk"><b>Xavf tahlili</b><small>Xavfli bandlar, yetishmayotgan shartlar, tavsiyalar</small></button>
       <button type="button" class="act" data-doc="opinion"><b>Yuridik xulosa</b><small>Hujjat bo'yicha rasmiy uslubdagi xulosa</small></button>
@@ -84,6 +90,7 @@
 </main>
 
 <div id="toast" class="toast" hidden></div>
-<script src="/word/taskpane.js?v=3"></script>
+<script src="/word/shared.js?v=1"></script>
+<script src="/word/taskpane.js?v=4"></script>
 </body>
 </html>

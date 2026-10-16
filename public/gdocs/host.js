@@ -44,7 +44,13 @@
     replace: function (saved, text, o) { return run('jaiReplace', saved.text, text, !!(o && o.track)); },
     comment: function () { return Promise.reject(new Error('Google Docs’da izoh qo‘shish hozircha yo‘q.')); },
     insertAnswer: function (reply, r) { return run('jaiInsertBlocks', blocksOf(reply, r && r.sources)); },
-    caps: function () { return { track: true, comment: false, trackLabel: 'Tahrir belgisi bilan qo‘yish', noTrackLabel: 'Almashtirish' }; },
+    caps: function () {
+      return { track: true, comment: false, trackLabel: 'Tahrir belgisi bilan qo‘yish', noTrackLabel: 'Almashtirish',
+        reviewSub: 'Xavfli bandlar sariq rang bilan belgilanadi, izohlar hujjat oxiriga yoziladi',
+        reviewEdits: 'Tuzatishlarni tahrir belgisi bilan kiritish', reviewClear: true };
+    },
+    review: function (items, o) { return run('jaiApplyReview', items, !!(o && o.edits)); },
+    removeReview: function () { return run('jaiClearReview'); },
     openBrowser: function (url) { window.open(url, '_blank'); },
     // Google Docs tanlov hodisasini bermaydi: panel ochiq va "Tanlangan" yorlig'ida bo'lsa, vaqti-vaqti bilan tekshiriladi
     onSelection: function (fn) { setInterval(function () { if (!document.hidden) fn(); }, 3000); },

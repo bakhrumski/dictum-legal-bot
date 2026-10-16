@@ -138,3 +138,100 @@ function jaiInsertBlocks(blocks) {
   });
   return true;
 }
+
+/* ---------- hujjatni ko'rib chiqish: belgilash va hujjat oxirida izohlar ---------- */
+
+var REVIEW_TITLE = 'JuristAI izohlari';
+
+function normQ_(s) { return String(s || '').replace(/\s+/g, ' ').trim(); }
+function needles_(quote) {
+  var q = normQ_(quote), out = [];
+  if (q.length < 4) return out;
+  function cut(n) { if (q.length <= n) return q; var s = q.slice(0, n), sp = s.lastIndexOf(' '); return (sp > n * 0.6 ? s.slice(0, sp) : s).trim(); }
+  if (q.length <= 240) out.push(q);
+  [120, 70, 40].forEach(function (n) { var c = cut(n); if (c.length >= 12 && out.indexOf(c) < 0) out.push(c); });
+  return out;
+}
+/** findText qidiruvi (RE2): bo'shliqlar va apostrof turlari farqiga chidamli */
+function pattern_(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    .replace(/[‘’'ʻʼ`]/g, "[‘’'ʻʼ`]")
+    .replace(/[«»"“”]/g, '[«»"“”]')
+    .replace(/\s+/g, '\\s+');
+}
+
+/** items: [{quote, problem, basis, advice, newText}] (panel JAIShared.parseReview). Qaytaradi [{where, edited}] */
+function jaiApplyReview(items, edits) {
+  var doc = DocumentApp.getActiveDocument(), body = doc.getBody();
+  var out = [], notes = [];
+  (items || []).slice(0, 60).forEach(function (it, i) {
+    var q = normQ_(it.quote), ns = needles_(q), hit = null, full = false;
+    for (var k = 0; k < ns.length && !hit; k++) {
+      try { hit = body.findText(pattern_(ns[k])); } catch (e) { hit = null; }
+      if (hit) full = ns[k] === q;
+    }
+    var res = { where: hit ? 'found' : (q ? 'missing' : 'general'), edited: false };
+    if (hit) {
+      var t = hit.getElement().asText(), s = hit.getStartOffset(), e = hit.getEndOffsetInclusive();
+      t.setBackgroundColor(s, e, '#FFF1A8');
+      try { doc.addNamedRange('jai-review', doc.newRange().addElement(t, s, e).build()); } catch (x) {}
+      if (edits && it.newText && full) {
+        t.setStrikethrough(s, e, true); t.setForegroundColor(s, e, '#C0392B');
+        var ins = ' ' + it.newText;
+        t.insertText(e + 1, ins);
+        t.setStrikethrough(e + 1, e + ins.length, false);
+        try { t.setBackgroundColor(e + 1, e + ins.length, null); } catch (x) {}
+        t.setForegroundColor(e + 2, e + ins.length, '#1F4FD8');
+        t.setUnderline(e + 2, e + ins.length, true);
+        res.edited = true;
+      }
+    }
+    var head = q ? '«' + (q.length > 140 ? q.slice(0, 140) + '…' : q) + '» — ' : '**Yetishmayotgan shart:** ';
+    notes.push(head + (it.problem || '') + (it.basis ? ' **Asos:** ' + it.basis : '') + (it.advice ? ' **Tavsiya:** ' + it.advice : '') +
+      (res.where === 'missing' ? ' (matnda aniq topilmadi)' : ''));
+    out.push(res);
+  });
+  if (notes.length) {
+    jaiClearNotes_(body);
+    var h = body.appendParagraph(REVIEW_TITLE);
+    h.setHeading(DocumentApp.ParagraphHeading.HEADING2);
+    notes.forEach(function (n) {
+      var li = body.appendListItem(' ');
+      li.setGlyphType(DocumentApp.GlyphType.NUMBER);
+      writeRich_(li, String(n).replace(/\n+/g, ' '));
+    });
+  }
+  return out;
+}
+
+function jaiClearNotes_(body) {
+  var start = -1;
+  for (var i = 0; i < body.getNumChildren(); i++) {
+    var c = body.getChild(i);
+    if (c.getType() === DocumentApp.ElementType.PARAGRAPH && c.asParagraph().getText() === REVIEW_TITLE) { start = i; break; }
+  }
+  if (start < 0) return 0;
+  var removed = 0;
+  for (var j = body.getNumChildren() - 1; j >= start; j--) {
+    var el = body.getChild(j);
+    if (j > start && el.getType() !== DocumentApp.ElementType.LIST_ITEM) continue;
+    // hujjatning oxirgi paragrafini o'chirib bo'lmaydi: matni tozalanadi
+    try { el.removeFromParent(); } catch (x) { try { el.editAsText().setText(''); } catch (y) {} }
+    removed++;
+  }
+  return removed;
+}
+
+/** belgilashlar va "JuristAI izohlari" bo'limini olib tashlaydi */
+function jaiClearReview() {
+  var doc = DocumentApp.getActiveDocument(), body = doc.getBody(), n = 0;
+  doc.getNamedRanges('jai-review').forEach(function (nr) {
+    nr.getRange().getRangeElements().forEach(function (re) {
+      var t = re.getElement().asText();
+      try { t.setBackgroundColor(re.getStartOffset(), re.getEndOffsetInclusive(), null); } catch (x) {}
+    });
+    nr.remove(); n++;
+  });
+  jaiClearNotes_(body);
+  return n;
+}

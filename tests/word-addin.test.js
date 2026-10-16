@@ -129,6 +129,10 @@ function res() {
     assert.notStrictEqual(id(a), id(b));
     assert.strictEqual(id(a), id(w.manifestXml('https://juristai-staging.onrender.com')));
     assert.ok(!/juristai\.uz/.test(a));
+    assert.match(a, /<ExtensionPoint xsi:type="ContextMenu">\s*<OfficeMenu id="ContextMenuText">/);
+    for (const fn of ['jaiFix', 'jaiClear', 'jaiProtect', 'jaiExplain']) assert.ok(a.includes(`<FunctionName>${fn}</FunctionName>`), fn);
+    const ids = [...a.matchAll(/resid="([^"]+)"/g)].map(m => m[1]);
+    for (const id of new Set(ids)) assert.ok(new RegExp(`id="${id.replace('.', '\\.')}"`).test(a), 'resource defined: ' + id);
   });
 
   await test('Google Docs sidebar origin may call only the add-in routes, without cookies', () => {
