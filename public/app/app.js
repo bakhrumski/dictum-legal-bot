@@ -16,7 +16,9 @@
     ['#/konikmalar', 'spark', 'nav.skills'], ['#/yozuvlar', 'mic', 'nav.voice'], ['#/jamoa', 'team', 'nav.team'], ['#/advokatlar', 'scale', 'nav.lawyers']
   ];
   function drawNav() {
-    $('#nav').innerHTML = NAV.map(function (n) {
+    // Boshqaruv faqat bazada master bo'lgan hisobga (admin.js; server har so'rovni o'zi tekshiradi)
+    var items = NAV.concat(J.isMaster && J.isMaster() ? [['#/boshqaruv', 'shield', 'nav.admin']] : []);
+    $('#nav').innerHTML = items.map(function (n) {
       var lock = (n[0] === '#/tayyorlash' && !J.hasService('draft') && !J.needsPlan()) || (n[0] === '#/jamoa' && !J.isStaff() && /^(sinov|none)$/.test(J.planKey()));
       return '<a href="' + n[0] + '" data-r="' + n[0] + '" title="' + esc(t(n[2])) + '">' + J.icon(n[1]) + '<span>' + esc(t(n[2])) + '</span>' + (lock ? '<span class="lock">' + J.icon('lock') + '</span>' : '') + '</a>';
     }).join('');
@@ -62,12 +64,14 @@
       '<button class="mi" data-a="tg">' + J.icon('tg') + '<span class="mi-t">' + esc(t('tg.menu')) + '</span>' + (J.tg && J.tg.linked ? '<span class="tag">✓</span>' : '') + '</button>' +
       '<button class="mi" data-a="theme">' + J.icon('moon') + '<span class="mi-t">' + esc(t('me.theme')) + '</span><span class="tag">' + (J.theme === 'dark' ? '●' : '○') + '</span></button>' +
       '<a class="mi" href="/index.html">' + J.icon('globe') + '<span class="mi-t">' + esc(t('me.site')) + '</span></a>' +
+      (J.isMaster && J.isMaster() ? '<a class="mi" href="#/boshqaruv">' + J.icon('shield') + '<span class="mi-t">' + esc(t('nav.admin')) + '</span></a>' : '') +
       '<a class="mi" href="/dashboard.html">' + J.icon('layers') + '<span class="mi-t">' + esc(t('me.old')) + '</span></a>' +
       '<button class="mi" data-a="out">' + J.icon('out') + '<span class="mi-t">' + esc(t('me.logout')) + '</span></button></div>');
     pop.style.left = (r.left) + 'px'; pop.style.bottom = (innerHeight - r.top + 6) + 'px'; pop.style.position = 'fixed'; pop.style.width = Math.max(280, r.width) + 'px';
     document.body.appendChild(pop);
     $$('[data-l]', pop).forEach(function (b) { b.onclick = function () { J.setLang(b.dataset.l); }; });
     $('[data-a=acc]', pop).onclick = function () { pop.remove(); J.go('#/hisob'); };
+    $$('a[href^="#/"]', pop).forEach(function (a) { a.addEventListener('click', function () { pop.remove(); }); });
     $('[data-a=tg]', pop).onclick = function () { pop.remove(); J.tg.info(); };
     $('[data-a=theme]', pop).onclick = function () { J.toggleTheme(); pop.remove(); };
     $('[data-a=out]', pop).onclick = async function () { await J.api('/api/logout', { method: 'POST', allow401: true }); location.href = '/'; };
