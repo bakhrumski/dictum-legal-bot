@@ -218,6 +218,79 @@ const pendingFiles = new Map();
 const PENDING_FILE_TTL = 60 * 60 * 1000; // 1 hour
 const MIN_FILE_DESC = 200; // min chars of description required with a file
 
+// An AI draft of an ordered document, right away in the chat (2026-10-20):
+// the website's generator (setDraftGenerator), one draft unit from the plan,
+// sent back as a Word file. The lawyer order is kept as well.
+let draftGenerator = null;
+const DRAFT_OFFER_TTL_MS = 30 * 60 * 1000;
+const draftOffers = new Map(); // chatId -> { docType, details, at }
+async function offerAiDraft(chatId, meta = {}) {
+  if (!draftGenerator) return;
+  const details = String(meta.caseSummary || '').trim();
+  if (details.length < 20) return;
+  draftOffers.set(chatId, { docType: String(meta.documentTypeLabel || 'Yuridik hujjat'), details: details.slice(0, 6000), at: Date.now() });
+  await bot.sendMessage(chatId,
+    "🤖 Kutmasdan loyiha kerakmi? AI hozir shu ma'lumotlar asosida hujjat loyihasini Word faylda tayyorlaydi — tarifingizdagi 1 ta hujjat birligi sarflanadi. Yurist buyurtmasi ham saqlanib qoladi.",
+    { reply_markup: { inline_keyboard: [[{ text: '🤖 AI loyiha — 1 birlik', callback_data: 'tgdraft_ai' }]] } }).catch(() => {});
+}
+async function runAiDraft(callbackQuery) {
+  const chatId = callbackQuery.message.chat.id;
+  const o = draftOffers.get(chatId);
+  if (!o || Date.now() - o.at > DRAFT_OFFER_TTL_MS) {
+    draftOffers.delete(chatId);
+    await bot.answerCallbackQuery(callbackQuery.id, { text: "Taklif muddati o'tdi. Hujjatni qayta buyurtma qiling.", show_alert: true }).catch(() => {});
+    return;
+  }
+  draftOffers.delete(chatId);
+  await bot.answerCallbackQuery(callbackQuery.id, { text: 'Loyiha tayyorlanmoqda' }).catch(() => {});
+  const ledger = require('../rag/tariff-ledger');
+  const who = await telegramIdentity(callbackQuery);
+  let job;
+  try {
+    job = await ledger.reserve({ adminId: who.adminId || null, telegramUserId: who.telegramUserId || callbackQuery.from.id, service: 'draft', units: 1, channel: 'telegram', endpoint: '/tg/draft' });
+  } catch (e) {
+    console.warn('[TG-DRAFT] reserve failed:', e.message);
+    await bot.sendMessage(chatId, "Limitni hozir tekshirib bo'lmadi. Birozdan keyin qayta urinib ko'ring.").catch(() => {});
+    return;
+  }
+  if (!job.allowed) {
+    await bot.sendMessage(chatId, `Tarifingizda hujjat tayyorlash birligi qolmagan (Sinov tarifida bu xizmat yo'q). Tariflar: ${String(process.env.APP_URL || 'https://juristai.uz').replace(/\/+$/u, '')}/tariff.html\nYurist buyurtmangiz o'z holicha ko'rib chiqiladi.`).catch(() => {});
+    return;
+  }
+  await bot.sendChatAction(chatId, 'upload_document').catch(() => {});
+  try {
+    const r = await draftGenerator(o.docType, o.details);
+    if (!r || !r.html) throw new Error('empty draft');
+    const { htmlToDocx } = require('../drafting/html-to-docx');
+    const buf = await htmlToDocx(r.html, { title: o.docType, lang: /[\u0400-\u04ff]/u.test(o.details) ? 'ru' : 'uz' });
+    const name = `${o.docType.replace(/[\\/:*?"<>|]+/gu, ' ').trim().slice(0, 60) || 'Hujjat'}.docx`;
+    await bot.sendDocument(chatId, buf, { caption: "📄 AI loyiha. [Qavs ichidagi] joylarni to'ldiring va imzolashdan oldin tekshiring; muhim hujjatni yurist bilan ko'rib chiqing." },
+      { filename: name, contentType: require('../drafting/html-to-docx').DOCX_MIME });
+    if (job.jobKey) await ledger.commit(job.jobKey).catch((e) => console.error('[TG-DRAFT] commit failed:', e.message));
+  } catch (e) {
+    console.error('[TG-DRAFT] failed:', e.message);
+    if (job.jobKey) await ledger.release(job.jobKey, 'failed').catch(() => {});
+    await bot.sendMessage(chatId, "Loyihani tayyorlab bo'lmadi, limitingiz qaytarildi. Birozdan keyin qayta urinib ko'ring yoki saytda tayyorlang.").catch(() => {});
+  }
+}
+
+// A PDF / DOCX can be analysed by AI in the chat (src/bot/telegram-documents.js);
+// the analyzer is the website's, set by the server (setDocumentAnalyzer).
+let documentAnalyzer = null;
+const documentFlow = require('./telegram-documents').createDocumentFlow({
+  bot,
+  pool,
+  ledger: require('../rag/tariff-ledger'),
+  extract: (buf, o) => require('../ocr/routes').extractFileText(buf, o),
+  getAnalyzer: () => documentAnalyzer,
+  identityOf: (q) => telegramIdentity(q),
+  holdForLawyer: async (chatId, file) => {
+    pendingFiles.set(chatId, { ...file, at: Date.now() });
+    await bot.sendMessage(chatId, tariffTexts.fileHeldText({ tooShortNote: '', minChars: MIN_FILE_DESC }));
+  },
+  tariffUrl: `${String(process.env.APP_URL || 'https://juristai.uz').replace(/\/+$/u, '')}/tariff.html`,
+});
+
 // ========== OPTIONAL CHANNEL SUBSCRIPTION ==========
 // The channel remains available as a promotional link, but ordinary Telegram
 // requests must not be blocked by it. Re-enable the gate only deliberately by
@@ -329,6 +402,14 @@ function agentActionKeyboard(agentResult) {
     };
   }
   if (agentResult.action === 'quota_exceeded') return paidAnswerKeyboard();
+  // account deletion is asked for, then confirmed with a button (src/services/account-deletion.js)
+  if (agentResult.action === 'tool_delete_account_confirm') {
+    const ru = agentResult.meta && agentResult.meta.lang === 'ru';
+    return { inline_keyboard: [[
+      { text: ru ? '🗑 Да, удалить' : "🗑 Ha, o'chirish", callback_data: 'acc_del_yes' },
+      { text: ru ? 'Отмена' : 'Bekor qilish', callback_data: 'acc_del_no' },
+    ]] };
+  }
   if (agentResult.action === 'attorney_intake_started') return attorneyFieldKeyboard();
   if (agentResult.action === 'document_intake_started') return documentTypeKeyboard();
   if (agentResult.action === 'greeting' || agentResult.action === 'intake_cancelled') return serviceKeyboard();
@@ -543,6 +624,10 @@ async function handleCallbackQuery(callbackQuery) {
   const testAccount = await testAccountFor(callbackQuery);
   const data = callbackQuery.data;
 
+  // a document's AI analysis or its lawyer queue (src/bot/telegram-documents.js)
+  if (await documentFlow.onCallback(callbackQuery)) return;
+  if (data === 'tgdraft_ai') { await runAiDraft(callbackQuery); return; }
+
   if (data === 'bot_stats') {
     try {
       await telegramEconomy.recordTelegramActivity(chatId);
@@ -578,6 +663,29 @@ async function handleCallbackQuery(callbackQuery) {
     } catch (error) {
       console.error('[BOT] confirmed answer invoice failed:', error.message);
       await bot.answerCallbackQuery(callbackQuery.id, { text: 'To\'lov oynasini hozir ochib bo\'lmadi.', show_alert: true });
+    }
+    return;
+  }
+
+  // account deletion: the confirmation of a request asked in the chat
+  if (data === 'acc_del_yes' || data === 'acc_del_no') {
+    const ru = /[\u0400-\u04ff]/u.test(String(callbackQuery.message && callbackQuery.message.text || ''));
+    if (data === 'acc_del_no') {
+      await bot.answerCallbackQuery(callbackQuery.id, { text: ru ? 'Отменено' : 'Bekor qilindi' }).catch(() => {});
+      await bot.sendMessage(chatId, ru ? 'Хорошо, аккаунт остаётся.' : 'Yaxshi, akkaunt saqlanib qoladi.').catch(() => {});
+      return;
+    }
+    try {
+      if (!callbackQuery.message || callbackQuery.message.chat.type !== 'private') throw new Error('private chat only');
+      const ident = await telegramIdentity(callbackQuery);
+      const r = await require('../services/account-deletion').createRequest(pool, { telegramUserId: callbackQuery.from.id, chatId, adminId: ident.adminId || null });
+      await bot.answerCallbackQuery(callbackQuery.id, { text: ru ? 'Запрос принят' : "So'rov qabul qilindi" }).catch(() => {});
+      await bot.sendMessage(chatId, r.duplicate
+        ? (ru ? 'Ваш запрос на удаление уже принят и ожидает обработки. Когда аккаунт будет удалён, мы сообщим здесь.' : "O'chirish so'rovingiz avval qabul qilingan va ko'rib chiqilmoqda. Akkaunt o'chirilganda shu yerda xabar beramiz.")
+        : (ru ? 'Запрос на удаление аккаунта принят. Администратор выполнит его, и мы сообщим здесь. Передумали — напишите администратору.' : "Akkauntni o'chirish so'rovi qabul qilindi. Administrator uni bajaradi va shu yerda xabar beramiz. Fikringiz o'zgarsa, administratorga yozing."));
+    } catch (error) {
+      console.error('[BOT] account deletion request failed:', error.message);
+      await bot.answerCallbackQuery(callbackQuery.id, { text: ru ? 'Не удалось принять запрос' : "So'rovni qabul qilib bo'lmadi", show_alert: true }).catch(() => {});
     }
     return;
   }
@@ -1442,6 +1550,16 @@ async function handleTelegramMessage(msg) {
     null;
   const caption = (msg.caption || '').trim();
 
+  // A PDF or DOCX without a full description: AI analysis is offered first
+  // (or the lawyer queue); a scan, photo or video goes on below as before.
+  if (attachedFile && attachedFile.request_type === 'document' && caption.length < MIN_FILE_DESC) {
+    try {
+      if (await documentFlow.offer(msg)) { pendingFiles.delete(chatId); return; }
+    } catch (e) {
+      console.warn('[TG-DOC] offer failed, lawyer queue:', e.message);
+    }
+  }
+
   // A file needs a written description of at least MIN_FILE_DESC characters.
   // If it's missing or too short, hold the file and ask for a proper one.
   if (attachedFile && caption.length < MIN_FILE_DESC) {
@@ -1655,6 +1773,16 @@ async function handleTelegramMessage(msg) {
           // configured voice). Sent in the background: the text answer is
           // already delivered, and a TTS failure must not touch it or the
           // quota bookkeeping below.
+          // a legal answer also lands in the linked web account's chat history
+          if (agentReplyDelivered && agentResult.action === 'answered') {
+            telegramIdentity(msg).then((ident) => ident && ident.adminId
+              ? require('../services/telegram-history').appendTelegramTurn(pool, { adminId: ident.adminId, question: requestData.request_text, answer: agentResult.reply })
+              : null).catch((e) => console.warn('[TG-HISTORY] not saved:', e.message));
+          }
+          // a document ordered from a lawyer can also be drafted by AI right now
+          if (agentReplyDelivered && agentResult.action === 'paid_service') {
+            offerAiDraft(chatId, agentResult.meta || {}).catch(() => {});
+          }
           if (agentReplyDelivered && requestData.voiceTranscribed) {
             sendVoiceReply(chatId, agentResult.reply).catch((e) =>
               console.warn('[BOT] voice reply failed (text answer already sent):', e.message));
@@ -1929,6 +2057,6 @@ function getRequestTypeLabel(type) {
 }
 
 // Export bot for use in other modules
-module.exports = { bot, getBot: () => bot, isChannelMember, channelLink, REQUIRED_CHANNEL, INSTAGRAM_URL };
+module.exports = { bot, getBot: () => bot, setDraftGenerator: (fn) => { draftGenerator = typeof fn === 'function' ? fn : null; }, setDocumentAnalyzer: (fn) => { documentAnalyzer = typeof fn === 'function' ? fn : null; }, isChannelMember, channelLink, REQUIRED_CHANNEL, INSTAGRAM_URL };
 
 console.log('Bot ishlamoqda...');

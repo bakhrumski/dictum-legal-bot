@@ -51,7 +51,9 @@ test('wired: the legal opinion (and its citation fix) and the AI draft are clean
   assert.ok(/html = sanitizeDocHtml\(tidyDocumentHtml\(html\)\);/u.test(server));
   assert.ok(/const fixed = sanitizeDocHtml\(tidyDocumentHtml\(/u.test(server));
   const drafting = fs.readFileSync(path.join(__dirname, '../src/drafting/routes.js'), 'utf8');
-  assert.ok(/html = require\('\.\.\/rag\/safe-html'\)\.sanitizeDocHtml\(html\);\n\s*res\.json\(\{ html, provider: result\.provider \}\);/u.test(drafting));
+  // the AI draft (website and Telegram) is cleaned inside generateDraftHtml
+  assert.ok(/return \{ html: html \? require\('\.\.\/rag\/safe-html'\)\.sanitizeDocHtml\(html\) : ''/u.test(drafting));
+  assert.ok(/const result = await generateDraftHtml\(\{ docType, details, continuationBlock, guides, callAI \}\);/u.test(drafting));
   const views = fs.readFileSync(path.join(__dirname, '../public/app/views.js'), 'utf8');
   assert.ok(views.includes("var clean = J.cleanHtml(d.html || '');") && views.includes('var clean = J.cleanHtml(html);'));
   assert.ok(!/replace\(\/<script\[\\s\\S\]\*\?<\\\/script>\/gi, ''\)/u.test(views), 'the two-regex filter is gone');

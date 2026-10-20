@@ -47,6 +47,7 @@
       'adm.agree': 'Mos kelish', 'adm.license': 'Litsenziya', 'adm.published': "Katalogda", 'adm.yes': 'Ha', 'adm.no': "Yo'q", 'adm.edit': 'Tahrirlash',
       'adm.orders': 'Buyurtmalar', 'adm.catalog': 'Narxlar katalogi', 'adm.price': "Narx, so'm", 'adm.name': 'Nomi',
       'adm.years': 'yil', 'adm.doc': 'hujjat', 'adm.role': 'Rol', 'adm.resource': 'Resurs',
+      'adm.del': "O'chirish so'rovlari", 'adm.del.d': "Botda akkauntni o'chirishni so'raganlar", 'adm.del.go': "O'chirish", 'adm.del.q': "Akkaunt va shaxsiy ma'lumotlar o'chiriladi (to'lov yozuvlari shaxsiy ma'lumotsiz qoladi). Davom etasizmi?", 'adm.done.t': 'Bajarilgan', 'adm.cancelled': 'Bekor qilingan',
       'adm.req': "So'rov", 'adm.calls.t': 'Chaqiruvlar', 'adm.close': 'Yopish', 'adm.done': 'Bajarildi', 'adm.err': 'Xato'
     },
     ru: {
@@ -89,6 +90,7 @@
       'adm.agree': 'Совпадение', 'adm.license': 'Лицензия', 'adm.published': 'В каталоге', 'adm.yes': 'Да', 'adm.no': 'Нет', 'adm.edit': 'Изменить',
       'adm.orders': 'Заказы', 'adm.catalog': 'Каталог цен', 'adm.price': 'Цена, сум', 'adm.name': 'Название',
       'adm.years': 'лет', 'adm.doc': 'документ', 'adm.role': 'Роль', 'adm.resource': 'Ресурс',
+      'adm.del': 'Запросы на удаление', 'adm.del.d': 'Кто попросил удалить аккаунт в боте', 'adm.del.go': 'Удалить', 'adm.del.q': 'Аккаунт и личные данные будут удалены (записи об оплате останутся без личных данных). Продолжить?', 'adm.done.t': 'Выполненные', 'adm.cancelled': 'Отклонённые',
       'adm.req': 'Запрос', 'adm.calls.t': 'Вызовы', 'adm.close': 'Закрыть', 'adm.done': 'Готово', 'adm.err': 'Ошибка'
     },
     en: {
@@ -124,7 +126,8 @@
   var SECTIONS = [
     ['ai', 'chat', 'adm.ai'], ['xarajat', 'cal', 'adm.spend'], ['qabul', 'user', 'adm.reg'], ['sifat', 'flag', 'adm.fb'],
     ['manbalar', 'book', 'adm.src'], ['korpus', 'search', 'adm.cov'], ['chegirmalar', 'spark', 'adm.offers'], ['telegram', 'tg', 'adm.tg'],
-    ['advokatlar', 'scale', 'adm.att'], ['xizmatlar', 'doc', 'adm.svc'], ['audit', 'shield', 'adm.audit'], ['landing', 'globe', 'adm.landing']
+    ['advokatlar', 'scale', 'adm.att'], ['xizmatlar', 'doc', 'adm.svc'], ['audit', 'shield', 'adm.audit'], ['landing', 'globe', 'adm.landing'],
+    ['ochirish', 'trash', 'adm.del']
   ];
 
   /** Bo'lim qobig'i: sarlavha, orqaga, yangilash; body ichini loader to'ldiradi. */
@@ -151,6 +154,7 @@
     J.api('/api/registration-requests/stats').then(function (r) { if (r.ok && Number(r.data.pending) > 0) setCount(v, 'qabul', r.data.pending + ' ' + t('adm.pending').toLowerCase()); });
     J.api('/api/admin/answer-feedback?status=new').then(function (r) { if (r.ok && r.data.newCount > 0) setCount(v, 'sifat', r.data.newCount + ' ' + t('adm.new').toLowerCase()); });
     J.api('/api/admin/suggested-sources?status=pending').then(function (r) { if (r.ok && (r.data.suggestions || []).length) setCount(v, 'manbalar', (r.data.suggestions || []).length + ' ' + t('adm.pending').toLowerCase()); });
+    J.api('/api/admin/account-deletions?status=pending').then(function (r) { if (r.ok && (r.data.requests || []).length) setCount(v, 'ochirish', (r.data.requests || []).length + ' ' + t('adm.pending').toLowerCase()); });
   };
   function setCount(v, k, txt) { var el = $('.adm-count[data-k="' + k + '"]', v); if (el) el.innerHTML = '<span class="dot warn"></span>' + esc(txt); }
 
@@ -638,8 +642,39 @@
     });
   }
 
+  /* ---------- Akkauntni o'chirish so'rovlari ---------- */
+  var delTab = 'pending';
+  function viewDel() {
+    shell('ochirish', function (body, again) {
+      body.innerHTML = tabs([['pending', t('adm.pending')], ['done', t('adm.done.t')], ['cancelled', t('adm.cancelled')]], delTab) + '<div class="dl-l">' + skel() + '</div>';
+      $$('[data-tab]', body).forEach(function (b) { b.onclick = function () { delTab = b.dataset.tab; again(); }; });
+      J.api('/api/admin/account-deletions?status=' + delTab).then(function (r) {
+        var box = $('.dl-l', body); if (!r.ok) { box.innerHTML = errBox(r); return; }
+        var list = r.data.requests || [];
+        box.innerHTML = table([t('adm.time'), t('adm.user'), 'Telegram', t('adm.status'), ''], list.map(function (q) {
+          return '<tr>' + td(dt(q.created_at)) + td(q.admin_id ? (q.full_name || '') + ' @' + (q.username || '') + ' · #' + q.admin_id : '—') +
+            td((q.tg_first_name || '') + (q.tg_username ? ' @' + q.tg_username : '') + ' · ' + (q.telegram_user_id || '')) + td((q.status || '') + (q.reason ? ' · ' + q.reason : '')) +
+            '<td style="white-space:nowrap">' + (q.status === 'pending' ? '<button class="pill sm" data-go="' + q.id + '">' + esc(t('adm.del.go')) + '</button> <button class="pill ghost sm" data-no="' + q.id + '">' + esc(t('adm.reject')) + '</button>' : '') + '</td></tr>';
+        }));
+        $$('[data-go]', box).forEach(function (b) { b.onclick = async function () {
+          if (!(await J.confirm(t('adm.del.q'), t('adm.del.go')))) return;
+          busy(b, true); var x = await J.api('/api/admin/account-deletions/' + b.dataset.go + '/complete', { method: 'POST' });
+          if (!x.ok) { busy(b, false); return J.toast(J.errMsg(x.data), 6000); } J.toast(t('adm.done')); again();
+        }; });
+        $$('[data-no]', box).forEach(function (b) { b.onclick = function () {
+          var m = J.modal({ cls: 'sm', html: '<h2>' + esc(t('adm.reject')) + '</h2><div class="field" style="margin-top:14px"><label>' + esc(t('adm.reason')) + '</label><textarea class="inp rj"></textarea></div><button class="pill rj-go">' + esc(t('adm.reject')) + '</button>' });
+          $('.rj-go', m.body).onclick = async function () {
+            var reason = $('.rj', m.body).value.trim(); if (reason.length < 3) return;
+            busy(this, true); var x = await J.api('/api/admin/account-deletions/' + b.dataset.no + '/cancel', { method: 'POST', body: { reason: reason } });
+            if (!x.ok) { busy(this, false); return J.toast(J.errMsg(x.data)); } m.close(); J.toast(t('adm.done')); again();
+          };
+        }; });
+      });
+    });
+  }
+
   /* ---------- marshrutlar ---------- */
-  var VIEWS = { ai: viewAi, xarajat: viewSpend, qabul: viewReg, sifat: viewFb, manbalar: viewSrc, korpus: viewCov, audit: viewAudit, landing: viewLanding, chegirmalar: viewOffers, telegram: viewTg, advokatlar: viewAtt, xizmatlar: viewSvc };
+  var VIEWS = { ai: viewAi, xarajat: viewSpend, qabul: viewReg, sifat: viewFb, manbalar: viewSrc, korpus: viewCov, audit: viewAudit, landing: viewLanding, chegirmalar: viewOffers, telegram: viewTg, advokatlar: viewAtt, xizmatlar: viewSvc, ochirish: viewDel };
   function guard(fn) { return function () { if (!J.isMaster()) { J.go('#/'); return; } fn.apply(null, arguments); }; }
   J.route(/^\/boshqaruv$/, guard(function () { J.viewAdmin(); }));
   J.route(/^\/boshqaruv\/([a-z]+)$/, guard(function (k) { (VIEWS[k] || J.viewAdmin)(); }));

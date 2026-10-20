@@ -19,7 +19,7 @@
  * of TOOL_NAMES. A legal question is never routed here (LEGAL_MARKER_RE).
  */
 
-const TOOL_NAMES = Object.freeze(['balance', 'plans', 'recent', 'link_account', 'open_app', 'commands']);
+const TOOL_NAMES = Object.freeze(['balance', 'plans', 'recent', 'link_account', 'open_app', 'commands', 'delete_account']);
 
 const baseUrl = () => String(process.env.APP_URL || 'https://juristai.uz').replace(/\/+$/u, '');
 
@@ -29,6 +29,8 @@ const LEGAL_MARKER_RE = /qonun|modda|kodeks|ish\s+haq|ish\s+beruvchi|kompensatsi
 const SHORT_ONLY = new Set(['balance', 'plans']);
 
 const PATTERNS = [
+  // first: "akkauntimni o'chiring" is never a question about the law
+  ['delete_account', /(akkaunt|hisob|profil|ma['’ʻ`]?lumot)\p{L}*\s+(?:\p{L}+\s+){0,2}(o['’ʻ`]?chir\p{L}*|yo['’ʻ`]?q\s+qil\p{L}*)|удал\p{L}*\s+(?:\p{L}+\s+){0,1}(аккаунт|профил|учётн|учетн|данн)\p{L}*|(аккаунт|профил)\p{L}*\s+(?:\p{L}+\s+){0,1}удал\p{L}*|delete\s+(my\s+)?account/iu],
   ['balance', /(limit\p{L}*|balans\p{L}*|qoldi[gq]\p{L}*|nechta\s+savol\p{L}*\s+(?:qoldi|bor)|savol(?:lar)?im\s+qoldi|kredit\p{L}*\s+(?:qoldi|qancha)|лимит\p{L}*|баланс\p{L}*|сколько\s+(?:вопросов\s+)?остал\p{L}*)/iu],
   ['plans', /(tarif\p{L}*|obuna\p{L}*|narx(?:lar)?i?\s+qancha|silver|gold|platinum|тариф\p{L}*|подписк\p{L}*|сколько\s+стоит)/iu],
   ['recent', /(oxirgi|so['’ʻ`]?nggi|avvalgi|oldingi)\s+(savol|so['’ʻ`]?rov|murojaat)\p{L}*|savol(?:lar)?im\s+tarixi|tarix(?:im|ni)\b|последн\p{L}*\s+(вопрос|обращен)\p{L}*|истори\p{L}*\s+(вопрос|обращен)\p{L}*/iu],
@@ -111,6 +113,15 @@ async function runAccountTool(name, { chatId, who = {}, lang = 'uz', deps = {} }
           : `Bot va sayt bitta akkaunt va umumiy limit bilan ishlashi uchun: ${app} ga Telegram orqali kiring ("Telegram orqali kirish" tugmasi), so'ng profil menyusida "Telegram'ni ulash"ni bosing.`);
       return { action: 'tool_link_account', reply };
     }
+    case 'delete_account':
+      // nothing is deleted here: the bot asks for a confirmation button
+      // (src/bot/bot.js acc_del_yes), then a master carries the request out
+      return {
+        action: 'tool_delete_account_confirm',
+        reply: R
+          ? 'Удалить аккаунт JuristAI? Будут удалены: ваши данные профиля, история чатов на сайте, текст ваших вопросов и ответов в боте. Записи об оплате и использовании тарифа остаются без личных данных (учёт). Неиспользованный лимит не возвращается. Подтвердите кнопкой ниже.'
+          : "JuristAI akkauntini o'chirishni so'raysizmi? O'chiriladi: profil ma'lumotlaringiz, saytdagi suhbatlar tarixi, botdagi savol va javoblaringiz matni. To'lov va tarif sarfi yozuvlari shaxsiy ma'lumotsiz qoladi (hisob-kitob uchun). Ishlatilmagan limit qaytarilmaydi. Quyidagi tugma bilan tasdiqlang.",
+      };
     case 'open_app':
       return { action: 'tool_open_app', reply: R ? `Приложение JuristAI: ${app}\nТарифы: ${baseUrl()}/tariff.html` : `JuristAI ilovasi: ${app}\nTariflar: ${baseUrl()}/tariff.html` };
     case 'commands':
