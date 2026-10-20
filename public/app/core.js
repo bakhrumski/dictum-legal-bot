@@ -63,10 +63,13 @@
     var data = null, ct = res.headers.get('Content-Type') || '';
     if (ct.indexOf('json') > -1) { try { data = await res.json(); } catch (e) { data = {}; } }
     else { try { data = { text: await res.text() }; } catch (e) { data = {}; } }
-    return { ok: res.ok, status: res.status, data: data || {} };
+    data = data || {};
+    if (!res.ok && data && typeof data === 'object' && !Array.isArray(data)) data._status = res.status;
+    return { ok: res.ok, status: res.status, data: data };
   };
   J.toLogin = function () { location.href = '/app/kirish.html?redirect=' + encodeURIComponent(location.pathname + location.hash); };
-  J.errMsg = function (d) { d = d || {}; return d.message || (typeof d.error === 'string' && d.error.length > 3 && !/^[a-z_]+$/.test(d.error) ? d.error : '') || J.t('err.generic'); };
+  // a reply with no readable reason (a proxy error page, a crash) says its HTTP code
+  J.errMsg = function (d) { d = d || {}; return d.message || (typeof d.error === 'string' && d.error.length > 3 && !/^[a-z_]+$/.test(d.error) ? d.error : '') || (d._status ? J.t('err.http', { code: d._status }) : J.t('err.generic')); };
 
   /* ---------- botlar ---------- */
   // Production nomlari; staging o'z test botlarini /api/auth/options orqali beradi.

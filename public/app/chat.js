@@ -321,6 +321,7 @@
       var ct = res.headers.get('Content-Type') || '';
       if (!res.ok || ct.indexOf('event-stream') < 0) {
         var d = {}; try { d = await res.json(); } catch (e) {}
+        if (!res.ok && d && typeof d === 'object') d._status = res.status;
         se.remove(); cmp.busy(false);
         if (res.status === 409 && d.code === 'DOC_COST_CONFIRM') return costCard(a, d, msg, shown);
         if (res.ok) { finishAi(a, d, shown); afterReply(d); return; }
