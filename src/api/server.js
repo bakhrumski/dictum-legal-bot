@@ -82,6 +82,7 @@ const {
   getLegalPolicyVersions,
 } = require('../rag/legal-prompt-policy');
 const { crossCheckLegalAnswer } = require('../rag/legal-answer-cross-check');
+const { sanitizeDocHtml } = require('../rag/safe-html');
 const { lexLangForText, buildOpinionPrompt, auditOpinionCitations, auditOpinionCitationPresentation, tidyDocumentHtml } = require('../rag/legal-opinion');
 const { hydrateMentionedOfficialActChunks } = require('../rag/official-citation-hydrator');
 const { appendRepealedNotice } = require('../rag/superseded-acts');
@@ -7737,7 +7738,8 @@ app.post('/api/draft/legal-opinion', requireAuth, require('../ai/ai-trigger').re
     );
     let html = (result.text || '').trim().replace(/```(?:html)?/gi, '').trim();
     if (!html) return res.status(500).json({ error: 'Xulosa yaratib bo\'lmadi — qayta urinib ko\'ring' });
-    html = tidyDocumentHtml(html);
+    // the model's HTML keeps its layout, never code (src/rag/safe-html.js)
+    html = sanitizeDocHtml(tidyDocumentHtml(html));
 
     // ── Citation audit: every locator in the opinion must trace back to the
     // source text it was grounded in. Anything the model produced from memory
@@ -7768,7 +7770,7 @@ Return ONLY the corrected HTML body — no fences, no commentary.` },
           { role: 'user', text: `KONTEKST:\n${sourceText.slice(0, 12000)}\n\nTASDIQLANGAN LEX.UZ MANBALARI:\n${verifiedSourceDirectory.join('\n') || '- Yo\'q'}\n\n─── XULOSA ───\n${html}` },
         ], { model: opinionModel, lane: opinionLane, fallbackModel: opinionLane === 'cheap' ? null : opinionFallback, useSearch: false, maxTokens: opinionMaxTokens + 1000, premiumRetries: 1,
              userId: req.session?.adminId || null, endpoint: '/api/draft/legal-opinion/fix-citations' });
-        const fixed = tidyDocumentHtml((fix.text || '').trim().replace(/```(?:html)?/gi, '').trim());
+        const fixed = sanitizeDocHtml(tidyDocumentHtml((fix.text || '').trim().replace(/```(?:html)?/gi, '').trim()));
         // A truncated rewrite is worse than the original with a disclosure
         // note: never swap in a correction that ran out of budget mid-text.
         const fixTruncated = fix.usage && fix.usage.outTokens >= opinionMaxTokens + 1000;
