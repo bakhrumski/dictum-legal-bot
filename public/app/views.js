@@ -166,7 +166,7 @@
       $('[data-a=word]', body).onclick = function () { J.exportWord(doc.name, r.html); };
     }
     function showOpinion(d) {
-      var clean = String(d.html || '').replace(/<script[\s\S]*?<\/script>/gi, '').replace(/\son\w+="[^"]*"/gi, '');
+      var clean = J.cleanHtml(d.html || '');
       body.innerHTML = head(t('an.s.opinion')) + (d.partial ? '<div class="note warn" style="margin-bottom:14px">⚠</div>' : '') + '<div class="card"><div class="md op"></div></div>';
       $('.op', body).innerHTML = clean;
       $('[data-a=again]', body).onclick = stepDrop;
@@ -216,7 +216,7 @@
       result(type, r.data.html || '');
     }
     function result(title, html) {
-      var clean = String(html).replace(/<script[\s\S]*?<\/script>/gi, '').replace(/\son\w+="[^"]*"/gi, '');
+      var clean = J.cleanHtml(html);
       body.innerHTML = '<div class="vh" style="margin-bottom:14px"><div><div class="kicker">' + esc(t('dr.result')) + '</div><h2 style="font-size:24px;margin-top:6px"></h2></div><div style="display:flex;gap:8px"><button class="pill sm" data-a="word">' + J.icon('word') + esc(t('dr.export')) + '</button><button class="pill sm ghost" data-a="back">' + esc(t('dr.back')) + '</button></div></div><div class="card"><div class="md doc" contenteditable="true" spellcheck="false"></div></div>';
       $('h2', body).textContent = title; $('.doc', body).innerHTML = clean;
       $('[data-a=back]', body).onclick = home;
@@ -245,7 +245,7 @@
         var rr = await J.api('/api/draft/export', { method: 'POST', body: { templateId: tpl.slug || tpl.id, values: values, format: format }, raw: true });
         if (!rr.ok) { J.toast(J.t('err.generic')); return; }
         var ct = rr.res.headers.get('Content-Type') || '';
-        if (ct.indexOf('json') > -1) { var d = await rr.res.json(); var w = window.open('', '_blank'); if (w) { w.document.write(d.html || ''); w.document.close(); w.print(); } return; }
+        if (ct.indexOf('json') > -1) { var d = await rr.res.json(); var w = window.open('', '_blank'); if (w) { w.document.write(J.cleanHtml(d.html || '')); w.document.close(); w.print(); } return; }
         var blob = await rr.res.blob(), a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = (L(tpl.name) || 'hujjat') + '.' + (format === 'pdf' ? 'pdf' : 'docx'); document.body.appendChild(a); a.click(); setTimeout(function () { a.remove(); }, 500);
       }
       $('[data-a=docx]', body).onclick = function () { exp('docx'); };

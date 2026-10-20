@@ -313,13 +313,50 @@
   /** Matndagi barcha lex.uz havolalari (oqim paytida ham) */
   J.plain = function (html) { var d = document.createElement('div'); d.innerHTML = html; return d.innerText; };
 
+  /* ---------- hujjat HTML'ini tozalash ----------
+     AI yozgan hujjat (xulosa, loyiha) o'z ko'rinishini saqlaydi, kod ishga tushiradigan hamma narsa
+     olib tashlanadi: script, svg, iframe, img, hodisa atributlari, javascript: havolalar, murakkab style.
+     Eski dashboarddagi sanitizeDocHtml bilan bir xil ro'yxat; server ham tozalaydi (src/rag/safe-html.js). */
+  var SAFE_DOC_TAGS = { P: 1, DIV: 1, SPAN: 1, BR: 1, HR: 1, H1: 1, H2: 1, H3: 1, H4: 1, H5: 1, H6: 1, B: 1, STRONG: 1, I: 1, EM: 1, U: 1, S: 1, SUP: 1, SUB: 1, SMALL: 1,
+    UL: 1, OL: 1, LI: 1, BLOCKQUOTE: 1, PRE: 1, CODE: 1, TABLE: 1, THEAD: 1, TBODY: 1, TFOOT: 1, TR: 1, TH: 1, TD: 1, CAPTION: 1, COLGROUP: 1, COL: 1, A: 1 };
+  var DROP_DOC = /^(SCRIPT|STYLE|TEMPLATE|IFRAME|FRAME|FRAMESET|OBJECT|EMBED|NOSCRIPT|TEXTAREA|SELECT|BUTTON|INPUT|FORM|LINK|META|BASE|SVG|MATH|AUDIO|VIDEO|SOURCE|IMG|CANVAS|TITLE|HEAD)$/;
+  var SAFE_DOC_STYLE = /^(text-align|font-weight|font-style|text-decoration|text-indent|line-height|margin(-top|-bottom|-left|-right)?|padding(-top|-bottom|-left|-right)?|width|border(-collapse)?|vertical-align)\s*:\s*[-#%.,\w\s]*$/i;
+  J.cleanHtml = function (html) {
+    if (html == null || html === '') return '';
+    var tpl = document.createElement('template');
+    tpl.innerHTML = String(html);
+    (function clean(node) {
+      Array.prototype.slice.call(node.childNodes).forEach(function (c) {
+        if (c.nodeType === 1 && DROP_DOC.test(c.tagName.toUpperCase())) { c.remove(); return; }
+        if (c.nodeType === 1) {
+          clean(c);
+          var tag = c.tagName.toUpperCase();
+          if (!SAFE_DOC_TAGS[tag]) { c.replaceWith.apply(c, Array.prototype.slice.call(c.childNodes)); return; }
+          Array.prototype.slice.call(c.attributes).forEach(function (a) {
+            var n = a.name.toLowerCase(), keep = false;
+            if (n === 'class' || n === 'colspan' || n === 'rowspan' || n === 'align') keep = /^[-\w\s]*$/.test(a.value);
+            else if (n === 'data-label' || n === 'data-hint' || n === 'data-key' || n === 'data-k') keep = true;
+            else if (n === 'style') {
+              var ok = a.value.split(';').map(function (x) { return x.trim(); }).filter(function (x) { return x && SAFE_DOC_STYLE.test(x); });
+              if (ok.length) { c.setAttribute('style', ok.join('; ')); return; }
+            } else if (n === 'href' && tag === 'A') keep = /^(https?:\/\/|\/(?![\/\\])|#)/i.test(a.value.trim());
+            if (!keep) c.removeAttribute(a.name);
+          });
+          if (tag === 'A') { c.setAttribute('target', '_blank'); c.setAttribute('rel', 'noopener'); }
+        } else if (c.nodeType !== 3) c.remove();
+      });
+    })(tpl.content);
+    return tpl.innerHTML;
+  };
+
   /* ---------- Word eksport (server: /api/draft/export-raw) ---------- */
   J.exportWord = async function (title, html) {
+    html = J.cleanHtml(html);
     var r = await J.api('/api/draft/export-raw', { method: 'POST', body: { title: title, html: html, format: 'docx', lang: J.lang }, raw: true });
     if (!r.ok) { J.toast(J.t('err.generic')); return; }
     var ct = r.res.headers.get('Content-Type') || '';
     if (ct.indexOf('json') > -1) {                    // server PDF/DOCX yarata olmadi: brauzer chop etadi
-      var d = await r.res.json(); var w = window.open('', '_blank'); if (w) { w.document.write(d.html || html); w.document.close(); w.print(); } return;
+      var d = await r.res.json(); var w = window.open('', '_blank'); if (w) { w.document.write(J.cleanHtml(d.html || html)); w.document.close(); w.print(); } return;
     }
     var blob = await r.res.blob(); var a = document.createElement('a');
     a.href = URL.createObjectURL(blob); a.download = (title || 'JuristAI').replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 80) + '.docx';
