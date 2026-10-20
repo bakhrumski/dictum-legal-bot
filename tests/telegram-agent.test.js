@@ -340,6 +340,37 @@ function stubMemory(clarifyCount = 0) {
     assert.match(context, /kompensatsiya: kontekstdagi 333-modda normasini javobda bayon qiling/u);
   });
 
+  await test('account actions are done by the bot itself, with no AI call and no quota; a legal question with the same words is not one (2026-10-20)', async () => {
+    const d = deps();
+    agent.initTelegramAgent(d);
+    let r = await agent.handleUserMessage({ chatId: 1, text: "Tariflarni ko'rsat" });
+    assert.strictEqual(r.action, 'tool_plans');
+    assert.ok(/Silver/u.test(r.reply) && /tariff\.html/u.test(r.reply), r.reply);
+    r = await agent.handleUserMessage({ chatId: 1, text: 'Nima qila olasan?' });
+    assert.strictEqual(r.action, 'tool_commands');
+    r = await agent.handleUserMessage({ chatId: 1, text: 'ilovani och' });
+    assert.strictEqual(r.action, 'tool_open_app');
+    assert.ok(/\/app\//u.test(r.reply));
+    assert.deepStrictEqual([d.calls.answer, d.calls.intent, d.calls.quota], [0, 0, 0], 'no answer, no intent model, no quota');
+    for (const q of ['Elektr tarifi oshdi, nima qilaman?', 'Bank kredit limitini kamaytirdi, qonuniymi?', 'Parolni unutdim']) {
+      const det = agent.classifyDeterministicIntent(q);
+      assert.ok(!det || det.intent !== 'hisob_amal', q);
+    }
+  });
+
+  await test('the intent model may name an account action; an unknown action is answered as a question', async () => {
+    let d = deps({ intent: { intent: 'hisob_amal', action: 'open_app', missing: [] } });
+    agent.initTelegramAgent(d);
+    let r = await agent.handleUserMessage({ chatId: 1, text: 'Menga JuristAI sahifasiga kirish manzilini yuborib yuboring iltimos' });
+    assert.strictEqual(r.action, 'tool_open_app');
+    assert.strictEqual(d.calls.answer, 0);
+    d = deps({ intent: { intent: 'hisob_amal', action: 'delete_account', missing: [] } });
+    agent.initTelegramAgent(d);
+    const i = await agent.classifyIntent('Hisobimni o\'chiring iltimos, endi kerak emas', []);
+    assert.strictEqual(i.intent, 'huquqiy_savol', 'no such tool: never improvised');
+    assert.strictEqual(i.action, null);
+  });
+
   await test('account questions are routed to the registration bot', async () => {
     const d = deps();
     agent.initTelegramAgent(d);

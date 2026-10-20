@@ -316,6 +316,14 @@ Known state of the suites (Sept 2026):
   linked customer (role `user`) or an unknown role is an ordinary user. An
   account counts as linked by `telegram_chat_id` (/link) or, in a private
   chat, by `telegram_user_id` (registration, the site's Telegram linking).
+  Account actions (2026-10-20, `src/agents/account-tools.js`): typed or
+  spoken (voice -> `src/ai/stt.js` -> the same agent), "limitim qancha?",
+  "tariflar", "oxirgi savollarim", "akkauntni ulash", "ilovani och", "nima
+  qila olasan?" are fixed read-only tools (intent `hisob_amal` + `action`;
+  phrase list first, then the intent model; an unknown action is answered as
+  a question): the caller's own balance, the catalogue, their last 5 bot
+  questions, links. No AI call, no quota; nothing is paid, granted or
+  deleted - such a step stays a link the person confirms on the site.
   Account help (login/OTP/password) is matched only on unambiguous account
   words, never "hisob…" in a legal question ("hisoblash" once routed wage
   questions to password reset). `/testmode` (master only, in memory, auto-off after 12 h) lifts that for one
