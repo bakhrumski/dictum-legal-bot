@@ -75,13 +75,22 @@ const noBound = { usd: null, reason: 'image input tokens per page are not publis
 // the provider answered: a cut reading is not a provider fault (no retry, no breaker)
 const truncated = (who) => Object.assign(new Error(`${who}: OCR output reached its cap: the text would be cut`), { code: 'OCR_TRUNCATED', providerAnswered: true });
 
+// A model for this request only (the master's OCR comparison): it was set in
+// process.env and reached every OCR call running at the same time, customers'
+// included (2026-10-20 review). AsyncLocalStorage keeps it to the one request.
+const { AsyncLocalStorage } = require('async_hooks');
+const ocrModelScope = new AsyncLocalStorage();
+/** Run fn with Gemini OCR on `model` for this async call chain only. */
+function withOcrModel(model, fn) { return ocrModelScope.run({ model: String(model || '') }, fn); }
+
 const readers = {
   // Gemini Developer API; cap = the output budget of the pages in this call
   // model: GEMINI_OCR_MODEL (default gemini-2.5-flash, as before). Gemini 2.x
   // turns thinking off with thinkingBudget 0; Gemini 3.x takes thinkingLevel
   // (minimal is the lowest; it does not promise zero thinking tokens).
   async gemini({ data, mimeType, prompt, cap, model }) {
-    const m = String(model || process.env.GEMINI_OCR_MODEL || 'gemini-2.5-flash').trim();
+    const scoped = ocrModelScope.getStore();
+    const m = String(model || (scoped && scoped.model) || process.env.GEMINI_OCR_MODEL || 'gemini-2.5-flash').trim();
     const thinkingConfig = /^gemini-2\./u.test(m) ? { thinkingBudget: 0 } : { thinkingLevel: 'minimal' };
     const body = {
       contents: [{ role: 'user', parts: [
@@ -763,4 +772,4 @@ function mountAnalyzerRoutes(app, deps) {
 }
 
 // readers: for the master's side-by-side OCR comparison (/api/admin/ocr/compare)
-module.exports = { mountAnalyzerRoutes, callVisionOCR, pageText, readers };
+module.exports = { mountAnalyzerRoutes, callVisionOCR, pageText, readers, withOcrModel };

@@ -25,8 +25,9 @@
   <div id="vLoad"><p class="muted">Yuklanmoqda…</p></div>
   <div id="vAsk" hidden>
     <h1>Word'ni ulash</h1>
-    <p class="muted">Word'dagi JuristAI paneli <b id="acc"></b> akkauntiga ulanadi va shu akkaunt tarifi bilan ishlaydi. Kod Word panelidagi kod bilan bir xil ekanini tekshiring.</p>
-    <input class="codein" id="code" maxlength="8" autocomplete="off" spellcheck="false" aria-label="Ulash kodi">
+    <p class="muted">Word'dagi JuristAI paneli <b id="acc"></b> akkauntiga ulanadi va shu akkaunt tarifi bilan ishlaydi. O'zingizning Word panelingizda ko'rinib turgan 6 belgili kodni kiriting.</p>
+    <p class="muted" style="font-size:12.5px">Kodni kimdir sizga xabar yoki havola orqali yuborgan bo'lsa, kiritmang: u sizning akkauntingizni o'z kompyuteriga ulab oladi.</p>
+    <input class="codein" id="code" maxlength="8" autocomplete="off" spellcheck="false" aria-label="Ulash kodi" placeholder="ABC123">
     <button type="button" class="pill wide" id="go">Tasdiqlash</button>
     <p class="err" id="err" hidden></p>
   </div>
@@ -39,6 +40,6 @@
     <button type="button" class="link" id="revoke" hidden>Barcha Word ulanishlarini uzish</button>
   </div>
 </div>
-<script src="/word/ulash.js?v=1"></script>
+<script src="/word/ulash.js?v=2"></script>
 </body>
 </html>

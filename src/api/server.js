@@ -374,7 +374,7 @@ const credentialLimiter = rateLimit({
   message: { error: "Juda ko'p urinish — 15 daqiqadan so'ng qayta urinib ko'ring" },
 });
 app.use(['/api/account/credentials', '/api/admin/test-users', '/api/recover', '/api/password-recovery'], credentialLimiter);
-app.use(['/api/legal-chat', '/api/analyze', '/api/draft', '/api/ai-chat'], aiLimiter);
+app.use(['/api/legal-chat', '/api/analyze', '/api/draft', '/api/ai-chat', '/api/voice/transcribe'], aiLimiter);
 
 // Public assets do not need a database-backed session. Serving them before the
 // session store keeps the landing, login, tariff and attorney-directory pages
@@ -489,6 +489,8 @@ async function revokeSessionsFor(adminId, keepSid = null) {
   } catch (err) {
     console.error('[SESSIONS] revoke failed:', err.message);
   }
+  // Word / Google Docs panels of the account end too (src/addin/word-addin.js)
+  try { await wordAddin.revokeAllForAdmin(pool, adminId); } catch (err) { console.error('[SESSIONS] add-in revoke failed:', err.message); }
 }
 
 // A lawyer or student may act on a client request only when it is assigned
@@ -678,7 +680,7 @@ app.get('/api/admin/model-check', requireMasterAdmin, async (req, res) => {
 
 // ── Speech to text: voice recordings (web app) and engine comparison ─────────
 // The engine is chosen in src/ai/stt.js (STT_PROVIDER=gemini | voicelab).
-//   POST /api/voice/transcribe   multipart {file, lang, durationSec}
+//   POST /api/voice/transcribe   multipart {file, lang} (the length is measured on the server)
 //        -> { segments:[{speaker,start,end,text}], keywords:[], durationSec, provider }
 //        Off unless VOICE_NOTES_ENABLED=true (501: the app keeps the recording
 //        as "pending"). Voice minutes are not metered yet, so ordinary users
@@ -706,7 +708,11 @@ app.post('/api/voice/transcribe', require('../auth/same-origin').requireSameOrig
   const staff = req.session.role && req.session.role !== 'user';
   if (!staff && process.env.VOICE_NOTES_USERS !== 'true') return res.status(403).json({ error: 'voice_notes_staff_only', message: "Ovozli yozuvlar hozircha sinovda." });
   if (!req.file || !req.file.buffer || !req.file.buffer.length) return res.status(400).json({ error: 'Audio fayl kerak' });
-  const durationSec = Math.max(0, Math.round(Number(req.body.durationSec) || 0));
+  // the length is measured here, never taken from the client (2026-10-20
+  // review: durationSec=0 let hours of audio past the limit and the estimate)
+  const measured = await require('../ai/audio-duration').probeAudioSeconds(req.file.buffer);
+  if (measured == null) return res.status(422).json({ error: 'audio_unreadable', message: "Yozuv uzunligini aniqlab bo'lmadi. Boshqa formatda (MP3, M4A, WAV, OGG) yuklab ko'ring." });
+  const durationSec = Math.max(1, Math.round(measured));
   if (durationSec > VOICE_MAX_SEC) return res.status(413).json({ error: 'too_long', message: 'Yozuv 30 daqiqadan uzun. Uni qismlarga bo‘lib yuklang.' });
   const stt = require('../ai/stt');
   if (!stt.sttEnabled()) return res.status(501).json({ error: 'stt_not_configured' });
@@ -800,17 +806,15 @@ app.post('/api/admin/ocr/compare', require('../auth/same-origin').requireSameOri
     }
     if (!process.env.GEMINI_API_KEY) return { engine, ok: false, error: 'GEMINI_API_KEY yo‘q' };
     if (isPdf) {
-      const keep = process.env.GEMINI_OCR_MODEL;
-      // the PDF path reads page ranges through the chain; the model is its env setting
-      return run(engine, async () => {
-        process.env.GEMINI_OCR_MODEL = engine;
-        try { const r = await callVisionOCR(req.file.buffer, mime, lang, { pages }); return { provider: `${r.provider || 'Gemini'} (${engine})`, text: String(r.text || '') }; }
-        finally { if (keep === undefined) delete process.env.GEMINI_OCR_MODEL; else process.env.GEMINI_OCR_MODEL = keep; }
-      });
+      // the PDF path reads page ranges through the chain; the model is set for
+      // this request only (never process.env: customers' OCR runs alongside)
+      return run(engine, () => require('../ocr/routes').withOcrModel(engine, async () => {
+        const r = await callVisionOCR(req.file.buffer, mime, lang, { pages }); return { provider: `${r.provider || 'Gemini'} (${engine})`, text: String(r.text || '') };
+      }));
     }
     return run(engine, async () => { const r = await readers.gemini({ data: req.file.buffer, mimeType: mime, prompt, cap: scanLimits.OCR_SINGLE_PAGE_CAP, model: engine }); return { ...r, provider: `Gemini ${engine}` }; });
   };
-  // a PDF switches the model through the environment: one engine at a time
+  // one engine at a time for a PDF (several page calls each)
   let results;
   if (isPdf) { results = []; for (const e of engines) results.push(await one(e)); }
   else results = await Promise.all(engines.map(one));
