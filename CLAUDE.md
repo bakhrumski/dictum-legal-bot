@@ -423,7 +423,12 @@ Known state of the suites (Sept 2026):
   `docs/design-handoff/` (`ANIMATIONS.md` lists which animations exist — do
   not invent new ones). Match the rendered canvas, not its inline declarations;
   the canvas runtime overrides some of them.
-- **Type: one face, Space Grotesk, everywhere** (owner's decision, Sept 2026;
+- **Type, new design (landing, `/app/`, Word/Google Docs panels): Golos
+  Text**, self-hosted from `public/fonts/golos-text/` through
+  `/app/fonts.css` (it has Cyrillic). Pages link that file - never Google
+  Fonts (2026-10-20 review replaced 21 Google Fonts links). The rule below
+  stays for the old dashboard and the pages that still use its styles.
+- **Type, old design: one face, Space Grotesk, everywhere** (owner's decision, Sept 2026;
   it overrides the dashboard canvas's Inter / Source Serif 4 / JetBrains Mono
   split). It is self-hosted: `public/css/fonts.css` declares it from
   `public/fonts/space-grotesk/` and sets every font role from `html:root`;

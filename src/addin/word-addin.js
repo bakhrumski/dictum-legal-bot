@@ -8,8 +8,11 @@
  * with a device pairing instead of a password or a pop-up:
  *
  *   1. task pane  POST /api/addin/pair            -> { pairId (secret), code }
- *   2. the person opens /word/ulash.html?code=…   in their browser, signed in
- *      to JuristAI as usual, and confirms the code (POST /api/addin/pair/approve)
+ *   2. the person opens /word/ulash.html          in their browser, signed in
+ *      to JuristAI as usual, and TYPES the code shown in Word (POST
+ *      /api/addin/pair/approve). The link never carries the code (2026-10-20
+ *      review: a prefilled ?code= let a stranger's link connect someone's
+ *      account to the stranger's Word with one click).
  *   3. task pane  GET  /api/addin/pair/:pairId    -> { status:'approved', token }
  *
  * The token ("jai_…", 90 days, stored as a SHA-256 hash in addin_tokens) is
@@ -123,8 +126,37 @@ async function loadAccount(pool, tokenHash) {
  * token gets a plain session object for that account (express-session then
  * leaves it alone: no cookie, nothing stored). Anything else passes through.
  */
+// every bearer cache of this process, so a revocation reaches all of them
+const CACHES = new Set();
+
+/** Drop every cached token of one account (revoke-all, password change, sign-out everywhere). */
+function forgetAdmin(adminId) {
+  for (const cache of CACHES) {
+    for (const [hash, hit] of cache) if (hit && hit.account && String(hit.account.id) === String(adminId)) cache.delete(hash);
+  }
+}
+
+/**
+ * Revoke every add-in token of an account and forget them at once (2026-10-20
+ * review: a password reset or "end other sessions" ended the browser sessions
+ * but left Word tokens working for up to 90 days). A database without the
+ * table yet is not an error.
+ */
+async function revokeAllForAdmin(db, adminId) {
+  let revoked = 0;
+  try {
+    const r = await db.query('UPDATE addin_tokens SET revoked_at = NOW() WHERE admin_id = $1 AND revoked_at IS NULL', [adminId]);
+    revoked = r.rowCount || 0;
+  } catch (e) {
+    if (e && e.code !== '42P01') throw e;
+  }
+  forgetAdmin(adminId);
+  return revoked;
+}
+
 function createBearerAuth(pool, { cacheMs = 60 * 1000 } = {}) {
   const cache = new Map(); // hash -> { at, account }
+  CACHES.add(cache);
   const bearerAuth = async function (req, res, next) {
     const h = req.headers && req.headers.authorization;
     if (!h || !/^Bearer jai_[A-Za-z0-9_-]{20,}$/.test(h)) return next();
@@ -426,7 +458,8 @@ function mountRoutes(app, { pool, requireAuth, requireSameOrigin, logAudit = () 
     const p = pairings.create();
     if (!p) return res.status(503).json({ error: 'busy' });
     res.set('Cache-Control', 'no-store');
-    res.json({ ...p, connectUrl: `${baseUrlOf(req)}/word/ulash.html?code=${p.code}` });
+    // the code is shown in Word only; the link does not carry it
+    res.json({ ...p, connectUrl: `${baseUrlOf(req)}/word/ulash.html` });
   });
 
   // 3. task pane polls until the person confirms
@@ -459,9 +492,9 @@ function mountRoutes(app, { pool, requireAuth, requireSameOrigin, logAudit = () 
     res.json(r.rows[0] || { n: 0 });
   });
   app.post('/api/addin/connections/revoke-all', requireAuth, requireSameOrigin, async (req, res) => {
-    const r = await pool.query('UPDATE addin_tokens SET revoked_at = NOW() WHERE admin_id = $1 AND revoked_at IS NULL', [req.session.adminId]);
+    const revoked = await revokeAllForAdmin(pool, req.session.adminId);
     logAudit(req, 'addin.word.revoke_all', 'addin_token', String(req.session.adminId));
-    res.json({ ok: true, revoked: r.rowCount || 0 });
+    res.json({ ok: true, revoked });
   });
 
   // task pane (token): who am I / sign out
@@ -479,7 +512,7 @@ function mountRoutes(app, { pool, requireAuth, requireSameOrigin, logAudit = () 
 
 module.exports = {
   BEARER_PATHS, PAIR_TTL_MS, TOKEN_TTL_DAYS, CODE_LEN,
-  sha256, newCode, normCode, newToken, ensureTables, createPairings, issueToken, loadAccount,
+  sha256, newCode, normCode, newToken, ensureTables, createPairings, issueToken, loadAccount, forgetAdmin, revokeAllForAdmin,
   createBearerAuth, wordFrameHeaders, manifestXml, guidFor, mountManifest, mountRoutes,
   addinCorsAllowed, ADDIN_CORS, GOOGLE_SANDBOX_ORIGIN, panelScript,
 };

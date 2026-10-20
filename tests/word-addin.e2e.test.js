@@ -82,7 +82,7 @@ function pane() {
       assert.strictEqual(r.status, 200);
       pair = r.body;
       assert.match(pair.code, /^[A-Z2-9]{6}$/);
-      assert.match(pair.connectUrl, /\/word\/ulash\.html\?code=/);
+      assert.match(pair.connectUrl, /\/word\/ulash\.html$/); // the code is typed, never in the link
       assert.strictEqual((await P.call(`/api/addin/pair/${pair.pairId}`)).body.status, 'pending');
     });
 

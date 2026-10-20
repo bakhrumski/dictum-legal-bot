@@ -1,6 +1,6 @@
 /* Ovozli yozuvlar: muloqotni yozib olish → matnga aylantirish (STT) → qisqacha mazmun, topshiriqlar, keyingi qadamlar, hujjat tavsiyasi.
    Server kelishuvi (hali yo'q, README'ga qarang):
-     POST /api/voice/transcribe  multipart {file, lang, durationSec} → {segments:[{speaker,start,end,text}], keywords:[], durationSec}
+     POST /api/voice/transcribe  multipart {file, lang:'auto'} → {segments:[{speaker,start,end,text}], keywords:[], durationSec}
      POST /api/voice/analyze     {segments, lang}                    → {title, summary, points[], tasks:[{text,owner,due}], nextSteps[], document:{type,reason}|null}
      GET  /api/voice/balance                                          → {minutesLimit, minutesUsed}
    Server javob bermasa (404/501), yozuv saqlanadi va "xizmat tez orada ulanadi" deb ko'rsatiladi.
@@ -38,7 +38,7 @@
   /* ---------- server ---------- */
   async function transcribe(item, blob) {
     item.status = 'working'; put(item); J.emit('voice', item.id);
-    var fd = new FormData(); fd.append('file', blob, (item.title || 'yozuv') + '.webm'); fd.append('lang', J.lang); fd.append('durationSec', String(Math.round(item.duration || 0)));
+    var fd = new FormData(); fd.append('file', blob, (item.title || 'yozuv') + '.webm'); fd.append('lang', 'auto'); // the speech's language, not the interface's: auto-detect (mixed uz/ru speech too); the server measures the length
     var r = await J.api('/api/voice/transcribe', { method: 'POST', body: fd });
     if (r.status === 404 || r.status === 501 || r.network) { item.status = 'pending'; put(item); J.emit('voice', item.id); return; }
     if (!r.ok) { item.status = 'error'; item.error = J.errMsg(r.data); put(item); J.emit('voice', item.id); if (r.status === 402 || r.status === 429) buyMinutes(); return; }

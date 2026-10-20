@@ -279,11 +279,19 @@
   }
   var STEP = { search: 'Qonunlar qidirilmoqda…', retrieve: 'Manbalar tanlanmoqda…', generate: 'Javob yozilmoqda…', verify: 'Manbalar tekshirilmoqda…' };
 
+  var TOO_BIG_BYTES = 1900000;
+  function jsonBytes(o) {
+    var str = JSON.stringify(o);
+    if (window.TextEncoder) return new TextEncoder().encode(str).length;
+    try { return unescape(encodeURIComponent(str)).length; } catch (e) { return str.length * 3; }
+  }
   /** /api/legal-chat (SSE). Qaytaradi: { reply } yoki null (xato kartada ko'rsatilgan) */
   function askLegal(el, payload) {
     var body = { message: payload.message, history: payload.history || [], databases: ['lex.uz'], topic: null, topics: null, autoDetect: true,
       documentText: payload.documentText || null, docTicket: null, scanIds: null, confirmedJob: payload.confirmedJob || null, stream: CAN_STREAM };
-    if (body.documentText && body.documentText.length > 900000) { fail(el, "Hujjat juda katta (900 000 belgidan ortiq). Bir qismini belgilab, \"Tanlangan matn\" orqali yuboring."); return Promise.resolve(null); }
+    // the server takes a JSON body up to 2 MB: count UTF-8 bytes (a Cyrillic
+    // letter is 2), not characters - a 700 000-letter Russian contract is ~1.4 MB
+    if (body.documentText && jsonBytes(body) > TOO_BIG_BYTES) { fail(el, "Hujjat juda katta (2 MB chegarasidan oshadi). Bir qismini belgilab, \"Tanlangan matn\" orqali yuboring."); return Promise.resolve(null); }
     ctrl = window.AbortController ? new AbortController() : null; setBusy(true);
     var st = $('.st', el), live = $('.live', el), acc = '';
     return api('/api/legal-chat', { method: 'POST', body: body, signal: ctrl ? ctrl.signal : undefined }).then(function (res) {
@@ -294,6 +302,7 @@
           setBusy(false);
           if (res.status === 409 && d.code === 'DOC_COST_CONFIRM') return costConfirm(el, d, payload);
           if (res.ok && d.reply) return d;
+          if (res.status === 413) { fail(el, "Hujjat juda katta (2 MB chegarasidan oshadi). Bir qismini belgilab, \"Tanlangan matn\" orqali yuboring."); return null; }
           limitOrFail(el, d); return null;
         });
       }

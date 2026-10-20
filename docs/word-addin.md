@@ -29,7 +29,7 @@ Files: `public/word/` (task pane, connect page, icons), `src/addin/word-addin.js
 
 ## Sign-in
 The pane cannot rely on the site cookie inside Word, so it pairs: the pane shows a 6-character
-code and opens `/word/ulash.html?code=…` in the browser; the signed-in person confirms it there.
+code and opens `/word/ulash.html` in the browser; the signed-in person types the code shown in Word there (the link never carries the code, 2026-10-20).
 The pane then holds a `jai_…` token (90 days, only its SHA-256 is stored in `addin_tokens`).
 The token opens only: `GET /api/user-info`, `GET /api/tariff/me`, `POST /api/legal-chat`,
 `GET /api/addin/me`, `POST /api/addin/logout` — as that account, with its role and limits.

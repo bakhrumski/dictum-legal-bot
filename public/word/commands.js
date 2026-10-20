@@ -15,8 +15,11 @@
       var r = ctx.document.getSelection(); r.load('text'); r.track();
       return ctx.sync().then(function () {
         if (!String(r.text || '').trim()) return { range: r, text: '' };
-        if (has14()) r.insertComment(WAIT);
-        return ctx.sync().then(function () { return { range: r, text: r.text }; });
+        // each run marks its own comment, so a reply never lands on another
+        // run's clause or on a comment left by an earlier, failed run
+        var wait = WAIT + ' [' + Math.random().toString(36).slice(2, 8) + ']';
+        if (has14()) r.insertComment(wait);
+        return ctx.sync().then(function () { return { range: r, text: r.text, wait: wait }; });
       });
     });
   }
@@ -26,8 +29,8 @@
     return Word.run(sel.range, function (ctx) {
       var cs = ctx.document.body.getComments(); cs.load('items/content');
       return ctx.sync().then(function () {
-        var mine = cs.items.filter(function (c) { return c.content === WAIT; });
-        if (mine.length) mine[mine.length - 1].content = text.slice(0, 2000);
+        var mine = cs.items.filter(function (c) { return sel.wait && c.content === sel.wait; });
+        if (mine.length) mine[0].content = text.slice(0, 2000);
         else sel.range.insertComment(text.slice(0, 2000));
         return ctx.sync();
       });

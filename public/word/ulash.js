@@ -3,8 +3,8 @@
 (function () {
   'use strict';
   var $ = function (s) { return document.querySelector(s); };
-  var params = new URLSearchParams(location.search);
-  var code = (params.get('code') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+  // The code is typed by hand from the Word panel, never taken from the link:
+  // a link someone sent you must not connect your account to their Word.
 
   function view(v) { ['vLoad', 'vAsk', 'vDone'].forEach(function (id) { $('#' + id).hidden = id !== v; }); }
   function post(url, body) {
@@ -22,17 +22,16 @@
 
   fetch('/api/user-info', { credentials: 'same-origin' }).then(function (r) {
     if (r.status === 401) {
-      location.replace('/app/kirish.html?redirect=' + encodeURIComponent(location.pathname + location.search));
+      location.replace('/app/kirish.html?redirect=' + encodeURIComponent(location.pathname));
       return null;
     }
     return r.json();
   }).then(function (u) {
     if (!u) return;
     $('#acc').textContent = u.fullName || u.username || '';
-    $('#code').value = code;
     view('vAsk');
     connections();
-    if (!code) $('#code').focus();
+    $('#code').focus();
   }).catch(function () { $('#vLoad').innerHTML = '<p class="err">Server bilan aloqa yo‘q. Sahifani yangilang.</p>'; });
 
   $('#go').onclick = function () {
