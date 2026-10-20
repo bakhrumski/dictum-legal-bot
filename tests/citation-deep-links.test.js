@@ -719,4 +719,17 @@ test('an item link marks the whole item up to the next one; a bare article in th
   assert.ok(/526-modda \(manbasi ko'rsatilmagan\)/u.test(linkBareArticleRefs('[**A**](https://lex.uz/docs/-6257288) va [**B**](https://lex.uz/docs/-4422250). Bu 526-modda bilan.', two, 'uz')), 'two acts hold it: still marked');
 });
 
+test('a title written before its own link is said once; the model\'s disclaimer sentence at a paragraph end goes; test mode names why the claim check did not run (2026-10-13)', () => {
+  const { tidyAroundLinks } = require('../src/rag/citation-utils');
+  const T = 'Raqamli texnologiyalar sohasida “IT-visa” berish tartibi to‘g‘risida';
+  assert.strictEqual(tidyAroundLinks(`Masalalar ${T} ([${T} (VMQ-734)](https://lex.uz/docs/-7851775)) bilan.`), `Masalalar [${T} (VMQ-734)](https://lex.uz/docs/-7851775) bilan.`);
+  const other = "Boshqa matn ([**Mehnat kodeksi (O'RQ-798)**](https://lex.uz/docs/-1)) qoladi.";
+  assert.strictEqual(tidyAroundLinks(other), other, 'another text before the bracket stays');
+  const { stripModelDisclaimer } = require('../src/agents/telegram-agent');
+  assert.strictEqual(stripModelDisclaimer('Xulosa: murojaat qiling. Javob AI tahliliga asoslanadi; muhim qaror uchun litsenziyalangan yuristga murojaat qiling.\n\n💬 x'), 'Xulosa: murojaat qiling.\n\n💬 x');
+  assert.strictEqual(stripModelDisclaimer('Javob berish muddati 10 kun; yurist bilan kelishing.'), 'Javob berish muddati 10 kun; yurist bilan kelishing.');
+  const src = require('fs').readFileSync(require('path').join(__dirname, '../src/agents/telegram-agent.js'), 'utf8');
+  assert.ok(/guardMeta\.status === 'unverified' && guardMeta\.reason/u.test(src) && /testModeNote\(testAccount, currentRequestSpend\(\)\)\}\$\{guardWhy\}/u.test(src), 'only under a test-mode answer');
+});
+
 console.log(`\n${passed} citation deep-link tests passed.\n`);

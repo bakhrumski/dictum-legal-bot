@@ -100,8 +100,12 @@ const DISCLAIMER = "\n\n_Javob SI tomonidan tayyorlandi va yuridik kuchga ega em
 // ... yuristga murojaat qiling", asked for by the web prompt) is dropped:
 // the bot adds its own, and the answer showed both (2026-10-13).
 const MODEL_DISCLAIMER = /^[ \t>*_]*(?:⚠️?\s*)?(?:\*{0,2}(?:Ogohlantirish|Eslatma|Diqqat|Предупреждение|Примечание)\*{0,2}\s*:?\s*)?(?:bu\s+)?(?:javob|ответ)(?!\p{L})[^\n]{0,40}(?<!\p{L})(?:AI|SI|ИИ|sun['ʼʻ’]?iy\s+intellekt|искусственн\p{L}*\s+интеллект\p{L}*)(?!\p{L})[^\n]*(?:yurist|юрист)[^\n]*$/gimu;
+// the same said as the last sentence of a paragraph (2026-10-13: "...
+// murojaat qiling. Javob AI tahliliga asoslanadi; muhim qaror uchun
+// litsenziyalangan yuristga murojaat qiling." closed the Xulosa)
+const MODEL_DISCLAIMER_SENTENCE = /(^|[.!?…»)]\s+)(?:bu\s+)?(?:javob|ответ)(?!\p{L})[^.\n]{0,40}(?<!\p{L})(?:AI|SI|ИИ)(?!\p{L})[^.\n]{0,160}(?:yurist|юрист)\p{L}*[^.\n]*\.?[ \t]*(?=\n|$)/gimu;
 function stripModelDisclaimer(text = '') {
-  return String(text || '').replace(MODEL_DISCLAIMER, '').replace(/\n{3,}/gu, '\n\n').trim();
+  return String(text || '').replace(MODEL_DISCLAIMER, '').replace(MODEL_DISCLAIMER_SENTENCE, '$1').replace(/[ \t]+\n/gu, '\n').replace(/\n{3,}/gu, '\n\n').trim();
 }
 const DISCLAIMER_RU = "\n\n_Ответ подготовлен ИИ и не имеет юридической силы. По важным вопросам проконсультируйтесь с юристом._";
 
@@ -1405,8 +1409,13 @@ Agar texnik uzilish yuz bersa, limitingiz avtomatik tiklanadi.`,
     ? `\n\n⚠️ _Это предварительный ответ: ${(reasons && reasons.length ? reasons : ['некоторые нормы не удалось подтвердить по проверенным источникам']).join('; ')}. Юрист проверит и уточнит._`
     : `\n\n⚠️ _Bu dastlabki javob: ${(reasons && reasons.length ? reasons : ["ba'zi normalarni tekshirilgan manbalardan tasdiqlay olmadim"]).join('; ')}. Yurist ko'rib chiqib, aniqlashtiradi._`;
 
+  // in test mode only: why the claim check did not run, for the master
+  const guardMeta = answer.meta && answer.meta.claimGuard;
+  const guardWhy = guardMeta && guardMeta.status === 'unverified' && guardMeta.reason
+    ? `\n🔬 Tekshiruvchi ishlamadi, sababi: ${String(guardMeta.reason).replace(/[*_`\[\]]/gu, '').slice(0, 160)}`
+    : '';
   const allowance = quota.source === 'test'
-    ? `\n\n${testModeNote(testAccount, currentRequestSpend())}`
+    ? `\n\n${testModeNote(testAccount, currentRequestSpend())}${guardWhy}`
     : quota.source === 'paid'
     ? (ru ? `\n\n🎟 Использован ранее купленный кредит. Осталось кредитов: ${quota.paidCredits || 0}.` : `\n\n🎟 Oldin sotib olingan javob krediti ishlatildi. Qolgan kreditlar: ${quota.paidCredits || 0}.`)
     : quota.source === 'staff' || quota.legacy
