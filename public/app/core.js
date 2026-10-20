@@ -350,13 +350,17 @@
   };
 
   /* ---------- Word eksport (server: /api/draft/export-raw) ---------- */
+  /** Chop etish oynasi: tozalangan hujjat + oddiy bezak (serverning HTML'i ishlatilmaydi). */
+  J.printPage = function (title, html) {
+    return '<!doctype html><html><head><meta charset="utf-8"><title>' + J.esc(title || 'JuristAI') + '</title><style>body{font:12pt/1.5 "Times New Roman",serif;max-width:780px;margin:24px auto;color:#111}h1,h2,h3{line-height:1.25}table{border-collapse:collapse;width:100%}td,th{border:1px solid #999;padding:4px 6px;vertical-align:top}a{color:#1a4fc4}</style></head><body>' + J.cleanHtml(html) + '</body></html>';
+  };
   J.exportWord = async function (title, html) {
     html = J.cleanHtml(html);
     var r = await J.api('/api/draft/export-raw', { method: 'POST', body: { title: title, html: html, format: 'docx', lang: J.lang }, raw: true });
     if (!r.ok) { J.toast(J.t('err.generic')); return; }
     var ct = r.res.headers.get('Content-Type') || '';
     if (ct.indexOf('json') > -1) {                    // server PDF/DOCX yarata olmadi: brauzer chop etadi
-      var d = await r.res.json(); var w = window.open('', '_blank'); if (w) { w.document.write(J.cleanHtml(d.html || html)); w.document.close(); w.print(); } return;
+      var w = window.open('', '_blank'); if (w) { w.document.write(J.printPage(title, html)); w.document.close(); w.print(); } return;
     }
     var blob = await r.res.blob(); var a = document.createElement('a');
     a.href = URL.createObjectURL(blob); a.download = (title || 'JuristAI').replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 80) + '.docx';

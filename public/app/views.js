@@ -245,7 +245,7 @@
         var rr = await J.api('/api/draft/export', { method: 'POST', body: { templateId: tpl.slug || tpl.id, values: values, format: format }, raw: true });
         if (!rr.ok) { J.toast(J.t('err.generic')); return; }
         var ct = rr.res.headers.get('Content-Type') || '';
-        if (ct.indexOf('json') > -1) { var d = await rr.res.json(); var w = window.open('', '_blank'); if (w) { w.document.write(J.cleanHtml(d.html || '')); w.document.close(); w.print(); } return; }
+        if (ct.indexOf('json') > -1) { var d = await rr.res.json(); var w = window.open('', '_blank'); if (w) { w.document.write(J.printPage(L(tpl.name) || 'JuristAI', d.html || '')); w.document.close(); w.print(); } return; }
         var blob = await rr.res.blob(), a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = (L(tpl.name) || 'hujjat') + '.' + (format === 'pdf' ? 'pdf' : 'docx'); document.body.appendChild(a); a.click(); setTimeout(function () { a.remove(); }, 500);
       }
       $('[data-a=docx]', body).onclick = function () { exp('docx'); };
