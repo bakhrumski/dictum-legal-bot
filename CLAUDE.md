@@ -1,7 +1,8 @@
 # JuristAI — notes for Claude Code
 
 JuristAI is an Uzbek legal assistant: a Telegram bot plus the juristai.uz web
-app. The repository is `bakhrumski/dictum-legal-bot` (the name predates the
+app (new app at `/app/`, master admin at `/app/#/boshqaruv`; the old
+`dashboard.html` is still served). The repository is `bakhrumski/dictum-legal-bot` (the name predates the
 brand). One Node process runs both: `index.js` loads `src/api/server.js`, which
 starts Express and the bot.
 
@@ -9,21 +10,36 @@ The owner writes in Uzbek; answer in Uzbek unless asked otherwise.
 
 ## Working agreement
 
+- **Branches and services (since 2026-10-20, owner's decision):**
+  - `staging` → Render service **"juristai-staging"**, which now serves
+    **juristai.uz** (the new design: landing + `/app/`). Database: Supabase
+    `juristai-staging-pro` (it started as a copy of production and is now the
+    live database). The Telegram bots run here too. **A push to `staging` is
+    a release** to juristai.uz.
+  - `main` → Render service **"JuristAI"** (the old design, no custom domain,
+    the old production database). It lags behind `staging` and is brought up
+    to date only by a `staging` → `main` PR. It must not run the same
+    Telegram bot token as "juristai-staging" (two pollers get 409 Conflict).
 - **After every push, check whether the branch has an open PR.** If it has
   none, open one and give the link. A push without a visible PR has been
   missed more than once; do not assume.
-- **Merging is split by what the change touches:**
+- **What may go live on `staging` is split by what the change touches:**
   - Frontend only (`public/**` — HTML, CSS, client JS, images, fonts, media):
-    merge the PR yourself once verified, then report the link.
+    push or merge to `staging` yourself once verified, then report it.
   - Anything else — `src/**`, `migrations/**`, `scripts/**`, auth, payments,
-    tariffs, database, `package.json`, config, tests, docs: open the PR and
-    **ask before merging**.
-- `main` deploys straight to production on Render. A merge is a release.
+    tariffs, database, `package.json`, config, tests, docs: work on a branch,
+    open a PR into `staging` and **ask before merging**. The answer pipeline
+    (`/api/legal-chat`) is not changed without the owner's consent.
+  - `staging` → `main` PRs: **ask before merging**.
+- The live database is read-only for Claude: queries only, no writes.
 - If the branch's PR has already been merged, restart the branch from
-  `origin/main` before new work; never stack commits on merged history.
+  `origin/staging` (or `origin/main` for a `main` PR) before new work; never
+  stack commits on merged history.
 - Verify visual work in a real browser at desktop and phone widths (~390px)
   before calling it done. Report what was checked, and say plainly what was
   not (e.g. no real iPhone available — Safari behaviour was simulated).
+- The owner's design rules for the new app: no coloured left-stripe cards;
+  a coloured text background only in light blue.
 
 ## Commands
 
