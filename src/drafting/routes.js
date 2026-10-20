@@ -471,6 +471,8 @@ Rules:
         .replace(/(?:<br\s*\/?>\s*){2,}/gi, '<br>')
         .replace(/>\s*\n\s*</g, '><')
         .trim();
+      // the model's HTML keeps its layout, never code (src/rag/safe-html.js)
+      html = require('../rag/safe-html').sanitizeDocHtml(html);
       res.json({ html, provider: result.provider });
     } catch (e) {
       console.error('[DRAFT] ai-generate error:', e.message);
