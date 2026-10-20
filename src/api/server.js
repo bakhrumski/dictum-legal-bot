@@ -780,6 +780,24 @@ app.get('/api/voice/balance', requireAuth, (req, res) => {
   res.json({ metered: false, minutesLimit: null, minutesUsed: null, enabled: process.env.VOICE_NOTES_ENABLED === 'true' });
 });
 
+// a recording's summary to the caller's own linked Telegram chat (the landing:
+// "xulosa Telegram'ga keladi"); the text is what the page already shows, no AI call
+app.post('/api/voice/send-telegram', require('../auth/same-origin').requireSameOrigin, requireAuth, async (req, res) => {
+  try {
+    const text = String((req.body && req.body.text) || '').trim().slice(0, 3800);
+    if (!text) return res.status(400).json({ error: 'empty' });
+    if (!bot) return res.status(503).json({ error: 'bot_unavailable', message: 'Telegram bot hozir ishlamayapti' });
+    const a = (await pool.query('SELECT telegram_chat_id, telegram_user_id FROM admins WHERE id = $1', [req.session.adminId])).rows[0] || {};
+    const chat = a.telegram_chat_id || a.telegram_user_id;
+    if (!chat) return res.status(409).json({ error: 'telegram_not_linked', message: "Telegram ulanmagan" });
+    await bot.sendMessage(chat, `🎙 ${text}`, { disable_web_page_preview: true });
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[VOICE] send-telegram failed:', e.message);
+    res.status(502).json({ error: 'send_failed', message: "Telegram'ga yuborib bo'lmadi" });
+  }
+});
+
 app.post('/api/admin/stt/compare', require('../auth/same-origin').requireSameOrigin, requireMasterAdmin, (req, res, next) => {
   sttUpload.single('file')(req, res, (err) => err ? res.status(400).json({ error: err.message }) : next());
 }, async (req, res) => {
@@ -11476,6 +11494,9 @@ async function runMigrations() {
         generateAnswer: generateWorkspaceAnswer,
       });
       await workspaceAiService.recoverStaleRuns();
+      const workspaceTelegram = require('../workspace/telegram-notify').createWorkspaceTelegramNotifier({
+        pool, send: (chat, text) => bot.sendMessage(chat, text, { disable_web_page_preview: true }),
+      });
       mountWorkspaceRoutes(app, {
         pool,
         requireAuth,
@@ -11483,7 +11504,9 @@ async function runMigrations() {
         aiService: workspaceAiService,
         verificationTokens,
         tariffModule,
+        telegramNotifier: workspaceTelegram,
       });
+      workspaceTelegram.start();
       console.log('[WORKSPACE] API, Realtime bridge and shared AI memory mounted');
     } catch (error) {
       error.workspaceMigrationFatal = true;

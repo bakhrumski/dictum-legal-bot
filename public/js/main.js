@@ -291,8 +291,7 @@
     [107, 549, 901, 925], [30, 549, 928, 952], [30, 107, 955, 975]].map(function (r) { return [r[0] / LEX_W, r[1] / LEX_W, r[2] / LEX_H, r[3] / LEX_H]; });
 
   var SHARE_IC = [
-    '<svg viewBox="0 0 40 40"><rect width="40" height="40" rx="10" fill="#2AABEE"/><path fill="#fff" d="M8.5 19.3 29 11.4c1-.4 1.8.2 1.5 1.7L27 29.5c-.2 1.2-1 1.5-1.9.9l-5.300-3.900-2.500 2.500c-.3.3-.5.5-1.100.5l.4-5.400 9.800-8.800c.4-.4-.1-.6-.7-.2l-12.100 7.600-5.200-1.600c-1.100-.4-1.200-1.100.1-1.800z"/></svg>',
-    '<svg viewBox="0 0 40 40"><rect width="40" height="40" rx="10" fill="#1E88F5"/><rect x="8" y="12" width="24" height="16" rx="2.5" fill="#fff"/><path d="m9 13.5 11 8.5 11-8.5" fill="none" stroke="#1E88F5" stroke-width="1.8"/></svg>',
+    '<svg viewBox="0 0 40 40"><rect width="40" height="40" rx="10" fill="#2B579A"/><path d="M10 13h3.2l2.3 10 2.6-10h3.8l2.6 10 2.3-10H30l-4 15h-3.400l-2.600-9.600L17.400 28H14z" fill="#fff"/></svg>',
     '<svg viewBox="0 0 40 40"><rect x=".5" y=".5" width="39" height="39" rx="10" fill="#fff" stroke="#DDD"/><path d="M12 6.5h11l6 6v21H12z" fill="#E5252A"/><path d="M23 6.5v6h6z" fill="#fff" opacity=".5"/><text x="20.5" y="27.5" text-anchor="middle" font-size="7.5" font-weight="700" fill="#fff" font-family="Arial,sans-serif">PDF</text></svg>'
   ];
   var ACTS = [
@@ -533,20 +532,19 @@
         for (var k = 0; k < sh.length; k++) { sh[k].classList.add('seek'); await sleep(750, id); sh[k].classList.remove('seek'); sh[k].classList.add('hit'); on(fd[k]); await sleep(350, id); }
         on($('.mk-done', st)); await sleep(1100, id);
       } },
-    /* Rahbar nazorati: bot guruhiga vazifa holatlari birma-bir keladi, rahbar tasdiqlaydi, «Bugungi hisobot» bosiladi */
+    /* Jamoa xabarlari: JuristAI bot vazifa holati o'zgarganini va yaqinlashgan muddatni Telegram'ga yuboradi */
     { html: function (s) {
         return '<div class="mn-h"><b>' + ic('check') + '</b><div><strong>' + esc(s.bot) + '</strong><small>bot</small></div></div><div class="mn-body"><div class="mn-list">' +
-          s.msgs.map(function (m) { return '<div class="mn-m"><strong>' + esc(m[0]) + '</strong><span>👤 ' + esc(m[1]) + '</span><span>⏰ ' + esc(s.due) + ': ' + esc(m[2]) + '</span><span class="mn-s">' + (m[3] === 'late' ? '🟡 ' : '✅ ') + esc(s.st[m[3]]) + '</span><span class="mn-ok">✅ ' + esc(s.ok) + '</span></div>'; }).join('') +
-          '<div class="mn-m mn-rep">📊 ' + esc(s.rep) + '</div></div></div>' +
-          '<div class="mn-kb">' + s.btns.map(function (x, k) { return '<span>' + ['📋 ', '📌 ', '📊 ', '📎 '][k] + esc(x) + '</span>'; }).join('') + '</div>';
+          s.msgs.map(function (m) { return '<div class="mn-m"><strong>📋 ' + esc(m[0]) + '</strong><span>👤 ' + esc(m[1]) + '</span><span>⏰ ' + esc(s.due) + ': ' + esc(m[2]) + '</span><span class="mn-s">' + (m[3] === 'late' ? '🟡 ' : '✅ ') + esc(s.st[m[3]]) + '</span></div>'; }).join('') +
+          '<div class="mn-m mn-rep">⏰ ' + esc(s.rep) + '</div></div></div>';
       },
       play: async function (st, s, id) {
-        var ms = $$('.mn-m', st), bt = $$('.mn-kb span', st);
+        var ms = $$('.mn-m', st);
         await sleep(400, id);
         for (var k = 0; k < ms.length - 1; k++) {
-          on(ms[k]); await sleep(650, id); on($('.mn-s', ms[k])); await sleep(750, id); on($('.mn-ok', ms[k])); await sleep(800, id);
+          on(ms[k]); await sleep(650, id); on($('.mn-s', ms[k])); await sleep(1100, id);
         }
-        await point(st, bt[2], id); bt[2].classList.add('sel'); await sleep(350, id); on(ms[ms.length - 1]); await sleep(1500, id);
+        on(ms[ms.length - 1]); await sleep(1500, id);
       } }
   ]
   ];
@@ -683,7 +681,7 @@
   var SK_IC = '<svg class="sk-ic" viewBox="0 0 20 20"><path d="M4 3.5h8.5L16 7v9.5H4z"/><path d="M12.5 3.5V7H16M7 10.5h6M7 13.5h4"/></svg>';
   var SK_DOC = '<svg viewBox="0 0 16 16"><path d="M3.5 1.5h6l3 3v10h-9z"/><path d="M9.5 1.5v3h3"/></svg>';
   function skScope(i) { return '<span class="sk-sc">' + SK_SC[i] + '<span>' + esc(dict['sk.scopes'][i]) + '</span></span>'; }
-  function skCard(it) { return '<div class="sk-card"><div class="sk-ct">' + SK_IC + '<span>' + esc(it[0]) + '</span></div><b>' + esc(it[1]) + '</b>' + skScope(it[2]) + '</div>'; }
+  function skCard(it) { return '<div class="sk-card"><div class="sk-ct">' + SK_IC + '<span>' + esc(it[0]) + '</span></div><b>' + esc(it[1]) + '</b>' + (it[2] == null ? '' : skScope(it[2])) + '</div>'; }
   function renderSkills() {
     if (!dict['sk.lib']) return;
     $$('.sk-wall').forEach(function (w) {
@@ -713,7 +711,6 @@
       b.innerHTML = '<div class="sk-ew"><div class="cp-bar"><i></i><i></i><i></i><span>' + esc(dict['sk.ed.head']) + '</span></div><div class="sk-eb">' +
         '<label>' + esc(dict['sk.ed.name']) + '</label><div class="sk-in"><span class="sk-nv"></span></div>' +
         '<label>' + esc(dict['sk.ed.ins']) + '</label><ol class="sk-ins">' + dict['sk.ed.lines'].map(function () { return '<li><span></span></li>'; }).join('') + '</ol>' +
-        '<label>' + esc(dict['sk.ed.scope']) + '</label><div class="sk-seg">' + dict['sk.scopes'].map(function (x, i) { return '<span>' + SK_SC[i] + esc(x) + '</span>'; }).join('') + '<i></i></div>' +
         '<div class="sk-ef"><span class="sk-toast">✓ ' + esc(dict['sk.ed.done']) + '</span><span class="pill sk-save">' + esc(dict['sk.ed.save']) + '</span></div>' +
         '</div></div>';
     });
@@ -885,14 +882,14 @@
       await wait(6000, t);
     }
   }
-  async function skillEdit(t, box) {                    // ko'nikma yoziladi, kimga ochiqligi tanlanadi, saqlanadi
-    var nv = $('.sk-nv', box), li = $$('.sk-ins li span', box), seg = $('.sk-seg', box), save = $('.sk-save', box), toast = $('.sk-toast', box), L = dict['sk.ed.lines'];
-    if (still.matches) { nv.textContent = dict['sk.ed.nameV']; li.forEach(function (x, k) { x.textContent = L[k]; }); seg.style.setProperty('--x', 1); toast.classList.add('on'); return; }
+  async function skillEdit(t, box) {                    // ko'nikma yoziladi va saqlanadi (shaxsiy)
+    var nv = $('.sk-nv', box), li = $$('.sk-ins li span', box), save = $('.sk-save', box), toast = $('.sk-toast', box), L = dict['sk.ed.lines'];
+    if (still.matches) { nv.textContent = dict['sk.ed.nameV']; li.forEach(function (x, k) { x.textContent = L[k]; }); toast.classList.add('on'); return; }
     while (t.on) {
-      nv.textContent = ''; li.forEach(function (x) { x.textContent = ''; }); seg.style.setProperty('--x', 0); toast.classList.remove('on'); save.classList.remove('hit');
+      nv.textContent = ''; li.forEach(function (x) { x.textContent = ''; }); toast.classList.remove('on'); save.classList.remove('hit');
       await wait(900, t); await typeInto(nv, dict['sk.ed.nameV'], t, 50); await wait(400, t);
       for (var k = 0; k < li.length; k++) { await typeInto(li[k], L[k], t, 22); await wait(220, t); }
-      await wait(600, t); seg.style.setProperty('--x', 1); await wait(1100, t);
+      await wait(600, t);
       save.classList.add('hit'); await wait(250, t); save.classList.remove('hit'); toast.classList.add('on'); await wait(5200, t);
     }
   }

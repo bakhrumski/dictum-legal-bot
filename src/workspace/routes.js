@@ -278,7 +278,7 @@ async function listTasks(pool, workspaceId, userId, query) {
 }
 
 function mountWorkspaceRoutes(app, options) {
-  const { pool, requireAuth, aiLimiter, aiService, verificationTokens, tariffModule } = options;
+  const { pool, requireAuth, aiLimiter, aiService, verificationTokens, tariffModule, telegramNotifier } = options;
   // Workspace AI is metered like chat on the asking member's own plan
   // (DECISIONS.md D-7): one unit of fair-use, fail-open, refunded on failure.
   const workspaceAiQuota = (tariffModule && typeof tariffModule.enforceQuota === 'function')
@@ -764,9 +764,11 @@ function mountWorkspaceRoutes(app, options) {
     const workspaceId = uuid(req.params.workspaceId, 'workspaceId');
     const taskId = uuid(req.params.taskId, 'taskId');
     const userId = actorId(req);
+    let previousStatus = null;
     const task = await withWorkspaceTransaction(pool, userId, async (db) => {
       await requireWorkspaceAccess(db, workspaceId, userId, { minimumRole: 'member', requireActive: true });
       const existing = await requireTask(db, workspaceId, taskId);
+      previousStatus = existing.status;
       const values = [];
       const updates = [];
       const fields = [
@@ -801,6 +803,10 @@ function mountWorkspaceRoutes(app, options) {
       };
     });
     res.json({ task });
+    if (telegramNotifier && previousStatus && task.status !== previousStatus) {
+      telegramNotifier.taskStatusChanged({ workspaceId, taskId, oldStatus: previousStatus, newStatus: task.status, actorId: userId })
+        .catch((e) => console.warn('[WS-TG] status notify failed:', e.message));
+    }
   }));
 
   router.delete('/workspaces/:workspaceId/tasks/:taskId', asyncRoute(async (req, res) => {

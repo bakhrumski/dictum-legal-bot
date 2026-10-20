@@ -8,7 +8,7 @@
 (function (G) {
   'use strict';
   var J = G.JAI, t = J.t, esc = J.esc, $ = J.$, $$ = J.$$;
-  J.VOICE_MIN = { sinov: null, silver: 'X', gold: 'X', platinum: 'X' };   // STT sinovidan keyin aniq raqamlar qo'yiladi
+  J.VOICE_MIN = { sinov: null, silver: null, gold: null, platinum: null };   // daqiqalar hali hisoblanmaydi: raqam o'ylab topilmaydi
 
   /* ---------- saqlash ---------- */
   var LS = 'jai-voice-list';
@@ -51,7 +51,7 @@
 
   /* ---------- daqiqa paketlari ---------- */
   function buyMinutes() {
-    var packs = [['60', 'X'], ['300', 'X'], ['1000', 'X']];
+    var packs = [['60', ''], ['300', ''], ['1000', '']];
     var m = J.modal({ cls: 'sm', html: '<h2>' + esc(t('vc.buy')) + '</h2><p class="sub">' + esc(t('vc.buy.d')) + '</p>' +
       '<div style="display:flex;flex-direction:column;gap:8px;margin-top:18px">' + packs.map(function (p) {
         return '<button class="method" data-p="' + p[0] + '"><span class="ic" style="background:var(--fg);color:var(--bg)">' + J.icon('mic') + '</span><span style="flex:1"><b>' + esc(t('vc.pack', { n: p[0] })) + '</b><small>' + esc(t('vc.pack.price', { p: p[1] })) + '</small></span></button>';
@@ -251,13 +251,17 @@
           ((a.tasks || []).length ? '<h3 class="vc-h">' + esc(t('vc.tasks')) + '</h3><div class="rows">' + a.tasks.map(function (x, i) { return '<label class="row" style="cursor:pointer"><input type="checkbox" data-task="' + i + '"' + (x.done ? ' checked' : '') + '><span style="white-space:normal">' + esc(x.text) + '</span>' + (x.owner ? '<span class="chip static" style="flex:none">' + J.icon('user') + esc(x.owner) + '</span>' : '') + (x.due ? '<small>' + esc(x.due) + '</small>' : '') + '</label>'; }).join('') + '</div>' : '') +
           ((a.nextSteps || []).length ? '<h3 class="vc-h">' + esc(t('vc.next')) + '</h3><ol class="vc-ul">' + a.nextSteps.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ol>' : '') +
           (a.document ? '<div class="card" style="margin-top:22px;display:flex;gap:14px;align-items:center;flex-wrap:wrap"><span class="ti" style="width:38px;height:38px;border-radius:10px;background:var(--panel);display:grid;place-items:center">' + J.icon('pen') + '</span><div style="flex:1;min-width:200px"><div class="kicker">' + esc(t('vc.doc')) + '</div><b style="font-weight:500;font-size:16px" class="doc-t"></b><p class="muted doc-r" style="font-size:13.5px"></p></div><button class="pill" data-a="draft">' + esc(t('vc.doc.btn')) + '<i>→</i></button></div>' : '') +
-          '<div class="btns" style="display:flex;gap:8px;margin-top:20px;flex-wrap:wrap"><button class="pill sm ghost" data-a="ask">' + J.icon('chat') + esc(t('vc.ask')) + '</button><button class="pill sm ghost" data-a="ctasks">' + J.icon('copy') + esc(t('vc.copytasks')) + '</button></div>' +
+          '<div class="btns" style="display:flex;gap:8px;margin-top:20px;flex-wrap:wrap"><button class="pill sm ghost" data-a="ask">' + J.icon('chat') + esc(t('vc.ask')) + '</button><button class="pill sm ghost" data-a="ctasks">' + J.icon('copy') + esc(t('vc.copytasks')) + '</button><button class="pill sm ghost" data-a="tg">' + J.icon('send') + esc(t('vc.tg')) + '</button></div>' +
           '<p class="hint" style="text-align:left;margin-top:18px">' + esc(t('vc.hint')) + '</p>';
         $('.card p', body).textContent = a.summary || '';
         if (a.document) { $('.doc-t', body).textContent = a.document.type || ''; $('.doc-r', body).textContent = a.document.reason || ''; }
         $$('[data-task]', body).forEach(function (c) { c.onchange = function () { var it2 = get(id); it2.analysis.tasks[+c.dataset.task].done = c.checked; put(it2); }; });
         var d = $('[data-a=draft]', body); if (d) d.onclick = function () { J.draftPrefill = { type: a.document.type, question: sumText(get(id)), answer: (it.segments || []).map(function (g) { return spkName(it, g.speaker) + ': ' + g.text; }).join('\n').slice(0, 11000), action: a.document.type }; J.go('#/tayyorlash?type=ai'); };
         $('[data-a=ask]', body).onclick = function () { J.startChat({ text: t('vc.ask.q') + '\n\n' + sumText(get(id)).slice(0, 4000), skill: null, files: [] }); };
+        $('[data-a=tg]', body).onclick = async function () {
+          var r = await J.api('/api/voice/send-telegram', { method: 'POST', body: { text: sumText(get(id)) } });
+          J.toast(r.ok ? t('vc.tg.ok') : (r.status === 409 ? t('vc.tg.nolink') : J.errMsg(r.data)));
+        };
         $('[data-a=ctasks]', body).onclick = function () { navigator.clipboard.writeText((a.tasks || []).map(function (x) { return '☐ ' + x.text + (x.owner ? ' — ' + x.owner : '') + (x.due ? ' (' + x.due + ')' : ''); }).join('\n')).then(function () { J.toast(t('act.copied')); }); };
       }
     }

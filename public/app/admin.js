@@ -651,10 +651,11 @@
       J.api('/api/admin/account-deletions?status=' + delTab).then(function (r) {
         var box = $('.dl-l', body); if (!r.ok) { box.innerHTML = errBox(r); return; }
         var list = r.data.requests || [];
-        box.innerHTML = table([t('adm.time'), t('adm.user'), 'Telegram', t('adm.status'), ''], list.map(function (q) {
+        // the tab already says the status: the last column is the action (pending) or the reason (declined)
+        box.innerHTML = table([t('adm.time'), t('adm.user'), 'Telegram', delTab === 'cancelled' ? t('adm.reason') : ''], list.map(function (q) {
           return '<tr>' + td(dt(q.created_at)) + td(q.admin_id ? (q.full_name || '') + ' @' + (q.username || '') + ' · #' + q.admin_id : '—') +
-            td((q.tg_first_name || '') + (q.tg_username ? ' @' + q.tg_username : '') + ' · ' + (q.telegram_user_id || '')) + td((q.status || '') + (q.reason ? ' · ' + q.reason : '')) +
-            '<td style="white-space:nowrap">' + (q.status === 'pending' ? '<button class="pill sm" data-go="' + q.id + '">' + esc(t('adm.del.go')) + '</button> <button class="pill ghost sm" data-no="' + q.id + '">' + esc(t('adm.reject')) + '</button>' : '') + '</td></tr>';
+            td((q.tg_first_name || '') + (q.tg_username ? ' @' + q.tg_username : '') + ' · ' + (q.telegram_user_id || '')) +
+            (q.status === 'pending' ? '<td style="white-space:nowrap"><button class="pill sm" data-go="' + q.id + '">' + esc(t('adm.del.go')) + '</button> <button class="pill ghost sm" data-no="' + q.id + '">' + esc(t('adm.reject')) + '</button></td>' : td(q.reason || (q.handled_at ? dt(q.handled_at) : ''))) + '</tr>';
         }));
         $$('[data-go]', box).forEach(function (b) { b.onclick = async function () {
           if (!(await J.confirm(t('adm.del.q'), t('adm.del.go')))) return;

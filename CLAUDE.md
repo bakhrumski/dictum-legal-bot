@@ -322,8 +322,25 @@ Known state of the suites (Sept 2026):
   qila olasan?" are fixed read-only tools (intent `hisob_amal` + `action`;
   phrase list first, then the intent model; an unknown action is answered as
   a question): the caller's own balance, the catalogue, their last 5 bot
-  questions, links. No AI call, no quota; nothing is paid, granted or
-  deleted - such a step stays a link the person confirms on the site.
+  questions, links. No AI call, no quota; nothing is paid or granted - such
+  a step stays a link the person confirms on the site. "Akkauntni o'chir"
+  (`delete_account`) is never a legal question: the bot explains what is
+  removed, a button files one pending request per Telegram user
+  (`src/services/account-deletion.js`, table `account_deletion_requests`),
+  and a master carries it out or declines it with a reason in
+  `/app/#/boshqaruv/ochirish`: personal fields scrubbed, web chats deleted,
+  sessions revoked, bot texts replaced; tariff, usage and payment rows kept
+  without personal data; staff accounts refused.
+  Also since 2026-10-20 (landing promises): a linked account's bot Q&A is
+  appended to its web chats (`src/services/telegram-history.js`, topic
+  'telegram', one per Tashkent day); a paid document order in the bot can be
+  drafted by AI as .docx for 1 `draft` unit (button `tgdraft_ai`); Workspace
+  task status changes and due-today/tomorrow reminders go to linked members
+  by the bot (`src/workspace/telegram-notify.js`, hourly, deduplicated in
+  `workspace_telegram_reminders`, title/status/date only,
+  `WS_TELEGRAM_NOTIFY=off`); a voice recording's summary can be sent to the
+  user's own Telegram (`POST /api/voice/send-telegram`). Voice minutes are
+  not metered (`/api/voice/balance` says so; no "X minutes" anywhere).
   Account help (login/OTP/password) is matched only on unambiguous account
   words, never "hisob…" in a legal question ("hisoblash" once routed wage
   questions to password reset). `/testmode` (master only, in memory, auto-off after 12 h) lifts that for one
@@ -369,8 +386,12 @@ Known state of the suites (Sept 2026):
   (`settleSections`: a delivered analysis stays paid if the opinion fails).
   Workspace does not run full analysis/opinion: such a request is routed to
   the AI section with no AI call and no quota (`createWorkspaceServiceRouting`);
-  a clause question is one chat unit. Telegram runs no AI on files (lawyer queue, told plainly, no
-  quota, review not promised free). Individual discounts
+  a clause question is one chat unit. In Telegram a PDF/DOCX (<= 5 MB, text layer) is offered
+  for AI analysis for its document units, run only after the button that
+  names them (`src/bot/telegram-documents.js`: reserve 'analysis', the
+  website's own analysis, commit on delivery, release on failure); the other
+  button, and every scan, photo or video, is the lawyer queue (no AI, no
+  quota, told plainly, review not promised free). Individual discounts
   (`src/rag/tariff-pricing.js`, `tariff-offers.js`, table `tariff_offers`):
   master only, one user, one plan, one 30-day period, final price >=
   conservative cost / 0.80 (integers, min rounded up to 1 000, floors

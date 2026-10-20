@@ -9,10 +9,12 @@
  *
  * Each tool is one fixed, read-only action: it reads the caller's own data
  * (by their Telegram id and the account linked to it) or returns a link;
- * nothing is paid, granted, changed or deleted here. An action that would
- * change something (a payment, a plan, a deletion) is not a tool: it stays a
- * link to the page where the person confirms it themselves. No AI call is
- * made by a tool; no answer quota is used (like /balance).
+ * nothing is paid, granted, changed or deleted here. A payment or a plan
+ * stays a link to the page where the person confirms it themselves; account
+ * deletion (delete_account) only explains what is removed and asks for a
+ * confirmation button - the request is filed by the bot and carried out by a
+ * master (src/services/account-deletion.js). No AI call is made by a tool; no
+ * answer quota is used (like /balance).
  *
  * Detection: a deterministic phrase list first (cheap, also for voice), then
  * the intent model may return intent "hisob_amal" with "action" set to one

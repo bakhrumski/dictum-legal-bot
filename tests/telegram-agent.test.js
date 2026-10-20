@@ -364,9 +364,9 @@ function stubMemory(clarifyCount = 0) {
     let r = await agent.handleUserMessage({ chatId: 1, text: 'Menga JuristAI sahifasiga kirish manzilini yuborib yuboring iltimos' });
     assert.strictEqual(r.action, 'tool_open_app');
     assert.strictEqual(d.calls.answer, 0);
-    d = deps({ intent: { intent: 'hisob_amal', action: 'delete_account', missing: [] } });
+    d = deps({ intent: { intent: 'hisob_amal', action: 'grant_plan', missing: [] } });
     agent.initTelegramAgent(d);
-    const i = await agent.classifyIntent('Hisobimni o\'chiring iltimos, endi kerak emas', []);
+    const i = await agent.classifyIntent('Shuni menga tekin qilib bering', []);
     assert.strictEqual(i.intent, 'huquqiy_savol', 'no such tool: never improvised');
     assert.strictEqual(i.action, null);
   });

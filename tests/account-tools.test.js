@@ -34,7 +34,9 @@ async function test(name, fn) {
 
   await test('the model\'s action is kept only when it is a tool', () => {
     assert.strictEqual(t.toolFromIntent({ action: 'Balance' }), 'balance');
-    for (const a of ['delete_account', 'grant_plan', 'pay', '', null]) assert.strictEqual(t.toolFromIntent({ action: a }), null, String(a));
+    // delete_account only asks for a confirmation button (src/bot/bot.js); nothing is deleted by the tool
+    assert.strictEqual(t.toolFromIntent({ action: 'delete_account' }), 'delete_account');
+    for (const a of ['grant_plan', 'pay', '', null]) assert.strictEqual(t.toolFromIntent({ action: a }), null, String(a));
   });
 
   await test('balance reads the caller\'s own allowance (the /balance text)', async () => {
