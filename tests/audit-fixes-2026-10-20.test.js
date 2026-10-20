@@ -82,7 +82,7 @@ const read = (f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
     const route = server.slice(server.indexOf("app.post('/api/voice/transcribe'"), server.indexOf("app.post('/api/admin/stt/compare'"));
     assert.ok(/probeAudioSeconds\(req\.file\.buffer\)/u.test(route) && !/req\.body\.durationSec/u.test(route));
     assert.ok(/audio_unreadable/u.test(route));
-    assert.ok(/'\/api\/voice\/transcribe'\], aiLimiter\)/u.test(server));
+    assert.ok(/'\/api\/voice\/transcribe'(, '[^']+')*\], aiLimiter\)/u.test(server));
     assert.ok(/fd\.append\('lang', 'auto'\)/u.test(read('public/app/voice.js')), 'the speech language is detected, not the interface language');
   });
 

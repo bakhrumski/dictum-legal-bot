@@ -381,6 +381,56 @@ function pageText(sink) {
     });
 }
 
+/**
+ * Text of an uploaded PDF or DOCX, as /api/analyze/extract reads it (no AI):
+ * { kind, text, pages, chars, scanned }. A legacy .doc, a scan (too little
+ * text) or another type gives scanned/unsupported - the caller decides.
+ * Used by the Telegram bot's document analysis (2026-10-20).
+ */
+async function extractFileText(buf, { fileName = '', mimeType = '' } = {}) {
+  const name = String(fileName || '').toLowerCase();
+  const isDocx = /\.docx$/u.test(name) || mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  const isPdf = /\.pdf$/u.test(name) || mimeType === 'application/pdf';
+  if (isDocx) {
+    if (buf.length < 4 || buf[0] !== 0x50 || buf[1] !== 0x4b) return { kind: 'docx', unsupported: 'corrupt' };
+    const docx = await require('./docx-text').docxText(buf);
+    const chars = contentChars(docx.text);
+    return { kind: 'docx', text: docx.text, pages: null, chars, scanned: chars < 80 };
+  }
+  if (isPdf) {
+    const pdfParse = require('pdf-parse/lib/pdf-parse.js');
+    const pageTexts = [];
+    const parsed = await pdfParse(new Uint8Array(buf), { pagerender: pageText(pageTexts) });
+    const pagesRead = Array.from({ length: Math.max(pageTexts.length, parsed.numpages || 0) }, (_, i) => pageTexts[i] || '');
+    const plain = pagesRead.join('\n').trim() || (parsed.text || '').trim();
+    const text = plain && pageTexts.length ? markPages(pagesRead).trim() : plain;
+    return { kind: 'pdf', text, pages: parsed.numpages || 1, chars: plain.length, scanned: plain.length < 80 };
+  }
+  return { kind: 'other', unsupported: 'type' };
+}
+
+/**
+ * The document analysis itself (the same prompt and checks as POST
+ * /api/analyze), for callers that metered the job themselves: { analysis }
+ * or { raw, parseError }. callAI and digestLongDocument are the server's.
+ */
+async function analyzeDocumentText(text, { callAI, digestLongDocument = null, adminId = null, langHint = null } = {}) {
+  const full = String(text || '').trim();
+  const body = full.length > MAX_ANALYSIS_CHARS && typeof digestLongDocument === 'function'
+    ? await digestLongDocument(full, adminId)
+    : full.slice(0, MAX_ANALYSIS_CHARS);
+  const langNote = langHint === 'ru' ? '\n(Document language: Russian)' : langHint === 'uz' ? '\n(Document language: Uzbek)' : '';
+  const result = await callAI([
+    { role: 'system', text: SYSTEM_PROMPT },
+    { role: 'user', text: `Analyze this legal document:${langNote}\n\n---\n${body}\n---` },
+  ], { temperature: 0.15, maxTokens: 4096, endpoint: '/api/analyze' });
+  let analysis = salvageJson(result.text);
+  if (analysis && typeof analysis === 'object' && !analysis.summary && !analysis.docType) analysis = null;
+  if (!analysis) return { raw: result.text, parseError: true, provider: result.provider };
+  for (const k of ['riskItems', 'missingClauses', 'complianceIssues', 'strengths']) analysis[k] = Array.isArray(analysis[k]) ? analysis[k] : [];
+  return { analysis, provider: result.provider };
+}
+
 function mountAnalyzerRoutes(app, deps) {
   const { requireAuth, callAI, tariffModule, digestLongDocument } = deps;
   if (!deps.pool) throw new TypeError('mountAnalyzerRoutes needs deps.pool (scan cache)');
@@ -772,4 +822,4 @@ function mountAnalyzerRoutes(app, deps) {
 }
 
 // readers: for the master's side-by-side OCR comparison (/api/admin/ocr/compare)
-module.exports = { mountAnalyzerRoutes, callVisionOCR, pageText, readers, withOcrModel };
+module.exports = { mountAnalyzerRoutes, callVisionOCR, pageText, readers, withOcrModel, extractFileText, analyzeDocumentText };

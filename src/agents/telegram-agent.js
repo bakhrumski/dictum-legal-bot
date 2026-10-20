@@ -315,7 +315,7 @@ const ATTORNEY_RESTART_RE = /(boshqa(\s+advokat)?|yana\s+(advokat|nomzod)|mezon(
 const INTENT_PROMPT = `Siz Telegram yuridik botining niyat aniqlovchi modulisiz. Foydalanuvchi xabarini tasniflang.
 
 FAQAT JSON qaytaring:
-{"intent":"...","reason":"...","missing":["..."]}
+{"intent":"...","action":"...","reason":"...","missing":["..."]}
 
 intent qiymatlari:
 - "huquqiy_savol"  — javob berish uchun yetarli ma'lumot bor huquqiy savol
@@ -325,6 +325,7 @@ intent qiymatlari:
 - "bot_haqida"     — foydalanuvchi bot kimligi, AI yoki yurist ekanini so'ramoqda
 - "advokat_kerak"  — mos advokat yoki yurist topishni so'ramoqda
 - "hujjat_tayyorlash" — ariza, da'vo, shikoyat, shartnoma yoki boshqa hujjat tayyorlashni so'ramoqda
+- "hisob_amal"     — foydalanuvchi JuristAI akkaunti bo'yicha amal so'ramoqda; "action" maydonini ham qaytaring: "balance" (limit/qoldiq), "plans" (tariflar, narx, to'lov), "recent" (oxirgi savollari), "link_account" (sayt/ilova akkauntini Telegram bilan ulash), "open_app" (ilova yoki sayt havolasi), "commands" (bot nima qila oladi). Huquqiy masala bo'lsa — bu EMAS.
 - "hisob_yordam"   — JuristAI'da ro'yxatdan o'tish, login, OTP yoki parol masalasi. "Hisoblash", "hisob-kitob", "hisoblamang" (kompensatsiya, summa, muddat, penya hisobi) — bu hisob_yordam EMAS, huquqiy savol.
 - "yurist_kerak"   — operator yoki jonli inson bilan gaplashishni so'ramoqda
 - "mavzudan_tashqari" — huquqqa aloqasi yo'q
@@ -351,9 +352,13 @@ async function classifyIntent(text, turns) {
     const raw = String(res.text || '').replace(/```(?:json)?/gi, '').trim();
     const m = raw.match(/\{[\s\S]*\}/);
     const parsed = m ? JSON.parse(m[0]) : {};
-    const valid = ['huquqiy_savol', 'noaniq', 'davomi', 'salomlashuv', 'bot_haqida', 'advokat_kerak', 'hujjat_tayyorlash', 'hisob_yordam', 'yurist_kerak', 'mavzudan_tashqari'];
+    const valid = ['huquqiy_savol', 'noaniq', 'davomi', 'salomlashuv', 'bot_haqida', 'advokat_kerak', 'hujjat_tayyorlash', 'hisob_yordam', 'hisob_amal', 'yurist_kerak', 'mavzudan_tashqari'];
+    // an account action only with a known tool; anything else is answered as a question
+    const action = require('./account-tools').toolFromIntent(parsed);
+    const intentName = parsed.intent === 'hisob_amal' && !action ? 'huquqiy_savol' : parsed.intent;
     return {
-      intent: valid.includes(parsed.intent) ? parsed.intent : 'huquqiy_savol',
+      intent: valid.includes(intentName) ? intentName : 'huquqiy_savol',
+      action,
       missing: Array.isArray(parsed.missing) ? parsed.missing.slice(0, 3).map(String) : [],
       legalField: String(parsed.legal_field || '').slice(0, 120),
       legalSubfield: String(parsed.legal_subfield || '').slice(0, 120),
@@ -376,6 +381,9 @@ function classifyDeterministicIntent(text) {
   if (HELP_RE.test(t))     return { intent: 'noaniq', missing: ['Qanday huquqiy muammo yoki vaziyat bo\'yicha yordam kerak?'] };
   if (DOCUMENT_RE.test(t)) return { intent: 'hujjat_tayyorlash', missing: [] };
   if (ATTORNEY_RE.test(t)) return { intent: 'advokat_kerak', missing: [] };
+  // an account action the bot does itself (src/agents/account-tools.js)
+  const tool = require('./account-tools').detectAccountAction(t);
+  if (tool) return { intent: 'hisob_amal', action: tool, missing: [] };
   if (isAccountRequest(t)) return { intent: 'hisob_yordam', missing: [] };
   if (HUMAN_RE.test(t))    return { intent: 'yurist_kerak', missing: [] };
   return null;
@@ -1134,6 +1142,23 @@ Agar texnik uzilish yuz bersa, limitingiz avtomatik tiklanadi.`,
     const reply = "Men inson yurist yoki advokat emasman. Men JuristAI — O'zbekiston qonunchiligi bo'yicha ma'lumot beruvchi AI yordamchiman.\n\nQonunchilik manbalari asosida tushuntirish beraman, lekin sudda vakillik qilmayman va javobim rasmiy yuridik xulosa hisoblanmaydi. Huquqiy vaziyatingizni yozsangiz, qaysi yo'l tutish mumkinligini tushuntiraman.";
     await remember(reply, clarifyCount);
     return complete({ handled: true, reply, action: 'identity', escalate: false, meta: { intent: intent.intent } });
+  }
+
+  // ── Account actions the bot does itself (balance, plans, recent questions,
+  // linking, the app link, what it can do). Read-only, no AI call, no quota;
+  // a payment or a plan change stays a link the person confirms on the site.
+  if (intent.intent === 'hisob_amal' && intent.action) {
+    const tools = require('./account-tools');
+    const toolLang = intent.language === 'ru' || /[\u0400-\u04ff]/u.test(question) ? 'ru' : 'uz';
+    try {
+      const out = await tools.runAccountTool(intent.action, { chatId, who: who || {}, lang: toolLang });
+      await remember(out.reply, 0);
+      return complete({ handled: true, reply: out.reply, action: out.action, escalate: false, meta: { intent: intent.intent, tool: intent.action, lang: toolLang } });
+    } catch (e) {
+      console.warn('[TG-AGENT] account tool failed:', intent.action, e.message);
+      const reply = toolLang === 'ru' ? 'Не удалось получить данные аккаунта. Попробуйте чуть позже или откройте приложение.' : "Akkaunt ma'lumotini hozir olib bo'lmadi. Birozdan keyin qayta urinib ko'ring yoki ilovani oching.";
+      return complete({ handled: true, reply, action: 'tool_failed', escalate: false, meta: { intent: intent.intent, tool: intent.action } });
+    }
   }
 
   // ── Account and authentication support ─────────────────────────────────
