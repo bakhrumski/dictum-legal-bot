@@ -375,7 +375,7 @@ const credentialLimiter = rateLimit({
   message: { error: "Juda ko'p urinish — 15 daqiqadan so'ng qayta urinib ko'ring" },
 });
 app.use(['/api/account/credentials', '/api/admin/test-users', '/api/recover', '/api/password-recovery'], credentialLimiter);
-app.use(['/api/legal-chat', '/api/analyze', '/api/draft', '/api/ai-chat', '/api/voice/transcribe', '/api/voice/analyze', '/api/voice/dictate'], aiLimiter);
+app.use(['/api/legal-chat', '/api/analyze', '/api/draft', '/api/ai-chat', '/api/voice/transcribe', '/api/voice/analyze', '/api/voice/dictate', '/api/agent'], aiLimiter);
 
 // Public assets do not need a database-backed session. Serving them before the
 // session store keeps the landing, login, tariff and attorney-directory pages
@@ -11486,6 +11486,16 @@ async function runMigrations() {
       const { mountDraftingRoutes } = require('../drafting/routes');
       mountDraftingRoutes(app, { requireAuth, callAI, tariffModule });
     } catch (e) { console.log('[DRAFT] Mount skipped:', e.message); }
+
+    // Agent workflows on the harness (src/agents/harness.js): the claim draft first
+    try {
+      const { generateDraftHtml } = require('../drafting/routes');
+      require('../agents/agent-routes').mountAgentRoutes(app, {
+        requireAuth, requireSameOrigin: require('../auth/same-origin').requireSameOrigin,
+        callAI, callCheapAI, generateDraftHtml, ledger: require('../rag/tariff-ledger'),
+        retrieve: (query, topic) => retrieveLegalContext(query, topic, null, {}),
+      });
+    } catch (e) { console.log('[AGENT] Mount skipped:', e.message); }
 
     // Mount OCR & AI Document Analyzer routes
     try {
