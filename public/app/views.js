@@ -336,9 +336,9 @@
   function loadWorkspaceModule() {
     if (wsLoaded) return wsLoaded;
     wsLoaded = new Promise(function (ok, no) {
-      var css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/css/workspace.css'; document.head.appendChild(css);
+      var css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/css/workspace.css?v=2'; document.head.appendChild(css);
       // dashboard.css'dagi Jamoa uslublari, ilova shrifti va ranglarida (tools/build-ws-skin.js)
-      var skin = document.createElement('link'); skin.rel = 'stylesheet'; skin.href = '/app/ws-skin.css?v=1'; document.head.appendChild(skin);
+      var skin = document.createElement('link'); skin.rel = 'stylesheet'; skin.href = '/app/ws-skin.css?v=2'; document.head.appendChild(skin);
       var s = document.createElement('script'); s.src = '/js/workspace.js'; s.onload = ok; s.onerror = no; document.body.appendChild(s);
     });
     return wsLoaded;
