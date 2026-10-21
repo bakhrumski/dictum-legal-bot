@@ -464,3 +464,9 @@ textarea.inp{height:auto;min-height:96px;padding:10px 13px;resize:vertical;line-
 .cmp-mic.on{background:var(--accent-soft);color:var(--cta);border-color:transparent}
 .cmp-mic .mic-t:empty{display:none}
 .cmp-mic .mic-t{font-variant-numeric:tabular-nums}
+
+/* Boshqaruv hub (admin.js): "Bugun" and the groups */
+.adm-gh{font-size:13px;font-weight:500;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:28px 0 12px}
+.adm-today{margin-bottom:6px}
+.adm-today h4{margin-bottom:12px}
+.adm-today .kv a:hover b{color:var(--cta)}

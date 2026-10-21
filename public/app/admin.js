@@ -8,7 +8,7 @@
   /* ---------- matnlar (uz / ru; en - sarlavhalar) ---------- */
   var L = {
     uz: {
-      'nav.admin': 'Boshqaruv', 'adm.sub': "Platformani boshqarish: so'rovlar, xarajat, korpus, foydalanuvchilar.",
+      'nav.admin': 'Boshqaruv', 'adm.sub': "Bugungi ishlar tepada; bo'limlar guruhlarga ajratilgan.",
       'adm.back': 'Boshqaruv', 'adm.old': 'Eski dashboardda ochish', 'adm.refresh': 'Yangilash', 'adm.empty': "Ma'lumot yo'q",
       'adm.ai': "AI so'rovlar", 'adm.ai.d': "Har so'rov: modellar, usage, xarajat",
       'adm.spend': 'Xarajat', 'adm.spend.d': 'Oylik API sarfi: provayder, model, foydalanuvchi',
@@ -22,7 +22,9 @@
       'adm.tg': 'Telegram agent', 'adm.tg.d': 'Suhbatlar, operator rejimi, Hermes',
       'adm.att': 'Advokatlar', 'adm.att.d': 'Litsenziya tekshiruvi va katalog',
       'adm.svc': 'Pullik xizmatlar', 'adm.svc.d': 'Hujjat buyurtmalari va narxlar',
-      'adm.more': "Eski dashboardda qolganlar", 'adm.more.d': "Korpusga yuklash, navbat, so'rovnoma, prognoz",
+      'adm.more': "Eski dashboardda qolganlar", 'adm.more.d': "Korpusga yuklash, inson navbati, model testi",
+      'adm.today': 'Bugun', 'adm.t.reg': 'Kutilayotgan arizalar', 'adm.t.orders': 'Yurist narxini kutayotgan buyurtmalar', 'adm.t.del': "O'chirish so'rovlari", 'adm.t.fb': 'Yangi xato xabarlari', 'adm.t.ai': 'Bugungi AI xarajati', 'adm.t.unknown': "ta narxi noma'lum",
+      'adm.g.daily': 'Kundalik ishlar', 'adm.g.money': 'Tarif va xarajat', 'adm.g.catalog': 'Advokatlar va manbalar', 'adm.g.tech': 'Texnik',
       'adm.day': 'Kunlik', 'adm.month': 'Oylik', 'adm.days': 'kun', 'adm.calls': 'chaqiruv', 'adm.requests': "so'rov",
       'adm.known': "Narxi ma'lum", 'adm.unknown': "Narxi noma'lum", 'adm.failed': 'Xato', 'adm.avg': "O'rtacha / so'rov",
       'adm.incomplete': "to'liq emas", 'adm.model': 'Model', 'adm.service': 'Servis', 'adm.cost': 'Xarajat', 'adm.time': 'Vaqt',
@@ -66,6 +68,8 @@
       'adm.att': 'Адвокаты', 'adm.att.d': 'Проверка лицензий и каталог',
       'adm.svc': 'Платные услуги', 'adm.svc.d': 'Заказы документов и цены',
       'adm.more': 'Остальное в старом дашборде', 'adm.more.d': 'Загрузка в корпус, очередь, опрос, прогноз',
+      'adm.today': 'Сегодня', 'adm.t.reg': 'Заявки в ожидании', 'adm.t.orders': 'Заказы ждут цену юриста', 'adm.t.del': 'Запросы на удаление', 'adm.t.fb': 'Новые сообщения об ошибках', 'adm.t.ai': 'Расход AI сегодня', 'adm.t.unknown': 'без цены',
+      'adm.g.daily': 'Ежедневные дела', 'adm.g.money': 'Тарифы и расходы', 'adm.g.catalog': 'Адвокаты и источники', 'adm.g.tech': 'Техническое',
       'adm.day': 'По дням', 'adm.month': 'По месяцам', 'adm.days': 'дн.', 'adm.calls': 'вызовов', 'adm.requests': 'запросов',
       'adm.known': 'Известная стоимость', 'adm.unknown': 'Неизвестная стоимость', 'adm.failed': 'Ошибки', 'adm.avg': 'Средняя / запрос',
       'adm.incomplete': 'неполная', 'adm.model': 'Модель', 'adm.service': 'Сервис', 'adm.cost': 'Стоимость', 'adm.time': 'Время',
@@ -98,7 +102,7 @@
       'adm.old': 'Open in the old dashboard', 'adm.refresh': 'Refresh', 'adm.empty': 'No data',
       'adm.ai': 'AI requests', 'adm.spend': 'Spend', 'adm.reg': 'Applications & plans', 'adm.fb': 'Quality', 'adm.src': 'Suggested sources',
       'adm.cov': 'Corpus coverage', 'adm.audit': 'Audit log', 'adm.landing': 'Landing', 'adm.offers': 'Discounts', 'adm.tg': 'Telegram agent',
-      'adm.att': 'Lawyers', 'adm.svc': 'Paid services', 'adm.more': 'Still in the old dashboard', 'adm.del': 'Deletion requests'
+      'adm.att': 'Lawyers', 'adm.svc': 'Paid services', 'adm.more': 'Still in the old dashboard', 'adm.today': 'Today', 'adm.g.daily': 'Daily work', 'adm.g.money': 'Plans and spend', 'adm.g.catalog': 'Lawyers and sources', 'adm.g.tech': 'Technical', 'adm.del': 'Deletion requests'
     }
   };
   ['uz', 'ru', 'en'].forEach(function (l) { var d = G.JAI_I18N[l] = G.JAI_I18N[l] || {}; Object.keys(L[l]).forEach(function (k) { if (d[k] === undefined) d[k] = L[l][k]; }); });
@@ -123,12 +127,16 @@
   function kv(items) { return '<div class="kv">' + items.map(function (x) { return '<div><small>' + esc(x[0]) + '</small><b class="num">' + x[1] + '</b></div>'; }).join('') + '</div>'; }
   function busy(btn, on) { if (btn) { btn.disabled = !!on; } }
 
+  // [key, icon, title key, group]; the hub shows the groups in this order (2026-10-21: "Xarajat" removed -
+  // "AI so'rovlar" shows the same spend with unknown cost counted)
   var SECTIONS = [
-    ['ai', 'chat', 'adm.ai'], ['xarajat', 'cal', 'adm.spend'], ['qabul', 'user', 'adm.reg'], ['sifat', 'flag', 'adm.fb'],
-    ['manbalar', 'book', 'adm.src'], ['korpus', 'search', 'adm.cov'], ['chegirmalar', 'spark', 'adm.offers'], ['telegram', 'tg', 'adm.tg'],
-    ['advokatlar', 'scale', 'adm.att'], ['xizmatlar', 'doc', 'adm.svc'], ['audit', 'shield', 'adm.audit'], ['landing', 'globe', 'adm.landing'],
-    ['ochirish', 'trash', 'adm.del']
+    ['qabul', 'user', 'adm.reg', 'daily'], ['xizmatlar', 'doc', 'adm.svc', 'daily'], ['ochirish', 'trash', 'adm.del', 'daily'],
+    ['sifat', 'flag', 'adm.fb', 'daily'], ['telegram', 'tg', 'adm.tg', 'daily'],
+    ['chegirmalar', 'spark', 'adm.offers', 'money'], ['ai', 'chat', 'adm.ai', 'money'],
+    ['advokatlar', 'scale', 'adm.att', 'catalog'], ['manbalar', 'book', 'adm.src', 'catalog'],
+    ['korpus', 'search', 'adm.cov', 'tech'], ['audit', 'shield', 'adm.audit', 'tech'], ['landing', 'globe', 'adm.landing', 'tech']
   ];
+  var GROUPS = [['daily', 'adm.g.daily'], ['money', 'adm.g.money'], ['catalog', 'adm.g.catalog'], ['tech', 'adm.g.tech']];
 
   /** Bo'lim qobig'i: sarlavha, orqaga, yangilash; body ichini loader to'ldiradi. */
   function shell(key, loader) {
@@ -146,15 +154,38 @@
   /* ---------- hub ---------- */
   J.viewAdmin = function () {
     J.setTitle(t('nav.admin'));
-    var tiles = SECTIONS.map(function (s) {
+    function tile(s) {
       return '<a class="tile" href="#/boshqaruv/' + s[0] + '"><span class="tile-h">' + J.icon(s[1]) + '</span><b>' + esc(t(s[2])) + '</b><p>' + esc(t(s[2] + '.d')) + '</p><span class="tile-f"><span class="tag adm-count" data-k="' + s[0] + '"></span></span></a>';
-    }).join('') + '<a class="tile" href="/dashboard.html"><span class="tile-h">' + J.icon('layers') + '</span><b>' + esc(t('adm.more')) + '</b><p>' + esc(t('adm.more.d')) + '</p></a>';
-    var v = J.mount('<div class="wrap"><div class="vh"><div><h2>' + esc(t('nav.admin')) + '</h2><p>' + esc(t('adm.sub')) + '</p></div></div><div class="grid3">' + tiles + '</div></div>');
+    }
+    var groups = GROUPS.map(function (g) {
+      var list = SECTIONS.filter(function (s) { return s[3] === g[0]; }).map(tile).join('')
+        + (g[0] === 'tech' ? '<a class="tile" href="/dashboard.html"><span class="tile-h">' + J.icon('layers') + '</span><b>' + esc(t('adm.more')) + '</b><p>' + esc(t('adm.more.d')) + '</p></a>' : '');
+      return '<h3 class="adm-gh">' + esc(t(g[1])) + '</h3><div class="grid3">' + list + '</div>';
+    }).join('');
+    // "Bugun": what needs a decision now, and today's AI spend
+    var today = '<div class="card adm-today"><h4>' + esc(t('adm.today')) + '</h4><div class="adm-today-b">' + skel() + '</div></div>';
+    var v = J.mount('<div class="wrap"><div class="vh"><div><h2>' + esc(t('nav.admin')) + '</h2><p>' + esc(t('adm.sub')) + '</p></div></div>' + today + groups + '</div>');
+    var todayItems = {};
+    function drawToday() {
+      var order = [['qabul', 'adm.t.reg'], ['xizmatlar', 'adm.t.orders'], ['ochirish', 'adm.t.del'], ['sifat', 'adm.t.fb'], ['ai', 'adm.t.ai']];
+      $('.adm-today-b', v).innerHTML = '<div class="kv">' + order.map(function (o) {
+        var x = todayItems[o[0]];
+        return '<a href="#/boshqaruv/' + o[0] + '" style="color:inherit;text-decoration:none"><small>' + esc(t(o[1])) + '</small><b class="num">' + (x == null ? '…' : esc(x)) + '</b></a>';
+      }).join('') + '</div>';
+    }
+    drawToday();
+    function put(k, val) { todayItems[k] = val; drawToday(); }
+    J.api('/api/admin/service-orders?limit=100&status=pending_lawyer_review').then(function (r) { put('xizmatlar', r.ok ? String((r.data.items || []).length) : '—'); });
+    J.api('/api/admin/ai-usage/report?period=day').then(function (r) {
+      var ps = r.ok ? (r.data.periods || []) : [], last = ps[ps.length - 1] || null;
+      // unknown cost is never shown as $0: the calls without a price are counted beside the known spend
+      put('ai', last ? '$' + Number(last.known_cost_usd || 0).toFixed(2) + (Number(last.unknown_cost_calls) ? ' · +' + last.unknown_cost_calls + ' ' + t('adm.t.unknown') : '') : '—');
+    });
     // kutilayotgan ishlar soni (bo'lsa)
-    J.api('/api/registration-requests/stats').then(function (r) { if (r.ok && Number(r.data.pending) > 0) setCount(v, 'qabul', r.data.pending + ' ' + t('adm.pending').toLowerCase()); });
-    J.api('/api/admin/answer-feedback?status=new').then(function (r) { if (r.ok && r.data.newCount > 0) setCount(v, 'sifat', r.data.newCount + ' ' + t('adm.new').toLowerCase()); });
+    J.api('/api/registration-requests/stats').then(function (r) { put('qabul', r.ok ? String(Number(r.data.pending) || 0) : '—'); if (r.ok && Number(r.data.pending) > 0) setCount(v, 'qabul', r.data.pending + ' ' + t('adm.pending').toLowerCase()); });
+    J.api('/api/admin/answer-feedback?status=new').then(function (r) { put('sifat', r.ok ? String(Number(r.data.newCount) || 0) : '—'); if (r.ok && r.data.newCount > 0) setCount(v, 'sifat', r.data.newCount + ' ' + t('adm.new').toLowerCase()); });
     J.api('/api/admin/suggested-sources?status=pending').then(function (r) { if (r.ok && (r.data.suggestions || []).length) setCount(v, 'manbalar', (r.data.suggestions || []).length + ' ' + t('adm.pending').toLowerCase()); });
-    J.api('/api/admin/account-deletions?status=pending').then(function (r) { if (r.ok && (r.data.requests || []).length) setCount(v, 'ochirish', (r.data.requests || []).length + ' ' + t('adm.pending').toLowerCase()); });
+    J.api('/api/admin/account-deletions?status=pending').then(function (r) { put('ochirish', r.ok ? String((r.data.requests || []).length) : '—'); if (r.ok && (r.data.requests || []).length) setCount(v, 'ochirish', (r.data.requests || []).length + ' ' + t('adm.pending').toLowerCase()); });
   };
   function setCount(v, k, txt) { var el = $('.adm-count[data-k="' + k + '"]', v); if (el) el.innerHTML = '<span class="dot warn"></span>' + esc(txt); }
 
@@ -219,28 +250,6 @@
 
   /* ---------- Xarajat ---------- */
   var spendMonth = '';
-  function viewSpend() {
-    shell('xarajat', function (body) {
-      var now = new Date(), def = now.getFullYear() + '-' + ('0' + (now.getMonth() + 1)).slice(-2);
-      body.innerHTML = '<div class="filters"><input class="inp sp-m" type="month" value="' + esc(spendMonth || def) + '"></div><div class="sp-b">' + skel() + '</div>';
-      $('.sp-m', body).onchange = function () { spendMonth = this.value; load(); };
-      function load() {
-        var box = $('.sp-b', body); box.innerHTML = skel();
-        J.api('/api/admin/spend-report?month=' + encodeURIComponent($('.sp-m', body).value)).then(function (r) {
-          if (!r.ok) { box.innerHTML = errBox(r); return; }
-          var d = r.data, pu = d.perUserUsd || {};
-          box.innerHTML = kv([[t('adm.total'), usd(d.totalUsd)], [t('adm.users'), n0(d.activeUsers)], [t('adm.peruser'), usd(pu.p50) + ' / ' + usd(pu.p95) + ' / ' + usd(pu.max)], ['OpenAI', usd(d.openaiUsd)]]) +
-            '<div class="grid2"><div>' + table([t('adm.provider'), t('adm.calls'), t('adm.cost')], (d.byProvider || []).map(function (x) { return '<tr>' + td(x.provider) + td(n0(x.calls)) + td(usd(x.usd)) + '</tr>'; })) + '</div>' +
-            '<div>' + table([t('adm.model'), t('adm.calls'), t('adm.cost')], (d.byModel || []).map(function (x) { return '<tr>' + td(x.model) + td(n0(x.calls)) + td(usd(x.usd)) + '</tr>'; })) + '</div></div>' +
-            '<h3 style="font-size:16px;margin:22px 0 10px">' + esc(t('adm.endpoint')) + '</h3>' + table([t('adm.endpoint'), t('adm.calls'), t('adm.cost')], (d.byEndpoint || []).map(function (x) { return '<tr>' + td(x.endpoint) + td(n0(x.calls)) + td(usd(x.usd)) + '</tr>'; })) +
-            '<h3 style="font-size:16px;margin:22px 0 10px">' + esc(t('adm.user')) + '</h3>' + table([t('adm.user'), t('adm.plan'), t('adm.calls'), t('adm.tokens'), t('adm.cost')], (d.topUsers || []).map(function (x) {
-              return '<tr>' + td((x.full_name || '') + (x.username ? ' @' + x.username : '')) + td(x.tariff_plan || '') + td(n0(x.calls)) + td(n0(x.in_tokens) + ' / ' + n0(x.out_tokens)) + td(usd(x.usd)) + '</tr>';
-            }));
-        });
-      }
-      load();
-    });
-  }
 
   /* ---------- Qabul va tarif ---------- */
   var regTab = 'pending';
@@ -682,7 +691,7 @@
   }
 
   /* ---------- marshrutlar ---------- */
-  var VIEWS = { ai: viewAi, xarajat: viewSpend, qabul: viewReg, sifat: viewFb, manbalar: viewSrc, korpus: viewCov, audit: viewAudit, landing: viewLanding, chegirmalar: viewOffers, telegram: viewTg, advokatlar: viewAtt, xizmatlar: viewSvc, ochirish: viewDel };
+  var VIEWS = { ai: viewAi, qabul: viewReg, sifat: viewFb, manbalar: viewSrc, korpus: viewCov, audit: viewAudit, landing: viewLanding, chegirmalar: viewOffers, telegram: viewTg, advokatlar: viewAtt, xizmatlar: viewSvc, ochirish: viewDel };
   function guard(fn) { return function () { if (!J.isMaster()) { J.go('#/'); return; } fn.apply(null, arguments); }; }
   J.route(/^\/boshqaruv$/, guard(function () { J.viewAdmin(); }));
   J.route(/^\/boshqaruv\/([a-z]+)$/, guard(function (k) { (VIEWS[k] || J.viewAdmin)(); }));
