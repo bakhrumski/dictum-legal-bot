@@ -73,6 +73,9 @@ function balanceText({ balance: b, paidCredits = 0, pending = false, testAccount
     if (b.kind === 'trial') lines.push("Sinov tugagach tarif tanlanadi; avtomatik to'lov olinmaydi.");
     else lines.push("Yangi davr to'lov bilan boshlanadi; ishlatilmagan limit keyingi davrga o'tmaydi va avtomatik qayta sotib olinmaydi.");
   }
+  // services bought one at a time (src/rag/one-time-products.js): after the plan's, never expire
+  const bought = Object.entries((b && b.oneTime) || {}).filter(([k, v]) => v > 0 && k !== 'ocr');
+  if (bought.length) lines.push('', 'Alohida sotib olingan (muddatsiz, tarif limitidan keyin ishlatiladi):', ...bought.map(([k, v]) => `• ${SERVICE_NAMES[k] || k}: ${v}`));
   if (paidCredits > 0) lines.push('', `Oldin Telegram Stars bilan sotib olingan javob kreditlari: ${paidCredits} (alohida hisob, muddati tugamaydi).`);
   if (pending) lines.push('', 'Hozir bitta huquqiy javob tayyorlanmoqda.');
   return lines.join('\n');
