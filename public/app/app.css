@@ -438,3 +438,10 @@ textarea.inp{height:auto;min-height:96px;padding:10px 13px;resize:vertical;line-
 /* ===== advokatlar: litsenziya va tugma ===== */
 .lw-side{flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:10px;padding-left:16px}
 @media (max-width:640px){.filters .sel{flex:1 1 calc(50% - 5px);min-width:0}.lw-side{padding-left:8px}}
+
+/* Diktovka tugmasi (chat.js) */
+.cmp-mic[hidden]{display:none!important}
+.cmp-mic.on{background:var(--accent-soft);color:var(--cta);border-color:transparent}
+.cmp-mic .mic-t:empty{display:none}
+.cmp-mic .mic-t{font-variant-numeric:tabular-nums}
+.note-blue{background:var(--accent-soft);border-radius:12px;padding:12px 14px;font-size:14px;color:var(--fg)}

@@ -341,6 +341,17 @@ Known state of the suites (Sept 2026):
   `WS_TELEGRAM_NOTIFY=off`); a voice recording's summary can be sent to the
   user's own Telegram (`POST /api/voice/send-telegram`). Voice minutes are
   not metered (`/api/voice/balance` says so; no "X minutes" anywhere).
+  Linking (2026-10-21 audit): `ulink_` refuses a Telegram held by another
+  account in either column (the way out is `/unlink` in that chat) and
+  detaches the account's old chat; `/unlink` clears both columns (private
+  chat only); `/link` is private-only with 5 tries / 15 min; the site's
+  link status reads the columns. A linked account gets the plan in the bot
+  when granted and 3 days / 1 day before it ends (`src/services/plan-notify.js`,
+  `tariff_expiry_notices`, `PLAN_NOTIFY=off`). Dictation: the chat's 🎙 button
+  -> `POST /api/voice/dictate` (<= 2 min, measured, not metered, rate-limited,
+  `VOICE_DICTATION=off`); the text lands in the box, never sent by itself.
+  Recordings transcribe only with `VOICE_NOTES_ENABLED=true` (customers also
+  `VOICE_NOTES_USERS=true`) and an STT engine; the page says which is missing.
   Account help (login/OTP/password) is matched only on unambiguous account
   words, never "hisob…" in a legal question ("hisoblash" once routed wage
   questions to password reset). `/testmode` (master only, in memory, auto-off after 12 h) lifts that for one

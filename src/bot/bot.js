@@ -527,13 +527,25 @@ function sendJoinPrompt(chatId) {
 // ========== ADMIN COMMANDS ==========
 
 // /link username password - Link Telegram account to admin
+const linkAttempts = new Map(); // telegram user id -> { n, at } (wrong /link passwords)
 bot.onText(/\/link(?:\s+(\S+)\s+(\S+))?/, async (msg, match) => {
   const chatId = msg.chat.id;
   const username = match[1];
   const password = match[2];
 
+  if (msg.chat.type !== 'private') {
+    bot.sendMessage(chatId, "Bu buyruq faqat bot bilan shaxsiy chatda ishlaydi — parolni guruhga yozmang.");
+    return;
+  }
   if (!username || !password) {
-    bot.sendMessage(chatId, '📋 Foydalanish:\n/link <username> <parol>\n\nMisol: /link admin admin123');
+    bot.sendMessage(chatId, "📋 Saytdagi akkauntni ulashning eng oson yo'li: juristai.uz/app/ ga o'z login yoki parolingiz bilan kiring va \"Telegram'ni ulash\" tugmasini bosing.\n\nYoki: /link <login> <parol>");
+    return;
+  }
+  // wrong passwords: at most 5 tries in 15 minutes per Telegram user
+  const tries = linkAttempts.get(msg.from.id) || { n: 0, at: Date.now() };
+  if (Date.now() - tries.at > 15 * 60e3) { tries.n = 0; tries.at = Date.now(); }
+  if (tries.n >= 5) {
+    bot.sendMessage(chatId, "Juda ko'p urinish. 15 daqiqadan keyin qayta urining yoki saytda \"Telegram'ni ulash\" tugmasidan foydalaning.");
     return;
   }
 
@@ -543,23 +555,21 @@ bot.onText(/\/link(?:\s+(\S+)\s+(\S+))?/, async (msg, match) => {
       [username]
     );
 
-    if (result.rows.length === 0) {
-      bot.sendMessage(chatId, '❌ Username topilmadi.');
-      return;
-    }
-
     const admin = result.rows[0];
-    const isValid = await bcrypt.compare(password, admin.password);
+    const isValid = admin ? await bcrypt.compare(password, admin.password) : false;
 
     if (!isValid) {
-      bot.sendMessage(chatId, '❌ Parol noto\'g\'ri.');
+      // one reply for an unknown login and a wrong password
+      tries.n++; linkAttempts.set(msg.from.id, tries);
+      bot.sendMessage(chatId, "❌ Login yoki parol noto'g'ri.");
       return;
     }
+    linkAttempts.delete(msg.from.id);
 
-    // Check if this chat is already linked to another admin
+    // Check if this Telegram is already linked to another account (either column)
     const existingLink = await pool.query(
-      'SELECT username FROM admins WHERE telegram_chat_id = $1 AND id != $2',
-      [chatId, admin.id]
+      'SELECT username FROM admins WHERE (telegram_chat_id = $1 OR telegram_user_id = $3) AND id != $2',
+      [chatId, admin.id, msg.from.id]
     );
     if (existingLink.rows.length > 0) {
       bot.sendMessage(chatId, `⚠️ Bu Telegram hisob allaqachon @${existingLink.rows[0].username} ga ulangan. Avval /unlink qiling.`);
@@ -567,8 +577,8 @@ bot.onText(/\/link(?:\s+(\S+)\s+(\S+))?/, async (msg, match) => {
     }
 
     await pool.query(
-      'UPDATE admins SET telegram_chat_id = $1 WHERE id = $2',
-      [chatId, admin.id]
+      'UPDATE admins SET telegram_chat_id = $1, telegram_user_id = $3 WHERE id = $2',
+      [chatId, admin.id, msg.from.id]
     );
 
     bot.sendMessage(chatId, isStaffRole(admin.role)
@@ -583,17 +593,24 @@ bot.onText(/\/link(?:\s+(\S+)\s+(\S+))?/, async (msg, match) => {
 // /unlink - Unlink Telegram account
 bot.onText(/\/unlink/, async (msg) => {
   const chatId = msg.chat.id;
+  if (msg.chat.type !== 'private') {
+    bot.sendMessage(chatId, 'Bu buyruq faqat bot bilan shaxsiy chatda ishlaydi.');
+    return;
+  }
 
   try {
+    // both columns: the account is matched by either (getLinkedAccount)
     const result = await pool.query(
-      'UPDATE admins SET telegram_chat_id = NULL WHERE telegram_chat_id = $1 RETURNING full_name',
-      [chatId]
+      `UPDATE admins SET telegram_chat_id = NULL, telegram_user_id = NULL
+        WHERE telegram_chat_id = $1 OR telegram_user_id = $2 RETURNING full_name, username`,
+      [chatId, msg.from.id]
     );
 
     if (result.rowCount > 0) {
-      bot.sendMessage(chatId, `✅ Telegram hisobingiz uzildi, ${result.rows[0].full_name}. Endi bildirishnomalar olmaysiz.`);
+      const names = result.rows.map(r => r.full_name || (r.username ? `@${r.username}` : 'akkaunt')).join(', ');
+      bot.sendMessage(chatId, `✅ Telegram uzildi: ${names}. Endi bu chatdagi savollar o'sha akkaunt tarifidan hisoblanmaydi va bildirishnomalar kelmaydi. Qayta ulash: saytda "Telegram'ni ulash".`);
     } else {
-      bot.sendMessage(chatId, 'ℹ️ Bu Telegram hisob hech qanday admin hisobiga ulanmagan.');
+      bot.sendMessage(chatId, 'ℹ️ Bu Telegram hech qanday JuristAI akkauntiga ulanmagan.');
     }
   } catch (error) {
     console.error('Unlink error:', error);
@@ -1061,17 +1078,33 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
         return;
       }
       const tgId = String(msg.from.id);
+      // this Telegram must not stay on another account by either column
+      // (a Telegram sign-in sets both); the person can free it with /unlink
       const taken = (await pool.query(
-        'SELECT id FROM admins WHERE telegram_user_id = $1 AND id <> $2', [tgId, row.id]
+        'SELECT id FROM admins WHERE (telegram_user_id = $1 OR telegram_chat_id = $1) AND id <> $2', [tgId, row.id]
       )).rows[0];
       if (taken) {
-        bot.sendMessage(chatId, '⚠️ Bu Telegram hisobi allaqachon boshqa akkauntga ulangan.');
+        bot.sendMessage(chatId, "⚠️ Bu Telegram boshqa JuristAI akkauntiga ulangan (masalan, Telegram orqali kirganingizda yangi akkaunt ochilgan bo'lishi mumkin).\n\nUni shu akkauntga o'tkazish uchun: shu chatda /unlink yuboring, so'ng saytdagi \"Telegram'ni ulash\" tugmasini qayta bosing.");
         return;
       }
+      // the account's previous Telegram (old chat id) is detached: one account, one Telegram
       await pool.query(
-        'UPDATE admins SET telegram_user_id = $1, telegram_username = $2, telegram_link_code = NULL WHERE id = $3',
-        [tgId, msg.from.username || null, row.id]
+        `UPDATE admins SET telegram_user_id = $1, telegram_username = $2, telegram_link_code = NULL,
+                telegram_chat_id = CASE WHEN $4 THEN $1::bigint ELSE NULL END
+          WHERE id = $3`,
+        [tgId, msg.from.username || null, row.id, msg.chat.type === 'private']
       );
+      // a paid plan: say so plainly, nothing about the free-access channel
+      let paid = null;
+      try {
+        const b = await require('../rag/tariff-ledger').balance({ adminId: row.id, telegramUserId: tgId });
+        if (b.kind === 'paid' || b.kind === 'test') paid = b;
+      } catch (_) { paid = null; }
+      if (paid) {
+        const label = (require('../rag/tariff-ledger').PLAN_CATALOG[paid.plan] || {}).label || paid.plan;
+        bot.sendMessage(chatId, `✅ Telegram akkauntingizga ulandi. Tarif: ${label}${paid.endsAt ? ` (${new Date(paid.endsAt).toLocaleDateString('ru-RU', { timeZone: 'Asia/Tashkent' })} gacha)` : ''}.\n\nEndi savol, hujjat va ovozli xabarlar shu yerda tarifingizdan hisoblanadi; bot va sayt limiti umumiy. Qoldiq: /balance · Uzish: /unlink`);
+        return;
+      }
       const isMember = await isChannelMember(msg.from.id);
       if (isMember) {
         await pool.query('UPDATE admins SET channel_verified_at = NOW() WHERE id = $1', [row.id]);

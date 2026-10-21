@@ -98,7 +98,7 @@
       'adm.old': 'Open in the old dashboard', 'adm.refresh': 'Refresh', 'adm.empty': 'No data',
       'adm.ai': 'AI requests', 'adm.spend': 'Spend', 'adm.reg': 'Applications & plans', 'adm.fb': 'Quality', 'adm.src': 'Suggested sources',
       'adm.cov': 'Corpus coverage', 'adm.audit': 'Audit log', 'adm.landing': 'Landing', 'adm.offers': 'Discounts', 'adm.tg': 'Telegram agent',
-      'adm.att': 'Lawyers', 'adm.svc': 'Paid services', 'adm.more': 'Still in the old dashboard'
+      'adm.att': 'Lawyers', 'adm.svc': 'Paid services', 'adm.more': 'Still in the old dashboard', 'adm.del': 'Deletion requests'
     }
   };
   ['uz', 'ru', 'en'].forEach(function (l) { var d = G.JAI_I18N[l] = G.JAI_I18N[l] || {}; Object.keys(L[l]).forEach(function (k) { if (d[k] === undefined) d[k] = L[l][k]; }); });
@@ -558,7 +558,7 @@
         var box = $('.hm-b', body); if (!r.ok) { box.innerHTML = errBox(r); return; }
         var d = r.data, s = d.stats || {};
         box.innerHTML = '<p class="tag" style="margin-bottom:10px">' + esc([d.status, d.model, d.sampleRate != null ? 'sample ' + d.sampleRate : ''].filter(Boolean).join(' · ')) + '</p>' +
-          kv([[t('adm.total'), n0(s.total)], [t('adm.agree'), s.agreement_rate == null ? '—' : Math.round(s.agreement_rate * 100) + '%'], [t('adm.failed'), n0(s.failed)], [t('adm.cost'), usd(s.estimated_cost_usd)]]) +
+          kv([[t('adm.total'), n0(s.total)], [t('adm.agree'), s.agreement_rate == null ? '—' : Math.round(Number(s.agreement_rate)) + '%'], [t('adm.failed'), n0(s.failed)], [t('adm.cost'), usd(s.estimated_cost_usd)]]) +
           table([t('adm.time'), t('adm.req'), 'Prod', 'Hermes', t('adm.agree')], (d.items || []).map(function (i) {
             return '<tr>' + td(dt(i.created_at)) + td(i.message_preview) + td((i.production_action || '') + ' · ' + (i.production_intent || '')) + td((i.hermes_action || '') + ' · ' + (i.hermes_intent || '') + (i.error ? ' · ' + i.error : '')) + td(i.agreement ? '✓' : '✕') + '</tr>';
           }));
@@ -619,12 +619,16 @@
             '<td><select class="inp so-s" data-id="' + o.id + '" style="min-width:200px">' + ORDER_ST.map(function (s) { return '<option' + (s === o.status ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select></td></tr>';
         }));
         J.selects(box);
-        $$('.so-s', box).forEach(function (s) { s.onchange = async function () {
-          var p = $('.so-p[data-id="' + s.dataset.id + '"]', box).value.replace(/\D/g, '');
-          var payload = { status: s.value }; if (p) payload.quoted_price_minor = Number(p);
-          var x = await J.api('/api/admin/service-orders/' + s.dataset.id, { method: 'PATCH', body: payload });
-          if (!x.ok) { J.toast(J.errMsg(x.data), 6000); again(); return; } J.toast(t('adm.saved'));
-        }; });
+        // status or price: either change is saved (the lawyer field is kept by the server when not sent)
+        function saveOrder(id) {
+          var p = $('.so-p[data-id="' + id + '"]', box).value.replace(/\D/g, ''), st = $('.so-s[data-id="' + id + '"]', box).value;
+          var payload = { status: st }; if (p) payload.quoted_price_minor = Number(p);
+          return J.api('/api/admin/service-orders/' + id, { method: 'PATCH', body: payload }).then(function (x) {
+            if (!x.ok) { J.toast(J.errMsg(x.data), 6000); again(); return; } J.toast(t('adm.saved')); again();
+          });
+        }
+        $$('.so-s', box).forEach(function (s) { s.onchange = function () { saveOrder(s.dataset.id); }; });
+        $$('.so-p', box).forEach(function (i) { i.onchange = function () { saveOrder(i.dataset.id); }; });
       });
       J.api('/api/admin/service-catalog').then(function (r) {
         var box = $('.sc-l', body); if (!r.ok) { box.innerHTML = errBox(r); return; }
