@@ -646,7 +646,9 @@
         if (!stack) {
             stack = document.createElement('div');
             stack.className = 'ws-toast-stack';
-            document.body.appendChild(stack);
+            // In the app the stack sits in the Jamoa host (beside #workspaceApp, which is
+            // re-rendered), so it takes the app's toast styles; elsewhere it stays on <body>.
+            (document.querySelector('.ws-host') || document.body).appendChild(stack);
         }
         var node = document.createElement('div');
         node.className = 'ws-toast ' + (tone || '');
