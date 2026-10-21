@@ -183,7 +183,9 @@
     var body = $('.dr-body', v);
     if (!J.hasService('draft')) { body.innerHTML = J.lockBox('Silver', t('pl.f.draft', { n: '10+' })); bindLock(body); return; }
     function home() {
-      body.innerHTML = '<div class="card" style="margin-bottom:26px"><h4>' + J.icon('spark') + ' ' + esc(t('dr.ai')) + '</h4><p class="muted" style="font-size:14px;margin-bottom:14px">' + esc(t('dr.ai.d')) + '</p>' +
+      // the claim-draft agent (agent.js): step by step, quotes checked against lex.uz
+      var agentCard = J.agentText ? '<div class="card" style="margin-bottom:18px;display:flex;gap:14px;align-items:center;flex-wrap:wrap"><div style="flex:1;min-width:220px"><h4>' + J.icon('scale') + ' ' + esc(J.agentText('title')) + '</h4><p class="muted" style="font-size:14px">' + esc(J.agentText('sub')) + '</p></div><a class="pill" href="#/agent/dava">' + esc(J.agentText('entry')) + '<i>→</i></a></div>' : '';
+      body.innerHTML = agentCard + '<div class="card" style="margin-bottom:26px"><h4>' + J.icon('spark') + ' ' + esc(t('dr.ai')) + '</h4><p class="muted" style="font-size:14px;margin-bottom:14px">' + esc(t('dr.ai.d')) + '</p>' +
         '<div class="field"><label>' + esc(t('dr.type')) + '</label><input class="inp" data-f="type" placeholder="' + esc(t('dr.type.ph')) + '"></div>' +
         '<div class="field"><label>' + esc(t('dr.details')) + '</label><textarea class="inp" data-f="det" placeholder="' + esc(t('dr.details.ph')) + '"></textarea></div>' +
         '<button class="pill" data-a="gen">' + esc(t('dr.gen')) + '<i>→</i></button></div>' +
