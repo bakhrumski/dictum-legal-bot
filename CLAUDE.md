@@ -365,6 +365,24 @@ Known state of the suites (Sept 2026):
   rollover) and of the reserve / commit / release ledger (`tariff_usage` +
   `tariff_periods`, atomic per payer, idempotent by job key). Linked Telegram
   and web accounts share one allowance; Stars credits are a separate balance.
+  One-time services (2026-10-21, owner): `src/rag/one-time-products.js` -
+  5 questions 15 000, AI draft 29 000, analysis unit 39 000, opinion unit
+  49 000 so'm (to be changed with real demand); sold in the bot for Stars
+  until Click/Payme are connected (`src/bot/one-time-sales.js`: signed `jsv1`
+  invoice, Stars = so'm price at `STAR_PAYOUT_USD` 0.013, rounded up to 10,
+  `ONE_TIME_STARS_<KEY>` overrides). A purchase is a `service_credits` row
+  (unique charge id; migration 017): used only after the plan's own
+  allowance, through tariff_usage rows with no period (`meta.pool =
+  'one_time'`), never expires, shared by bot and site; a failed credit
+  refunds the Stars; the paid draft or analysis then runs at once. Offered
+  after the last Sinov answer, when a limit is spent (with the document the
+  last answer pointed to), and when a draft or analysis has no unit. The
+  1-Star / 4-answer pack is no longer offered (old invoices still honoured).
+  Lawyer services: the lawyer's price is `quoted_price_minor` (so'm); the
+  platform's share `LAWYER_COMMISSION_PCT` (0-50, unset = not recorded) is
+  written with the quote (`src/services/lawyer-commission.js`); the customer
+  gets the price in the bot when it is approved; payment is manual until a
+  provider is connected. A delivered AI draft can be sent for lawyer review.
   Document jobs are sized in units: max(pages/10, chars/40 000), signed PDF
   page counts (`docTicket`), never silently cut. A paid period is granted only
   by `POST /api/admin/tariff/grant` (idempotent `paymentRef`), never by the

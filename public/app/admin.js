@@ -30,7 +30,7 @@
       'adm.all': 'Hammasi', 'adm.open': 'Ochish', 'adm.user': 'Foydalanuvchi', 'adm.total': 'Jami', 'adm.provider': 'Provayder',
       'adm.endpoint': "Yo'l", 'adm.users': 'Faol foydalanuvchilar', 'adm.peruser': 'Bir foydalanuvchiga (p50 / p95 / max)',
       'adm.pending': 'Kutilmoqda', 'adm.approved': 'Tasdiqlangan', 'adm.rejected': 'Rad etilgan',
-      'adm.approve': 'Tasdiqlash', 'adm.reject': 'Rad etish', 'adm.reason': 'Sabab', 'adm.approve.q': 'Arizani tasdiqlaysizmi?',
+      'adm.approve': 'Tasdiqlash', 'adm.reject': 'Rad etish', 'adm.reason': 'Sabab', 'adm.fee': 'Platforma', 'adm.payout': 'Yuristga', 'adm.fee.none': 'Komissiya % belgilanmagan (LAWYER_COMMISSION_PCT)', 'adm.approve.q': 'Arizani tasdiqlaysizmi?',
       'adm.grant': 'Tarif berish', 'adm.grant.d': "To'lov tasdiqlangandan keyin: foydalanuvchi, tarif va to'lov raqami.",
       'adm.search.user': 'Foydalanuvchi qidirish (kamida 2 belgi)', 'adm.plan': 'Tarif', 'adm.payref': "To'lov raqami (paymentRef)",
       'adm.amount': "Summa, so'm (ixtiyoriy)", 'adm.grant.ok': 'Tarif berildi', 'adm.grant.dup': "Bu to'lov allaqachon qayd etilgan",
@@ -73,7 +73,7 @@
       'adm.all': 'Все', 'adm.open': 'Открыть', 'adm.user': 'Пользователь', 'adm.total': 'Итого', 'adm.provider': 'Провайдер',
       'adm.endpoint': 'Путь', 'adm.users': 'Активные пользователи', 'adm.peruser': 'На пользователя (p50 / p95 / max)',
       'adm.pending': 'Ожидают', 'adm.approved': 'Одобренные', 'adm.rejected': 'Отклонённые',
-      'adm.approve': 'Одобрить', 'adm.reject': 'Отклонить', 'adm.reason': 'Причина', 'adm.approve.q': 'Одобрить заявку?',
+      'adm.approve': 'Одобрить', 'adm.reject': 'Отклонить', 'adm.reason': 'Причина', 'adm.fee': 'Платформа', 'adm.payout': 'Юристу', 'adm.fee.none': 'Комиссия % не задана (LAWYER_COMMISSION_PCT)', 'adm.approve.q': 'Одобрить заявку?',
       'adm.grant': 'Выдать тариф', 'adm.grant.d': 'После подтверждения оплаты: пользователь, тариф и номер платежа.',
       'adm.search.user': 'Поиск пользователя (от 2 символов)', 'adm.plan': 'Тариф', 'adm.payref': 'Номер платежа (paymentRef)',
       'adm.amount': 'Сумма, сум (необязательно)', 'adm.grant.ok': 'Тариф выдан', 'adm.grant.dup': 'Этот платёж уже учтён',
@@ -612,7 +612,10 @@
         var list = r.data.items || [];
         box.innerHTML = table([t('adm.time'), t('adm.name'), t('adm.user'), t('adm.price'), t('adm.status')], list.map(function (o) {
           return '<tr>' + td(dt(o.created_at)) + td(o.service_name || '') + td((o.first_name || '') + (o.username ? ' @' + o.username : '')) +
-            '<td><input class="inp so-p" data-id="' + o.id + '" inputmode="numeric" style="width:120px;height:34px" value="' + esc(o.quoted_price_minor != null ? o.quoted_price_minor : '') + '"></td>' +
+            '<td><input class="inp so-p" data-id="' + o.id + '" inputmode="numeric" style="width:120px;height:34px" value="' + esc(o.quoted_price_minor != null ? o.quoted_price_minor : '') + '">' +
+            (o.quoted_price_minor == null ? '' : '<div class="muted" style="font-size:12px;margin-top:4px;white-space:nowrap">' + (o.platform_fee_minor != null
+              ? esc(t('adm.fee')) + ': ' + esc(o.platform_fee_minor) + ' (' + esc(Number(o.platform_fee_pct)) + '%) · ' + esc(t('adm.payout')) + ': ' + esc(o.lawyer_payout_minor)
+              : esc(t('adm.fee.none'))) + '</div>') + '</td>' +
             '<td><select class="inp so-s" data-id="' + o.id + '" style="min-width:200px">' + ORDER_ST.map(function (s) { return '<option' + (s === o.status ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select></td></tr>';
         }));
         J.selects(box);

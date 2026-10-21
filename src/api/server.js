@@ -2261,6 +2261,13 @@ app.patch('/api/admin/service-orders/:id', requireMasterAdmin, async (req, res) 
     if (['approved_awaiting_payment', 'paid', 'in_progress', 'ready', 'delivered'].includes(status) && quote === null) {
       return res.status(400).json({ error: 'Tasdiqlangan buyurtma uchun narx kiritilishi kerak' });
     }
+    // the platform's share of the lawyer's price (src/services/lawyer-commission.js),
+    // written with the quote; unknown (NULL) until LAWYER_COMMISSION_PCT is set
+    const commission = require('../services/lawyer-commission');
+    await commission.ensureColumns(pool);
+    const before = (await pool.query('SELECT status, quoted_price_minor FROM service_orders WHERE id = $1', [id])).rows[0];
+    if (!before) return res.status(404).json({ error: 'Buyurtma topilmadi' });
+    const share = commission.split(quote);
     const result = await pool.query(`
       UPDATE service_orders SET
         status = $1,
@@ -2270,13 +2277,22 @@ app.patch('/api/admin/service-orders/:id', requireMasterAdmin, async (req, res) 
           WHEN $1 = 'approved_awaiting_payment' AND lawyer_approved_at IS NULL THEN NOW()
           ELSE lawyer_approved_at
         END,
+        platform_fee_pct = CASE WHEN $2::bigint IS DISTINCT FROM quoted_price_minor OR platform_fee_pct IS NULL THEN $5 ELSE platform_fee_pct END,
+        platform_fee_minor = CASE WHEN $2::bigint IS DISTINCT FROM quoted_price_minor OR platform_fee_pct IS NULL THEN $6 ELSE platform_fee_minor END,
+        lawyer_payout_minor = CASE WHEN $2::bigint IS DISTINCT FROM quoted_price_minor OR platform_fee_pct IS NULL THEN $7 ELSE lawyer_payout_minor END,
         updated_at = NOW()
       WHERE id = $4
       RETURNING *
-    `, [status, quote, lawyerId, id]);
+    `, [status, quote, lawyerId, id, share.pct, share.feeMinor, share.payoutMinor]);
     if (!result.rows.length) return res.status(404).json({ error: 'Buyurtma topilmadi' });
     logAudit(req, 'service_order.update.' + status, 'service_order', id);
-    res.json(result.rows[0]);
+    const order = result.rows[0];
+    // the customer learns the price once, when it is approved
+    if (status === 'approved_awaiting_payment' && before.status !== status && order.telegram_chat_id && bot) {
+      bot.sendMessage(order.telegram_chat_id, commission.quoteMessage(order, { formatUzs: require('../rag/one-time-products').formatUzs }))
+        .catch((e) => console.warn('[SERVICE-ORDER] quote message failed:', e.message));
+    }
+    res.json(order);
   } catch (error) {
     res.status(500).json({ error: 'Buyurtmani saqlashda xatolik' });
   }

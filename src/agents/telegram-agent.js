@@ -812,9 +812,15 @@ Agar texnik uzilish yuz bersa, limitingiz avtomatik tiklanadi.`,
     // tariffs v2: the one-time Sinov or the paid period is used up; nothing
     // renews by itself and nothing is charged automatically
     const trial = status.kind === 'trial' || status.plan === 'sinov' || status.kind === 'none';
+    // one-time services (src/rag/one-time-products.js): a question pack now,
+    // the plan for regular use; the buttons are added by the bot
+    const otp = require('../rag/one-time-products');
+    const silver = require('../rag/tariff-ledger').PLAN_CATALOG.silver;
+    const pack = `💬 ${otp.PRODUCTS.chat5.title} — ${otp.formatUzs(otp.PRODUCTS.chat5.priceUzs)} (hozircha Telegram Stars orqali: ${otp.starsFor('chat5')} ⭐), bir martalik, muddati tugamaydi.`;
+    const plan = `⭐ Silver — ${otp.formatUzs(silver.priceUzs)} / 30 kun: ${silver.quotas.chat} savol, ${silver.quotas.analysis} tahlil, ${silver.quotas.opinion} xulosa, ${silver.quotas.draft} hujjat. Tariflar: ${TARIFF_URL}`;
     const reply = trial
-      ? `Sinov tarifidagi bepul huquqiy savollaringiz tugadi (Sinov bir martalik, yangilanmaydi).\n\nDavom etish uchun tarif tanlang: Silver, Gold yoki Platinum — ${TARIFF_URL}\nAvtomatik to'lov olinmaydi. Salomlashuv, menyu, /balance va yordam buyruqlari limit sarflamaydi.`
-      : `Tarifingizdagi huquqiy chat limiti tugadi${status.limit ? ` (${status.used || status.limit}/${status.limit})` : ''}.\n\n${status.endsAt ? `Joriy davr ${tashkentDay(status.endsAt)} da tugaydi; yangi davr to'lov bilan boshlanadi — avtomatik to'lov olinmaydi. ` : ''}Yuqori tarifga o'tish: ${TARIFF_URL}`;
+      ? `Sinov tarifidagi bepul huquqiy savollaringiz tugadi (Sinov bir martalik, yangilanmaydi).\n\nDavom etish uchun:\n${pack}\n${plan}\n\nOxirgi savolingiz bo'yicha hujjat kerak bo'lsa — pastdagi tugma. Avtomatik to'lov olinmaydi; to'lovni Telegram oynasida o'zingiz tasdiqlaysiz. Salomlashuv, menyu, /balance va yordam buyruqlari limit sarflamaydi.`
+      : `Tarifingizdagi huquqiy chat limiti tugadi${status.limit ? ` (${status.used || status.limit}/${status.limit})` : ''}.\n\n${status.endsAt ? `Joriy davr ${tashkentDay(status.endsAt)} da tugaydi; yangi davr to'lov bilan boshlanadi — avtomatik to'lov olinmaydi. ` : ''}Davr tugaguncha: ${pack}\nYuqori tarifga o'tish: ${TARIFF_URL}`;
     return {
       handled: true,
       reply,
@@ -1418,12 +1424,15 @@ Agar texnik uzilish yuz bersa, limitingiz avtomatik tiklanadi.`,
     ? `\n\n${testModeNote(testAccount, currentRequestSpend())}${guardWhy}`
     : quota.source === 'paid'
     ? (ru ? `\n\n🎟 Использован ранее купленный кредит. Осталось кредитов: ${quota.paidCredits || 0}.` : `\n\n🎟 Oldin sotib olingan javob krediti ishlatildi. Qolgan kreditlar: ${quota.paidCredits || 0}.`)
+    : quota.oneTime
+      ? (ru ? `\n\n🎟 Из купленного пакета: осталось ${quota.remaining} вопросов (без срока).` : `\n\n🎟 Sotib olingan paketdan: yana ${quota.remaining} ta savol qoldi (muddatsiz).`)
     : quota.source === 'staff' || quota.legacy
       ? ''
       : quota.kind === 'trial' || quota.plan === 'sinov'
         ? (quota.remaining > 0
           ? (ru ? `\n\n🎁 Sinov: осталось ${quota.remaining} правовых вопроса (разово, не обновляется).` : `\n\n🎁 Sinov: yana ${quota.remaining} ta huquqiy savol qoldi (bir martalik, yangilanmaydi).`)
-          : (ru ? `\n\n🎁 Вопросы тарифа Sinov закончились. Чтобы продолжить, выберите тариф: ${TARIFF_URL}` : `\n\n🎁 Sinovdagi huquqiy savollar tugadi. Davom etish uchun tarif tanlang: ${TARIFF_URL}`))
+          : (ru ? `\n\n🎁 Вопросы тарифа Sinov закончились. Дальше: пакет из 5 вопросов (кнопка ниже) или тариф: ${TARIFF_URL}`
+            : `\n\n🎁 Sinovdagi huquqiy savollar tugadi. Davom etish: 5 ta savol paketi (pastdagi tugma) yoki tarif: ${TARIFF_URL}`))
         : (ru
           ? `\n\n📊 ${quota.plan ? quota.plan[0].toUpperCase() + quota.plan.slice(1) : 'Тариф'}: осталось ${quota.remaining} правовых вопросов${quota.endsAt ? ` (период до ${tashkentDay(quota.endsAt)})` : ''}.`
           : `\n\n📊 ${quota.plan ? quota.plan[0].toUpperCase() + quota.plan.slice(1) : 'Tarif'}: yana ${quota.remaining} ta huquqiy savol${quota.endsAt ? ` (davr ${tashkentDay(quota.endsAt)} gacha)` : ''}.`);
@@ -1462,6 +1471,8 @@ Agar texnik uzilish yuz bersa, limitingiz avtomatik tiklanadi.`,
       paidCredits: quota.paidCredits || 0,
       ...(testAccount ? { testMode: { until: testAccount.until, budgetUsd: testAccount.budgetUsd, spentBeforeUsd: testAccount.spend.committedUsd } } : {}),
       nextActions,
+      // the last Sinov question: the bot adds the one-time question pack to the buttons
+      trialSpent: !quota.oneTime && (quota.kind === 'trial' || quota.plan === 'sinov') && quota.source === 'tariff' && Number(quota.remaining) === 0,
       conversationState: 'awaiting_next_action',
       ms: Date.now() - started,
     },

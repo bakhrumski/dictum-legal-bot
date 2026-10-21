@@ -67,6 +67,7 @@ function formatAnalysis(a = {}, { fileName = '', units = null } = {}) {
  * deps: bot, pool, ledger (tariff-ledger), extract(buf, {fileName, mimeType}),
  * getAnalyzer() -> async (text, {adminId}) => { analysis } | { raw, parseError },
  * identityOf(msgOrQuery) -> { telegramUserId, adminId }, holdForLawyer(chatId, file),
+ * sales (src/bot/one-time-sales.js, optional: buy the analysis when the plan has no units),
  * fetchImpl (tests).
  */
 function createDocumentFlow(deps) {
@@ -123,6 +124,12 @@ function createDocumentFlow(deps) {
       return true;
     }
     await deps.bot.answerCallbackQuery(q.id, { text: 'Tahlil boshlandi' }).catch(() => {});
+    await runAnalysis(chatId, o, q);
+    return true;
+  }
+
+  /** Reserve the units (plan, else bought one at a time), analyse, deliver, commit; else release. */
+  async function runAnalysis(chatId, o, q) {
     const who = await deps.identityOf(q);
     let job;
     try {
@@ -131,14 +138,25 @@ function createDocumentFlow(deps) {
     } catch (e) {
       console.warn('[TG-DOC] reserve failed:', e.message);
       await deps.bot.sendMessage(chatId, "Limitni hozir tekshirib bo'lmadi. Birozdan keyin qayta urinib ko'ring.");
-      return true;
+      return;
     }
     if (!job.allowed) {
       offers.set(chatId, { ...o, at: Date.now() }); // the lawyer option stays
+      const rows = [];
+      let price = '';
+      if (deps.sales) {
+        // the analysis bought one at a time (src/bot/one-time-sales.js), then run at once
+        const otp = require('../rag/one-time-products');
+        const need = Math.max(1, o.units - Math.max(0, Number(job.oneTimeRemaining) || 0));
+        deps.sales.setResume(chatId, 'analysis', () => { offers.delete(chatId); return runAnalysis(chatId, o, q); });
+        rows.push([deps.sales.button('analysis', need, `🤖 AI tahlil — ${otp.starsLabel('analysis', need)}`)]);
+        price = `\n\nBitta tahlilni alohida sotib olish mumkin: ${otp.formatUzs(otp.PRODUCTS.analysis.priceUzs * need)} (hozircha Telegram Stars orqali ${otp.starsFor('analysis') * need} ⭐). To'lovdan keyin tahlil darhol boshlanadi; xatoda birlik qaytariladi.`;
+      }
+      rows.push([{ text: '👨‍⚖️ Yuristga yuborish', callback_data: 'tgdoc_lawyer' }]);
       await deps.bot.sendMessage(chatId,
-        `Tarifingizda bu hujjat uchun tahlil birligi yetarli emas (kerak: ${o.units}). Tariflar: ${deps.tariffUrl || 'https://juristai.uz/tariff.html'}\n\nFaylni yurist navbatiga yuborishingiz mumkin:`,
-        { reply_markup: { inline_keyboard: [[{ text: '👨‍⚖️ Yuristga yuborish', callback_data: 'tgdoc_lawyer' }]] } });
-      return true;
+        `Tarifingizda bu hujjat uchun tahlil birligi yetarli emas (kerak: ${o.units}). Tariflar: ${deps.tariffUrl || 'https://juristai.uz/tariff.html'}${price}\n\nYoki faylni yurist navbatiga yuboring:`,
+        { reply_markup: { inline_keyboard: rows } });
+      return;
     }
     await deps.bot.sendChatAction(chatId, 'typing').catch(() => {});
     const typing = setInterval(() => deps.bot.sendChatAction(chatId, 'typing').catch(() => {}), 4500);
@@ -155,10 +173,9 @@ function createDocumentFlow(deps) {
     } finally {
       clearInterval(typing);
     }
-    return true;
   }
 
-  return { offer, onCallback, _offers: offers };
+  return { offer, onCallback, runAnalysis, _offers: offers };
 }
 
 function splitPlain(text, limit = 3900) {
