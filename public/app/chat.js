@@ -100,6 +100,7 @@
       '<div class="cmp-bar">' +
         '<button type="button" class="chip" data-a="at">' + J.icon('clip') + '<span>' + esc(t('cmp.attach')) + '</span></button>' +
         '<button type="button" class="chip" data-a="sl"><b>/</b><span>' + esc(t('cmp.skills')) + '</span></button>' +
+        '<button type="button" class="chip cmp-mic" data-a="mic" hidden aria-label="' + esc(t('cmp.mic')) + '" title="' + esc(t('cmp.mic')) + '">' + J.icon('mic') + '<span class="mic-t"></span></button>' +
         '<span class="sp"></span><span class="src-lock">' + J.icon('shield') + esc(t('cmp.src')) + '</span>' +
         '<button type="button" class="send" aria-label="Send">' + J.icon('send') + '</button>' +
       '</div><input type="file" hidden multiple accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.webp,.heic,.tif,.tiff,image/*"></div>');
@@ -150,6 +151,38 @@
       items.forEach(function (x) { x.classList.remove('on'); }); var n = items[(i + d + items.length) % items.length]; n.classList.add('on'); n.scrollIntoView({ block: 'nearest' });
       return true;
     }
+    /* ---------- ovoz bilan yozish (diktovka): /api/voice/dictate, matn maydonga tushadi, avtomatik yuborilmaydi ---------- */
+    (function dictation() {
+      var mic = $('[data-a=mic]', el), lab = $('.mic-t', mic), rec = null, chunks = [], timer = null, secs = 0, MAX = 120;
+      if (!G.MediaRecorder || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+      if (J.dictationOk === undefined) J.dictationOk = J.api('/api/voice/balance').then(function (r) { return !!(r.ok && r.data && r.data.dictation); });
+      J.dictationOk.then(function (ok) { mic.hidden = !ok; });
+      function reset() { clearInterval(timer); timer = null; secs = 0; lab.textContent = ''; mic.classList.remove('on'); mic.disabled = false; }
+      async function stop() { if (rec && rec.state !== 'inactive') rec.stop(); }
+      mic.onclick = async function () {
+        if (rec && rec.state === 'recording') return stop();
+        var stream;
+        try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch (e) { J.toast(t('cmp.mic.denied')); return; }
+        chunks = [];
+        rec = new MediaRecorder(stream);
+        rec.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
+        rec.onstop = async function () {
+          stream.getTracks().forEach(function (tr) { tr.stop(); });
+          clearInterval(timer); mic.classList.remove('on'); mic.disabled = true; lab.textContent = t('cmp.mic.busy');
+          var blob = new Blob(chunks, { type: rec.mimeType || 'audio/webm' }), fd = new FormData();
+          fd.append('file', blob, 'dictation.' + (/ogg/.test(blob.type) ? 'ogg' : /mp4|aac/.test(blob.type) ? 'm4a' : 'webm'));
+          fd.append('lang', J.lang === 'ru' ? 'ru' : 'uz');
+          var r = await J.api('/api/voice/dictate', { method: 'POST', body: fd });
+          reset();
+          if (!r.ok) { J.toast(J.errMsg(r.data), 5000); return; }
+          ta.value = (ta.value.trim() ? ta.value.trim() + ' ' : '') + r.data.text; grow(); sync(); ta.focus();
+        };
+        rec.start();
+        mic.classList.add('on'); secs = 0; lab.textContent = '0:00';
+        timer = setInterval(function () { secs++; lab.textContent = Math.floor(secs / 60) + ':' + ('0' + secs % 60).slice(-2); if (secs >= MAX) stop(); }, 1000);
+      };
+    })();
+
     ta.addEventListener('input', function () {
       grow(); sync();
       var m = ta.value.match(/(?:^|\s)\/([^\s]*)$/);

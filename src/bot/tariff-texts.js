@@ -71,7 +71,8 @@ function balanceText({ balance: b, paidCredits = 0, pending = false, testAccount
       lines.push(`• ${SERVICE_NAMES[k] || k}: ${v.remaining} / ${v.limit} qoldi`);
     }
     if (b.kind === 'trial') lines.push("Sinov tugagach tarif tanlanadi; avtomatik to'lov olinmaydi.");
-    else lines.push("Yangi davr to'lov bilan boshlanadi; ishlatilmagan limit keyingi davrga o'tmaydi va avtomatik qayta sotib olinmaydi.");
+    else lines.push("Yangi davr to'lov bilan boshlanadi; ishlatilmagan limit keyingi davrga o'tmaydi va avtomatik qayta sotib olinmaydi.",
+      `Davom ettirish yoki yuqori tarif: ${String(process.env.APP_URL || 'https://juristai.uz').replace(/\/+$/u, '')}/tariff.html`);
   }
   // services bought one at a time (src/rag/one-time-products.js): after the plan's, never expire
   const bought = Object.entries((b && b.oneTime) || {}).filter(([k, v]) => v > 0 && k !== 'ocr');

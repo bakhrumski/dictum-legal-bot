@@ -111,8 +111,10 @@ async function runAccountTool(name, { chatId, who = {}, lang = 'uz', deps = {} }
       const reply = linked
         ? (R ? `Ваш Telegram уже привязан к аккаунту JuristAI: лимиты общие для бота и сайта. Открыть приложение: ${app}`
           : `Telegram'ingiz JuristAI akkauntiga allaqachon ulangan: bot va saytdagi limit umumiy. Ilovani ochish: ${app}`)
-        : (R ? `Чтобы бот и сайт работали с одним аккаунтом и общими лимитами: войдите на ${app} через Telegram (кнопка «Войти через Telegram»), затем в меню профиля нажмите «Подключить Telegram».`
-          : `Bot va sayt bitta akkaunt va umumiy limit bilan ishlashi uchun: ${app} ga Telegram orqali kiring ("Telegram orqali kirish" tugmasi), so'ng profil menyusida "Telegram'ni ulash"ni bosing.`);
+        // sign in with the account's own login / password / Google: "sign in with Telegram"
+        // would open a NEW account for this Telegram when none is linked yet
+        : (R ? `Если у вас уже есть аккаунт на сайте (например, с оплаченным тарифом): войдите на ${app} своим логином и паролем (или через Google) и в меню профиля нажмите «Подключить Telegram» — откроется этот бот, нажмите «Start». Если аккаунта на сайте нет, «Войти через Telegram» создаст его, уже связанным с этим Telegram. Если Telegram привязан к другому аккаунту: /unlink, затем подключите снова.`
+          : `Saytda akkauntingiz bo'lsa (masalan, tarif sotib olingan): ${app} ga o'z login va parolingiz (yoki Google) bilan kiring va profil menyusida "Telegram'ni ulash"ni bosing — shu bot ochiladi, "Start"ni bosing. Saytda akkaunt bo'lmasa, "Telegram orqali kirish" uni shu Telegram'ga ulangan holda ochadi. Telegram boshqa akkauntga ulangan bo'lsa: /unlink, so'ng qayta ulang.`);
       return { action: 'tool_link_account', reply };
     }
     case 'delete_account':

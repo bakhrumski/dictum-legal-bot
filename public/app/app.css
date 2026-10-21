@@ -438,3 +438,29 @@ textarea.inp{height:auto;min-height:96px;padding:10px 13px;resize:vertical;line-
 /* ===== advokatlar: litsenziya va tugma ===== */
 .lw-side{flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:10px;padding-left:16px}
 @media (max-width:640px){.filters .sel{flex:1 1 calc(50% - 5px);min-width:0}.lw-side{padding-left:8px}}
+
+/* Da'vo arizasi agenti (agent.js) */
+.note-blue{background:var(--accent-soft);border-radius:12px;padding:12px 14px;font-size:14px;color:var(--fg)}
+.note-blue ul{margin:6px 0 0;padding-left:18px}
+.note-blue li{margin:3px 0}
+.ag-steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.ag-steps li{display:flex;align-items:center;gap:10px;font-size:14.5px;color:var(--muted)}
+.ag-steps li.cur,.ag-steps li.done{color:var(--fg)}
+.ag-dot{width:10px;height:10px;flex:none;border-radius:50%;border:1.5px solid var(--line)}
+.ag-steps li.cur .ag-dot{border-color:var(--cta);animation:agPulse 1.2s ease-in-out infinite}
+.ag-steps li.done .ag-dot{background:var(--ok);border-color:var(--ok)}
+.ag-steps li.bad .ag-dot{background:var(--bad);border-color:var(--bad)}
+.ag-steps li.skip .ag-dot{border-style:dashed}
+@keyframes agPulse{50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){.ag-steps li.cur .ag-dot{animation:none}}
+.ag-basis{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:14px}
+.ag-basis a{color:var(--cta);font-size:13px;text-decoration:none}
+.ag-basis blockquote{margin:6px 0 4px;padding:8px 12px;border:1px solid var(--line);border-radius:12px;font-size:14px;color:var(--fg)}
+.ag-doc{border:1px solid var(--line);border-radius:12px;padding:22px 24px;background:var(--surface);font-size:14.5px;line-height:1.6;overflow-wrap:anywhere;max-height:70vh;overflow:auto}
+.ag-doc p{margin:0 0 .6em}
+@media (max-width:560px){.ag-doc{padding:16px}}
+/* Diktovka tugmasi (chat.js) */
+.cmp-mic[hidden]{display:none!important}
+.cmp-mic.on{background:var(--accent-soft);color:var(--cta);border-color:transparent}
+.cmp-mic .mic-t:empty{display:none}
+.cmp-mic .mic-t{font-variant-numeric:tabular-nums}

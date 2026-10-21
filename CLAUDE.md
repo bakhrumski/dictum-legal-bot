@@ -341,6 +341,17 @@ Known state of the suites (Sept 2026):
   `WS_TELEGRAM_NOTIFY=off`); a voice recording's summary can be sent to the
   user's own Telegram (`POST /api/voice/send-telegram`). Voice minutes are
   not metered (`/api/voice/balance` says so; no "X minutes" anywhere).
+  Linking (2026-10-21 audit): `ulink_` refuses a Telegram held by another
+  account in either column (the way out is `/unlink` in that chat) and
+  detaches the account's old chat; `/unlink` clears both columns (private
+  chat only); `/link` is private-only with 5 tries / 15 min; the site's
+  link status reads the columns. A linked account gets the plan in the bot
+  when granted and 3 days / 1 day before it ends (`src/services/plan-notify.js`,
+  `tariff_expiry_notices`, `PLAN_NOTIFY=off`). Dictation: the chat's 🎙 button
+  -> `POST /api/voice/dictate` (<= 2 min, measured, not metered, rate-limited,
+  `VOICE_DICTATION=off`); the text lands in the box, never sent by itself.
+  Recordings transcribe only with `VOICE_NOTES_ENABLED=true` (customers also
+  `VOICE_NOTES_USERS=true`) and an STT engine; the page says which is missing.
   Account help (login/OTP/password) is matched only on unambiguous account
   words, never "hisob…" in a legal question ("hisoblash" once routed wage
   questions to password reset). `/testmode` (master only, in memory, auto-off after 12 h) lifts that for one
@@ -458,6 +469,20 @@ Known state of the suites (Sept 2026):
   Not a hard dollar guarantee: it holds only as far as the price table is
   right. Every `usageLedger.track()` call must pass `bound`. Rollback uses
   `MAINTENANCE_MODE=on` (503 on the API, bot notice) before the SQL.
+- `src/agents/harness.js` (2026-10-21) — the agentic harness: a workflow is a
+  fixed list of steps (tools); the harness enforces `maxSteps` / `maxMs`,
+  keeps a trace (label, status, ms, short note - never prompts or raw model
+  text), stops on a failed required step or a deliberate halt
+  (`needs_input`). First workflow: `src/agents/workflows/claim-draft.js`
+  (da'vo arizasi: intake no AI -> issues -> lex.uz retrieval -> basis whose
+  quotes must be in the source word for word, else dropped and counted ->
+  the drafting generator told to cite only that basis -> mechanical check:
+  articles outside the basis, figures not in the facts, missing claim parts;
+  warnings only). Route `POST /api/agent/claim-draft`
+  (`src/agents/agent-routes.js`): missing facts 422 before any charge or AI;
+  1 `draft` unit reserved, committed only when a draft came out. Page:
+  `/app/#/agent/dava` (`public/app/agent.js`). It does not touch
+  `/api/legal-chat`.
 - `src/workspace/` — Platinum Workspace: routes, authz, Supabase
   realtime/storage, Workspace AI.
 - `public/` — static pages: `index.html` (landing), `login.html`,
