@@ -101,7 +101,7 @@ const read = (p) => fs.readFileSync(path.join(__dirname, '..', p), 'utf8');
   await test('voice: dictation endpoint (2 min, measured, rate-limited), mic button in chat, the page says why it cannot transcribe, VoiceLab gets a real language', () => {
     assert.match(server, /app\.post\('\/api\/voice\/dictate', require\('\.\.\/auth\/same-origin'\)\.requireSameOrigin, requireAuth/u);
     assert.match(server, /measured > VOICE_DICTATE_MAX_SEC \+ 5/u);
-    assert.match(server, /'\/api\/voice\/dictate'\], aiLimiter\)/u);
+    assert.match(server, /'\/api\/voice\/dictate'(, '[^']+')*\], aiLimiter\)/u);
     assert.match(server, /reason: !stt \? 'stt_not_configured' : !notes \? 'voice_notes_disabled' : !forUser \? 'staff_only' : null/u);
     const chat = read('public/app/chat.js');
     assert.match(chat, /data-a="mic" hidden/u);
