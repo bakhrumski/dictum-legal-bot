@@ -76,6 +76,13 @@
       '<div class="rows vc-list"></div></div>');
     $('[data-a=rec]', v).onclick = function () { J.go('#/yozuvlar/yangi'); };
     $('[data-a=buy]', v).onclick = buyMinutes;
+    // say plainly when recordings cannot be transcribed for this person (2026-10-21: the page used to stay silent)
+    J.api('/api/voice/balance').then(function (r) {
+      if (!r.ok || !r.data || r.data.enabled) return;
+      var key = r.data.reason === 'stt_not_configured' ? 'vc.off.stt' : r.data.reason === 'staff_only' ? 'vc.off.staff' : 'vc.off.notes';
+      var note = J.h('<div class="note-blue" style="margin-bottom:18px"></div>'); note.textContent = t(key);
+      var min = $('.vc-min', v); if (min) min.parentNode.insertBefore(note, min);
+    });
     $('input[type=file]', v).onchange = function () { var f = this.files[0]; if (f) fromFile(f); };
     function draw() {
       var l = list();
@@ -209,7 +216,7 @@
     function state(it) {
       if (it.status === 'working') return '<div class="card" style="display:flex;gap:12px;align-items:center"><span class="spin"></span>' + esc(t('vc.working')) + '</div>';
       if (it.status === 'pending') return '<div class="card"><h4>' + esc(t('vc.pending')) + '</h4><p class="muted" style="font-size:14px">' + esc(t('vc.pending.d')) + '</p><div class="btns"><button class="pill sm" data-a="retry">' + esc(t('retry')) + '</button></div></div>';
-      if (it.status === 'error') return '<div class="card"><h4 class="err">' + esc(t('err.generic')) + '</h4><p class="muted" style="font-size:14px"></p><div class="btns"><button class="pill sm" data-a="retry">' + esc(t('retry')) + '</button><button class="pill sm ghost" data-a="buy">' + esc(t('vc.buy')) + '</button></div></div>';
+      if (it.status === 'error') return '<div class="card"><h4 class="err">' + esc(t('err.generic')) + '</h4><p class="muted" style="font-size:14px"></p><div class="btns"><button class="pill sm" data-a="retry">' + esc(t('retry')) + '</button></div></div>';
       return '';
     }
     function draw() {

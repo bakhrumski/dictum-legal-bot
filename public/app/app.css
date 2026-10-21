@@ -459,3 +459,8 @@ textarea.inp{height:auto;min-height:96px;padding:10px 13px;resize:vertical;line-
 .ag-doc{border:1px solid var(--line);border-radius:12px;padding:22px 24px;background:var(--surface);font-size:14.5px;line-height:1.6;overflow-wrap:anywhere;max-height:70vh;overflow:auto}
 .ag-doc p{margin:0 0 .6em}
 @media (max-width:560px){.ag-doc{padding:16px}}
+/* Diktovka tugmasi (chat.js) */
+.cmp-mic[hidden]{display:none!important}
+.cmp-mic.on{background:var(--accent-soft);color:var(--cta);border-color:transparent}
+.cmp-mic .mic-t:empty{display:none}
+.cmp-mic .mic-t{font-variant-numeric:tabular-nums}

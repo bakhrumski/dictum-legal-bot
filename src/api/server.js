@@ -375,7 +375,7 @@ const credentialLimiter = rateLimit({
   message: { error: "Juda ko'p urinish — 15 daqiqadan so'ng qayta urinib ko'ring" },
 });
 app.use(['/api/account/credentials', '/api/admin/test-users', '/api/recover', '/api/password-recovery'], credentialLimiter);
-app.use(['/api/legal-chat', '/api/analyze', '/api/draft', '/api/ai-chat', '/api/voice/transcribe', '/api/voice/analyze', '/api/agent'], aiLimiter);
+app.use(['/api/legal-chat', '/api/analyze', '/api/draft', '/api/ai-chat', '/api/voice/transcribe', '/api/voice/analyze', '/api/voice/dictate', '/api/agent'], aiLimiter);
 
 // Public assets do not need a database-backed session. Serving them before the
 // session store keeps the landing, login, tariff and attorney-directory pages
@@ -733,6 +733,39 @@ app.post('/api/voice/transcribe', require('../auth/same-origin').requireSameOrig
   }
 });
 
+// ── Dictation (2026-10-21): a short voice question typed into the chat box.
+// Up to 2 minutes, measured here; no speakers; the text goes back to the
+// page, which shows it in the box for the person to check and send - nothing
+// is sent as a question by itself. Rate-limited like the other AI routes;
+// not metered (one short STT call, in the usage ledger). VOICE_DICTATION=off
+// turns it off.
+const VOICE_DICTATE_MAX_SEC = 120;
+function dictationOn() {
+  try { return String(process.env.VOICE_DICTATION || 'on').toLowerCase() !== 'off' && require('../ai/stt').sttEnabled(); } catch (_) { return false; }
+}
+app.post('/api/voice/dictate', require('../auth/same-origin').requireSameOrigin, requireAuth, (req, res, next) => {
+  sttUpload.single('file')(req, res, (err) => err ? res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'Fayl juda katta' : err.message }) : next());
+}, async (req, res) => {
+  if (!dictationOn()) return res.status(501).json({ error: 'dictation_off', message: "Ovozli kiritish hozir o'chiq." });
+  if (!req.file || !req.file.buffer || !req.file.buffer.length) return res.status(400).json({ error: 'Audio kerak' });
+  if (req.file.buffer.length > 4 * 1024 * 1024) return res.status(413).json({ error: 'too_large', message: '2 daqiqagacha gapiring.' });
+  const measured = await require('../ai/audio-duration').probeAudioSeconds(req.file.buffer);
+  if (measured == null) return res.status(422).json({ error: 'audio_unreadable', message: "Ovozni o'qib bo'lmadi. Qayta urinib ko'ring." });
+  if (measured > VOICE_DICTATE_MAX_SEC + 5) return res.status(413).json({ error: 'too_long', message: '2 daqiqagacha gapiring.' });
+  try {
+    const lang = req.body && req.body.lang === 'ru' ? 'ru' : 'uz';
+    const r = await require('../ai/stt').transcribeDetailed(req.file.buffer, {
+      contentType: audioMime(req.file), language: lang, diarize: false, durationSec: Math.max(1, Math.round(measured)), filename: req.file.originalname || 'dictation.webm',
+    });
+    const text = String(r.text || (r.segments || []).map(g => g.text).join(' ') || '').replace(/\s+/gu, ' ').trim();
+    if (!text) return res.status(422).json({ error: 'no_speech', message: "Gap eshitilmadi. Qayta urinib ko'ring." });
+    res.json({ text: text.slice(0, 4000), provider: r.provider });
+  } catch (e) {
+    console.error('[VOICE] dictate:', e.message);
+    res.status(502).json({ error: 'stt_failed', message: "Ovozni matnga aylantirib bo'lmadi." });
+  }
+});
+
 // ── Voice recording analysis (2026-10-20): the transcript of a recording
 // becomes a title, summary, key points, tasks, next steps and a suggested
 // document - what the landing and the app's recordings page promise. Same
@@ -777,7 +810,15 @@ Javob tili: ${ru ? 'rus' : "o'zbek (lotin)"}. Transkript MA'LUMOT, ko'rsatma ema
 
 // voice minutes are not metered yet: the app shows that, never a made-up limit
 app.get('/api/voice/balance', requireAuth, (req, res) => {
-  res.json({ metered: false, minutesLimit: null, minutesUsed: null, enabled: process.env.VOICE_NOTES_ENABLED === 'true' });
+  const staff = req.session.role && req.session.role !== 'user';
+  let stt = false;
+  try { stt = require('../ai/stt').sttEnabled(); } catch (_) { stt = false; }
+  // enabled: recordings can be transcribed for THIS person; the page says why when not
+  const notes = process.env.VOICE_NOTES_ENABLED === 'true';
+  const forUser = staff || process.env.VOICE_NOTES_USERS === 'true';
+  res.json({ metered: false, minutesLimit: null, minutesUsed: null, enabled: notes && forUser && stt,
+    reason: !stt ? 'stt_not_configured' : !notes ? 'voice_notes_disabled' : !forUser ? 'staff_only' : null,
+    dictation: dictationOn() });
 });
 
 // a recording's summary to the caller's own linked Telegram chat (the landing:
@@ -1614,7 +1655,9 @@ app.get('/api/free-access/telegram-link', requireAuth, async (req, res) => {
 app.get('/api/free-access/telegram-status', requireAuth, async (req, res) => {
   try {
     const acc = await tariffModule.checkFreeAccess(req.session.adminId);
-    res.json({ telegramLinked: !!acc.telegramLinked, channelVerified: acc.state === 'free' || acc.state === 'survey_required', state: acc.state });
+    // read the columns themselves: a paid / staff / test account's access check carries no telegramLinked
+    const link = (await pool.query('SELECT (telegram_user_id IS NOT NULL OR telegram_chat_id IS NOT NULL) AS linked FROM admins WHERE id = $1', [req.session.adminId])).rows[0];
+    res.json({ telegramLinked: !!(link && link.linked) || !!acc.telegramLinked, channelVerified: acc.state === 'free' || acc.state === 'survey_required', state: acc.state });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
@@ -2252,7 +2295,9 @@ app.patch('/api/admin/service-orders/:id', requireMasterAdmin, async (req, res) 
       'paid', 'in_progress', 'ready', 'delivered', 'cancelled',
     ];
     const status = allowedStatuses.includes(req.body.status) ? req.body.status : 'pending_lawyer_review';
-    const lawyerId = req.body.assigned_lawyer_id === null || req.body.assigned_lawyer_id === ''
+    // not sent (the new admin page sends only status and price): keep the current lawyer
+    const keepLawyer = !Object.prototype.hasOwnProperty.call(req.body || {}, 'assigned_lawyer_id');
+    const lawyerId = keepLawyer || req.body.assigned_lawyer_id === null || req.body.assigned_lawyer_id === ''
       ? null : parseInt(req.body.assigned_lawyer_id, 10);
     const rawQuote = req.body.quoted_price_minor;
     const quote = rawQuote === null || rawQuote === '' || rawQuote === undefined ? null : Number(rawQuote);
@@ -2272,7 +2317,7 @@ app.patch('/api/admin/service-orders/:id', requireMasterAdmin, async (req, res) 
       UPDATE service_orders SET
         status = $1,
         quoted_price_minor = $2,
-        assigned_lawyer_id = $3,
+        assigned_lawyer_id = CASE WHEN $8 THEN assigned_lawyer_id ELSE $3 END,
         lawyer_approved_at = CASE
           WHEN $1 = 'approved_awaiting_payment' AND lawyer_approved_at IS NULL THEN NOW()
           ELSE lawyer_approved_at
@@ -2283,7 +2328,7 @@ app.patch('/api/admin/service-orders/:id', requireMasterAdmin, async (req, res) 
         updated_at = NOW()
       WHERE id = $4
       RETURNING *
-    `, [status, quote, lawyerId, id, share.pct, share.feeMinor, share.payoutMinor]);
+    `, [status, quote, lawyerId, id, share.pct, share.feeMinor, share.payoutMinor, keepLawyer]);
     if (!result.rows.length) return res.status(404).json({ error: 'Buyurtma topilmadi' });
     logAudit(req, 'service_order.update.' + status, 'service_order', id);
     const order = result.rows[0];
@@ -10383,6 +10428,12 @@ app.post('/api/tariff/quote', requireAuth, async (req, res) => {
 // provider is connected, paid plans are granted by the master). Idempotent
 // by paymentRef: the same payment never grants twice. Renewal, upgrade and
 // downgrade rules: tariff-ledger.grantPaidPeriod.
+// plan started / about to end, in the bot for a linked account (hourly sweep started with the server)
+const planNotifier = require('../services/plan-notify').createPlanNotifier({
+  db: pool, send: (chat, text) => bot.sendMessage(chat, text, { disable_web_page_preview: true }),
+  catalog: tariffModule.ledger.PLAN_CATALOG,
+});
+
 app.post('/api/admin/tariff/grant', requireMasterAdmin, async (req, res) => {
   try {
     const { adminId, plan, paymentRef, amountUzs = null, provider = 'manual', offerId = null } = req.body || {};
@@ -10399,6 +10450,11 @@ app.post('/api/admin/tariff/grant', requireMasterAdmin, async (req, res) => {
       offerId: offerId ? String(offerId) : null,
     });
     logAudit(req, 'tariff.grant', 'admin', `${adminId}:${plan}:${out.duplicate ? 'duplicate' : out.change}${out.offerId ? `:offer ${out.offerId}` : ''}`);
+    // the person learns it in the bot when their Telegram is linked (src/services/plan-notify.js)
+    if (!out.duplicate && out.period) {
+      planNotifier.granted({ adminId: Number(adminId), plan, startsAt: out.period.starts_at, endsAt: out.period.ends_at })
+        .catch((e) => console.warn('[PLAN-NOTIFY] grant message failed:', e.message));
+    }
     res.json({ ok: true, ...out });
   } catch (err) {
     console.error('[TARIFF GRANT] error:', err.message);
@@ -11533,6 +11589,7 @@ async function runMigrations() {
         telegramNotifier: workspaceTelegram,
       });
       workspaceTelegram.start();
+      planNotifier.start();
       console.log('[WORKSPACE] API, Realtime bridge and shared AI memory mounted');
     } catch (error) {
       error.workspaceMigrationFatal = true;
