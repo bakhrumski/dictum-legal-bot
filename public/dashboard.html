@@ -7659,7 +7659,7 @@
         </div>
 
         <!-- Weekly R&D Survey management (Master Only) -->
-        <div class="reg-section collapsed" id="surveyAdminSection" style="margin-top:16px;">
+        <div class="reg-section collapsed" id="surveyAdminSection" style="margin-top:16px;display:none" hidden><!-- removed from view 2026-10-21 (owner); ids kept for the page's scripts -->
             <div class="reg-section-header" onclick="document.getElementById('surveyAdminSection').classList.toggle('collapsed'); if(!document.getElementById('surveyAdminSection').classList.contains('collapsed')) loadSurveyAdmin();">
                 <div style="display:flex;align-items:center;gap:6px;">
                     <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
@@ -7894,7 +7894,7 @@
         <!-- TAB: Boshqaruv — Analytics -->
         <div class="tab-view" data-tab="sorov">
         <!-- Monte Carlo Simulation Section -->
-        <div class="monte-carlo-section" id="monteCarloSection">
+        <div class="monte-carlo-section" id="monteCarloSection" style="display:none" hidden><!-- removed from view 2026-10-21 (owner); ids kept for the page's scripts -->
             <div class="mc-card">
                 <h3>
                     Murojaatlar prognozi
@@ -8530,7 +8530,7 @@
                 // Survey admin panel: master only
                 const surveyAdminSection = document.getElementById('surveyAdminSection');
                 if (surveyAdminSection) {
-                    surveyAdminSection.style.display = data.role === 'master' ? '' : 'none';
+                    surveyAdminSection.style.display = 'none'; // the survey panel is retired (2026-10-21)
                 }
                 // Coverage gaps panel: master only
                 const coverageSection = document.getElementById('coverageSection');
@@ -9164,7 +9164,7 @@
             try {
                 const response = await fetch('/api/monte-carlo');
                 const data = await response.json();
-                renderForecast(data.volume);
+                // the forecast is retired (2026-10-21): its section stays hidden, nothing is computed
                 renderResolution(data.resolution);
             } catch (error) {
                 console.error('Error loading Monte Carlo:', error);
