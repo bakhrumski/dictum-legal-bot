@@ -21,6 +21,14 @@ const LEX_SEARCH_URL = 'https://lex.uz/search/nat';
 const MAX_DOCS_TO_FETCH = 2;
 const MAX_EXCERPT_CHARS = 4000;
 const SEARCH_TIMEOUT_MS = 15000;
+// One document read (a historical version followed to the current one
+// included). httpGet's own socket timeout is 60 s, and the candidates of one
+// search are read one after another, so without this a slow lex.uz alone
+// could spend a request's whole AI_REQUEST_MAX_MS (2026-10-22: a Telegram
+// answer used ~29 s of AI calls and still hit the 120 s limit before its
+// claim check). The read itself is not cancelled - it may still fill the
+// cache - it is only no longer waited for.
+const DOC_FETCH_MAX_MS = () => Math.max(1000, Number(process.env.LEX_FETCH_MAX_MS) || 15000);
 const DOCUMENT_CACHE_TTL_MS = Math.max(
   60_000,
   Number.parseInt(process.env.LEX_DOCUMENT_CACHE_TTL_MS || String(24 * 60 * 60 * 1000), 10) || 24 * 60 * 60 * 1000
@@ -64,7 +72,12 @@ async function searchLexUz(query, opts = {}) {
     // known acts by address (a named special status), inspected first and
     // kept only when the page's own title matches
     pinnedDocs = [],
+    // epoch ms: no read starts after it, and a running one is waited for only
+    // until it; what was found by then is returned
+    deadline = 0,
   } = opts;
+  const startedAt = Date.now();
+  const leftMs = () => (deadline ? deadline - Date.now() : Infinity);
   const effectiveScoreText = [scoreText || query, TOPIC_SCORE_HINTS[String(topic || '').toLowerCase()] || '']
     .filter(Boolean)
     .join(' ');
@@ -77,7 +90,8 @@ async function searchLexUz(query, opts = {}) {
 
   let html = '';
   try {
-    html = await fetchCachedSearchPage(searchUrl);
+    if (leftMs() <= 0) throw new Error('time limit reached before the search');
+    html = await within(fetchCachedSearchPage(searchUrl), Math.min(SEARCH_TIMEOUT_MS, leftMs()));
   } catch (err) {
     console.warn(`[LEX-LIVE] Search page fetch failed: ${err.message}`);
   }
@@ -139,10 +153,14 @@ async function searchLexUz(query, opts = {}) {
       console.warn(`[LEX-LIVE] Candidate inspection capped at ${inspectionLimit}`);
       break;
     }
+    if (leftMs() <= 0) {
+      console.warn(`[LEX-LIVE] Time limit reached, ${results.length} documents kept`);
+      break;
+    }
     inspectedCandidates += 1;
     const docUrl = candidate.url;
     try {
-      const doc = await fetchCachedLexDocument(docUrl);
+      const doc = await within(fetchCachedLexDocument(docUrl), Math.min(DOC_FETCH_MAX_MS(), leftMs()));
       if (!doc.body || doc.body.trim().length === 0) continue;
 
       // Skip if still a historical version after the auto-follow attempt
@@ -202,8 +220,17 @@ async function searchLexUz(query, opts = {}) {
     }
   }
 
-  console.log(`[LEX-LIVE] Returning ${results.length} documents from lex.uz`);
+  console.log(`[LEX-LIVE] Returning ${results.length} documents from lex.uz (${Date.now() - startedAt} ms)`);
   return results;
+}
+
+/** Waits for a lex.uz read at most ms; the read itself goes on. */
+function within(promise, ms) {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`lex.uz time limit ${Math.round(ms)} ms`)), Math.max(0, ms)); }),
+  ]).finally(() => clearTimeout(timer));
 }
 
 /**

@@ -214,6 +214,12 @@ Known state of the suites (Sept 2026):
   found and names up to 4 missing acts as lex.uz terms (never a number
   alone, never another site), searched within `LEX_FOLLOWUP_MAX_MS`; any
   failure keeps round one.
+  Every lex.uz round has a deadline (2026-10-22, after a Telegram answer
+  used ~29 s of AI calls and still reached the 120 s limit before its claim
+  check): `LEX_LIVE_MAX_MS` (30 s), never past `AI_REQUEST_MAX_MS` minus
+  `LEX_ANSWER_RESERVE_MS` (60 s); one page is waited for at most
+  `LEX_FETCH_MAX_MS` (15 s); a search past the deadline returns what it
+  found. Other `searchLexUz` callers pass no deadline and are unchanged.
   Answer layout (2026-10-13, `src/rag/answer-structure.js`, no AI; the
   sections stay Huquqiy asos / Tahlil / Xulosa): a `> «...»` quote of the
   law is kept only when its words are in a retrieved source word for word
