@@ -482,7 +482,18 @@ Known state of the suites (Sept 2026):
   (`src/agents/agent-routes.js`): missing facts 422 before any charge or AI;
   1 `draft` unit reserved, committed only when a draft came out. Page:
   `/app/#/agent/dava` (`public/app/agent.js`). It does not touch
-  `/api/legal-chat`.
+  `/api/legal-chat`. Second workflow (2026-10-22):
+  `src/agents/workflows/tabular-review.js` - tabular review, up to 20
+  documents x 10 questions: per document the clauses matching the questions
+  (`selectExcerpt`, <= 20 000 chars, the row says when a long document was
+  read in parts), one AI call per document (4 at a time; a failed document
+  is a failed row), each cell's quote checked word for word in the document
+  (page from `[Sahifa n]`; unverified cells keep the answer, marked) - a found
+  quote proves the words are there, not that the answer is right. Route
+  `POST /api/agent/tabular-review` (6 MB body): one `chat` unit per document,
+  reserved together (`reserveMany`), committed per row read, released per
+  row failed. Page `/app/#/jadval` (`public/app/tabular.js`, CSV export);
+  scans are not supported there yet.
 - `src/workspace/` — Platinum Workspace: routes, authz, Supabase
   realtime/storage, Workspace AI.
 - `public/` — static pages: `index.html` (landing), `login.html`,

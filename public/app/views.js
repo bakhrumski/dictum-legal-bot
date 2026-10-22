@@ -69,7 +69,9 @@
     var body = $('.an-body', v), doc = null, file = null;
     function stepDrop() {
       doc = null; file = null;
-      body.innerHTML = '<label class="drop"><span class="drop-ic">' + J.icon('up') + '</span><b>' + esc(t('an.drop')) + '</b><small>' + esc(t('an.types')) + '</small><span class="pill sm ghost drop-btn">' + esc(t('an.pick')) + '</span><input type="file" hidden accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.webp,.heic,.tif,.tiff,image/*"></label>' +
+      // many documents at once: the tabular review (tabular.js)
+      var tableCard = J.tabularText ? '<div class="card" style="margin-bottom:18px;display:flex;gap:14px;align-items:center;flex-wrap:wrap"><div style="flex:1;min-width:220px"><h4>' + J.icon('layers') + ' ' + esc(J.tabularText('entry')) + '</h4><p class="muted" style="font-size:14px">' + esc(J.tabularText('sub')) + '</p></div><a class="pill ghost" href="#/jadval">' + esc(J.tabularText('open')) + '<i>→</i></a></div>' : '';
+      body.innerHTML = tableCard + '<label class="drop"><span class="drop-ic">' + J.icon('up') + '</span><b>' + esc(t('an.drop')) + '</b><small>' + esc(t('an.types')) + '</small><span class="pill sm ghost drop-btn">' + esc(t('an.pick')) + '</span><input type="file" hidden accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.webp,.heic,.tif,.tiff,image/*"></label>' +
         '<div class="an-gets">' + t('an.gets').map(function (x, i) { return '<div class="an-get"><span class="an-gi">' + J.icon(['flag', 'doc', 'scale'][i]) + '</span><div><b>' + esc(x[0]) + '</b><small>' + esc(x[1]) + '</small></div></div>'; }).join('') + '</div>';
       var drop = $('.drop', body), inp = $('input', body);
       inp.onchange = function () { if (inp.files[0]) take(inp.files[0]); };
