@@ -28,7 +28,7 @@ const SEARCH_TIMEOUT_MS = 15000;
 // answer used ~29 s of AI calls and still hit the 120 s limit before its
 // claim check). The read itself is not cancelled - it may still fill the
 // cache - it is only no longer waited for.
-const DOC_FETCH_MAX_MS = () => Math.max(1000, Number(process.env.LEX_FETCH_MAX_MS) || 15000);
+const DOC_FETCH_MAX_MS = () => Math.max(1000, Number(process.env.LEX_FETCH_MAX_MS) || 30000);
 const DOCUMENT_CACHE_TTL_MS = Math.max(
   60_000,
   Number.parseInt(process.env.LEX_DOCUMENT_CACHE_TTL_MS || String(24 * 60 * 60 * 1000), 10) || 24 * 60 * 60 * 1000

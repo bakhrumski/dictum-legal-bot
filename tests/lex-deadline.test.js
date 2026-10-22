@@ -93,7 +93,7 @@ const QUERY = 'pudratchi ishni bajarmadi avans';
   await test('the answer pipeline gives every lex.uz round a deadline that keeps time for the answer and its checks', () => {
     const server = fs.readFileSync(path.join(__dirname, '../src/api/server.js'), 'utf8');
     assert.match(server, /process\.env\.LEX_ANSWER_RESERVE_MS\) \|\| 60000/u);
-    assert.match(server, /process\.env\.LEX_LIVE_MAX_MS\) \|\| 30000/u);
+    assert.match(server, /Number\(process\.env\.LEX_LIVE_MAX_MS\) > 0 \? Number\(process\.env\.LEX_LIVE_MAX_MS\) : Infinity/u, 'no cap of its own by default');
     assert.match(server, /const runLexSteps = \(steps, deadline = lexDeadline\(\)\) =>/u);
     assert.match(server, /searchLexUz\(step\.query, \{\n\s+deadline,/u);
   });
