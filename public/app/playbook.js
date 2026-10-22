@@ -9,7 +9,7 @@
     uz: {
       title: 'Playbook bo‘yicha tekshiruv', sub: 'Shartnomani firmangizning o‘z qoidalari bilan solishtiring: qaysi band talabga mos, qaysi biri farq qiladi yoki yo‘q — va o‘rniga taklif matni.',
       pick: '1. Playbook tanlang', builtin: 'Tayyor', mine: 'Meniki', newPb: 'Yangi playbook', copy: 'Nusxa olib tahrirlash', edit: 'Tahrirlash', del: 'O‘chirish', rules: 'qoida',
-      doc: '2. Shartnomani yuklang', upload: 'PDF yoki DOCX tanlash', reading: 'O‘qilmoqda…', scanned: 'Skan hujjat — hozircha qo‘llab-quvvatlanmaydi', bad: 'Faylni o‘qib bo‘lmadi',
+      doc: '2. Shartnomani yuklang', upload: 'PDF, DOCX yoki skan tanlash', reading: 'O‘qilmoqda…', scanned: 'Skan hujjat — hozircha qo‘llab-quvvatlanmaydi', bad: 'Faylni o‘qib bo‘lmadi',
       run: 'Solishtirish', cost: 'Tahlil birligi shartnoma hajmiga qarab (40 000 belgigacha — 1 birlik); faqat natija chiqsa yechiladi.',
       working: 'Shartnoma qoidalar bilan solishtirilmoqda…', need: 'Playbook tanlang va shartnoma yuklang',
       st: { mos: 'Mos', farq: 'Farq qiladi', yoq: 'Band yo‘q', noaniq: 'Noaniq' }, sev: { high: 'Muhim', medium: 'O‘rta', low: 'Past' },
@@ -22,7 +22,7 @@
     ru: {
       title: 'Проверка по плейбуку', sub: 'Сравните договор с правилами вашей фирмы: какой пункт соответствует, какой отличается или отсутствует — и предложенная формулировка.',
       pick: '1. Выберите плейбук', builtin: 'Готовые', mine: 'Мои', newPb: 'Новый плейбук', copy: 'Скопировать и изменить', edit: 'Изменить', del: 'Удалить', rules: 'правил',
-      doc: '2. Загрузите договор', upload: 'Выбрать PDF или DOCX', reading: 'Читается…', scanned: 'Скан — пока не поддерживается', bad: 'Не удалось прочитать файл',
+      doc: '2. Загрузите договор', upload: 'Выбрать PDF, DOCX или скан', reading: 'Читается…', scanned: 'Скан — пока не поддерживается', bad: 'Не удалось прочитать файл',
       run: 'Сравнить', cost: 'Единицы анализа по объёму договора (до 40 000 знаков — 1); списываются только при результате.',
       working: 'Договор сравнивается с правилами…', need: 'Выберите плейбук и загрузите договор',
       st: { mos: 'Соответствует', farq: 'Отличается', yoq: 'Нет пункта', noaniq: 'Неясно' }, sev: { high: 'Важно', medium: 'Средне', low: 'Низко' },
@@ -57,7 +57,7 @@
       body.innerHTML = '<div class="card" style="margin-bottom:18px"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px"><h4 style="margin:0">' + esc(s('pick')) + '</h4><button class="pill sm ghost" data-a="new" type="button">+ ' + esc(s('newPb')) + '</button></div>' +
         (data.mine.length ? '<p class="muted pb-gh">' + esc(s('mine')) + '</p><div class="pb-grid">' + data.mine.map(function (p) { return card(p, 'm'); }).join('') + '</div>' : '') +
         '<p class="muted pb-gh">' + esc(s('builtin')) + '</p><div class="pb-grid">' + data.builtin.map(function (p) { return card(p, 'b'); }).join('') + '</div></div>' +
-        '<div class="card"><h4>' + esc(s('doc')) + '</h4><div class="pb-doc" style="margin:10px 0 14px"></div><label class="pill ghost sm" style="cursor:pointer">' + J.icon('up') + esc(s('upload')) + '<input type="file" hidden accept=".pdf,.docx"></label></div>' +
+        '<div class="card"><h4>' + esc(s('doc')) + '</h4><div class="pb-doc" style="margin:10px 0 14px"></div><label class="pill ghost sm" style="cursor:pointer">' + J.icon('up') + esc(s('upload')) + '<input type="file" hidden accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,.heic,image/*"></label></div>' +
         '<div class="pb-miss"></div><div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:18px"><button class="pill" data-a="run" type="button">' + esc(s('run')) + '<i>→</i></button><span class="muted" style="font-size:13px">' + esc(s('cost')) + '</span></div>';
       drawDoc();
       $$('.pb-card', body).forEach(function (c) {
@@ -74,11 +74,16 @@
       $('input[type=file]', body).onchange = async function () {
         var f = this.files[0]; if (!f) return;
         doc = { name: f.name, status: 'reading' }; drawDoc();
-        var fd = new FormData(); fd.append('file', f);
-        var r = await J.api('/api/analyze/extract', { method: 'POST', body: fd });
-        if (r.ok && r.data && r.data.scanned) doc.status = 'scanned';
-        else if (r.ok && r.data && r.data.text) { doc.status = 'ok'; doc.text = r.data.text; }
-        else doc.status = 'bad';
+        // a scan goes through the shared OCR step for an analysis (price confirmed first;
+        // the analysis units it holds are the ones this review uses)
+        try {
+          var r = await J.readFile(f, J.scanConfirm, 'analysis');
+          doc.status = 'ok';
+          if (r.scanId) { doc.scanId = r.scanId; doc.chars = r.chars || 0; } else { doc.text = r.text; doc.chars = r.text.length; }
+        } catch (e) {
+          if (e && e.message === 'cancel') { doc = null; drawDoc(); return; }
+          doc.status = 'bad'; doc.error = e && e.message;
+        }
         drawDoc();
       };
       $('[data-a=run]', body).onclick = run;
@@ -87,7 +92,7 @@
       var box = $('.pb-doc', body); if (!box) return;
       if (!doc) { box.innerHTML = ''; return; }
       box.innerHTML = '<div class="pb-file">' + J.icon('doc') + '<span>' + esc(doc.name) + '</span><small class="' + (doc.status === 'ok' ? 'muted' : doc.status === 'reading' ? 'muted' : 'err') + '">' +
-        (doc.status === 'ok' ? Math.round(doc.text.length / 1000) + 'k' : esc(s(doc.status === 'reading' ? 'reading' : doc.status))) + '</small></div>';
+        (doc.status === 'ok' ? (doc.scanId ? 'OCR · ' : '') + Math.round((doc.chars || 0) / 1000) + 'k' : esc(doc.status === 'bad' && doc.error ? doc.error : s(doc.status === 'reading' ? 'reading' : doc.status))) + '</small></div>';
     }
 
     function editor(p) {
@@ -129,7 +134,7 @@
 
     async function run() {
       if (!chosen || !doc || doc.status !== 'ok') { $('.pb-miss', body).innerHTML = '<div class="note-blue" style="margin-top:14px">' + esc(s('need')) + '</div>'; return; }
-      var payload = { text: doc.text, name: doc.name };
+      var payload = doc.scanId ? { scanId: doc.scanId, name: doc.name } : { text: doc.text, name: doc.name };
       if (chosen.kind === 'b') payload.builtin = chosen.id; else payload.playbookId = Number(chosen.id);
       body.innerHTML = '<div class="card" style="display:flex;gap:12px;align-items:center"><span class="spin"></span>' + esc(s('working')) + '</div>';
       var r = await J.api('/api/agent/playbook-review', { method: 'POST', body: payload });

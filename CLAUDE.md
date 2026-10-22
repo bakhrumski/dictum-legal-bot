@@ -493,7 +493,10 @@ Known state of the suites (Sept 2026):
   `POST /api/agent/tabular-review` (6 MB body): one `chat` unit per document,
   reserved together (`reserveMany`), committed per row read, released per
   row failed. Page `/app/#/jadval` (`public/app/tabular.js`, CSV export);
-  scans are not supported there yet. Third workflow (2026-10-22):
+  a scan goes through the shared OCR step (`J.readFile` -> scan-quote ->
+  confirmed ocr-image, service `chat`: the OCR pages from the plan's pool)
+  and is sent as `scanId` (this account's only, from `document_scans`;
+  `=== PAGE n ===` marks give the page). Third workflow (2026-10-22):
   `src/agents/workflows/playbook-review.js` - a contract against a firm's
   own rules (not the law): clauses matching the rules (`selectExcerpt`), one
   AI call (mos / farq / yoq / noaniq, the clause's words, a note, a proposed
@@ -503,8 +506,10 @@ Known state of the suites (Sept 2026):
   `playbooks` (migration 018, 30 per account, owner-only CRUD
   `/api/playbooks`). `POST /api/agent/playbook-review`: analysis units by the
   contract's size (docUnits, page marks not counted), committed on a
-  result. Page `/app/#/playbook` (`public/app/playbook.js`, editor, Word
-  report).
+  result; a scanned contract comes as `scanId` from the OCR step for
+  `analysis`, and the analysis units that step held are adopted
+  (`heldScanJob`) - never charged twice. Page `/app/#/playbook`
+  (`public/app/playbook.js`, editor, Word report).
 - `src/workspace/` — Platinum Workspace: routes, authz, Supabase
   realtime/storage, Workspace AI.
 - `public/` — static pages: `index.html` (landing), `login.html`,

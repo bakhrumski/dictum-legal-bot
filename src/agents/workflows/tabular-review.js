@@ -52,7 +52,8 @@ function readInput(input = {}) {
 /** The page a position falls on, from the last "[Sahifa n]" mark before it. */
 function pageAt(text, index) {
   let page = null;
-  for (const m of String(text).slice(0, index).matchAll(/\[Sahifa (\d+)\]/gu)) page = Number(m[1]);
+  // "[Sahifa n]" from a text PDF, "=== PAGE n ===" from an OCR reading of a scan
+  for (const m of String(text).slice(0, index).matchAll(/\[Sahifa (\d+)\]|=== PAGE (\d+) ===/gu)) page = Number(m[1] || m[2]);
   return page;
 }
 

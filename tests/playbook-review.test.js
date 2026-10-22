@@ -139,6 +139,24 @@ const AI_RESULTS = [
     assert.ok(fs.existsSync(path.join(__dirname, '../migrations/down/20261022_018_playbooks.down.sql')));
   });
 
+  await test('scans: a scanned contract uses the analysis units its OCR step held (no second charge)', async () => {
+    const SCAN = '11111111-2222-3333-4444-555555555555';
+    const routes = {}, calls = [];
+    const app = {}; for (const m of ['get', 'post', 'put', 'delete']) app[m] = (p, ...fns) => { routes[`${m} ${p}`] = fns[fns.length - 1]; };
+    const pool = { async query(sql, p) { return { rows: /document_scans/u.test(sql) && p[0] === SCAN && p[1] === 5 ? [{ id: SCAN, text: CONTRACT.replace('[Sahifa 1]', '=== PAGE 1 ===').replace('[Sahifa 2]', '=== PAGE 2 ==='), pages: 2, file_hash: 'fh' }] : [] }; } };
+    mountPlaybookRoutes(app, { requireAuth: () => {}, requireSameOrigin: () => {}, callAI: stub(AI_RESULTS).callAI, pool, ledger: {
+      docUnits: () => ({ units: 1 }),
+      heldScanJob: async (o) => { calls.push(['held', o.fileHash, o.service]); return { job_key: 'held1', units: 1 }; },
+      reserve: async () => { calls.push(['reserve']); return { allowed: true, jobKey: 'new' }; },
+      commit: async (k) => calls.push(['commit', k]), release: async (k) => calls.push(['release', k]) } });
+    const res = { code: 200, status(c) { this.code = c; return this; }, json(b) { this.body = b; return this; } };
+    await routes['post /api/agent/playbook-review']({ body: { scanId: SCAN, builtin: 'supply_buyer' }, params: {}, session: { adminId: 5 } }, res);
+    assert.strictEqual(res.code, 200);
+    assert.deepStrictEqual(calls, [['held', 'fh', 'analysis'], ['commit', 'held1']]);
+    const r2 = res.body.results.find(x => x.id === 'r2');
+    assert.strictEqual(r2.page, 2, 'page from the OCR marks');
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed) process.exit(1);
 })();
