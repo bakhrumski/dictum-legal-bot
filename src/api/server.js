@@ -4573,6 +4573,13 @@ try {
   }));
   // the AI draft of an ordered document, as the website writes it
   require('../bot/bot').setDraftGenerator((docType, details) => require('../drafting/routes').generateDraftHtml({ docType, details, callAI }));
+  // a da'vo arizasi ordered in the bot is drafted by the claim agent (src/agents/telegram-claim.js)
+  if (String(process.env.TG_CLAIM_AGENT || 'on').toLowerCase() !== 'off') {
+    require('../bot/bot').setClaimAgent(require('../agents/telegram-claim').createTelegramClaimAgent({
+      callAI, callCheapAI, generateDraftHtml: require('../drafting/routes').generateDraftHtml,
+      retrieve: (query, topic) => retrieveLegalContext(query, topic, null, {}),
+    }));
+  }
 } catch (e) {
   console.warn('[TG-DOC] document analyzer not set:', e.message);
 }
