@@ -81,6 +81,11 @@ function deps({ facts = null } = {}) {
     assert.match(bot, /await resumeClaimAgent\(msg\)\) return;/u);
     assert.match(bot, /ledger\.release\(job\.jobKey, 'claim_failed'\)/u);
     assert.match(bot, /setClaimAgent: \(a\) =>/u);
+    // the agent note is shown whether the draft is paid by a unit or by Stars
+    assert.strictEqual((bot.match(/\$\{agentNote\}|\+ agentNote/gu) || []).length, 2);
+    // the order's "Bekor qilish" ends the wait for details and any claim question
+    assert.match(bot, /if \(data === 'docin_cancel'\) \{\n\s+await require\('\.\.\/agents\/telegram-agent'\)\.setConversationState\(chatId, 'idle', \{\}\);\n\s+claimAwait\.delete\(String\(chatId\)\);/u);
+    assert.match(bot, /callback_data: 'docin_cancel'/u);
     const server = fs.readFileSync(path.join(__dirname, '../src/api/server.js'), 'utf8');
     assert.match(server, /process\.env\.TG_CLAIM_AGENT \|\| 'on'/u);
     assert.match(server, /setClaimAgent\(require\('\.\.\/agents\/telegram-claim'\)\.createTelegramClaimAgent/u);

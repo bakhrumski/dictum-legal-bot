@@ -389,7 +389,18 @@ function classifyDeterministicIntent(text) {
   return null;
 }
 
+// A document order waits for its details only so long (2026-10-22: the
+// owner chose "Da'vo arizasi", wrote nothing, and a legal question asked
+// 2.5 hours later was taken as the order's details). DOC_INTAKE_TTL_MIN.
+const DOC_INTAKE_TTL_MS = () => Math.max(1, Number(process.env.DOC_INTAKE_TTL_MIN) || 30) * 60000;
+
+function docIntakeExpired(context = {}, now = Date.now()) {
+  const at = Number(context && context.intakeAt);
+  return !Number.isFinite(at) || at <= 0 || now - at > DOC_INTAKE_TTL_MS();
+}
+
 async function setConversationState(chatId, state, context) {
+  if (state === 'document_details' && context && !context.intakeAt) context = { ...context, intakeAt: Date.now() };
   try {
     await ensureTable();
     const hasContext = context !== undefined;
@@ -791,7 +802,9 @@ async function handleUserMessage({ chatId, text, firstName = '', testAccount = n
   if (!question)    return skip('empty message');
 
   const started = Date.now();
-  const { turns, clarifyCount, mode, state, context } = await loadConversation(chatId);
+  const conversation = await loadConversation(chatId);
+  const { turns, clarifyCount, mode } = conversation;
+  let { state, context } = conversation;
 
   // Who pays: the Telegram sender, or the ordinary account linked to them
   // (one allowance for linked Telegram and web accounts).
@@ -857,6 +870,12 @@ Agar texnik uzilish yuz bersa, limitingiz avtomatik tiklanadi.`,
   // Button-selected states already tell us the user's intent. Do not spend an
   // LLM call reclassifying a number, a document intake, or an advocate case.
   let intent;
+  if (state === 'document_details' && docIntakeExpired(context)) {
+    console.log('[TG-AGENT] document order intake expired; the message is handled as a new one');
+    await setConversationState(chatId, 'idle', {});
+    state = 'idle';
+    context = {};
+  }
   if (state === 'awaiting_attorney_choice' || state === 'attorney_problem') {
     intent = {
       intent: 'advokat_kerak',
@@ -1177,7 +1196,7 @@ Agar texnik uzilish yuz bersa, limitingiz avtomatik tiklanadi.`,
   // ── Paid document preparation ──────────────────────────────────────────
   if (intent.intent === 'hujjat_tayyorlash') {
     if (state !== 'document_details') {
-      const reply = "Hujjat tayyorlash pullik xizmat hisoblanadi va buyurtma mas'ul yurist tasdig'idan keyin qabul qilinadi. Kerakli hujjat turini quyidagi tugmalardan tanlang:";
+      const reply = "Hujjatni ikki yo'l bilan tayyorlash mumkin: 🤖 AI loyiha darhol, Word faylda; 👨‍⚖️ yoki yurist - narxni yurist belgilaydi, rozilik berguningizcha to'lov yo'q. Kerakli hujjat turini quyidagi tugmalardan tanlang:";
       await setConversationState(chatId, 'document_type', {});
       await remember(reply, 0);
       return complete({
@@ -1192,7 +1211,7 @@ Agar texnik uzilish yuz bersa, limitingiz avtomatik tiklanadi.`,
     const serviceSlug = String(context.serviceSlug || detectServiceSlug(question));
     const documentTypeLabel = String(context.documentTypeLabel || 'Yuridik hujjat');
     const caseSummary = [context.caseSummary, question].filter(Boolean).join('\n\nQo\'shimcha ma\'lumot:\n');
-    const reply = `*${documentTypeLabel}* bo'yicha ma'lumotlaringiz qabul qilindi. Bu pullik xizmat hisoblanadi. Buyurtma faqat mas'ul yurist ko'rib chiqib, ruxsat berganidan keyin ishga olinadi.\n\nNarx va bajarish shartlari tasdiqlangach sizga alohida xabar beriladi.`;
+    const reply = `*${documentTypeLabel}* bo'yicha ma'lumotlaringiz qabul qilindi va yuristga yuborildi. Yurist narx va muddatni belgilaydi - rozilik berguningizcha to'lov yo'q, javob shu yerga keladi.`;
     await remember(reply, 0);
     return complete({
       handled: true,
@@ -1514,6 +1533,7 @@ function splitForTelegram(text, limit = TG_LIMIT) {
 }
 
 module.exports = {
+  docIntakeExpired,
   initTelegramAgent,
   telegramAnswerMaxTokens,
   stripModelDisclaimer,
