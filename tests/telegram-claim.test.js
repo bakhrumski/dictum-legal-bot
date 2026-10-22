@@ -81,11 +81,16 @@ function deps({ facts = null } = {}) {
     assert.match(bot, /await resumeClaimAgent\(msg\)\) return;/u);
     assert.match(bot, /ledger\.release\(job\.jobKey, 'claim_failed'\)/u);
     assert.match(bot, /setClaimAgent: \(a\) =>/u);
-    // the agent note is shown whether the draft is paid by a unit or by Stars
-    assert.strictEqual((bot.match(/\$\{agentNote\}|\+ agentNote/gu) || []).length, 2);
+    // the agent note is shown in every offer: test mode, a unit, Stars
+    assert.strictEqual((bot.match(/\$\{agentNote\}|\+ agentNote/gu) || []).length, 3);
     // the order's "Bekor qilish" ends the wait for details and any claim question
     assert.match(bot, /if \(data === 'docin_cancel'\) \{\n\s+await require\('\.\.\/agents\/telegram-agent'\)\.setConversationState\(chatId, 'idle', \{\}\);\n\s+claimAwait\.delete\(String\(chatId\)\);/u);
     assert.match(bot, /callback_data: 'docin_cancel'/u);
+    // a master in /testmode drafts with no unit and no Stars, under the test budget (owner, 2026-10-22)
+    assert.match(bot, /job = await masterDraftTest\(chatId, from\)\n\s+\? \{ allowed: true, jobKey: null, testMode: true \}\n\s+: await ledger\.reserve\(/u);
+    assert.match(bot, /if \(await masterDraftTest\(chatId, from\)\) \{\n\s+await bot\.sendMessage\(chatId,\n\s+"🤖 Kutmasdan loyiha kerakmi\?[^"]*🧪 Test rejimi: birlik ham, Stars ham olinmaydi/u);
+    assert.match(bot, /return account && !account\.exhausted \? account : null;/u, 'a spent test budget falls back to the ordinary rules');
+    assert.match(bot, /isMaster: !!\(linked && isMasterRole\(linked\.role\)\)/u, 'master read from the database');
     const server = fs.readFileSync(path.join(__dirname, '../src/api/server.js'), 'utf8');
     assert.match(server, /process\.env\.TG_CLAIM_AGENT \|\| 'on'/u);
     assert.match(server, /setClaimAgent\(require\('\.\.\/agents\/telegram-claim'\)\.createTelegramClaimAgent/u);

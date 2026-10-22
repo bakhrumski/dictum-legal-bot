@@ -386,7 +386,10 @@ Known state of the suites (Sept 2026):
   like the test account below (`resolveMasterTestMode`): master role read
   from the database, own private chat, the 12 h session as the window, its
   own budget `TG_MASTER_TESTMODE_BUDGET_USD` ($5); `TG_MASTER_TESTMODE_UNLIMITED=off`
-  restores the limits.
+  restores the limits. Since 2026-10-22 (owner) that master also gets the AI
+  draft and the claim agent with no unit and no Stars (`masterDraftTest`):
+  nothing reserved or committed, the calls under the same test budget; a
+  spent budget falls back to the ordinary rules.
   Separately, one ordinary (role `user`) account can be a test account
   (`src/bot/test-account.js`, `TG_TEST_ACCOUNT_*`): by the Telegram user id
   linked in `admins.telegram_user_id`, never a username; no daily limit or
