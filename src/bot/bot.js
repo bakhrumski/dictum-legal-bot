@@ -233,6 +233,26 @@ async function serviceUnitsLeft(who, service) {
   return plan + Number((b.oneTime && b.oneTime[service]) || 0);
 }
 
+// A master in /testmode tries the AI draft (and the claim agent) with no
+// unit and no Stars: its AI calls run under the test mode's own budget (the
+// callback and message handlers attach it: testAccountFor), nothing is
+// reserved or committed (owner, 2026-10-22). null when that does not apply.
+async function masterDraftTest(chatId, from) {
+  if (!from || !inAdminTestMode(chatId)) return null;
+  try {
+    const linked = await getLinkedAccount(pool, chatId, from.id);
+    const expiresAt = adminTestMode.get(chatId);
+    const account = await testAccounts.resolveMasterTestMode(pool, {
+      chatId, chatType: 'private', fromUserId: from.id,
+      isMaster: !!(linked && isMasterRole(linked.role)), startedAt: expiresAt - TEST_MODE_TTL_MS, expiresAt,
+    });
+    return account && !account.exhausted ? account : null;
+  } catch (e) {
+    console.warn('[TG-DRAFT] master test mode check failed; ordinary rules apply:', e.message);
+    return null;
+  }
+}
+
 /** "AI loyiha" when the person has a draft unit; else the one-time purchase, which then drafts at once. */
 function draftPurchaseMarkup(chatId, from) {
   oneTimeSales.setResume(chatId, 'draft', () => startAiDraft(chatId, from));
@@ -259,6 +279,12 @@ async function offerAiDraft(chatId, meta = {}, from = null) {
     try { left = await serviceUnitsLeft(await telegramIdentity({ chat: { id: chatId, type: 'private' }, from }), 'draft'); } catch (_) { left = 1; }
   }
   const agentNote = meta.serviceSlug === 'claim' && claimAgent ? "\n⚖️ Da'vo arizasini agent tayyorlaydi: lex.uz'dan asos qidiradi, iqtiboslarni manbada tekshiradi va loyihani shu asosda yozadi." : '';
+  if (await masterDraftTest(chatId, from)) {
+    await bot.sendMessage(chatId,
+      "🤖 Kutmasdan loyiha kerakmi? AI hozir shu ma'lumotlar asosida hujjat loyihasini Word faylda tayyorlaydi.\n🧪 Test rejimi: birlik ham, Stars ham olinmaydi; xarajat test budjetidan." + agentNote,
+      { reply_markup: { inline_keyboard: [[{ text: '🤖 AI loyiha — test rejimi', callback_data: 'tgdraft_ai' }]] } }).catch(() => {});
+    return;
+  }
   if (left > 0) {
     await bot.sendMessage(chatId,
       "🤖 Kutmasdan loyiha kerakmi? AI hozir shu ma'lumotlar asosida hujjat loyihasini Word faylda tayyorlaydi — tarifingizdagi 1 ta hujjat birligi sarflanadi. Yurist buyurtmasi ham saqlanib qoladi." + agentNote,
@@ -285,7 +311,9 @@ async function startAiDraft(chatId, from) {
   const who = await telegramIdentity({ chat: { id: chatId, type: 'private' }, from });
   let job;
   try {
-    job = await ledger.reserve({ adminId: who.adminId || null, telegramUserId: who.telegramUserId || from.id, service: 'draft', units: 1, channel: 'telegram', endpoint: '/tg/draft' });
+    job = await masterDraftTest(chatId, from)
+      ? { allowed: true, jobKey: null, testMode: true }
+      : await ledger.reserve({ adminId: who.adminId || null, telegramUserId: who.telegramUserId || from.id, service: 'draft', units: 1, channel: 'telegram', endpoint: '/tg/draft' });
   } catch (e) {
     console.warn('[TG-DRAFT] reserve failed:', e.message);
     await bot.sendMessage(chatId, "Limitni hozir tekshirib bo'lmadi. Birozdan keyin qayta urinib ko'ring.").catch(() => {});
