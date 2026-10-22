@@ -351,6 +351,12 @@ Known state of the suites (Sept 2026):
   `/app/#/boshqaruv/ochirish`: personal fields scrubbed, web chats deleted,
   sessions revoked, bot texts replaced; tariff, usage and payment rows kept
   without personal data; staff accounts refused.
+  A document order waits for its details 30 minutes (`DOC_INTAKE_TTL_MIN`,
+  `intakeAt` stamped by `setConversationState`; 2026-10-22: a legal question
+  asked 2.5 hours after choosing "Da'vo arizasi" was taken as the order's
+  details); after that, or on its "❌ Bekor qilish" (`docin_cancel`), the
+  next message is a new one. The intake texts name both ways (AI draft now,
+  lawyer priced by the lawyer, nothing paid until agreed).
   Also since 2026-10-20 (landing promises): a linked account's bot Q&A is
   appended to its web chats (`src/services/telegram-history.js`, topic
   'telegram', one per Tashkent day); a paid document order in the bot can be

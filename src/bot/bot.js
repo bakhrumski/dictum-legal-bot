@@ -267,7 +267,7 @@ async function offerAiDraft(chatId, meta = {}, from = null) {
   }
   const p = require('../rag/one-time-products');
   await bot.sendMessage(chatId,
-    `🤖 Kutmasdan loyiha kerakmi? AI hozir shu ma'lumotlar asosida hujjat loyihasini Word faylda tayyorlaydi.\nNarx: ${p.formatUzs(p.PRODUCTS.draft.priceUzs)} — hozircha Telegram Stars orqali ${p.starsFor('draft')} ⭐ (bir martalik). To'lovdan keyin loyiha darhol tayyorlanadi; xatoda birlik qaytariladi.\nYurist buyurtmasi ham saqlanib qoladi: uning narxini yurist belgilaydi.`,
+    `🤖 Kutmasdan loyiha kerakmi? AI hozir shu ma'lumotlar asosida hujjat loyihasini Word faylda tayyorlaydi.\nNarx: ${p.formatUzs(p.PRODUCTS.draft.priceUzs)} — hozircha Telegram Stars orqali ${p.starsFor('draft')} ⭐ (bir martalik). To'lovdan keyin loyiha darhol tayyorlanadi; xatoda birlik qaytariladi.\nYurist buyurtmasi ham saqlanib qoladi: uning narxini yurist belgilaydi.${agentNote}`,
     { reply_markup: draftPurchaseMarkup(chatId, from) }).catch(() => {});
 }
 async function runAiDraft(callbackQuery) {
@@ -790,6 +790,14 @@ async function handleCallbackQuery(callbackQuery) {
 
   // a document's AI analysis or its lawyer queue (src/bot/telegram-documents.js)
   if (await documentFlow.onCallback(callbackQuery)) return;
+  // a document order waiting for its details is dropped: the next message is a new one
+  if (data === 'docin_cancel') {
+    await require('../agents/telegram-agent').setConversationState(chatId, 'idle', {});
+    claimAwait.delete(String(chatId));
+    await bot.answerCallbackQuery(callbackQuery.id, { text: 'Bekor qilindi' }).catch(() => {});
+    await bot.sendMessage(chatId, "Buyurtma bekor qilindi. Huquqiy savolingizni yozavering.").catch(() => {});
+    return;
+  }
   if (data === 'tgdraft_ai') { await runAiDraft(callbackQuery); return; }
   if (data === 'tgdraft_review') { await orderLawyerReview(callbackQuery); return; }
   if (await oneTimeSales.onCallback(callbackQuery)) return;
@@ -934,7 +942,8 @@ async function handleCallbackQuery(callbackQuery) {
           '',
           questions,
           "Shaxsiy maxfiy ma'lumotlarni hozircha yubormang.",
-        ].filter(Boolean).join('\n'), { parse_mode: 'Markdown' });
+          "Buyurtma 30 daqiqa kutadi; savol bermoqchi bo'lsangiz, ❌ Bekor qilish.",
+        ].filter(Boolean).join('\n'), { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '❌ Bekor qilish', callback_data: 'docin_cancel' }]] } });
         return;
       }
 
