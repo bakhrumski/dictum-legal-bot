@@ -158,7 +158,7 @@
       body.innerHTML = '<div class="note-blue" style="margin-bottom:14px">' + esc(s('note')) + (d.excerpt ? ' ' + esc(s('part')) : '') + '</div>' +
         '<div class="card" style="margin-bottom:14px"><div class="kv">' + ['yoq', 'farq', 'noaniq', 'mos'].map(function (k) { return '<div><small>' + esc(s('st')[k]) + '</small><b class="num pb-st st-' + k + '">' + (c[k] || 0) + '</b></div>'; }).join('') + '</div></div>' +
         items.map(itemHtml).join('') +
-        '<div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap"><button class="pill sm" data-a="word" type="button">' + J.icon('word') + esc(s('word')) + '</button><button class="pill sm ghost" data-a="back" type="button">' + esc(s('again')) + '</button></div>';
+        '<div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap"><button class="pill sm" data-a="word" type="button">' + J.icon('word') + esc(s('word')) + '</button>' + (J.wsSaveButton ? J.wsSaveButton() : '') + '<button class="pill sm ghost" data-a="back" type="button">' + esc(s('again')) + '</button></div>';
       $$('.pb-cp', body).forEach(function (b) { b.onclick = function () { navigator.clipboard.writeText(b.parentNode.querySelector('p').textContent).then(function () { J.toast(J.t('act.copied')); }); }; });
       $('[data-a=word]', body).onclick = function () {
         var html = '<p><i>' + esc(s('note')) + '</i></p>' + items.map(function (x) {
@@ -168,6 +168,14 @@
             (x.note ? '<p>' + esc(x.note) + '</p>' : '') + (x.suggestion ? '<p><b>' + esc(s('suggestion')) + ':</b> ' + esc(x.suggestion) + '</p>' : '');
         }).join('');
         J.exportWord(s('title') + (chosen ? ' — ' + chosen.name : ''), html);
+      };
+      var ws = $('[data-a=wssave]', body);
+      if (ws) ws.onclick = function () {
+        var text = items.map(function (x) {
+          var rl = x.rule || {};
+          return (rl.title || '') + ' — ' + s('st')[x.status] + '\n  ' + (rl.requirement || '') + (x.quote ? '\n  «' + x.quote + '»' + (x.page ? ' (' + s('page') + ' ' + x.page + ')' : '') : '') + (x.note ? '\n  ' + x.note : '') + (x.suggestion ? '\n  ' + s('suggestion') + ': ' + x.suggestion : '');
+        }).join('\n\n');
+        J.saveToWorkspace({ title: s('title') + (chosen ? ' — ' + chosen.name : '') + (doc ? ' — ' + doc.name : ''), text: s('note') + '\n\n' + text, json: { type: 'playbook_review', playbook: chosen ? chosen.name : null, document: doc ? doc.name : null, counts: c, results: items } });
       };
       $('[data-a=back]', body).onclick = function () { doc = null; setup(); };
       if (J.refreshTariff) J.refreshTariff();

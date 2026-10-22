@@ -120,7 +120,7 @@
       }).join('');
       body.innerHTML = '<div class="note-blue" style="margin-bottom:14px">' + esc(s('note')) + '</div>' +
         '<div class="tb-wrap"><table class="tb-grid"><thead>' + head + '</thead><tbody>' + trs + '</tbody></table></div>' +
-        '<div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap"><button class="pill sm" data-a="csv" type="button">' + esc(s('csv')) + '</button><button class="pill sm ghost" data-a="back" type="button">' + esc(s('again')) + '</button></div>';
+        '<div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap"><button class="pill sm" data-a="csv" type="button">' + esc(s('csv')) + '</button>' + (J.wsSaveButton ? J.wsSaveButton() : '') + '<button class="pill sm ghost" data-a="back" type="button">' + esc(s('again')) + '</button></div>';
       $$('td[data-r]', body).forEach(function (td) {
         td.onclick = function () {
           var r = rows[+td.dataset.r], c = r.cells[td.dataset.c], col = columns.filter(function (x) { return x.id === td.dataset.c; })[0];
@@ -142,6 +142,15 @@
         var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'jadvalli-tahlil.csv'; a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
       };
       $('[data-a=back]', body).onclick = function () { setup(); };
+      // the table as text (Workspace AI reads it) and as data
+      var ws = $('[data-a=wssave]', body);
+      if (ws) ws.onclick = function () {
+        var text = rows.map(function (r) {
+          if (r.status !== 'ok') return r.name + ': ' + s('failed');
+          return r.name + '\n' + columns.map(function (c) { var x = r.cells[c.id]; return '  • ' + c.label + ': ' + (x.notFound ? s('notfound') : x.answer) + (x.quote ? ' — «' + x.quote + '»' + (x.page ? ' (' + s('page') + ' ' + x.page + ')' : '') + (x.verified ? '' : ' [!]') : ''); }).join('\n');
+        }).join('\n\n');
+        J.saveToWorkspace({ title: s('title') + ' — ' + rows.length + ' ' + s('doc').toLowerCase(), text: s('note') + '\n\n' + text, json: { type: 'tabular_review', columns: columns, rows: rows } });
+      };
       if (J.refreshTariff) J.refreshTariff();
     }
 
