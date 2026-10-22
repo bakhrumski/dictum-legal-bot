@@ -133,6 +133,23 @@ function stubAI({ failFor = null } = {}) {
     assert.strictEqual(h.ai.calls.length, 0);
   });
 
+  await test('scans: a scanId brings the OCR text of this account only; OCR page marks give the page', async () => {
+    const SCAN = '11111111-2222-3333-4444-555555555555';
+    const ocrText = "=== PAGE 1 ===\nIJARA SHARTNOMASI\n=== PAGE 2 ===\n2. Oylik ijara haqi 3 000 000 so'm.\n5. Nizolar sudda hal qilinadi.\n" + 'Qo‘shimcha. '.repeat(10);
+    assert.strictEqual(tr.pageAt(ocrText, tr.findQuote(ocrText, "Oylik ijara haqi 3 000 000 so'm.")), 2);
+    let handler; const app = { post: (p, ...fns) => { handler = fns[fns.length - 1]; } };
+    const pool = { async query(sql, p) { return { rows: /document_scans/u.test(sql) && p[0] === SCAN && p[1] === 5 ? [{ id: SCAN, text: ocrText, pages: 2, file_hash: 'h' }] : [] }; } };
+    const ai = stubAI();
+    mountTabularRoute(app, { requireAuth: () => {}, requireSameOrigin: () => {}, callAI: ai.callAI, pool, ledger: {
+      reserveMany: async (o) => ({ allowed: true, kind: 'paid', jobs: o.jobs.map((j, i) => ({ jobKey: `k${i}` })) }), commit: async () => {}, release: async () => {} } });
+    const call = async (body, adminId = 5) => { const res = { code: 200, status(c) { this.code = c; return this; }, json(b) { this.body = b; return this; } }; await handler({ body, session: { adminId } }, res); return res; };
+    let res = await call({ documents: [{ name: 'skan.pdf', scanId: SCAN }], columns: COLS });
+    assert.strictEqual(res.code, 200);
+    assert.strictEqual(res.body.rows[0].cells.c1.page, 2);
+    res = await call({ documents: [{ name: 'skan.pdf', scanId: SCAN }], columns: COLS }, 6);
+    assert.strictEqual(res.code, 404, "another account's scan is not found");
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed) process.exit(1);
 })();

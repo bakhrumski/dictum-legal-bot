@@ -8,7 +8,7 @@
   var S = {
     uz: {
       title: 'Jadvalli tahlil', sub: 'Bir nechta hujjatni bir vaqtda ko‘ring: har hujjat — qator, har savol — ustun. Har bir javob yonida hujjatdan iqtibos va sahifa.',
-      docs: 'Hujjatlar', add: 'Hujjat qo‘shish', types: 'PDF yoki DOCX, 20 tagacha', reading: 'o‘qilmoqda…', scanned: 'skan — hozircha qo‘llab-quvvatlanmaydi', bad: 'o‘qib bo‘lmadi',
+      docs: 'Hujjatlar', add: 'Hujjat qo‘shish', types: 'PDF, DOCX yoki skan/rasm (OCR — narxi oldin ko‘rsatiladi), 20 tagacha', reading: 'o‘qilmoqda…', scanned: 'skan — hozircha qo‘llab-quvvatlanmaydi', bad: 'o‘qib bo‘lmadi',
       cols: 'Savollar (ustunlar)', colPh: 'O‘z savolingiz, masalan: Javobgarlik chegarasi qancha?', addCol: 'Qo‘shish', presets: 'Tayyor savollar',
       run: 'Jadvalni tuzish', cost: 'Har hujjat — 1 ta savol birligi (10 tagacha savol); faqat o‘qilgan hujjat uchun yechiladi.',
       working: 'Hujjatlar o‘qilmoqda… 20 hujjat uchun 1–2 daqiqa', doc: 'Hujjat', verified: 'Iqtibos hujjatda topildi', unverified: 'Iqtibos hujjatda so‘zma-so‘z topilmadi — qo‘lda tekshiring',
@@ -19,7 +19,7 @@
     },
     ru: {
       title: 'Табличный анализ', sub: 'Несколько документов сразу: документ — строка, вопрос — столбец. У каждого ответа — цитата из документа и страница.',
-      docs: 'Документы', add: 'Добавить документ', types: 'PDF или DOCX, до 20', reading: 'читается…', scanned: 'скан — пока не поддерживается', bad: 'не удалось прочитать',
+      docs: 'Документы', add: 'Добавить документ', types: 'PDF, DOCX или скан/фото (OCR — цена показывается заранее), до 20', reading: 'читается…', scanned: 'скан — пока не поддерживается', bad: 'не удалось прочитать',
       cols: 'Вопросы (столбцы)', colPh: 'Свой вопрос, например: Каков предел ответственности?', addCol: 'Добавить', presets: 'Готовые вопросы',
       run: 'Построить таблицу', cost: 'Каждый документ — 1 единица вопроса (до 10 вопросов); списывается только за прочитанные.',
       working: 'Документы читаются… 1–2 минуты на 20 документов', doc: 'Документ', verified: 'Цитата найдена в документе', unverified: 'Цитата не найдена дословно — проверьте вручную',
@@ -47,7 +47,7 @@
       var presets = PRESETS[J.lang] || PRESETS.uz;
       body.innerHTML = '<div class="grid2 tb-setup">' +
         '<div class="card"><h4>' + esc(s('docs')) + '</h4><p class="muted" style="font-size:13px;margin-bottom:12px">' + esc(s('types')) + '</p><div class="tb-docs"></div>' +
-        '<label class="pill ghost sm" style="cursor:pointer;margin-top:10px">' + J.icon('up') + esc(s('add')) + '<input type="file" hidden multiple accept=".pdf,.docx"></label></div>' +
+        '<label class="pill ghost sm" style="cursor:pointer;margin-top:10px">' + J.icon('up') + esc(s('add')) + '<input type="file" hidden multiple accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,.heic,image/*"></label></div>' +
         '<div class="card"><h4>' + esc(s('cols')) + '</h4><div class="tb-cols"></div>' +
         '<div style="display:flex;gap:8px;margin-top:10px"><input class="inp tb-new" placeholder="' + esc(s('colPh')) + '"><button class="pill sm ghost" data-a="addcol" type="button">' + esc(s('addCol')) + '</button></div>' +
         '<p class="muted" style="font-size:12.5px;margin:14px 0 8px">' + esc(s('presets')) + '</p><div class="tb-presets">' + presets.map(function (p, i) { return '<button type="button" class="chip" data-p="' + i + '">' + esc(p[0]) + '</button>'; }).join('') + '</div></div></div>' +
@@ -62,7 +62,7 @@
     function drawDocs() {
       var box = $('.tb-docs', body); if (!box) return;
       box.innerHTML = docs.length ? '<ul class="tb-list">' + docs.map(function (d, i) {
-        var st = d.status === 'reading' ? '<span class="spin"></span>' + esc(s('reading')) : d.status === 'ok' ? '<span class="muted">' + Math.round(d.text.length / 1000) + 'k</span>' : '<span class="err">' + esc(s(d.status)) + '</span>';
+        var st = d.status === 'reading' ? '<span class="spin"></span>' + esc(s('reading')) : d.status === 'ok' ? '<span class="muted">' + (d.scanId ? 'OCR · ' : '') + Math.round((d.chars || 0) / 1000) + 'k</span>' : '<span class="err" title="' + esc(d.error || '') + '">' + esc(s(d.status)) + '</span>';
         return '<li>' + J.icon('doc') + '<span class="tb-n">' + esc(d.name) + '</span><small>' + st + '</small><button type="button" class="ib" data-rd="' + i + '" aria-label="x">' + J.icon('x') + '</button></li>';
       }).join('') + '</ul>' : '';
       $$('[data-rd]', box).forEach(function (b) { b.onclick = function () { docs.splice(+b.dataset.rd, 1); drawDocs(); }; });
@@ -79,14 +79,19 @@
       if (cols.length >= 10 || cols.some(function (c) { return c.label === label; })) return;
       cols.push({ label: label, type: type }); drawCols();
     }
+    // a scan or photo goes through the shared OCR step (chat.js J.readFile: its
+    // price shown and confirmed first); the text stays on the server as scanId
     async function addFile(f) {
       if (docs.length >= 20) return;
       var d = { name: f.name, status: 'reading', text: '' }; docs.push(d); drawDocs();
-      var fd = new FormData(); fd.append('file', f);
-      var r = await J.api('/api/analyze/extract', { method: 'POST', body: fd });
-      if (r.ok && r.data && r.data.scanned) d.status = 'scanned';
-      else if (r.ok && r.data && r.data.text) { d.status = 'ok'; d.text = r.data.text; }
-      else d.status = 'bad';
+      try {
+        var r = await J.readFile(f, J.scanConfirm, 'chat');
+        d.status = 'ok';
+        if (r.scanId) { d.scanId = r.scanId; d.chars = r.chars || 0; } else { d.text = r.text; d.chars = r.text.length; }
+      } catch (e) {
+        if (e && e.message === 'cancel') { docs.splice(docs.indexOf(d), 1); drawDocs(); return; }
+        d.status = 'bad'; d.error = e && e.message;
+      }
       drawDocs();
     }
 
@@ -94,7 +99,7 @@
       var ready = docs.filter(function (d) { return d.status === 'ok'; });
       if (!ready.length || !cols.length) { $('.tb-miss', body).innerHTML = '<div class="note-blue" style="margin-top:14px">' + esc(s('need')) + '</div>'; return; }
       body.innerHTML = '<div class="card" style="display:flex;gap:12px;align-items:center"><span class="spin"></span>' + esc(s('working')) + '</div>';
-      var r = await J.api('/api/agent/tabular-review', { method: 'POST', body: { documents: ready.map(function (d) { return { name: d.name, text: d.text }; }), columns: cols } });
+      var r = await J.api('/api/agent/tabular-review', { method: 'POST', body: { documents: ready.map(function (d) { return d.scanId ? { name: d.name, scanId: d.scanId } : { name: d.name, text: d.text }; }), columns: cols } });
       if (r.status === 402) { body.innerHTML = '<div class="card"><p>' + esc((r.data && r.data.message) || s('nounit')) + '</p><a class="pill" href="/tariff.html">' + esc(s('plans')) + '<i>→</i></a> <button class="pill ghost" data-a="back" type="button">' + esc(s('again')) + '</button></div>'; $('[data-a=back]', body).onclick = setup; return; }
       if (!r.ok) { body.innerHTML = '<div class="card"><p class="err">' + esc(J.errMsg(r.data)) + '</p><button class="pill ghost" data-a="back" type="button">' + esc(s('again')) + '</button></div>'; $('[data-a=back]', body).onclick = setup; return; }
       result(r.data);

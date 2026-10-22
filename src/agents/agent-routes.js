@@ -22,7 +22,7 @@ const playbook = require('./workflows/playbook-review');
 
 function mountAgentRoutes(app, { requireAuth, requireSameOrigin, callAI, callCheapAI, retrieve, generateDraftHtml, ledger, pool, budget = {} }) {
   const workflow = createClaimDraftWorkflow();
-  mountTabularRoute(app, { requireAuth, requireSameOrigin, callAI, ledger });
+  mountTabularRoute(app, { requireAuth, requireSameOrigin, callAI, ledger, pool });
   if (pool) mountPlaybookRoutes(app, { requireAuth, requireSameOrigin, callAI, ledger, pool });
 
   app.post('/api/agent/claim-draft', requireSameOrigin, requireAuth, async (req, res) => {
@@ -83,10 +83,17 @@ module.exports = { mountAgentRoutes, mountTabularRoute, mountPlaybookRoutes };
  * nothing), then committed per row that was read and released per row that
  * failed. Missing input is 422 before any charge.
  */
-function mountTabularRoute(app, { requireAuth, requireSameOrigin, callAI, ledger, budget = {} }) {
+function mountTabularRoute(app, { requireAuth, requireSameOrigin, callAI, ledger, pool = null, budget = {} }) {
   const workflow = tabular.createTabularReviewWorkflow();
   app.post('/api/agent/tabular-review', requireSameOrigin, requireAuth, async (req, res) => {
-    const input = req.body || {};
+    const input = { ...(req.body || {}) };
+    // a scanned document comes as its scanId: the text read by the OCR step
+    // (POST /api/analyze/ocr-image, its pages paid there), this account's only
+    if (Array.isArray(input.documents) && input.documents.some(d => d && d.scanId)) {
+      const r = await scanDocuments(pool, req.session.adminId, input.documents);
+      if (r.error) return res.status(r.status).json(r.error);
+      input.documents = r.documents;
+    }
     const first = tabular.readInput(input);
     if (first.missing.length) return res.status(422).json({ error: 'needs_input', message: "Jadval uchun ma'lumot yetarli emas", missing: first.missing });
     let jobs;
@@ -210,13 +217,24 @@ function mountPlaybookRoutes(app, { requireAuth, requireSameOrigin, callAI, ledg
       if (!b) return res.status(404).json({ error: 'not_found', message: 'Playbook topilmadi' });
       input.rules = b.rules;
     }
+    // a scanned contract: the text its OCR step read, and the analysis units that step held for it
+    let scan = null;
+    if (req.body && req.body.scanId) {
+      const r = await scanDocuments(pool, req.session.adminId, [{ scanId: req.body.scanId, name: req.body.name }]);
+      if (r.error) return res.status(r.status).json(r.error);
+      scan = r.rows[0];
+      input.text = scan.text;
+    }
     const first = playbook.readInput(input);
     if (first.missing.length) return res.status(422).json({ error: 'needs_input', message: "Tekshiruv uchun ma'lumot yetarli emas", missing: first.missing });
-    const chars = first.text.replace(/^\[Sahifa \d+\]\n?/gmu, '').length;
-    const size = ledger.docUnits({ chars });
+    const chars = first.text.replace(/^\[Sahifa \d+\]\n?|^=== PAGE \d+ ===\n?/gmu, '').length;
+    const size = ledger.docUnits({ chars, pages: scan ? scan.pages : null });
     let job;
     try {
-      job = await ledger.reserve({ adminId: req.session.adminId, service: 'analysis', units: size.units, endpoint: '/api/agent/playbook-review', channel: 'web' });
+      const held = scan && ledger.heldScanJob ? await ledger.heldScanJob({ adminId: req.session.adminId, fileHash: scan.file_hash, service: 'analysis' }) : null;
+      job = held && Number(held.units) >= size.units
+        ? { allowed: true, jobKey: held.job_key, adopted: true }
+        : await ledger.reserve({ adminId: req.session.adminId, service: 'analysis', units: size.units, endpoint: '/api/agent/playbook-review', channel: 'web' });
     } catch (e) {
       console.error('[AGENT] playbook reserve failed:', e.message);
       return res.status(503).json({ error: 'quota_unavailable', message: "Limitni hozir tekshirib bo'lmadi" });
@@ -246,4 +264,28 @@ function mountPlaybookRoutes(app, { requireAuth, requireSameOrigin, callAI, ledg
       charged: !!done && !job.unlimited,
     });
   });
+}
+
+/**
+ * Scanned documents by scanId (src/ocr/scan-store.js): only this account's,
+ * unexpired; the OCR text with its "=== PAGE n ===" marks.
+ * Returns { documents, rows } or { status, error }.
+ */
+async function scanDocuments(pool, adminId, docs) {
+  if (!pool) return { status: 503, error: { error: 'scan_unavailable', message: "Skan hujjatni o'qib bo'lmadi" } };
+  const { getScan } = require('../ocr/scan-store');
+  const out = [], rows = [];
+  try {
+    for (const d of docs.slice(0, 20)) {
+      if (!d || !d.scanId) { out.push(d); continue; }
+      const row = await getScan(pool, { adminId, scanId: d.scanId });
+      if (!row) return { status: 404, error: { error: 'scan_not_found', code: 'SCAN_NOT_FOUND', message: "Skan hujjat topilmadi yoki muddati o'tgan — uni qayta yuklang." } };
+      rows.push(row);
+      out.push({ name: d.name || 'Skan hujjat', text: row.text });
+    }
+  } catch (e) {
+    console.error('[AGENT] scan load failed:', e.message);
+    return { status: 503, error: { error: 'scan_unavailable', message: "Skan hujjatni o'qib bo'lmadi" } };
+  }
+  return { documents: out, rows };
 }
