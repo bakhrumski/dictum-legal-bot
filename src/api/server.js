@@ -338,6 +338,7 @@ app.use(cors((req, cb) => {
 // vector — any authed user could post 50MB JSON at every endpoint.
 // tabular review sends the text of up to 20 documents (src/agents/workflows/tabular-review.js)
 app.use('/api/agent/tabular-review', express.json({ limit: '6mb' }));
+app.use('/api/agent/playbook-review', express.json({ limit: '3mb' }));
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 try { app.use(require('cookie-parser')()); } catch { console.log('[WARN] cookie-parser not installed, refresh tokens via cookie disabled'); }
@@ -11494,7 +11495,7 @@ async function runMigrations() {
       const { generateDraftHtml } = require('../drafting/routes');
       require('../agents/agent-routes').mountAgentRoutes(app, {
         requireAuth, requireSameOrigin: require('../auth/same-origin').requireSameOrigin,
-        callAI, callCheapAI, generateDraftHtml, ledger: require('../rag/tariff-ledger'),
+        callAI, callCheapAI, generateDraftHtml, ledger: require('../rag/tariff-ledger'), pool,
         retrieve: (query, topic) => retrieveLegalContext(query, topic, null, {}),
       });
     } catch (e) { console.log('[AGENT] Mount skipped:', e.message); }
