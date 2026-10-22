@@ -327,6 +327,7 @@ function transactionalPool(handler) {
       '20261006_015_document_scans.sql',
       '20261007_016_account_credentials.sql',
       '20261021_017_one_time_credits.sql',
+      '20261022_018_playbooks.sql',
     ]);
     assert.strictEqual(stripOuterTransaction('BEGIN;\nSELECT 1;\nCOMMIT;'), 'SELECT 1;');
   });

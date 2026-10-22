@@ -493,7 +493,18 @@ Known state of the suites (Sept 2026):
   `POST /api/agent/tabular-review` (6 MB body): one `chat` unit per document,
   reserved together (`reserveMany`), committed per row read, released per
   row failed. Page `/app/#/jadval` (`public/app/tabular.js`, CSV export);
-  scans are not supported there yet.
+  scans are not supported there yet. Third workflow (2026-10-22):
+  `src/agents/workflows/playbook-review.js` - a contract against a firm's
+  own rules (not the law): clauses matching the rules (`selectExcerpt`), one
+  AI call (mos / farq / yoq / noaniq, the clause's words, a note, a proposed
+  wording from the rule's preferred text), quotes checked word for word with
+  pages; "mos" with no quote found becomes "noaniq". Four built-in playbooks
+  (one side's negotiating preferences, never statements of law); own ones in
+  `playbooks` (migration 018, 30 per account, owner-only CRUD
+  `/api/playbooks`). `POST /api/agent/playbook-review`: analysis units by the
+  contract's size (docUnits, page marks not counted), committed on a
+  result. Page `/app/#/playbook` (`public/app/playbook.js`, editor, Word
+  report).
 - `src/workspace/` — Platinum Workspace: routes, authz, Supabase
   realtime/storage, Workspace AI.
 - `public/` — static pages: `index.html` (landing), `login.html`,
