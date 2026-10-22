@@ -470,3 +470,26 @@ textarea.inp{height:auto;min-height:96px;padding:10px 13px;resize:vertical;line-
 .adm-today{margin-bottom:6px}
 .adm-today h4{margin-bottom:12px}
 .adm-today .kv a:hover b{color:var(--cta)}
+
+/* Jadvalli tahlil (tabular.js) */
+.tb-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.tb-list li{display:flex;align-items:center;gap:8px;font-size:14px;padding:6px 0;border-bottom:1px solid var(--line-2);min-width:0}
+.tb-list .tb-n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tb-list small{font-size:12px;display:inline-flex;gap:6px;align-items:center;white-space:nowrap}
+.tb-list .tb-type{width:auto;height:32px;padding:0 8px;font-size:13px}
+.tb-presets{display:flex;flex-wrap:wrap;gap:6px}
+.tb-wrap{overflow:auto;border:1px solid var(--line);border-radius:16px;background:var(--surface);max-height:75vh}
+.tb-grid{border-collapse:separate;border-spacing:0;min-width:100%;font-size:14px}
+.tb-grid th,.tb-grid td{padding:10px 12px;border-bottom:1px solid var(--line-2);vertical-align:top;text-align:left}
+.tb-grid thead th{position:sticky;top:0;background:var(--surface);font-weight:500;font-size:13px;color:var(--muted);z-index:2;min-width:180px}
+.tb-grid th[scope=row]{position:sticky;left:0;background:var(--surface);z-index:1;min-width:170px;max-width:220px;font-weight:400;border-right:1px solid var(--line-2)}
+.tb-grid thead th:first-child{left:0;z-index:3;border-right:1px solid var(--line-2)}
+.tb-grid th[scope=row] b{font-weight:500;display:block;overflow-wrap:anywhere}
+.tb-grid th[scope=row] small{display:block;color:var(--muted);font-size:12px;margin-top:4px}
+.tb-cell{display:flex;gap:6px;align-items:flex-start;flex-wrap:wrap;text-align:left;width:100%;min-width:160px;background:none;border:0;padding:0;color:var(--fg);font:inherit;cursor:pointer}
+.tb-cell:hover span{color:var(--cta)}
+.tb-cell.nf span{color:var(--faint)}
+.tb-cell small{flex-basis:100%;color:var(--muted);font-size:12px}
+.tb-ok{color:var(--ok);font-weight:600}
+.tb-warn{color:var(--warn);font-weight:700}
+.tb-q{margin:8px 0;padding:10px 12px;border:1px solid var(--line);border-radius:12px;font-size:14px}

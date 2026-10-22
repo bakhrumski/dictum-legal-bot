@@ -17,9 +17,11 @@
 
 const { runWorkflow } = require('./harness');
 const { createClaimDraftWorkflow, readIntake } = require('./workflows/claim-draft');
+const tabular = require('./workflows/tabular-review');
 
 function mountAgentRoutes(app, { requireAuth, requireSameOrigin, callAI, callCheapAI, retrieve, generateDraftHtml, ledger, budget = {} }) {
   const workflow = createClaimDraftWorkflow();
+  mountTabularRoute(app, { requireAuth, requireSameOrigin, callAI, ledger });
 
   app.post('/api/agent/claim-draft', requireSameOrigin, requireAuth, async (req, res) => {
     const input = req.body || {};
@@ -69,4 +71,59 @@ function mountAgentRoutes(app, { requireAuth, requireSameOrigin, callAI, callChe
   });
 }
 
-module.exports = { mountAgentRoutes };
+module.exports = { mountAgentRoutes, mountTabularRoute };
+
+/**
+ *   POST /api/agent/tabular-review   { documents: [{ name, text }], columns: [{ label, type }] }
+ *
+ * Each document is one row and costs one question unit ('chat') for up to
+ * 10 questions - reserved for all rows together before any AI call (all or
+ * nothing), then committed per row that was read and released per row that
+ * failed. Missing input is 422 before any charge.
+ */
+function mountTabularRoute(app, { requireAuth, requireSameOrigin, callAI, ledger, budget = {} }) {
+  const workflow = tabular.createTabularReviewWorkflow();
+  app.post('/api/agent/tabular-review', requireSameOrigin, requireAuth, async (req, res) => {
+    const input = req.body || {};
+    const first = tabular.readInput(input);
+    if (first.missing.length) return res.status(422).json({ error: 'needs_input', message: "Jadval uchun ma'lumot yetarli emas", missing: first.missing });
+    let jobs;
+    try {
+      jobs = await ledger.reserveMany({ adminId: req.session.adminId, channel: 'web',
+        jobs: first.docs.map(d => ({ service: 'chat', units: 1, endpoint: '/api/agent/tabular-review', meta: { row: d.id } })) });
+    } catch (e) {
+      console.error('[AGENT] tabular reserve failed:', e.message);
+      return res.status(503).json({ error: 'quota_unavailable', message: "Limitni hozir tekshirib bo'lmadi" });
+    }
+    if (!jobs.allowed) {
+      return res.status(402).json({ error: 'no_units', message: `Har bir hujjat uchun 1 ta savol birligi kerak (${first.docs.length} ta), limit yetarli emas.`, needed: first.docs.length, remaining: jobs.remaining == null ? null : jobs.remaining });
+    }
+    const jobOf = new Map(first.docs.map((d, i) => [d.id, jobs.jobs[i] && jobs.jobs[i].jobKey]));
+    let out;
+    try {
+      out = await runWorkflow(workflow, input, { deps: { callAI }, budget: { maxSteps: 6, maxMs: Number(process.env.AGENT_TABLE_MAX_MS) || 180000, ...budget } });
+    } catch (e) {
+      out = { status: 'failed', trace: [], state: { steps: {} } };
+    }
+    const steps = (out.state && out.state.steps) || {};
+    const rows = (steps.verify && steps.verify.rows) || [];
+    const ok = new Set(rows.filter(r => r.status === 'ok').map(r => r.docId));
+    let charged = 0;
+    for (const [docId, key] of jobOf) {
+      if (!key) continue;
+      if (out.status === 'done' && ok.has(docId)) { await ledger.commit(key).catch(() => {}); charged++; }
+      else await ledger.release(key, out.status === 'done' ? 'tabular_row_failed' : `tabular_${out.status}`).catch(() => {});
+    }
+    res.status(out.status === 'done' ? 200 : 502).json({
+      status: out.status,
+      ...(out.status === 'done' ? {} : { message: "Jadvalni tayyorlab bo'lmadi; birliklar qaytarildi.", stoppedAt: out.stoppedAt || null }),
+      columns: steps.validate ? steps.validate.columns : [],
+      rows,
+      droppedDocs: steps.validate ? steps.validate.droppedDocs : 0,
+      verified: steps.verify ? steps.verify.verified : 0,
+      unverified: steps.verify ? steps.verify.unverified : 0,
+      trace: out.trace, ms: out.ms,
+      charged: jobs.kind === 'staff' ? 0 : charged,
+    });
+  });
+}
