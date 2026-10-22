@@ -394,6 +394,10 @@ Known state of the suites (Sept 2026):
   written with the quote (`src/services/lawyer-commission.js`); the customer
   gets the price in the bot when it is approved; payment is manual until a
   provider is connected. A delivered AI draft can be sent for lawyer review.
+  Master view: `/app/#/boshqaruv/xaridlar` (`GET /api/admin/one-time-purchases`,
+  `src/services/one-time-report.js`, read only): purchases, who, Stars,
+  catalogue so'm price at the sale (not the Stars payout), units left per
+  person and service; refunds listed, never counted.
   Document jobs are sized in units: max(pages/10, chars/40 000), signed PDF
   page counts (`docTicket`), never silently cut. A paid period is granted only
   by `POST /api/admin/tariff/grant` (idempotent `paymentRef`), never by the

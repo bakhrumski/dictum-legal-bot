@@ -1152,6 +1152,16 @@ app.get('/api/admin/model-ab', requireMasterAdmin, async (req, res) => {
 // Audit trail viewer (master only): recent sensitive-data access + auth events.
 // ── Account deletion requests (asked in the bot, carried out by a master;
 // src/services/account-deletion.js) ───────────────────────────────────────
+// one-time purchases (service_credits): master only, read only (src/services/one-time-report.js)
+app.get('/api/admin/one-time-purchases', requireMasterAdmin, async (req, res) => {
+  try {
+    res.json(await require('../services/one-time-report').oneTimeReport(pool, { days: req.query.days, limit: req.query.limit }));
+  } catch (e) {
+    console.error('[ONE-TIME] report failed:', e.message);
+    res.status(500).json({ error: "Xaridlar ro'yxatini olib bo'lmadi" });
+  }
+});
+
 app.get('/api/admin/account-deletions', requireMasterAdmin, async (req, res) => {
   try {
     const status = ['pending', 'done', 'cancelled'].includes(req.query.status) ? req.query.status : 'pending';
