@@ -5654,9 +5654,25 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
         console.warn(`[LEX-PLAN] AI query planning failed; deterministic plan retained: ${error.message}`);
       }
     }
-    const runLexSteps = (steps) => Promise.all(steps.map(async (step) => ({
+    // A lex.uz round never eats the time the answer and its checks need: it
+    // may use the request's time (AI_REQUEST_MAX_MS) except
+    // LEX_ANSWER_RESERVE_MS (60 s); a search past that returns what it found
+    // (2026-10-22: 18 parallel searches, each reading its candidates one by
+    // one at up to 60 s a page, left the cross-check and claim check no
+    // time). Sources come first, so there is no shorter cap of its own unless
+    // LEX_LIVE_MAX_MS is set.
+    const lexDeadline = () => {
+      const store = usageLedger.current();
+      const left = store && store.budget ? store.budget.maxMs - (Date.now() - store.startedAt) : Infinity;
+      const reserve = Math.max(0, Number(process.env.LEX_ANSWER_RESERVE_MS) || 60000);
+      const own = Number(process.env.LEX_LIVE_MAX_MS) > 0 ? Number(process.env.LEX_LIVE_MAX_MS) : Infinity;
+      const ms = Math.min(own, left - reserve);
+      return Number.isFinite(ms) ? Date.now() + Math.max(0, ms) : 0;
+    };
+    const runLexSteps = (steps, deadline = lexDeadline()) => Promise.all(steps.map(async (step) => ({
       step,
       results: await searchLexUz(step.query, {
+        deadline,
         topic,
         scoreText: originalQuestion,
         includeRegistry: step.includeRegistry,
