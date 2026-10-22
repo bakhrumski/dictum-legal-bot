@@ -75,6 +75,8 @@ async function searchLexUz(query, opts = {}) {
     // epoch ms: no read starts after it, and a running one is waited for only
     // until it; what was found by then is returned
     deadline = 0,
+    // 'code' | 'law': only that act form (ACT_FORMS)
+    actForm = '',
   } = opts;
   const startedAt = Date.now();
   const leftMs = () => (deadline ? deadline - Date.now() : Infinity);
@@ -85,8 +87,8 @@ async function searchLexUz(query, opts = {}) {
   if (!query || query.trim().length < 3) return [];
 
   const requestedActs = extractActIdentifiers(query);
-  const searchUrl = buildLexSearchUrl(query);
-  console.log(`[LEX-LIVE] Searching lex.uz: "${query.substring(0, 60)}"`);
+  const searchUrl = buildLexSearchUrl(query, { actForm });
+  console.log(`[LEX-LIVE] Searching lex.uz${actForm ? ` (${actForm})` : ''}: "${query.substring(0, 60)}"`);
 
   let html = '';
   try {
@@ -96,7 +98,22 @@ async function searchLexUz(query, opts = {}) {
     console.warn(`[LEX-LIVE] Search page fetch failed: ${err.message}`);
   }
 
-  const searchCandidates = html ? parseSearchCandidates(html) : [];
+  let searchCandidates = html ? parseSearchCandidates(html) : [];
+  if (searchCandidates.length === 0 && html && !requestedActs.length) {
+    for (const shorter of relaxedQueries(query)) {
+      if (leftMs() <= 0) break;
+      try {
+        const more = parseSearchCandidates(await within(fetchCachedSearchPage(buildLexSearchUrl(shorter, { actForm })), Math.min(SEARCH_TIMEOUT_MS, leftMs())));
+        if (more.length) {
+          console.log(`[LEX-LIVE] Nothing for the whole query; "${shorter}" found ${more.length}`);
+          searchCandidates = more;
+          break;
+        }
+      } catch (err) {
+        console.warn(`[LEX-LIVE] Search page fetch failed: ${err.message}`);
+      }
+    }
+  }
   if (searchCandidates.length === 0) console.log('[LEX-LIVE] No document links found in search results');
 
   // Search results on lex.uz are often ordered by publication date rather
@@ -251,10 +268,34 @@ function parseSearchResults(html) {
  * and Cabinet decisions are Qaror (3972). Issuing-body/type verification is
  * still performed against each result row's own badge.
  */
-function buildLexSearchUrl(query = '') {
+// lex.uz's own form ids (its search page's "Hujjat turi" list): a code or a
+// law is found among a few acts, where the plain search lists the newest of
+// hundreds (2026-10-22: "pudratchining javobgarligi" with the code filter
+// returned the Civil Code, part two, alone).
+const ACT_FORMS = Object.freeze({ code: '3964', law: '3968' });
+// lex.uz refuses a text query over 100 characters
+const MAX_QUERY_CHARS = 100;
+
+function capQuery(value = '') {
+  const text = String(value || '').replace(/\s+/gu, ' ').trim();
+  if (text.length <= MAX_QUERY_CHARS) return text;
+  const cut = text.slice(0, MAX_QUERY_CHARS + 1);
+  const space = cut.lastIndexOf(' ');
+  return (space > 0 ? cut.slice(0, space) : cut.slice(0, MAX_QUERY_CHARS)).trim();
+}
+
+/**
+ * Text queries search acts in force only (status=Y: a repealed or historical
+ * page is skipped after reading anyway) and, with actForm, one act form.
+ */
+function buildLexSearchUrl(query = '', { actForm = '' } = {}) {
   const rawQuery = String(query || '').trim();
   const exact = extractActIdentifiers(rawQuery)[0];
-  if (!exact) return `${LEX_SEARCH_URL}?Query=${encodeURIComponent(rawQuery)}`;
+  if (!exact) {
+    const params = new URLSearchParams({ Query: capQuery(rawQuery), status: 'Y' });
+    if (ACT_FORMS[actForm]) params.set('form_id', ACT_FORMS[actForm]);
+    return `${LEX_SEARCH_URL}?${params.toString()}`;
+  }
 
   const formId = exact.prefix === 'PF'
     ? '3973'
@@ -266,6 +307,23 @@ function buildLexSearchUrl(query = '') {
   });
   if (formId) params.set('form_id', formId);
   return `${LEX_SEARCH_URL}?${params.toString()}`;
+}
+
+/**
+ * Shorter forms of a query that found nothing: lex.uz wants every word near
+ * the others, so a long phrase finds no act where two of its words would
+ * (2026-10-22: "avans to'lovini qaytarish majburiyati" 0, "avans to'lovini"
+ * 17). The first and the last two words, at most two more searches.
+ */
+const CONNECTORS = new Set(["bo'yicha", 'boʻyicha', 'буйича', 'бўйича', 'tomonidan', 'томонидан', 'va', 'ва', 'uchun', 'учун', 'bilan', 'билан', 'hamda', 'ҳамда', 'yoki', 'ёки', 'haqida', 'ҳақида']);
+
+function relaxedQueries(query = '') {
+  const words = String(query || '').replace(/[,.;:!?«»"“”()]/gu, ' ').split(/\s+/u)
+    .filter(w => w && !CONNECTORS.has(w.toLocaleLowerCase('uz').replace(/[ʻ‘’`]/gu, "'")));
+  if (words.length < 2) return [];
+  const joined = words.join(' ');
+  const out = words.length === 2 ? [joined] : [words.slice(0, 2).join(' '), words.slice(-2).join(' ')];
+  return Array.from(new Set(out)).filter(q => q.length >= 3 && q !== query);
 }
 
 function normalizeSearchText(value = '') {
@@ -631,6 +689,8 @@ function formatLexSearchResults(results, language = 'uz') {
 
 module.exports = {
   searchLexUz,
+  relaxedQueries,
+  ACT_FORMS,
   titleMostlyMatches,
   identityMatches,
   buildLexSearchUrl,
