@@ -485,7 +485,13 @@ Known state of the suites (Sept 2026):
   warnings only). Route `POST /api/agent/claim-draft`
   (`src/agents/agent-routes.js`): missing facts 422 before any charge or AI;
   1 `draft` unit reserved, committed only when a draft came out. Page:
-  `/app/#/agent/dava` (`public/app/agent.js`). It does not touch
+  `/app/#/agent/dava` (`public/app/agent.js`). In the Telegram bot
+  (2026-10-22, `src/agents/telegram-claim.js`, `TG_CLAIM_AGENT=off` to
+  stop): a da'vo arizasi order's "AI loyiha" runs this workflow - one cheap
+  call reads the free text into the fields (only what it says), missing
+  facts are asked for with the unit released and the next message resumes;
+  the steps update one message; the .docx, then the basis with lex.uz links
+  and the warnings; the unit is committed on delivery. It does not touch
   `/api/legal-chat`. Second workflow (2026-10-22):
   `src/agents/workflows/tabular-review.js` - tabular review, up to 20
   documents x 10 questions: per document the clauses matching the questions

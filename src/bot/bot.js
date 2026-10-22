@@ -251,14 +251,17 @@ async function offerAiDraft(chatId, meta = {}, from = null) {
   if (!draftGenerator) return;
   const details = String(meta.caseSummary || '').trim();
   if (details.length < 20) return;
-  draftOffers.set(chatId, { docType: String(meta.documentTypeLabel || 'Yuridik hujjat'), details: details.slice(0, 6000), at: Date.now() });
+  // the source question and answer go with the order: the claim agent reads the story from all of it
+  const story = [meta.sourceQuestion && `Savol: ${meta.sourceQuestion}`, details].filter(Boolean).join('\n\n');
+  draftOffers.set(chatId, { docType: String(meta.documentTypeLabel || 'Yuridik hujjat'), details: story.slice(0, 6000), slug: String(meta.serviceSlug || ''), at: Date.now() });
   let left = 1;
   if (from) {
     try { left = await serviceUnitsLeft(await telegramIdentity({ chat: { id: chatId, type: 'private' }, from }), 'draft'); } catch (_) { left = 1; }
   }
+  const agentNote = meta.serviceSlug === 'claim' && claimAgent ? "\n⚖️ Da'vo arizasini agent tayyorlaydi: lex.uz'dan asos qidiradi, iqtiboslarni manbada tekshiradi va loyihani shu asosda yozadi." : '';
   if (left > 0) {
     await bot.sendMessage(chatId,
-      "🤖 Kutmasdan loyiha kerakmi? AI hozir shu ma'lumotlar asosida hujjat loyihasini Word faylda tayyorlaydi — tarifingizdagi 1 ta hujjat birligi sarflanadi. Yurist buyurtmasi ham saqlanib qoladi.",
+      "🤖 Kutmasdan loyiha kerakmi? AI hozir shu ma'lumotlar asosida hujjat loyihasini Word faylda tayyorlaydi — tarifingizdagi 1 ta hujjat birligi sarflanadi. Yurist buyurtmasi ham saqlanib qoladi." + agentNote,
       { reply_markup: { inline_keyboard: [[{ text: '🤖 AI loyiha — 1 birlik', callback_data: 'tgdraft_ai' }]] } }).catch(() => {});
     return;
   }
@@ -294,26 +297,100 @@ async function startAiDraft(chatId, from) {
     return;
   }
   draftOffers.delete(chatId);
+  // a da'vo arizasi goes through the claim agent (src/agents/telegram-claim.js)
+  if (o.slug === 'claim' && claimAgent) return runClaimAgent(chatId, from, o, job);
   await bot.sendChatAction(chatId, 'upload_document').catch(() => {});
   try {
     const r = await draftGenerator(o.docType, o.details);
     if (!r || !r.html) throw new Error('empty draft');
-    const { htmlToDocx } = require('../drafting/html-to-docx');
-    const buf = await htmlToDocx(r.html, { title: o.docType, lang: /[\u0400-\u04ff]/u.test(o.details) ? 'ru' : 'uz' });
-    const name = `${o.docType.replace(/[\\/:*?"<>|]+/gu, ' ').trim().slice(0, 60) || 'Hujjat'}.docx`;
-    await bot.sendDocument(chatId, buf, { caption: "📄 AI loyiha. [Qavs ichidagi] joylarni to'ldiring va imzolashdan oldin tekshiring; muhim hujjatni yurist bilan ko'rib chiqing." },
-      { filename: name, contentType: require('../drafting/html-to-docx').DOCX_MIME });
-    if (job.jobKey) await ledger.commit(job.jobKey).catch((e) => console.error('[TG-DRAFT] commit failed:', e.message));
-    const text = String(r.html).replace(/<[^>]+>/gu, ' ').replace(/&nbsp;/gu, ' ').replace(/\s+/gu, ' ').trim();
-    lastDrafts.set(chatId, { docType: o.docType, details: o.details, text: text.slice(0, 12000), at: Date.now() });
-    await bot.sendMessage(chatId,
-      "👨‍⚖️ Loyihani yurist tekshirib, to'g'rilab berishini xohlaysizmi? Narxni yurist belgilaydi; tasdiqlangach sizga narx yuboriladi va siz rozilik bildirgandan keyingina ish boshlanadi.",
-      { reply_markup: { inline_keyboard: [[{ text: '👨‍⚖️ Yurist tekshiruvi', callback_data: 'tgdraft_review' }]] } }).catch(() => {});
+    await deliverDraft(chatId, o, r.html, job);
   } catch (e) {
     console.error('[TG-DRAFT] failed:', e.message);
     if (job.jobKey) await ledger.release(job.jobKey, 'failed').catch(() => {});
     await bot.sendMessage(chatId, "Loyihani tayyorlab bo'lmadi, birlik qaytarildi. Birozdan keyin qayta urinib ko'ring yoki saytda tayyorlang.").catch(() => {});
   }
+}
+
+/** Send the draft as .docx, commit its unit, offer the lawyer review. */
+async function deliverDraft(chatId, o, html, job, { caption = null } = {}) {
+  const ledger = require('../rag/tariff-ledger');
+  const { htmlToDocx, DOCX_MIME } = require('../drafting/html-to-docx');
+  const buf = await htmlToDocx(html, { title: o.docType, lang: /[\u0400-\u04ff]/u.test(o.details) ? 'ru' : 'uz' });
+  const name = `${o.docType.replace(/[\\/:*?"<>|]+/gu, ' ').trim().slice(0, 60) || 'Hujjat'}.docx`;
+  await bot.sendDocument(chatId, buf, { caption: caption || "📄 AI loyiha. [Qavs ichidagi] joylarni to'ldiring va imzolashdan oldin tekshiring; muhim hujjatni yurist bilan ko'rib chiqing." },
+    { filename: name, contentType: DOCX_MIME });
+  if (job && job.jobKey) await ledger.commit(job.jobKey).catch((e) => console.error('[TG-DRAFT] commit failed:', e.message));
+  const text = String(html).replace(/<[^>]+>/gu, ' ').replace(/&nbsp;/gu, ' ').replace(/\s+/gu, ' ').trim();
+  lastDrafts.set(chatId, { docType: o.docType, details: o.details, text: text.slice(0, 12000), at: Date.now() });
+  await bot.sendMessage(chatId,
+    "👨‍⚖️ Loyihani yurist tekshirib, to'g'rilab berishini xohlaysizmi? Narxni yurist belgilaydi; tasdiqlangach sizga narx yuboriladi va siz rozilik bildirgandan keyingina ish boshlanadi.",
+    { reply_markup: { inline_keyboard: [[{ text: '👨‍⚖️ Yurist tekshiruvi', callback_data: 'tgdraft_review' }]] } }).catch(() => {});
+}
+
+// The claim agent (2026-10-22, src/agents/telegram-claim.js), set by the
+// server (setClaimAgent). Its steps are shown in one message that updates;
+// facts it still needs are asked for (the unit is released, nothing is
+// charged) and the person's next message in this chat resumes it.
+let claimAgent = null;
+const claimAwait = new Map(); // chatId -> { o, from, at }
+async function runClaimAgent(chatId, from, o, job) {
+  const ledger = require('../rag/tariff-ledger');
+  const done = [];
+  let current = "Ma'lumotlarni tekshirish";
+  let status = null, lastEdit = 0, editing = Promise.resolve();
+  const view = () => ["⚖️ Da'vo arizasi agenti ishlamoqda (1–2 daqiqa):", ...done.map(l => `✅ ${l}`), current ? `⏳ ${current}` : ''].filter(Boolean).join('\n');
+  try { status = await bot.sendMessage(chatId, view()); } catch (_) { status = null; }
+  const onStep = (e) => {
+    if (e.type !== 'step') return;
+    if (e.status === 'running') current = e.label;
+    else if (e.status === 'ok') { done.push(e.label); current = null; }
+    const now = Date.now();
+    if (status && now - lastEdit > 1200) {
+      lastEdit = now;
+      editing = editing.then(() => bot.editMessageText(view(), { chat_id: chatId, message_id: status.message_id }).catch(() => {}));
+    }
+  };
+  let r;
+  try {
+    r = await claimAgent.run(o.details, { lang: /[\u0400-\u04ff]/u.test(o.details) ? 'ru' : 'uz', onStep });
+  } catch (e) {
+    r = { status: 'failed', error: e.message };
+  }
+  await editing;
+  if (r.status === 'needs_input') {
+    if (job && job.jobKey) await ledger.release(job.jobKey, 'claim_needs_input').catch(() => {});
+    claimAwait.set(String(chatId), { o, from, at: Date.now() });
+    await bot.sendMessage(chatId, ["Da'vo arizasi uchun yana quyidagilar kerak:", ...(r.missing || []).map((m, i) => `${i + 1}. ${m.question}`), '',
+      "Javobni bitta xabarda yozib yuboring — loyiha shundan keyin tayyorlanadi. Birlik hali yechilmadi."].join('\n')).catch(() => {});
+    return;
+  }
+  if (r.status !== 'done') {
+    console.error('[TG-CLAIM] agent failed:', r.error || r.stoppedAt || r.status);
+    if (job && job.jobKey) await ledger.release(job.jobKey, 'claim_failed').catch(() => {});
+    await bot.sendMessage(chatId, "Da'vo arizasini tayyorlab bo'lmadi, birlik qaytarildi. Birozdan keyin qayta urinib ko'ring yoki saytda (Hujjat tayyorlash → Da'vo arizasi agenti) tayyorlang.").catch(() => {});
+    return;
+  }
+  if (status) await bot.editMessageText(["⚖️ Da'vo arizasi agenti:", ...done.map(l => `✅ ${l}`)].join('\n'), { chat_id: chatId, message_id: status.message_id }).catch(() => {});
+  try {
+    await deliverDraft(chatId, o, r.html, null, { caption: "📄 Da'vo arizasi loyihasi (agent). Moddalar faqat lex.uz'da tasdiqlangan iqtiboslardan; [qavs ichidagi] joylarni to'ldiring. Bu AI loyiha, yuridik xulosa emas." });
+    if (job && job.jobKey) await ledger.commit(job.jobKey).catch((e) => console.error('[TG-CLAIM] commit failed:', e.message));
+    await bot.sendMessage(chatId, require('../agents/telegram-claim').resultText(r), { disable_web_page_preview: true }).catch(() => {});
+  } catch (e) {
+    console.error('[TG-CLAIM] delivery failed:', e.message);
+    if (job && job.jobKey) await ledger.release(job.jobKey, 'claim_not_delivered').catch(() => {});
+    await bot.sendMessage(chatId, "Faylni yuborib bo'lmadi, birlik qaytarildi. Qayta urinib ko'ring.").catch(() => {});
+  }
+}
+/** The person's answer to the agent's questions: added to the order, and the agent runs again. true when handled. */
+async function resumeClaimAgent(msg) {
+  const key = String(msg.chat.id);
+  const w = claimAwait.get(key);
+  if (!w || !msg.text || msg.text.startsWith('/')) return false;
+  claimAwait.delete(key);
+  if (Date.now() - w.at > DRAFT_OFFER_TTL_MS) return false;
+  draftOffers.set(msg.chat.id, { ...w.o, details: `${w.o.details}\n\nQo'shimcha ma'lumot: ${msg.text}`.slice(0, 7000), at: Date.now() });
+  await startAiDraft(msg.chat.id, msg.from || w.from);
+  return true;
 }
 
 /** A delivered AI draft goes to a lawyer for review: an order the lawyer prices (src/services/legal-marketplace.js). */
@@ -1482,6 +1559,9 @@ async function handleTelegramMessage(msg) {
   // command handlers own the response.
   if (msg.text && msg.text.startsWith('/')) return;
 
+  // the claim agent asked for missing facts: this message is the answer
+  if (msg.chat && msg.chat.type === 'private' && await resumeClaimAgent(msg)) return;
+
   if (pendingPaymentSupport.has(chatId)) {
     const supportStartedAt = pendingPaymentSupport.get(chatId);
     if (Date.now() - supportStartedAt > 15 * 60 * 1000) {
@@ -2166,6 +2246,6 @@ function getRequestTypeLabel(type) {
 }
 
 // Export bot for use in other modules
-module.exports = { bot, getBot: () => bot, setDraftGenerator: (fn) => { draftGenerator = typeof fn === 'function' ? fn : null; }, setDocumentAnalyzer: (fn) => { documentAnalyzer = typeof fn === 'function' ? fn : null; }, isChannelMember, channelLink, REQUIRED_CHANNEL, INSTAGRAM_URL };
+module.exports = { bot, getBot: () => bot, setClaimAgent: (a) => { claimAgent = a && typeof a.run === 'function' ? a : null; }, setDraftGenerator: (fn) => { draftGenerator = typeof fn === 'function' ? fn : null; }, setDocumentAnalyzer: (fn) => { documentAnalyzer = typeof fn === 'function' ? fn : null; }, isChannelMember, channelLink, REQUIRED_CHANNEL, INSTAGRAM_URL };
 
 console.log('Bot ishlamoqda...');
