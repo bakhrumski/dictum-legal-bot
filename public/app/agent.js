@@ -103,10 +103,17 @@
       var warn = (d.warnings || []).length ? '<div class="note-blue" style="margin-bottom:18px"><b>' + esc(s('warn')) + '</b><ul>' + d.warnings.map(function (w) { return '<li>' + esc(w.text) + '</li>'; }).join('') + '</ul></div>' : '';
       body.innerHTML = html + warn +
         '<div class="card" style="margin-bottom:18px"><h4>' + esc(s('basis')) + '</h4>' + basis + '</div>' +
-        '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px"><h4 style="margin:0">' + esc(s('draft')) + '</h4><div style="display:flex;gap:8px"><button class="pill sm" data-a="word">' + J.icon('word') + esc(s('word')) + '</button><button class="pill sm ghost" data-a="back">' + esc(s('again')) + '</button></div></div>' +
+        '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px"><h4 style="margin:0">' + esc(s('draft')) + '</h4><div style="display:flex;gap:8px"><button class="pill sm" data-a="word">' + J.icon('word') + esc(s('word')) + '</button>' + (J.wsSaveButton ? J.wsSaveButton() : '') + '<button class="pill sm ghost" data-a="back">' + esc(s('again')) + '</button></div></div>' +
         '<div class="ag-doc doc-prev"></div><p class="muted" style="font-size:12.5px;margin-top:12px">' + esc(s('note')) + '</p></div>';
       $('.ag-doc', body).innerHTML = d.draftHtml; // sanitized on the server (src/rag/safe-html.js)
       $('[data-a=word]', body).onclick = function () { J.exportWord(s('title'), d.draftHtml); };
+      var ws = $('[data-a=wssave]', body);
+      if (ws) ws.onclick = function () {
+        var plain = String(d.draftHtml).replace(/<\/(p|h\d|li|div)>/g, '\n').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+        var basisText = (d.basis || []).map(function (b) { return '• ' + b.act + (b.article ? ', ' + b.article + '-modda' : '') + ': «' + b.quote + '»'; }).join('\n');
+        J.saveToWorkspace({ title: s('title') + (last.df ? ' — ' + last.df : ''), text: plain + (basisText ? '\n\n' + s('basis') + ':\n' + basisText : '') + '\n\n' + s('note'),
+          json: { type: 'claim_draft', draftHtml: d.draftHtml, basis: d.basis || [], warnings: d.warnings || [] } });
+      };
       $('[data-a=back]', body).onclick = function () { last = {}; form(); };
       if (J.refreshTariff) J.refreshTariff();
     }
