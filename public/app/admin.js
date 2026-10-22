@@ -23,7 +23,7 @@
       'adm.att': 'Advokatlar', 'adm.att.d': 'Litsenziya tekshiruvi va katalog',
       'adm.svc': 'Pullik xizmatlar', 'adm.svc.d': 'Hujjat buyurtmalari va narxlar',
       'adm.more': "Eski dashboardda qolganlar", 'adm.more.d': "Korpusga yuklash, inson navbati, model testi",
-      'adm.today': 'Bugun', 'adm.t.reg': 'Kutilayotgan arizalar', 'adm.t.orders': 'Yurist narxini kutayotgan buyurtmalar', 'adm.t.del': "O'chirish so'rovlari", 'adm.t.fb': 'Yangi xato xabarlari', 'adm.t.ai': 'Bugungi AI xarajati', 'adm.t.unknown': "ta narxi noma'lum",
+      'adm.today': 'Bugun', 'adm.t.reg': 'Kutilayotgan arizalar', 'adm.t.orders': 'Yurist narxini kutayotgan buyurtmalar', 'adm.t.del': "O'chirish so'rovlari", 'adm.t.fb': 'Yangi xato xabarlari', 'adm.t.ai': 'Bugungi AI xarajati', 'adm.t.buy': 'Bugungi xaridlar', 'adm.buy': 'Bir martalik xaridlar', 'adm.buy.d': 'Telegram Stars orqali sotilgan xizmatlar', 'adm.buy.count': 'Xaridlar', 'adm.buy.uzs': "Katalog narxi, so'm", 'adm.buy.today': 'Bugun', 'adm.buy.product': 'Xizmat', 'adm.buy.units': 'Birlik', 'adm.buy.list': "So'nggi xaridlar", 'adm.buy.left': 'Qolgan', 'adm.buy.refunded': 'Qaytarilgan', 'adm.buy.ok': "To'langan", 'adm.buy.none': "Hali xarid yo'q (jadval migratsiyasi ishlamagan bo'lishi mumkin).", 'adm.buy.note': "So'mdagi summa — sotuv paytidagi katalog narxi. Stars'dan haqiqatda tushgan pul bu yerda ko'rinmaydi; qaytarilganlar hisoblanmaydi.", 'adm.p.chat5': '5 ta savol', 'adm.p.draft': 'AI hujjat loyihasi', 'adm.p.analysis': 'AI tahlil', 'adm.p.opinion': 'AI xulosa', 'adm.t.unknown': "ta narxi noma'lum",
       'adm.g.daily': 'Kundalik ishlar', 'adm.g.money': 'Tarif va xarajat', 'adm.g.catalog': 'Advokatlar va manbalar', 'adm.g.tech': 'Texnik',
       'adm.day': 'Kunlik', 'adm.month': 'Oylik', 'adm.days': 'kun', 'adm.calls': 'chaqiruv', 'adm.requests': "so'rov",
       'adm.known': "Narxi ma'lum", 'adm.unknown': "Narxi noma'lum", 'adm.failed': 'Xato', 'adm.avg': "O'rtacha / so'rov",
@@ -68,7 +68,7 @@
       'adm.att': 'Адвокаты', 'adm.att.d': 'Проверка лицензий и каталог',
       'adm.svc': 'Платные услуги', 'adm.svc.d': 'Заказы документов и цены',
       'adm.more': 'Остальное в старом дашборде', 'adm.more.d': 'Загрузка в корпус, очередь, опрос, прогноз',
-      'adm.today': 'Сегодня', 'adm.t.reg': 'Заявки в ожидании', 'adm.t.orders': 'Заказы ждут цену юриста', 'adm.t.del': 'Запросы на удаление', 'adm.t.fb': 'Новые сообщения об ошибках', 'adm.t.ai': 'Расход AI сегодня', 'adm.t.unknown': 'без цены',
+      'adm.today': 'Сегодня', 'adm.t.reg': 'Заявки в ожидании', 'adm.t.orders': 'Заказы ждут цену юриста', 'adm.t.del': 'Запросы на удаление', 'adm.t.fb': 'Новые сообщения об ошибках', 'adm.t.ai': 'Расход AI сегодня', 'adm.t.buy': 'Покупки сегодня', 'adm.buy': 'Разовые покупки', 'adm.buy.d': 'Услуги, проданные за Telegram Stars', 'adm.buy.count': 'Покупки', 'adm.buy.uzs': 'Цена каталога, сум', 'adm.buy.today': 'Сегодня', 'adm.buy.product': 'Услуга', 'adm.buy.units': 'Единиц', 'adm.buy.list': 'Последние покупки', 'adm.buy.left': 'Осталось', 'adm.buy.refunded': 'Возврат', 'adm.buy.ok': 'Оплачено', 'adm.buy.none': 'Покупок пока нет (возможно, миграция не применена).', 'adm.buy.note': 'Сумма в сумах — цена каталога на момент продажи. Фактическая выплата за Stars здесь не видна; возвраты не учитываются.', 'adm.p.chat5': '5 вопросов', 'adm.p.draft': 'AI-проект документа', 'adm.p.analysis': 'AI-анализ', 'adm.p.opinion': 'AI-заключение', 'adm.t.unknown': 'без цены',
       'adm.g.daily': 'Ежедневные дела', 'adm.g.money': 'Тарифы и расходы', 'adm.g.catalog': 'Адвокаты и источники', 'adm.g.tech': 'Техническое',
       'adm.day': 'По дням', 'adm.month': 'По месяцам', 'adm.days': 'дн.', 'adm.calls': 'вызовов', 'adm.requests': 'запросов',
       'adm.known': 'Известная стоимость', 'adm.unknown': 'Неизвестная стоимость', 'adm.failed': 'Ошибки', 'adm.avg': 'Средняя / запрос',
@@ -102,7 +102,7 @@
       'adm.old': 'Open in the old dashboard', 'adm.refresh': 'Refresh', 'adm.empty': 'No data',
       'adm.ai': 'AI requests', 'adm.spend': 'Spend', 'adm.reg': 'Applications & plans', 'adm.fb': 'Quality', 'adm.src': 'Suggested sources',
       'adm.cov': 'Corpus coverage', 'adm.audit': 'Audit log', 'adm.landing': 'Landing', 'adm.offers': 'Discounts', 'adm.tg': 'Telegram agent',
-      'adm.att': 'Lawyers', 'adm.svc': 'Paid services', 'adm.more': 'Still in the old dashboard', 'adm.today': 'Today', 'adm.g.daily': 'Daily work', 'adm.g.money': 'Plans and spend', 'adm.g.catalog': 'Lawyers and sources', 'adm.g.tech': 'Technical', 'adm.del': 'Deletion requests'
+      'adm.att': 'Lawyers', 'adm.svc': 'Paid services', 'adm.more': 'Still in the old dashboard', 'adm.today': 'Today', 'adm.buy': 'One-time purchases', 'adm.g.daily': 'Daily work', 'adm.g.money': 'Plans and spend', 'adm.g.catalog': 'Lawyers and sources', 'adm.g.tech': 'Technical', 'adm.del': 'Deletion requests'
     }
   };
   ['uz', 'ru', 'en'].forEach(function (l) { var d = G.JAI_I18N[l] = G.JAI_I18N[l] || {}; Object.keys(L[l]).forEach(function (k) { if (d[k] === undefined) d[k] = L[l][k]; }); });
@@ -132,7 +132,7 @@
   var SECTIONS = [
     ['qabul', 'user', 'adm.reg', 'daily'], ['xizmatlar', 'doc', 'adm.svc', 'daily'], ['ochirish', 'trash', 'adm.del', 'daily'],
     ['sifat', 'flag', 'adm.fb', 'daily'], ['telegram', 'tg', 'adm.tg', 'daily'],
-    ['chegirmalar', 'spark', 'adm.offers', 'money'], ['ai', 'chat', 'adm.ai', 'money'],
+    ['xaridlar', 'tg', 'adm.buy', 'money'], ['chegirmalar', 'spark', 'adm.offers', 'money'], ['ai', 'chat', 'adm.ai', 'money'],
     ['advokatlar', 'scale', 'adm.att', 'catalog'], ['manbalar', 'book', 'adm.src', 'catalog'],
     ['korpus', 'search', 'adm.cov', 'tech'], ['audit', 'shield', 'adm.audit', 'tech'], ['landing', 'globe', 'adm.landing', 'tech']
   ];
@@ -167,7 +167,7 @@
     var v = J.mount('<div class="wrap"><div class="vh"><div><h2>' + esc(t('nav.admin')) + '</h2><p>' + esc(t('adm.sub')) + '</p></div></div>' + today + groups + '</div>');
     var todayItems = {};
     function drawToday() {
-      var order = [['qabul', 'adm.t.reg'], ['xizmatlar', 'adm.t.orders'], ['ochirish', 'adm.t.del'], ['sifat', 'adm.t.fb'], ['ai', 'adm.t.ai']];
+      var order = [['qabul', 'adm.t.reg'], ['xizmatlar', 'adm.t.orders'], ['ochirish', 'adm.t.del'], ['sifat', 'adm.t.fb'], ['xaridlar', 'adm.t.buy'], ['ai', 'adm.t.ai']];
       $('.adm-today-b', v).innerHTML = '<div class="kv">' + order.map(function (o) {
         var x = todayItems[o[0]];
         return '<a href="#/boshqaruv/' + o[0] + '" style="color:inherit;text-decoration:none"><small>' + esc(t(o[1])) + '</small><b class="num">' + (x == null ? '…' : esc(x)) + '</b></a>';
@@ -176,6 +176,7 @@
     drawToday();
     function put(k, val) { todayItems[k] = val; drawToday(); }
     J.api('/api/admin/service-orders?limit=100&status=pending_lawyer_review').then(function (r) { put('xizmatlar', r.ok ? String((r.data.items || []).length) : '—'); });
+    J.api('/api/admin/one-time-purchases?days=1&limit=1').then(function (r) { put('xaridlar', r.ok && r.data.available ? r.data.today.count + (r.data.today.stars ? ' · ' + r.data.today.stars + ' ⭐' : '') : '—'); });
     J.api('/api/admin/ai-usage/report?period=day').then(function (r) {
       var ps = r.ok ? (r.data.periods || []) : [], last = ps[ps.length - 1] || null;
       // unknown cost is never shown as $0: the calls without a price are counted beside the known spend
@@ -658,6 +659,32 @@
     });
   }
 
+  /* ---------- Bir martalik xaridlar (service_credits) ---------- */
+  var PRODUCT_T = { chat5: 'adm.p.chat5', draft: 'adm.p.draft', analysis: 'adm.p.analysis', opinion: 'adm.p.opinion' };
+  var buyDays = 30;
+  function viewBuy() {
+    shell('xaridlar', function (body, again) {
+      body.innerHTML = '<div class="filters"><span class="seg">' + [7, 30, 90].map(function (d) { return '<button type="button" data-d="' + d + '" class="' + (d === buyDays ? 'on' : '') + '">' + d + ' ' + esc(t('adm.days')) + '</button>'; }).join('') + '</span></div><div class="by-b">' + skel() + '</div>';
+      $$('[data-d]', body).forEach(function (b) { b.onclick = function () { buyDays = Number(b.dataset.d); again(); }; });
+      J.api('/api/admin/one-time-purchases?days=' + buyDays).then(function (r) {
+        var box = $('.by-b', body); if (!r.ok) { box.innerHTML = errBox(r); return; }
+        var d = r.data;
+        if (!d.available) { box.innerHTML = '<div class="empty-state">' + esc(t('adm.buy.none')) + '</div>'; return; }
+        var tot = d.totals || [], all = tot.reduce(function (a, x) { return { count: a.count + x.count, stars: a.stars + x.stars, uzs: a.uzs + Number(x.price_uzs) }; }, { count: 0, stars: 0, uzs: 0 });
+        box.innerHTML = kv([[t('adm.buy.count'), n0(all.count)], ['Stars', n0(all.stars) + ' ⭐'], [t('adm.buy.uzs'), n0(all.uzs) + " so'm"], [t('adm.buy.today'), n0(d.today.count)]]) +
+          '<p class="muted" style="font-size:12.5px;margin:8px 0 16px">' + esc(t('adm.buy.note')) + '</p>' +
+          table([t('adm.buy.product'), t('adm.buy.count'), t('adm.buy.units'), 'Stars', t('adm.buy.uzs')], tot.map(function (x) {
+            return '<tr>' + td(t(PRODUCT_T[x.product] || x.product)) + td(n0(x.count)) + td(n0(x.units)) + td(n0(x.stars) + ' ⭐') + td(n0(x.price_uzs)) + '</tr>';
+          })) + '<h3 style="font-size:16px;margin:22px 0 10px">' + esc(t('adm.buy.list')) + '</h3>' +
+          table([t('adm.time'), t('adm.user'), t('adm.buy.product'), 'Stars', t('adm.buy.left'), t('adm.status')], (d.purchases || []).map(function (p) {
+            var who = p.admin_id ? (p.full_name || '') + (p.username ? ' @' + p.username : '') + ' · #' + p.admin_id : (p.tg_first_name || '') + (p.tg_username ? ' @' + p.tg_username : '') + ' · tg ' + (p.telegram_user_id || '');
+            return '<tr>' + td(dt(p.created_at)) + td(who) + td(t(PRODUCT_T[p.product] || p.product) + ' × ' + p.units) + td(p.stars != null ? p.stars + ' ⭐' : '—') +
+              td(p.remaining == null ? '—' : String(p.remaining)) + td(p.refunded_at ? t('adm.buy.refunded') : t('adm.buy.ok')) + '</tr>';
+          }));
+      });
+    });
+  }
+
   /* ---------- Akkauntni o'chirish so'rovlari ---------- */
   var delTab = 'pending';
   function viewDel() {
@@ -691,7 +718,7 @@
   }
 
   /* ---------- marshrutlar ---------- */
-  var VIEWS = { ai: viewAi, qabul: viewReg, sifat: viewFb, manbalar: viewSrc, korpus: viewCov, audit: viewAudit, landing: viewLanding, chegirmalar: viewOffers, telegram: viewTg, advokatlar: viewAtt, xizmatlar: viewSvc, ochirish: viewDel };
+  var VIEWS = { ai: viewAi, xaridlar: viewBuy, qabul: viewReg, sifat: viewFb, manbalar: viewSrc, korpus: viewCov, audit: viewAudit, landing: viewLanding, chegirmalar: viewOffers, telegram: viewTg, advokatlar: viewAtt, xizmatlar: viewSvc, ochirish: viewDel };
   function guard(fn) { return function () { if (!J.isMaster()) { J.go('#/'); return; } fn.apply(null, arguments); }; }
   J.route(/^\/boshqaruv$/, guard(function () { J.viewAdmin(); }));
   J.route(/^\/boshqaruv\/([a-z]+)$/, guard(function (k) { (VIEWS[k] || J.viewAdmin)(); }));
