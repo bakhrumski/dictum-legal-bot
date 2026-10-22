@@ -222,6 +222,18 @@ Known state of the suites (Sept 2026):
   one page is waited for at most `LEX_FETCH_MAX_MS` (30 s); a search past
   the deadline returns what it found. Other `searchLexUz` callers pass no
   deadline and are unchanged.
+  Queries (2026-10-22: one question ran 18 searches, 13 found nothing):
+  lex.uz finds 2-3 words near each other in the law's word forms and lists
+  the newest acts first. The plan searches the question's terms three at a
+  time with negative/progressive verbs as verbal nouns (`nominalizeVerb`:
+  "bajarmadi" -> "bajarmaslik"), "<2 words> nizom", and codes / laws by
+  lex.uz's form filter (`actForm` code 3964 / law 3968, `code-search` +40 in
+  ranking); the planner is told the same rules; text searches are in-force
+  only (`status=Y`, <= 100 chars); a phrase that found nothing is searched
+  once more as its first and last two words, connectors dropped
+  (`relaxedQueries`). Live on 10 questions that day: 0 of 110 old
+  deterministic searches found acts, 110 of 128 new ones; the AI planner's
+  new prompt was not measured (no key here).
   Answer layout (2026-10-13, `src/rag/answer-structure.js`, no AI; the
   sections stay Huquqiy asos / Tahlil / Xulosa): a `> «...»` quote of the
   law is kept only when its words are in a retrieved source word for word

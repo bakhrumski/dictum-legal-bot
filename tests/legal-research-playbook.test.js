@@ -139,7 +139,12 @@ test('Lex research expands beyond laws and codes to implementing acts', () => {
     'talim'
   );
   assert.ok(queries.length >= 4);
-  assert.ok(queries.some(query => query.includes('Vazirlar Mahkamasi qarori')));
+  // implementing acts are found by the act form of each result (PQ / PF / VMQ
+  // steps) and codes and laws by lex.uz's form filter - no act-class words in
+  // the query: lex.uz finds nothing for a long phrase (2026-10-22, tests/lex-queries.test.js)
+  const plan = buildLexResearchPlan('Talabani yakuniy nazoratdan qaysi asosda chetlashtirish mumkin?', 'talim');
+  assert.ok(plan.some(step => step.kind === 'cabinet-decision' && step.preferredPrefixes.includes('VMQ')));
+  assert.ok(plan.some(step => step.actForm === 'code') && plan.some(step => step.actForm === 'law'));
   assert.ok(queries.some(query => query.includes('nizom')));
   assert.ok(queries.some(query => query.includes('yakuniy')));
   assert.ok(queries.some(query => /якуний/iu.test(query)), 'Cyrillic search fallback is missing');
@@ -262,6 +267,7 @@ test('exact PQ, PF and VMQ identifiers use the official Lex.uz act-number filter
   const natural = new URL(buildLexSearchUrl('talabani yakuniy nazoratdan chetlashtirish'));
   assert.strictEqual(natural.searchParams.get('actnum'), null);
   assert.strictEqual(natural.searchParams.get('Query'), 'talabani yakuniy nazoratdan chetlashtirish');
+  assert.strictEqual(natural.searchParams.get('status'), 'Y', 'acts in force only');
 });
 
 test('same-number Cabinet decisions are ranked by the original legal question', () => {
