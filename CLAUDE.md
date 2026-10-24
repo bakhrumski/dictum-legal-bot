@@ -242,8 +242,14 @@ Known state of the suites (Sept 2026):
   round reads at most `LEX_ROUND_MAX_READS` (48) uncached pages (a shared
   `readBudget`). Same question after: 16 documents kept, 233 MB peak with
   `--max-old-space-size=320` (301 MB without: V8 collects late).
-  Answer layout (2026-10-13, `src/rag/answer-structure.js`, no AI; the
-  sections stay Huquqiy asos / Tahlil / Xulosa): a `> «...»` quote of the
+  Answer sections (2026-10-24, owner: "Huquqiy asos" repeated Tahlil and
+  Xulosa): two, **Tahlil** (opens with the deciding norm - name, number,
+  article, the quote - and applies it, each norm once) and **Xulosa** (1-2
+  sentences, the direct answer and next step, never repeating Tahlil), in
+  every legal-answer prompt (`buildTopicPrompt` for chat and Telegram, the
+  search prompt, the Gemini fallback, advanced RAG, playbook 1.5.0);
+  `tests/answer-layout.test.js`.
+  Answer layout (2026-10-13, `src/rag/answer-structure.js`, no AI): a `> «...»` quote of the
   law is kept only when its words are in a retrieved source word for word
   (spaces, case, apostrophe forms aside; "..." parts in order in one
   source), shown in the source's own words with a "lex.uz ↗" link that

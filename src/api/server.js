@@ -4848,13 +4848,11 @@ Quyidagi murojaat turini aniqlang:
 Javob strukturasini murojaat turiga moslang.`;
 
     // ========== STRUCTURED RESPONSE FORMAT ==========
-    const responseFormat = `JAVOB FORMATI (3 bo'lim, MAJBURIY — boshqa sarlavha qo'shmang):
+    const responseFormat = `JAVOB FORMATI (2 bo'lim — Tahlil va Xulosa, MAJBURIY — boshqa sarlavha qo'shmang):
 
-**Huquqiy asos** — Qaysi hujjat va qaysi aniq norma qo'llanadi? Faqat AMALDAGI normalarni keltiring. Hujjatning to'liq nomi, tasdiqlangan rasmiy raqami (O'RQ, PQ, PF, VMQ) va modda/band/qismni **qalin** yozing. Raqamlarni FAQAT kontekst yoki Lex.uz tasdiqlasa keltiring — taxmin qilmang.
+**Tahlil** — Hal qiluvchi normadan boshlang: faqat AMALDAGI normalar; hujjatning to'liq nomi, tasdiqlangan rasmiy raqami (O'RQ, PQ, PF, VMQ) va modda/band/qismni **qalin** yozing (raqamlarni FAQAT kontekst yoki Lex.uz tasdiqlasa keltiring — taxmin qilmang). So'ng norma foydalanuvchi vaziyatiga qanday tatbiq etilishini ayting: jismoniy / mansabdor / yuridik shaxs uchun farq bo'lsa — har birini alohida; aniq BHM ko'paytmasi, aniq muddatlar, aniq foizlar — noaniq iboralar TAQIQLANGAN. Har bir normani bir marta keltiring.
 
-**Tahlil** — Norma foydalanuvchi vaziyatiga qanday tatbiq etiladi? Jismoniy / mansabdor / yuridik shaxs uchun farq bo'lsa — har birini alohida ko'rsating. Aniq BHM ko'paytmasi, aniq muddatlar, aniq foizlar — noaniq iboralar TAQIQLANGAN.
-
-**Xulosa** — 1-2 gap. Savol uchun ENG MUHIM amaliy natija va tavsiya.
+**Xulosa** — 1-2 gap: savolga to'g'ridan-to'g'ri javob va eng muhim keyingi qadam; Tahlildagi dalil va moddalarni takrorlamang.
 
 JIDDIY TAQIQLAR:
 - Modda matnini so'zma-so'z ko'chirib chiqarmang.
@@ -5995,16 +5993,13 @@ SOHA: MA'MURIY HUQUQ (regulatory/tartibga soluvchi)
 
   // ── OUTPUT FORMAT — IRAC structure for lawyers ──
   const outputFormat = `
-JAVOB FORMATI (3 bo'lim, MAJBURIY):
+JAVOB FORMATI (2 bo'lim, MAJBURIY; 2026-10-24, egasi: "Huquqiy asos" bo'limi yo'q - u Tahlil va Xulosa bilan takrorlanardi):
 ${definitionHint}
 
-**Huquqiy asos** — Qaysi hujjat, qaysi modda yoki band va qaysi qism qo'llanadi? Hujjatning to'liq nomi, Lex.uz'da tasdiqlangan rasmiy raqami va normani **qalin** yozing. Har bir norma uchun: (**Hujjatning to'liq nomi (O'RQ/PQ/PF/VMQ-raqami), N-modda yoki N-band, M-qism**) (rus tilidagi javobda esa: **Полное название на русском (ЗРУ/ПП/УП/ПКМ-номер), статья N, часть первая/вторая…**). Iqtibos ham javob tilida yoziladi.
-Kontekstdagi savolga bevosita tatbiq etiladigan barcha normalarni qamrab oling. Ichki tartib, shartnoma yoki tashkilot nizomi hal qiluvchi bo'lsa, aynan qaysi hujjat kerakligini ayting.
+**Tahlil** — Savolni hal qiluvchi normadan boshlang: hujjatning to'liq nomi, Lex.uz'da tasdiqlangan rasmiy raqami va normani **qalin** yozing. Har bir norma uchun: (**Hujjatning to'liq nomi (O'RQ/PQ/PF/VMQ-raqami), N-modda yoki N-band, M-qism**) (rus tilidagi javobda esa: **Полное название на русском (ЗРУ/ПП/УП/ПКМ-номер), статья N, часть первая/вторая…**). Iqtibos ham javob tilida yoziladi. So'ng normani foydalanuvchi vaziyatiga qo'llang: shartlar, istisnolar, subyektlar bo'yicha farq (jismoniy / mansabdor / yuridik shaxs) bo'lsa — har birini alohida jumlada; jarima va sanksiyalarni ANIQ BHM ko'paytmasida, muddatlarni ANIQ kun/oy/yilda. Savolga bevosita tatbiq etiladigan barcha normalarni qamrab oling, lekin har bir normani BIR MARTA keltiring va o'sha joyda qo'llang — norma mazmunini qayta bayon qilmang. Ichki tartib, shartnoma yoki tashkilot nizomi hal qiluvchi bo'lsa, aynan qaysi hujjat kerakligini ayting.
+Konstitutsiyadagi iqtibos uslubiga amal qiling. Alohida "Huquqiy asos" yoki "Manbalar" bo'limi yaratmang.
 
-**Tahlil** — Norma amalda qanday ishlaydi? Subyektlar bo'yicha (jismoniy / mansabdor / yuridik shaxs) farq bo'lsa — har birini alohida jumlada ko'rsating. Jarima va sanksiyalarni ANIQ BHM ko'paytmasida, muddatlarni ANIQ kun/oy/yilda yozing. Foydalanuvchi savoliga to'g'ridan-to'g'ri aloqador holatlarni tahlil qiling.
-Konstitutsiyadagi iqtibos uslubiga amal qiling. Alohida "Manbalar" bo'limi yaratmang.
-
-**Xulosa** — 1-2 gap. Savol uchun ENG MUHIM amaliy natija va tavsiya.
+**Xulosa** — 1-2 gap: savolga to'g'ridan-to'g'ri javob va eng muhim keyingi qadam. Tahlildagi dalillar, moddalar va iqtiboslarni TAKRORLAMANG.
 
 ${require('../rag/answer-structure').promptRules(lexLangForText(userQuestion))}
 
@@ -6040,14 +6035,12 @@ Siz O'zbekiston ${topicLabel} bo'yicha yuqori malakali yuridik maslahatchi AI si
 
 VAZIFA: O'zbekiston qonunchiligi asosida ANIQ, RAQAMLI va TUZILMALI javob bering.
 
-JAVOB FORMATI (3 bo'lim, MAJBURIY):
+JAVOB FORMATI (2 bo'lim, MAJBURIY):
 ${definitionHint}
 ${ragContext ? `\nKONTEKST — FAQAT SHU MANBALARGA TAYANING:\n${ragContext}\n` : ''}
 
-**Huquqiy asos** — Bevosita tatbiq etiladigan normalarni konstitutsiyadagi iqtibos uslubida yozing.
-
-**Tahlil** — Norma amalda qanday ishlaydi? Subyektlar bo'yicha farq bo'lsa har birini alohida jumlada ko'rsating (jismoniy / mansabdor / yuridik shaxs). Jarima va sanksiyalarni ANIQ BHM ko'paytmasida, muddatlarni ANIQ kun/oy/yilda yozing.
-**Xulosa** — 1-2 gap. Savol uchun ENG MUHIM amaliy natija va tavsiya.
+**Tahlil** — Hal qiluvchi normadan konstitutsiyadagi iqtibos uslubida boshlang, so'ng uni vaziyatga qo'llang. Subyektlar bo'yicha farq bo'lsa har birini alohida jumlada ko'rsating (jismoniy / mansabdor / yuridik shaxs). Jarima va sanksiyalarni ANIQ BHM ko'paytmasida, muddatlarni ANIQ kun/oy/yilda yozing. Har bir normani bir marta keltiring.
+**Xulosa** — 1-2 gap: savolga to'g'ridan-to'g'ri javob va keyingi qadam; Tahlilni takrorlamang.
 
 "Yuridik maslahat" yoki "Eslatma" kabi qo'shimcha sarlavha yaratmang.
 
