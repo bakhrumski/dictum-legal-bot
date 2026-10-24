@@ -81,6 +81,19 @@ function translitQueryToCyr(value = '') {
   return output;
 }
 
+// lex.uz does not find a complaint's finite verb ("bajarmadi",
+// "qaytarmayapti": 0 acts) but finds the form the law uses ("ishni
+// bajarmaslik": 33). A negative or progressive verb becomes its verbal noun;
+// any other word is left as it is (a past "-di" is too ambiguous to guess).
+function nominalizeVerb(word = '') {
+  const w = String(word || '');
+  const neg = w.match(/^([\p{L}'ʻ’]{3,}?)ma(?:di|ydi|yapti|yapdi|pti|sa|gan)$/u);
+  if (neg) return `${neg[1]}maslik`;
+  const prog = w.match(/^([\p{L}'ʻ’]{3,}?)(?:yapti|yapdi|moqda)$/u);
+  if (prog) return /[aeiouoʻ']$/iu.test(prog[1]) ? `${prog[1]}sh` : `${prog[1]}ish`;
+  return w;
+}
+
 function canonicalQueryPrefix(value = '') {
   const normalized = String(value || '').toLocaleLowerCase('uz').replace(/['`\u2018\u2019\u02bb]/gu, '');
   return ACT_PREFIX_CANON[normalized] || String(value || '').toUpperCase();
@@ -211,8 +224,13 @@ function buildLexResearchPlan(question = '', topic = '') {
 
   const steps = [];
   const seen = new Set();
-  const terms = significantTerms(original, 12);
-  const concise = terms.join(' ') || original;
+  // lex.uz finds two or three words near each other, not a sentence
+  // (2026-10-22: 13 of 18 searches for one question found nothing): the
+  // question's terms in the law's word forms, three at a time
+  const terms = significantTerms(original, 12).map(nominalizeVerb);
+  const concise = terms.slice(0, 3).join(' ') || original;
+  const concise2 = terms.slice(3, 6).join(' ');
+  const short = terms.slice(0, 2).join(' ') || concise;
   const cyrillicConcise = translitQueryToCyr(concise);
   const topicLabel = TOPIC_LABELS[topic] || String(topic || '').replace(/[-_]/g, ' ');
   const concepts = buildConceptQueries(original);
@@ -246,7 +264,12 @@ function buildLexResearchPlan(question = '', topic = '') {
   // registry accelerates discovery but is never treated as a complete list.
   pushResearchStep(steps, seen, original, 'natural-language', 2, steps.every(step => !step.includeRegistry));
   pushResearchStep(steps, seen, concise, 'legal-concept', 2, false);
+  if (concise2.split(' ').length >= 2) pushResearchStep(steps, seen, concise2, 'legal-concept', 2, false);
   pushResearchStep(steps, seen, cyrillicConcise, 'legal-concept-cyrillic', 2, false);
+  // the codes and laws among the acts that use these words: a handful, where
+  // the plain search lists the newest of hundreds
+  pushFormStep(steps, seen, concise, 'code');
+  pushFormStep(steps, seen, concise, 'law');
 
   for (const actClass of SPECIAL_ACT_QUERY_CLASSES) {
     // Keep the Lex.uz text query short. Appending the act class to a long
@@ -264,24 +287,18 @@ function buildLexResearchPlan(question = '', topic = '') {
     );
   }
 
-  pushResearchStep(
-    steps,
-    seen,
-    `${concise} nizom tartib yo'riqnoma vazirlik buyrug'i`,
-    'subordinate-regulation',
-    2,
-    false
-  );
-  pushResearchStep(
-    steps,
-    seen,
-    [concise, topicLabel, "qonun kodeks Prezident Vazirlar Mahkamasi qarori nizom"].filter(Boolean).join(' '),
-    'hierarchy-cross-check',
-    2,
-    false
-  );
+  // a regulation (nizom) is usually an annex of a decision: two words and
+  // "nizom" find it, a longer phrase finds nothing
+  pushResearchStep(steps, seen, `${short} nizom`, 'subordinate-regulation', 2, false);
 
   return steps.slice(0, 15);
+}
+
+/** A search limited to codes ('code') or laws ('law'): see ACT_FORMS in lex-live-search. */
+function pushFormStep(steps, seen, query, actForm) {
+  const before = steps.length;
+  pushResearchStep(steps, seen, query, `${actForm}-search`, actForm === 'code' ? 1 : 2, false);
+  if (steps.length > before) steps[steps.length - 1].actForm = actForm;
 }
 
 function buildLexQueryPlannerPrompt(question = '', topic = '') {
@@ -290,10 +307,12 @@ function buildLexQueryPlannerPrompt(question = '', topic = '') {
   return `Siz Lex.uz qidiruv so'rovlari rejalashtiruvchisiz. Huquqiy javob BERMANG. Faqat foydalanuvchi iborasini Lex.uz hujjatlarida uchrashi mumkin bo'lgan rasmiy yuridik tushunchalarga aylantiring.
 
 Faqat JSON massiv qaytaring:
-[{"query":"2-6 so'zli qidiruv iborasi","kind":"official-concept|presidential-decision|presidential-decree|cabinet-decision|subordinate-regulation","preferredPrefixes":["PQ|PF|VMQ"]}]
+[{"query":"2-3 so'zli qidiruv iborasi","kind":"official-concept|presidential-decision|presidential-decree|cabinet-decision|subordinate-regulation","preferredPrefixes":["PQ|PF|VMQ"]}]
 
 Qoidalar:
 - 3-8 ta qisqa, bir-biridan mazmunan farqli qidiruv iborasi bering.
+- Har bir ibora 2-3 so'z: Lex.uz so'zlari yonma-yon turgan hujjatni topadi; 4 va undan ko'p so'zli ibora odatda hech narsa topmaydi.
+- So'zlarni qonun matnidagi shaklda yozing: ot yoki harakat nomi ("shartnomani bajarishdan voz kechish", "pudratchining javobgarligi", "avans to'lovi", "ish haqini to'lash"); fe'lning tuslangan shakli ("bajarmadi", "qaytarmayapti") va "bo'yicha", "tomonidan", "va" kabi bog'lovchi so'zlarsiz.
 - Oddiy foydalanuvchi so'zining rasmiy atamasi, subyekt, shart, huquqiy oqibat va maxsus tartib nomini qidiring.
 - PQ, PF yoki VMQ raqami xotirangizda bo'lsa, uni faqat qidiruv GIPOTEZASI sifatida alohida queryda berishingiz mumkin; u dalil emas va Lex.uz hujjatining o'z raqami bilan keyin tasdiqlanadi.
 - Uydirma norma, modda yoki fakt yozmang. Savolga javob bermang.
@@ -331,6 +350,12 @@ function parseLexQueryPlannerResponse(value = '') {
       pushResearchStep(steps, seen, exact, 'exact-act', 1, false, [prefix]);
     }
     pushResearchStep(steps, seen, query, kind, 2, false, preferredPrefixes);
+    // the first official terms are also looked up among codes and laws
+    if (kind === 'official-concept' && !buildExactActQueryVariants(query).length) {
+      const concepts = steps.filter(st => st.kind === 'official-concept').length;
+      if (concepts <= 3) pushFormStep(steps, seen, query, 'code');
+      if (concepts <= 2) pushFormStep(steps, seen, query, 'law');
+    }
   }
   return steps;
 }
@@ -480,6 +505,8 @@ function scoreLexResearchResult(result = {}, question = '') {
   if (result.metadata && result.metadata.is_active === false) score -= 1000;
   if (/o['`\u2018\u2019\u02bb]?zgartirish|qo['`\u2018\u2019\u02bb]?shimcha|\u045e\u0437\u0433\u0430\u0440\u0442\u0438\u0440\u0438\u0448|\u0438\u0437\u043c\u0435\u043d\u0435\u043d/iu.test(result.title || '')) score -= 70;
 
+  // a code or law found by its form among a handful (pushFormStep)
+  if (/^(?:code|law)-search$/u.test(result.researchKind || '')) score += 40;
   const expectedPrefix = queryKindPrefix(result.researchKind || '');
   const actualPrefix = resultActPrefix(result);
   if (expectedPrefix && actualPrefix === expectedPrefix) score += 55;
@@ -609,4 +636,5 @@ module.exports = {
   SPECIAL_STATUS_QUERIES,
   translitQueryToCyr,
   significantTerms,
+  nominalizeVerb,
 };

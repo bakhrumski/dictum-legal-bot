@@ -21,11 +21,35 @@ const LEX_SEARCH_URL = 'https://lex.uz/search/nat';
 const MAX_DOCS_TO_FETCH = 2;
 const MAX_EXCERPT_CHARS = 4000;
 const SEARCH_TIMEOUT_MS = 15000;
+// One document read (a historical version followed to the current one
+// included). httpGet's own socket timeout is 60 s, and the candidates of one
+// search are read one after another, so without this a slow lex.uz alone
+// could spend a request's whole AI_REQUEST_MAX_MS (2026-10-22: a Telegram
+// answer used ~29 s of AI calls and still hit the 120 s limit before its
+// claim check). The read itself is not cancelled - it may still fill the
+// cache - it is only no longer waited for.
+const DOC_FETCH_MAX_MS = () => Math.max(1000, Number(process.env.LEX_FETCH_MAX_MS) || 30000);
 const DOCUMENT_CACHE_TTL_MS = Math.max(
   60_000,
   Number.parseInt(process.env.LEX_DOCUMENT_CACHE_TTL_MS || String(24 * 60 * 60 * 1000), 10) || 24 * 60 * 60 * 1000
 );
-const DOCUMENT_CACHE_LIMIT = 128;
+const DOCUMENT_CACHE_LIMIT = Math.max(8, Number(process.env.LEX_DOCUMENT_CACHE_LIMIT) || 64);
+// Documents read at once, across every search of every request (2026-10-24:
+// with #477's queries finding acts, one question's 22 searches read dozens of
+// 0.3-1 MB pages in parallel and the process went from 57 to 515 MB - the
+// Render instance has 512 MB, the answer never came). A read waits for a slot.
+const FETCH_SLOTS = () => Math.max(1, Number(process.env.LEX_FETCH_CONCURRENCY) || 2);
+let activeFetches = 0;
+const fetchQueue = [];
+function acquireFetchSlot() {
+  if (activeFetches < FETCH_SLOTS()) { activeFetches++; return Promise.resolve(); }
+  return new Promise(resolve => fetchQueue.push(resolve));
+}
+function releaseFetchSlot() {
+  const next = fetchQueue.shift();
+  if (next) next();
+  else activeFetches = Math.max(0, activeFetches - 1);
+}
 const documentCache = new Map();
 const documentInFlight = new Map();
 const SEARCH_PAGE_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -64,7 +88,18 @@ async function searchLexUz(query, opts = {}) {
     // known acts by address (a named special status), inspected first and
     // kept only when the page's own title matches
     pinnedDocs = [],
+    // epoch ms: no read starts after it, and a running one is waited for only
+    // until it; what was found by then is returned
+    deadline = 0,
+    // 'code' | 'law': only that act form (ACT_FORMS)
+    actForm = '',
+    // { left: n } shared by every search of one round: lex.uz pages not in
+    // the cache it may still read (the cache and the slots bound memory over
+    // time, this bounds one question)
+    readBudget = null,
   } = opts;
+  const startedAt = Date.now();
+  const leftMs = () => (deadline ? deadline - Date.now() : Infinity);
   const effectiveScoreText = [scoreText || query, TOPIC_SCORE_HINTS[String(topic || '').toLowerCase()] || '']
     .filter(Boolean)
     .join(' ');
@@ -72,17 +107,33 @@ async function searchLexUz(query, opts = {}) {
   if (!query || query.trim().length < 3) return [];
 
   const requestedActs = extractActIdentifiers(query);
-  const searchUrl = buildLexSearchUrl(query);
-  console.log(`[LEX-LIVE] Searching lex.uz: "${query.substring(0, 60)}"`);
+  const searchUrl = buildLexSearchUrl(query, { actForm });
+  console.log(`[LEX-LIVE] Searching lex.uz${actForm ? ` (${actForm})` : ''}: "${query.substring(0, 60)}"`);
 
   let html = '';
   try {
-    html = await fetchCachedSearchPage(searchUrl);
+    if (leftMs() <= 0) throw new Error('time limit reached before the search');
+    html = await within(fetchCachedSearchPage(searchUrl), Math.min(SEARCH_TIMEOUT_MS, leftMs()));
   } catch (err) {
     console.warn(`[LEX-LIVE] Search page fetch failed: ${err.message}`);
   }
 
-  const searchCandidates = html ? parseSearchCandidates(html) : [];
+  let searchCandidates = html ? parseSearchCandidates(html) : [];
+  if (searchCandidates.length === 0 && html && !requestedActs.length) {
+    for (const shorter of relaxedQueries(query)) {
+      if (leftMs() <= 0) break;
+      try {
+        const more = parseSearchCandidates(await within(fetchCachedSearchPage(buildLexSearchUrl(shorter, { actForm })), Math.min(SEARCH_TIMEOUT_MS, leftMs())));
+        if (more.length) {
+          console.log(`[LEX-LIVE] Nothing for the whole query; "${shorter}" found ${more.length}`);
+          searchCandidates = more;
+          break;
+        }
+      } catch (err) {
+        console.warn(`[LEX-LIVE] Search page fetch failed: ${err.message}`);
+      }
+    }
+  }
   if (searchCandidates.length === 0) console.log('[LEX-LIVE] No document links found in search results');
 
   // Search results on lex.uz are often ordered by publication date rather
@@ -139,10 +190,22 @@ async function searchLexUz(query, opts = {}) {
       console.warn(`[LEX-LIVE] Candidate inspection capped at ${inspectionLimit}`);
       break;
     }
-    inspectedCandidates += 1;
+    if (leftMs() <= 0) {
+      console.warn(`[LEX-LIVE] Time limit reached, ${results.length} documents kept`);
+      break;
+    }
     const docUrl = candidate.url;
+    if (readBudget && !isLexDocumentCached(docUrl)) {
+      if (readBudget.left <= 0) {
+        console.warn(`[LEX-LIVE] Round read limit reached, ${results.length} documents kept`);
+        break;
+      }
+      readBudget.left -= 1;
+    }
+    inspectedCandidates += 1;
     try {
-      const doc = await fetchCachedLexDocument(docUrl);
+      // the read has its own limit (fetchCachedLexDocument); here only the round's deadline
+      const doc = await within(fetchCachedLexDocument(docUrl), leftMs());
       if (!doc.body || doc.body.trim().length === 0) continue;
 
       // Skip if still a historical version after the auto-follow attempt
@@ -202,8 +265,18 @@ async function searchLexUz(query, opts = {}) {
     }
   }
 
-  console.log(`[LEX-LIVE] Returning ${results.length} documents from lex.uz`);
+  console.log(`[LEX-LIVE] Returning ${results.length} documents from lex.uz (${Date.now() - startedAt} ms)`);
   return results;
+}
+
+/** Waits for a lex.uz read at most ms; the read itself goes on. */
+function within(promise, ms) {
+  if (!Number.isFinite(ms)) return promise;
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`lex.uz time limit ${Math.round(ms)} ms`)), Math.max(0, ms)); }),
+  ]).finally(() => clearTimeout(timer));
 }
 
 /**
@@ -224,10 +297,34 @@ function parseSearchResults(html) {
  * and Cabinet decisions are Qaror (3972). Issuing-body/type verification is
  * still performed against each result row's own badge.
  */
-function buildLexSearchUrl(query = '') {
+// lex.uz's own form ids (its search page's "Hujjat turi" list): a code or a
+// law is found among a few acts, where the plain search lists the newest of
+// hundreds (2026-10-22: "pudratchining javobgarligi" with the code filter
+// returned the Civil Code, part two, alone).
+const ACT_FORMS = Object.freeze({ code: '3964', law: '3968' });
+// lex.uz refuses a text query over 100 characters
+const MAX_QUERY_CHARS = 100;
+
+function capQuery(value = '') {
+  const text = String(value || '').replace(/\s+/gu, ' ').trim();
+  if (text.length <= MAX_QUERY_CHARS) return text;
+  const cut = text.slice(0, MAX_QUERY_CHARS + 1);
+  const space = cut.lastIndexOf(' ');
+  return (space > 0 ? cut.slice(0, space) : cut.slice(0, MAX_QUERY_CHARS)).trim();
+}
+
+/**
+ * Text queries search acts in force only (status=Y: a repealed or historical
+ * page is skipped after reading anyway) and, with actForm, one act form.
+ */
+function buildLexSearchUrl(query = '', { actForm = '' } = {}) {
   const rawQuery = String(query || '').trim();
   const exact = extractActIdentifiers(rawQuery)[0];
-  if (!exact) return `${LEX_SEARCH_URL}?Query=${encodeURIComponent(rawQuery)}`;
+  if (!exact) {
+    const params = new URLSearchParams({ Query: capQuery(rawQuery), status: 'Y' });
+    if (ACT_FORMS[actForm]) params.set('form_id', ACT_FORMS[actForm]);
+    return `${LEX_SEARCH_URL}?${params.toString()}`;
+  }
 
   const formId = exact.prefix === 'PF'
     ? '3973'
@@ -239,6 +336,23 @@ function buildLexSearchUrl(query = '') {
   });
   if (formId) params.set('form_id', formId);
   return `${LEX_SEARCH_URL}?${params.toString()}`;
+}
+
+/**
+ * Shorter forms of a query that found nothing: lex.uz wants every word near
+ * the others, so a long phrase finds no act where two of its words would
+ * (2026-10-22: "avans to'lovini qaytarish majburiyati" 0, "avans to'lovini"
+ * 17). The first and the last two words, at most two more searches.
+ */
+const CONNECTORS = new Set(["bo'yicha", 'boʻyicha', 'буйича', 'бўйича', 'tomonidan', 'томонидан', 'va', 'ва', 'uchun', 'учун', 'bilan', 'билан', 'hamda', 'ҳамда', 'yoki', 'ёки', 'haqida', 'ҳақида']);
+
+function relaxedQueries(query = '') {
+  const words = String(query || '').replace(/[,.;:!?«»"“”()]/gu, ' ').split(/\s+/u)
+    .filter(w => w && !CONNECTORS.has(w.toLocaleLowerCase('uz').replace(/[ʻ‘’`]/gu, "'")));
+  if (words.length < 2) return [];
+  const joined = words.join(' ');
+  const out = words.length === 2 ? [joined] : [words.slice(0, 2).join(' '), words.slice(-2).join(' ')];
+  return Array.from(new Set(out)).filter(q => q.length >= 3 && q !== query);
 }
 
 function normalizeSearchText(value = '') {
@@ -400,6 +514,12 @@ async function fetchCachedSearchPage(searchUrl) {
   return pending;
 }
 
+function isLexDocumentCached(url) {
+  const key = canonicalLexUrl(url);
+  const cached = documentCache.get(key);
+  return !!(cached && cached.expiresAt > Date.now()) || documentInFlight.has(key);
+}
+
 async function fetchCachedLexDocument(url) {
   const key = canonicalLexUrl(url);
   const cached = documentCache.get(key);
@@ -407,7 +527,17 @@ async function fetchCachedLexDocument(url) {
   if (cached) documentCache.delete(key);
   if (documentInFlight.has(key)) return documentInFlight.get(key);
 
-  const pending = fetchLexDocument(key).then((document) => {
+  // the slot is held until the read itself ends (one that is no longer waited
+  // for still holds its memory); the caller waits at most LEX_FETCH_MAX_MS
+  // from the start of the read, not of the wait for a slot
+  const pending = acquireFetchSlot().then(() => {
+    const read = fetchLexDocument(key);
+    read.then(releaseFetchSlot, releaseFetchSlot);
+    return within(read, DOC_FETCH_MAX_MS());
+  }).then((full) => {
+    // the page's HTML (0.3-1 MB) is not kept: live search reads the text only;
+    // ingest reads lex.uz itself (fetchLexDocument), never this cache
+    const document = { title: full.title, body: full.body, metadata: full.metadata };
     if (documentCache.size >= DOCUMENT_CACHE_LIMIT) {
       const oldest = documentCache.keys().next().value;
       if (oldest) documentCache.delete(oldest);
@@ -604,6 +734,8 @@ function formatLexSearchResults(results, language = 'uz') {
 
 module.exports = {
   searchLexUz,
+  relaxedQueries,
+  ACT_FORMS,
   titleMostlyMatches,
   identityMatches,
   buildLexSearchUrl,
@@ -616,5 +748,6 @@ module.exports = {
   extractRelevantSections,
   inferExcerptProvision,
   fetchCachedLexDocument,
+  isLexDocumentCached,
   clearLexDocumentCache,
 };

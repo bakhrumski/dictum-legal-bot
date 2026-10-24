@@ -100,8 +100,12 @@ const DISCLAIMER = "\n\n_Javob SI tomonidan tayyorlandi va yuridik kuchga ega em
 // ... yuristga murojaat qiling", asked for by the web prompt) is dropped:
 // the bot adds its own, and the answer showed both (2026-10-13).
 const MODEL_DISCLAIMER = /^[ \t>*_]*(?:⚠️?\s*)?(?:\*{0,2}(?:Ogohlantirish|Eslatma|Diqqat|Предупреждение|Примечание)\*{0,2}\s*:?\s*)?(?:bu\s+)?(?:javob|ответ)(?!\p{L})[^\n]{0,40}(?<!\p{L})(?:AI|SI|ИИ|sun['ʼʻ’]?iy\s+intellekt|искусственн\p{L}*\s+интеллект\p{L}*)(?!\p{L})[^\n]*(?:yurist|юрист)[^\n]*$/gimu;
+// the same said as the last sentence of a paragraph (2026-10-13: "...
+// murojaat qiling. Javob AI tahliliga asoslanadi; muhim qaror uchun
+// litsenziyalangan yuristga murojaat qiling." closed the Xulosa)
+const MODEL_DISCLAIMER_SENTENCE = /(^|[.!?…»)]\s+)(?:bu\s+)?(?:javob|ответ)(?!\p{L})[^.\n]{0,40}(?<!\p{L})(?:AI|SI|ИИ)(?!\p{L})[^.\n]{0,160}(?:yurist|юрист)\p{L}*[^.\n]*\.?[ \t]*(?=\n|$)/gimu;
 function stripModelDisclaimer(text = '') {
-  return String(text || '').replace(MODEL_DISCLAIMER, '').replace(/\n{3,}/gu, '\n\n').trim();
+  return String(text || '').replace(MODEL_DISCLAIMER, '').replace(MODEL_DISCLAIMER_SENTENCE, '$1').replace(/[ \t]+\n/gu, '\n').replace(/\n{3,}/gu, '\n\n').trim();
 }
 const DISCLAIMER_RU = "\n\n_Ответ подготовлен ИИ и не имеет юридической силы. По важным вопросам проконсультируйтесь с юристом._";
 
@@ -311,7 +315,7 @@ const ATTORNEY_RESTART_RE = /(boshqa(\s+advokat)?|yana\s+(advokat|nomzod)|mezon(
 const INTENT_PROMPT = `Siz Telegram yuridik botining niyat aniqlovchi modulisiz. Foydalanuvchi xabarini tasniflang.
 
 FAQAT JSON qaytaring:
-{"intent":"...","reason":"...","missing":["..."]}
+{"intent":"...","action":"...","reason":"...","missing":["..."]}
 
 intent qiymatlari:
 - "huquqiy_savol"  — javob berish uchun yetarli ma'lumot bor huquqiy savol
@@ -321,6 +325,7 @@ intent qiymatlari:
 - "bot_haqida"     — foydalanuvchi bot kimligi, AI yoki yurist ekanini so'ramoqda
 - "advokat_kerak"  — mos advokat yoki yurist topishni so'ramoqda
 - "hujjat_tayyorlash" — ariza, da'vo, shikoyat, shartnoma yoki boshqa hujjat tayyorlashni so'ramoqda
+- "hisob_amal"     — foydalanuvchi JuristAI akkaunti bo'yicha amal so'ramoqda; "action" maydonini ham qaytaring: "balance" (limit/qoldiq), "plans" (tariflar, narx, to'lov), "recent" (oxirgi savollari), "link_account" (sayt/ilova akkauntini Telegram bilan ulash), "open_app" (ilova yoki sayt havolasi), "commands" (bot nima qila oladi). Huquqiy masala bo'lsa — bu EMAS.
 - "hisob_yordam"   — JuristAI'da ro'yxatdan o'tish, login, OTP yoki parol masalasi. "Hisoblash", "hisob-kitob", "hisoblamang" (kompensatsiya, summa, muddat, penya hisobi) — bu hisob_yordam EMAS, huquqiy savol.
 - "yurist_kerak"   — operator yoki jonli inson bilan gaplashishni so'ramoqda
 - "mavzudan_tashqari" — huquqqa aloqasi yo'q
@@ -347,9 +352,13 @@ async function classifyIntent(text, turns) {
     const raw = String(res.text || '').replace(/```(?:json)?/gi, '').trim();
     const m = raw.match(/\{[\s\S]*\}/);
     const parsed = m ? JSON.parse(m[0]) : {};
-    const valid = ['huquqiy_savol', 'noaniq', 'davomi', 'salomlashuv', 'bot_haqida', 'advokat_kerak', 'hujjat_tayyorlash', 'hisob_yordam', 'yurist_kerak', 'mavzudan_tashqari'];
+    const valid = ['huquqiy_savol', 'noaniq', 'davomi', 'salomlashuv', 'bot_haqida', 'advokat_kerak', 'hujjat_tayyorlash', 'hisob_yordam', 'hisob_amal', 'yurist_kerak', 'mavzudan_tashqari'];
+    // an account action only with a known tool; anything else is answered as a question
+    const action = require('./account-tools').toolFromIntent(parsed);
+    const intentName = parsed.intent === 'hisob_amal' && !action ? 'huquqiy_savol' : parsed.intent;
     return {
-      intent: valid.includes(parsed.intent) ? parsed.intent : 'huquqiy_savol',
+      intent: valid.includes(intentName) ? intentName : 'huquqiy_savol',
+      action,
       missing: Array.isArray(parsed.missing) ? parsed.missing.slice(0, 3).map(String) : [],
       legalField: String(parsed.legal_field || '').slice(0, 120),
       legalSubfield: String(parsed.legal_subfield || '').slice(0, 120),
@@ -372,12 +381,26 @@ function classifyDeterministicIntent(text) {
   if (HELP_RE.test(t))     return { intent: 'noaniq', missing: ['Qanday huquqiy muammo yoki vaziyat bo\'yicha yordam kerak?'] };
   if (DOCUMENT_RE.test(t)) return { intent: 'hujjat_tayyorlash', missing: [] };
   if (ATTORNEY_RE.test(t)) return { intent: 'advokat_kerak', missing: [] };
+  // an account action the bot does itself (src/agents/account-tools.js)
+  const tool = require('./account-tools').detectAccountAction(t);
+  if (tool) return { intent: 'hisob_amal', action: tool, missing: [] };
   if (isAccountRequest(t)) return { intent: 'hisob_yordam', missing: [] };
   if (HUMAN_RE.test(t))    return { intent: 'yurist_kerak', missing: [] };
   return null;
 }
 
+// A document order waits for its details only so long (2026-10-22: the
+// owner chose "Da'vo arizasi", wrote nothing, and a legal question asked
+// 2.5 hours later was taken as the order's details). DOC_INTAKE_TTL_MIN.
+const DOC_INTAKE_TTL_MS = () => Math.max(1, Number(process.env.DOC_INTAKE_TTL_MIN) || 30) * 60000;
+
+function docIntakeExpired(context = {}, now = Date.now()) {
+  const at = Number(context && context.intakeAt);
+  return !Number.isFinite(at) || at <= 0 || now - at > DOC_INTAKE_TTL_MS();
+}
+
 async function setConversationState(chatId, state, context) {
+  if (state === 'document_details' && context && !context.intakeAt) context = { ...context, intakeAt: Date.now() };
   try {
     await ensureTable();
     const hasContext = context !== undefined;
@@ -779,7 +802,9 @@ async function handleUserMessage({ chatId, text, firstName = '', testAccount = n
   if (!question)    return skip('empty message');
 
   const started = Date.now();
-  const { turns, clarifyCount, mode, state, context } = await loadConversation(chatId);
+  const conversation = await loadConversation(chatId);
+  const { turns, clarifyCount, mode } = conversation;
+  let { state, context } = conversation;
 
   // Who pays: the Telegram sender, or the ordinary account linked to them
   // (one allowance for linked Telegram and web accounts).
@@ -800,9 +825,15 @@ Agar texnik uzilish yuz bersa, limitingiz avtomatik tiklanadi.`,
     // tariffs v2: the one-time Sinov or the paid period is used up; nothing
     // renews by itself and nothing is charged automatically
     const trial = status.kind === 'trial' || status.plan === 'sinov' || status.kind === 'none';
+    // one-time services (src/rag/one-time-products.js): a question pack now,
+    // the plan for regular use; the buttons are added by the bot
+    const otp = require('../rag/one-time-products');
+    const silver = require('../rag/tariff-ledger').PLAN_CATALOG.silver;
+    const pack = `💬 ${otp.PRODUCTS.chat5.title} — ${otp.formatUzs(otp.PRODUCTS.chat5.priceUzs)} (hozircha Telegram Stars orqali: ${otp.starsFor('chat5')} ⭐), bir martalik, muddati tugamaydi.`;
+    const plan = `⭐ Silver — ${otp.formatUzs(silver.priceUzs)} / 30 kun: ${silver.quotas.chat} savol, ${silver.quotas.analysis} tahlil, ${silver.quotas.opinion} xulosa, ${silver.quotas.draft} hujjat. Tariflar: ${TARIFF_URL}`;
     const reply = trial
-      ? `Sinov tarifidagi bepul huquqiy savollaringiz tugadi (Sinov bir martalik, yangilanmaydi).\n\nDavom etish uchun tarif tanlang: Silver, Gold yoki Platinum — ${TARIFF_URL}\nAvtomatik to'lov olinmaydi. Salomlashuv, menyu, /balance va yordam buyruqlari limit sarflamaydi.`
-      : `Tarifingizdagi huquqiy chat limiti tugadi${status.limit ? ` (${status.used || status.limit}/${status.limit})` : ''}.\n\n${status.endsAt ? `Joriy davr ${tashkentDay(status.endsAt)} da tugaydi; yangi davr to'lov bilan boshlanadi — avtomatik to'lov olinmaydi. ` : ''}Yuqori tarifga o'tish: ${TARIFF_URL}`;
+      ? `Sinov tarifidagi bepul huquqiy savollaringiz tugadi (Sinov bir martalik, yangilanmaydi).\n\nDavom etish uchun:\n${pack}\n${plan}\n\nOxirgi savolingiz bo'yicha hujjat kerak bo'lsa — pastdagi tugma. Avtomatik to'lov olinmaydi; to'lovni Telegram oynasida o'zingiz tasdiqlaysiz. Salomlashuv, menyu, /balance va yordam buyruqlari limit sarflamaydi.`
+      : `Tarifingizdagi huquqiy chat limiti tugadi${status.limit ? ` (${status.used || status.limit}/${status.limit})` : ''}.\n\n${status.endsAt ? `Joriy davr ${tashkentDay(status.endsAt)} da tugaydi; yangi davr to'lov bilan boshlanadi — avtomatik to'lov olinmaydi. ` : ''}Davr tugaguncha: ${pack}\nYuqori tarifga o'tish: ${TARIFF_URL}`;
     return {
       handled: true,
       reply,
@@ -839,6 +870,12 @@ Agar texnik uzilish yuz bersa, limitingiz avtomatik tiklanadi.`,
   // Button-selected states already tell us the user's intent. Do not spend an
   // LLM call reclassifying a number, a document intake, or an advocate case.
   let intent;
+  if (state === 'document_details' && docIntakeExpired(context)) {
+    console.log('[TG-AGENT] document order intake expired; the message is handled as a new one');
+    await setConversationState(chatId, 'idle', {});
+    state = 'idle';
+    context = {};
+  }
   if (state === 'awaiting_attorney_choice' || state === 'attorney_problem') {
     intent = {
       intent: 'advokat_kerak',
@@ -1132,9 +1169,26 @@ Agar texnik uzilish yuz bersa, limitingiz avtomatik tiklanadi.`,
     return complete({ handled: true, reply, action: 'identity', escalate: false, meta: { intent: intent.intent } });
   }
 
+  // ── Account actions the bot does itself (balance, plans, recent questions,
+  // linking, the app link, what it can do). Read-only, no AI call, no quota;
+  // a payment or a plan change stays a link the person confirms on the site.
+  if (intent.intent === 'hisob_amal' && intent.action) {
+    const tools = require('./account-tools');
+    const toolLang = intent.language === 'ru' || /[\u0400-\u04ff]/u.test(question) ? 'ru' : 'uz';
+    try {
+      const out = await tools.runAccountTool(intent.action, { chatId, who: who || {}, lang: toolLang });
+      await remember(out.reply, 0);
+      return complete({ handled: true, reply: out.reply, action: out.action, escalate: false, meta: { intent: intent.intent, tool: intent.action, lang: toolLang } });
+    } catch (e) {
+      console.warn('[TG-AGENT] account tool failed:', intent.action, e.message);
+      const reply = toolLang === 'ru' ? 'Не удалось получить данные аккаунта. Попробуйте чуть позже или откройте приложение.' : "Akkaunt ma'lumotini hozir olib bo'lmadi. Birozdan keyin qayta urinib ko'ring yoki ilovani oching.";
+      return complete({ handled: true, reply, action: 'tool_failed', escalate: false, meta: { intent: intent.intent, tool: intent.action } });
+    }
+  }
+
   // ── Account and authentication support ─────────────────────────────────
   if (intent.intent === 'hisob_yordam') {
-    const reply = "Ro'yxatdan o'tish, kirish, OTP va parolni tiklash uchun @juristAI_registration_bot yordam beradi.\n\nBotni ochib, kerakli amalni tanlang. Bu bot esa faqat huquqiy savollar uchun ishlaydi.";
+    const reply = "Ro'yxatdan o'tish, kirish, OTP va parolni tiklash uchun @" + require('../config/bot-usernames').AUTH_BOT_USERNAME + " yordam beradi.\n\nBotni ochib, kerakli amalni tanlang. Bu bot esa faqat huquqiy savollar uchun ishlaydi.";
     await remember(reply, 0);
     return complete({ handled: true, reply, action: 'account_help', escalate: false, meta: { intent: intent.intent } });
   }
@@ -1142,7 +1196,7 @@ Agar texnik uzilish yuz bersa, limitingiz avtomatik tiklanadi.`,
   // ── Paid document preparation ──────────────────────────────────────────
   if (intent.intent === 'hujjat_tayyorlash') {
     if (state !== 'document_details') {
-      const reply = "Hujjat tayyorlash pullik xizmat hisoblanadi va buyurtma mas'ul yurist tasdig'idan keyin qabul qilinadi. Kerakli hujjat turini quyidagi tugmalardan tanlang:";
+      const reply = "Hujjatni ikki yo'l bilan tayyorlash mumkin: 🤖 AI loyiha darhol, Word faylda; 👨‍⚖️ yoki yurist - narxni yurist belgilaydi, rozilik berguningizcha to'lov yo'q. Kerakli hujjat turini quyidagi tugmalardan tanlang:";
       await setConversationState(chatId, 'document_type', {});
       await remember(reply, 0);
       return complete({
@@ -1157,7 +1211,7 @@ Agar texnik uzilish yuz bersa, limitingiz avtomatik tiklanadi.`,
     const serviceSlug = String(context.serviceSlug || detectServiceSlug(question));
     const documentTypeLabel = String(context.documentTypeLabel || 'Yuridik hujjat');
     const caseSummary = [context.caseSummary, question].filter(Boolean).join('\n\nQo\'shimcha ma\'lumot:\n');
-    const reply = `*${documentTypeLabel}* bo'yicha ma'lumotlaringiz qabul qilindi. Bu pullik xizmat hisoblanadi. Buyurtma faqat mas'ul yurist ko'rib chiqib, ruxsat berganidan keyin ishga olinadi.\n\nNarx va bajarish shartlari tasdiqlangach sizga alohida xabar beriladi.`;
+    const reply = `*${documentTypeLabel}* bo'yicha ma'lumotlaringiz qabul qilindi va yuristga yuborildi. Yurist narx va muddatni belgilaydi - rozilik berguningizcha to'lov yo'q, javob shu yerga keladi.`;
     await remember(reply, 0);
     return complete({
       handled: true,
@@ -1380,16 +1434,24 @@ Agar texnik uzilish yuz bersa, limitingiz avtomatik tiklanadi.`,
     ? `\n\n⚠️ _Это предварительный ответ: ${(reasons && reasons.length ? reasons : ['некоторые нормы не удалось подтвердить по проверенным источникам']).join('; ')}. Юрист проверит и уточнит._`
     : `\n\n⚠️ _Bu dastlabki javob: ${(reasons && reasons.length ? reasons : ["ba'zi normalarni tekshirilgan manbalardan tasdiqlay olmadim"]).join('; ')}. Yurist ko'rib chiqib, aniqlashtiradi._`;
 
+  // in test mode only: why the claim check did not run, for the master
+  const guardMeta = answer.meta && answer.meta.claimGuard;
+  const guardWhy = guardMeta && guardMeta.status === 'unverified' && guardMeta.reason
+    ? `\n🔬 Tekshiruvchi ishlamadi, sababi: ${String(guardMeta.reason).replace(/[*_`\[\]]/gu, '').slice(0, 160)}`
+    : '';
   const allowance = quota.source === 'test'
-    ? `\n\n${testModeNote(testAccount, currentRequestSpend())}`
+    ? `\n\n${testModeNote(testAccount, currentRequestSpend())}${guardWhy}`
     : quota.source === 'paid'
     ? (ru ? `\n\n🎟 Использован ранее купленный кредит. Осталось кредитов: ${quota.paidCredits || 0}.` : `\n\n🎟 Oldin sotib olingan javob krediti ishlatildi. Qolgan kreditlar: ${quota.paidCredits || 0}.`)
+    : quota.oneTime
+      ? (ru ? `\n\n🎟 Из купленного пакета: осталось ${quota.remaining} вопросов (без срока).` : `\n\n🎟 Sotib olingan paketdan: yana ${quota.remaining} ta savol qoldi (muddatsiz).`)
     : quota.source === 'staff' || quota.legacy
       ? ''
       : quota.kind === 'trial' || quota.plan === 'sinov'
         ? (quota.remaining > 0
           ? (ru ? `\n\n🎁 Sinov: осталось ${quota.remaining} правовых вопроса (разово, не обновляется).` : `\n\n🎁 Sinov: yana ${quota.remaining} ta huquqiy savol qoldi (bir martalik, yangilanmaydi).`)
-          : (ru ? `\n\n🎁 Вопросы тарифа Sinov закончились. Чтобы продолжить, выберите тариф: ${TARIFF_URL}` : `\n\n🎁 Sinovdagi huquqiy savollar tugadi. Davom etish uchun tarif tanlang: ${TARIFF_URL}`))
+          : (ru ? `\n\n🎁 Вопросы тарифа Sinov закончились. Дальше: пакет из 5 вопросов (кнопка ниже) или тариф: ${TARIFF_URL}`
+            : `\n\n🎁 Sinovdagi huquqiy savollar tugadi. Davom etish: 5 ta savol paketi (pastdagi tugma) yoki tarif: ${TARIFF_URL}`))
         : (ru
           ? `\n\n📊 ${quota.plan ? quota.plan[0].toUpperCase() + quota.plan.slice(1) : 'Тариф'}: осталось ${quota.remaining} правовых вопросов${quota.endsAt ? ` (период до ${tashkentDay(quota.endsAt)})` : ''}.`
           : `\n\n📊 ${quota.plan ? quota.plan[0].toUpperCase() + quota.plan.slice(1) : 'Tarif'}: yana ${quota.remaining} ta huquqiy savol${quota.endsAt ? ` (davr ${tashkentDay(quota.endsAt)} gacha)` : ''}.`);
@@ -1428,6 +1490,8 @@ Agar texnik uzilish yuz bersa, limitingiz avtomatik tiklanadi.`,
       paidCredits: quota.paidCredits || 0,
       ...(testAccount ? { testMode: { until: testAccount.until, budgetUsd: testAccount.budgetUsd, spentBeforeUsd: testAccount.spend.committedUsd } } : {}),
       nextActions,
+      // the last Sinov question: the bot adds the one-time question pack to the buttons
+      trialSpent: !quota.oneTime && (quota.kind === 'trial' || quota.plan === 'sinov') && quota.source === 'tariff' && Number(quota.remaining) === 0,
       conversationState: 'awaiting_next_action',
       ms: Date.now() - started,
     },
@@ -1469,6 +1533,7 @@ function splitForTelegram(text, limit = TG_LIMIT) {
 }
 
 module.exports = {
+  docIntakeExpired,
   initTelegramAgent,
   telegramAnswerMaxTokens,
   stripModelDisclaimer,

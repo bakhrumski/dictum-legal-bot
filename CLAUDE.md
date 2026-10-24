@@ -1,7 +1,8 @@
 # JuristAI — notes for Claude Code
 
 JuristAI is an Uzbek legal assistant: a Telegram bot plus the juristai.uz web
-app. The repository is `bakhrumski/dictum-legal-bot` (the name predates the
+app (new app at `/app/`, master admin at `/app/#/boshqaruv`; the old
+`dashboard.html` is still served). The repository is `bakhrumski/dictum-legal-bot` (the name predates the
 brand). One Node process runs both: `index.js` loads `src/api/server.js`, which
 starts Express and the bot.
 
@@ -9,21 +10,36 @@ The owner writes in Uzbek; answer in Uzbek unless asked otherwise.
 
 ## Working agreement
 
+- **Branches and services (since 2026-10-20, owner's decision):**
+  - `staging` → Render service **"juristai-staging"**, which now serves
+    **juristai.uz** (the new design: landing + `/app/`). Database: Supabase
+    `juristai-staging-pro` (it started as a copy of production and is now the
+    live database). The Telegram bots run here too. **A push to `staging` is
+    a release** to juristai.uz.
+  - `main` → Render service **"JuristAI"** (the old design, no custom domain,
+    the old production database). It lags behind `staging` and is brought up
+    to date only by a `staging` → `main` PR. It must not run the same
+    Telegram bot token as "juristai-staging" (two pollers get 409 Conflict).
 - **After every push, check whether the branch has an open PR.** If it has
   none, open one and give the link. A push without a visible PR has been
   missed more than once; do not assume.
-- **Merging is split by what the change touches:**
+- **What may go live on `staging` is split by what the change touches:**
   - Frontend only (`public/**` — HTML, CSS, client JS, images, fonts, media):
-    merge the PR yourself once verified, then report the link.
+    push or merge to `staging` yourself once verified, then report it.
   - Anything else — `src/**`, `migrations/**`, `scripts/**`, auth, payments,
-    tariffs, database, `package.json`, config, tests, docs: open the PR and
-    **ask before merging**.
-- `main` deploys straight to production on Render. A merge is a release.
+    tariffs, database, `package.json`, config, tests, docs: work on a branch,
+    open a PR into `staging` and **ask before merging**. The answer pipeline
+    (`/api/legal-chat`) is not changed without the owner's consent.
+  - `staging` → `main` PRs: **ask before merging**.
+- The live database is read-only for Claude: queries only, no writes.
 - If the branch's PR has already been merged, restart the branch from
-  `origin/main` before new work; never stack commits on merged history.
+  `origin/staging` (or `origin/main` for a `main` PR) before new work; never
+  stack commits on merged history.
 - Verify visual work in a real browser at desktop and phone widths (~390px)
   before calling it done. Report what was checked, and say plainly what was
   not (e.g. no real iPhone available — Safari behaviour was simulated).
+- The owner's design rules for the new app: no coloured left-stripe cards;
+  a coloured text background only in light blue.
 
 ## Commands
 
@@ -198,6 +214,34 @@ Known state of the suites (Sept 2026):
   found and names up to 4 missing acts as lex.uz terms (never a number
   alone, never another site), searched within `LEX_FOLLOWUP_MAX_MS`; any
   failure keeps round one.
+  Every lex.uz round has a deadline (2026-10-22, after a Telegram answer
+  used ~29 s of AI calls and still reached the 120 s limit before its claim
+  check): the request's time (`AI_REQUEST_MAX_MS`) minus
+  `LEX_ANSWER_RESERVE_MS` (60 s) for the answer and its checks; no shorter
+  cap unless `LEX_LIVE_MAX_MS` is set (owner: answer quality before speed);
+  one page is waited for at most `LEX_FETCH_MAX_MS` (30 s); a search past
+  the deadline returns what it found. Other `searchLexUz` callers pass no
+  deadline and are unchanged.
+  Queries (2026-10-22: one question ran 18 searches, 13 found nothing):
+  lex.uz finds 2-3 words near each other in the law's word forms and lists
+  the newest acts first. The plan searches the question's terms three at a
+  time with negative/progressive verbs as verbal nouns (`nominalizeVerb`:
+  "bajarmadi" -> "bajarmaslik"), "<2 words> nizom", and codes / laws by
+  lex.uz's form filter (`actForm` code 3964 / law 3968, `code-search` +40 in
+  ranking); the planner is told the same rules; text searches are in-force
+  only (`status=Y`, <= 100 chars); a phrase that found nothing is searched
+  once more as its first and last two words, connectors dropped
+  (`relaxedQueries`). Live on 10 questions that day: 0 of 110 old
+  deterministic searches found acts, 110 of 128 new ones; the AI planner's
+  new prompt was not measured (no key here).
+  Memory (2026-10-24: with those queries finding acts, one question read 63
+  pages, ~60 MB of HTML, in parallel; locally 57 -> 515 MB, the 512 MB
+  Render instance went down and the answer never came): at most
+  `LEX_FETCH_CONCURRENCY` (2) pages are read at once, the cache keeps the
+  text without the page's HTML (`LEX_DOCUMENT_CACHE_LIMIT` 64), and one
+  round reads at most `LEX_ROUND_MAX_READS` (48) uncached pages (a shared
+  `readBudget`). Same question after: 16 documents kept, 233 MB peak with
+  `--max-old-space-size=320` (301 MB without: V8 collects late).
   Answer layout (2026-10-13, `src/rag/answer-structure.js`, no AI; the
   sections stay Huquqiy asos / Tahlil / Xulosa): a `> «...»` quote of the
   law is kept only when its words are in a retrieved source word for word
@@ -300,6 +344,48 @@ Known state of the suites (Sept 2026):
   linked customer (role `user`) or an unknown role is an ordinary user. An
   account counts as linked by `telegram_chat_id` (/link) or, in a private
   chat, by `telegram_user_id` (registration, the site's Telegram linking).
+  Account actions (2026-10-20, `src/agents/account-tools.js`): typed or
+  spoken (voice -> `src/ai/stt.js` -> the same agent), "limitim qancha?",
+  "tariflar", "oxirgi savollarim", "akkauntni ulash", "ilovani och", "nima
+  qila olasan?" are fixed read-only tools (intent `hisob_amal` + `action`;
+  phrase list first, then the intent model; an unknown action is answered as
+  a question): the caller's own balance, the catalogue, their last 5 bot
+  questions, links. No AI call, no quota; nothing is paid or granted - such
+  a step stays a link the person confirms on the site. "Akkauntni o'chir"
+  (`delete_account`) is never a legal question: the bot explains what is
+  removed, a button files one pending request per Telegram user
+  (`src/services/account-deletion.js`, table `account_deletion_requests`),
+  and a master carries it out or declines it with a reason in
+  `/app/#/boshqaruv/ochirish`: personal fields scrubbed, web chats deleted,
+  sessions revoked, bot texts replaced; tariff, usage and payment rows kept
+  without personal data; staff accounts refused.
+  A document order waits for its details 30 minutes (`DOC_INTAKE_TTL_MIN`,
+  `intakeAt` stamped by `setConversationState`; 2026-10-22: a legal question
+  asked 2.5 hours after choosing "Da'vo arizasi" was taken as the order's
+  details); after that, or on its "❌ Bekor qilish" (`docin_cancel`), the
+  next message is a new one. The intake texts name both ways (AI draft now,
+  lawyer priced by the lawyer, nothing paid until agreed).
+  Also since 2026-10-20 (landing promises): a linked account's bot Q&A is
+  appended to its web chats (`src/services/telegram-history.js`, topic
+  'telegram', one per Tashkent day); a paid document order in the bot can be
+  drafted by AI as .docx for 1 `draft` unit (button `tgdraft_ai`); Workspace
+  task status changes and due-today/tomorrow reminders go to linked members
+  by the bot (`src/workspace/telegram-notify.js`, hourly, deduplicated in
+  `workspace_telegram_reminders`, title/status/date only,
+  `WS_TELEGRAM_NOTIFY=off`); a voice recording's summary can be sent to the
+  user's own Telegram (`POST /api/voice/send-telegram`). Voice minutes are
+  not metered (`/api/voice/balance` says so; no "X minutes" anywhere).
+  Linking (2026-10-21 audit): `ulink_` refuses a Telegram held by another
+  account in either column (the way out is `/unlink` in that chat) and
+  detaches the account's old chat; `/unlink` clears both columns (private
+  chat only); `/link` is private-only with 5 tries / 15 min; the site's
+  link status reads the columns. A linked account gets the plan in the bot
+  when granted and 3 days / 1 day before it ends (`src/services/plan-notify.js`,
+  `tariff_expiry_notices`, `PLAN_NOTIFY=off`). Dictation: the chat's 🎙 button
+  -> `POST /api/voice/dictate` (<= 2 min, measured, not metered, rate-limited,
+  `VOICE_DICTATION=off`); the text lands in the box, never sent by itself.
+  Recordings transcribe only with `VOICE_NOTES_ENABLED=true` (customers also
+  `VOICE_NOTES_USERS=true`) and an STT engine; the page says which is missing.
   Account help (login/OTP/password) is matched only on unambiguous account
   words, never "hisob…" in a legal question ("hisoblash" once routed wage
   questions to password reset). `/testmode` (master only, in memory, auto-off after 12 h) lifts that for one
@@ -308,7 +394,10 @@ Known state of the suites (Sept 2026):
   like the test account below (`resolveMasterTestMode`): master role read
   from the database, own private chat, the 12 h session as the window, its
   own budget `TG_MASTER_TESTMODE_BUDGET_USD` ($5); `TG_MASTER_TESTMODE_UNLIMITED=off`
-  restores the limits.
+  restores the limits. Since 2026-10-22 (owner) that master also gets the AI
+  draft and the claim agent with no unit and no Stars (`masterDraftTest`):
+  nothing reserved or committed, the calls under the same test budget; a
+  spent budget falls back to the ordinary rules.
   Separately, one ordinary (role `user`) account can be a test account
   (`src/bot/test-account.js`, `TG_TEST_ACCOUNT_*`): by the Telegram user id
   linked in `admins.telegram_user_id`, never a username; no daily limit or
@@ -324,6 +413,28 @@ Known state of the suites (Sept 2026):
   rollover) and of the reserve / commit / release ledger (`tariff_usage` +
   `tariff_periods`, atomic per payer, idempotent by job key). Linked Telegram
   and web accounts share one allowance; Stars credits are a separate balance.
+  One-time services (2026-10-21, owner): `src/rag/one-time-products.js` -
+  5 questions 15 000, AI draft 29 000, analysis unit 39 000, opinion unit
+  49 000 so'm (to be changed with real demand); sold in the bot for Stars
+  until Click/Payme are connected (`src/bot/one-time-sales.js`: signed `jsv1`
+  invoice, Stars = so'm price at `STAR_PAYOUT_USD` 0.013, rounded up to 10,
+  `ONE_TIME_STARS_<KEY>` overrides). A purchase is a `service_credits` row
+  (unique charge id; migration 017): used only after the plan's own
+  allowance, through tariff_usage rows with no period (`meta.pool =
+  'one_time'`), never expires, shared by bot and site; a failed credit
+  refunds the Stars; the paid draft or analysis then runs at once. Offered
+  after the last Sinov answer, when a limit is spent (with the document the
+  last answer pointed to), and when a draft or analysis has no unit. The
+  1-Star / 4-answer pack is no longer offered (old invoices still honoured).
+  Lawyer services: the lawyer's price is `quoted_price_minor` (so'm); the
+  platform's share `LAWYER_COMMISSION_PCT` (0-50, unset = not recorded) is
+  written with the quote (`src/services/lawyer-commission.js`); the customer
+  gets the price in the bot when it is approved; payment is manual until a
+  provider is connected. A delivered AI draft can be sent for lawyer review.
+  Master view: `/app/#/boshqaruv/xaridlar` (`GET /api/admin/one-time-purchases`,
+  `src/services/one-time-report.js`, read only): purchases, who, Stars,
+  catalogue so'm price at the sale (not the Stars payout), units left per
+  person and service; refunds listed, never counted.
   Document jobs are sized in units: max(pages/10, chars/40 000), signed PDF
   page counts (`docTicket`), never silently cut. A paid period is granted only
   by `POST /api/admin/tariff/grant` (idempotent `paymentRef`), never by the
@@ -345,8 +456,12 @@ Known state of the suites (Sept 2026):
   (`settleSections`: a delivered analysis stays paid if the opinion fails).
   Workspace does not run full analysis/opinion: such a request is routed to
   the AI section with no AI call and no quota (`createWorkspaceServiceRouting`);
-  a clause question is one chat unit. Telegram runs no AI on files (lawyer queue, told plainly, no
-  quota, review not promised free). Individual discounts
+  a clause question is one chat unit. In Telegram a PDF/DOCX (<= 5 MB, text layer) is offered
+  for AI analysis for its document units, run only after the button that
+  names them (`src/bot/telegram-documents.js`: reserve 'analysis', the
+  website's own analysis, commit on delivery, release on failure); the other
+  button, and every scan, photo or video, is the lawyer queue (no AI, no
+  quota, told plainly, review not promised free). Individual discounts
   (`src/rag/tariff-pricing.js`, `tariff-offers.js`, table `tariff_offers`):
   master only, one user, one plan, one 30-day period, final price >=
   conservative cost / 0.80 (integers, min rounded up to 1 000, floors
@@ -395,6 +510,53 @@ Known state of the suites (Sept 2026):
   Not a hard dollar guarantee: it holds only as far as the price table is
   right. Every `usageLedger.track()` call must pass `bound`. Rollback uses
   `MAINTENANCE_MODE=on` (503 on the API, bot notice) before the SQL.
+- `src/agents/harness.js` (2026-10-21) — the agentic harness: a workflow is a
+  fixed list of steps (tools); the harness enforces `maxSteps` / `maxMs`,
+  keeps a trace (label, status, ms, short note - never prompts or raw model
+  text), stops on a failed required step or a deliberate halt
+  (`needs_input`). First workflow: `src/agents/workflows/claim-draft.js`
+  (da'vo arizasi: intake no AI -> issues -> lex.uz retrieval -> basis whose
+  quotes must be in the source word for word, else dropped and counted ->
+  the drafting generator told to cite only that basis -> mechanical check:
+  articles outside the basis, figures not in the facts, missing claim parts;
+  warnings only). Route `POST /api/agent/claim-draft`
+  (`src/agents/agent-routes.js`): missing facts 422 before any charge or AI;
+  1 `draft` unit reserved, committed only when a draft came out. Page:
+  `/app/#/agent/dava` (`public/app/agent.js`). In the Telegram bot
+  (2026-10-22, `src/agents/telegram-claim.js`, `TG_CLAIM_AGENT=off` to
+  stop): a da'vo arizasi order's "AI loyiha" runs this workflow - one cheap
+  call reads the free text into the fields (only what it says), missing
+  facts are asked for with the unit released and the next message resumes;
+  the steps update one message; the .docx, then the basis with lex.uz links
+  and the warnings; the unit is committed on delivery. It does not touch
+  `/api/legal-chat`. Second workflow (2026-10-22):
+  `src/agents/workflows/tabular-review.js` - tabular review, up to 20
+  documents x 10 questions: per document the clauses matching the questions
+  (`selectExcerpt`, <= 20 000 chars, the row says when a long document was
+  read in parts), one AI call per document (4 at a time; a failed document
+  is a failed row), each cell's quote checked word for word in the document
+  (page from `[Sahifa n]`; unverified cells keep the answer, marked) - a found
+  quote proves the words are there, not that the answer is right. Route
+  `POST /api/agent/tabular-review` (6 MB body): one `chat` unit per document,
+  reserved together (`reserveMany`), committed per row read, released per
+  row failed. Page `/app/#/jadval` (`public/app/tabular.js`, CSV export);
+  a scan goes through the shared OCR step (`J.readFile` -> scan-quote ->
+  confirmed ocr-image, service `chat`: the OCR pages from the plan's pool)
+  and is sent as `scanId` (this account's only, from `document_scans`;
+  `=== PAGE n ===` marks give the page). Third workflow (2026-10-22):
+  `src/agents/workflows/playbook-review.js` - a contract against a firm's
+  own rules (not the law): clauses matching the rules (`selectExcerpt`), one
+  AI call (mos / farq / yoq / noaniq, the clause's words, a note, a proposed
+  wording from the rule's preferred text), quotes checked word for word with
+  pages; "mos" with no quote found becomes "noaniq". Four built-in playbooks
+  (one side's negotiating preferences, never statements of law); own ones in
+  `playbooks` (migration 018, 30 per account, owner-only CRUD
+  `/api/playbooks`). `POST /api/agent/playbook-review`: analysis units by the
+  contract's size (docUnits, page marks not counted), committed on a
+  result; a scanned contract comes as `scanId` from the OCR step for
+  `analysis`, and the analysis units that step held are adopted
+  (`heldScanJob`) - never charged twice. Page `/app/#/playbook`
+  (`public/app/playbook.js`, editor, Word report).
 - `src/workspace/` — Platinum Workspace: routes, authz, Supabase
   realtime/storage, Workspace AI.
 - `public/` — static pages: `index.html` (landing), `login.html`,
@@ -407,7 +569,12 @@ Known state of the suites (Sept 2026):
   `docs/design-handoff/` (`ANIMATIONS.md` lists which animations exist — do
   not invent new ones). Match the rendered canvas, not its inline declarations;
   the canvas runtime overrides some of them.
-- **Type: one face, Space Grotesk, everywhere** (owner's decision, Sept 2026;
+- **Type, new design (landing, `/app/`, Word/Google Docs panels): Golos
+  Text**, self-hosted from `public/fonts/golos-text/` through
+  `/app/fonts.css` (it has Cyrillic). Pages link that file - never Google
+  Fonts (2026-10-20 review replaced 21 Google Fonts links). The rule below
+  stays for the old dashboard and the pages that still use its styles.
+- **Type, old design: one face, Space Grotesk, everywhere** (owner's decision, Sept 2026;
   it overrides the dashboard canvas's Inter / Source Serif 4 / JetBrains Mono
   split). It is self-hosted: `public/css/fonts.css` declares it from
   `public/fonts/space-grotesk/` and sets every font role from `html:root`;

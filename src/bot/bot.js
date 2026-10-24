@@ -39,9 +39,10 @@ async function telegramIdentity(msgOrQuery) {
   return { telegramUserId: fromId, adminId };
 }
 
-// Voice notes become typed questions when VoiceLab STT is on (src/ai/voicelab-speech.js).
+// Voice notes become typed questions when an STT engine is on (src/ai/stt.js:
+// VoiceLab by default, Gemini 3.5 Transcribe with STT_PROVIDER=gemini).
 function voiceToTextEnabled() {
-  try { return require('../ai/voicelab-speech').sttEnabled(); } catch (_) { return false; }
+  try { return require('../ai/stt').sttEnabled(); } catch (_) { return false; }
 }
 
 async function testAccountFor(msgOrQuery) {
@@ -102,8 +103,7 @@ const {
 // separate Justify integration; the bot no longer depends on it.
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
-const LEGAL_BOT_USERNAME = 'yuristga_savolbot';
-const AUTH_BOT_USERNAME = 'juristAI_registration_bot';
+const { LEGAL_BOT_USERNAME, AUTH_BOT_USERNAME } = require('../config/bot-usernames');
 const LEGAL_BOT_AUTH_FALLBACK_ENABLED = false;
 const PAID_ANSWER_STARS = Math.max(1, Number.parseInt(process.env.TG_PAID_ANSWER_STARS || '1', 10) || 1);
 const PAID_ANSWER_CREDITS = Math.max(1, Number.parseInt(process.env.TG_PAID_ANSWER_CREDITS || '4', 10) || 4);
@@ -218,6 +218,251 @@ const pendingFiles = new Map();
 const PENDING_FILE_TTL = 60 * 60 * 1000; // 1 hour
 const MIN_FILE_DESC = 200; // min chars of description required with a file
 
+// One-time services for Telegram Stars (2026-10-21, src/bot/one-time-sales.js):
+// a question pack, an AI draft, an analysis or an opinion bought one at a time.
+const oneTimeSales = require('./one-time-sales').createOneTimeSales({
+  bot, ledger: require('../rag/tariff-ledger'), identityOf: (m) => telegramIdentity(m), secret: token, refundStars,
+});
+const appBase = () => String(process.env.APP_URL || 'https://juristai.uz').replace(/\/+$/u, '');
+
+/** Units of a service this person can use now: the plan's plus any bought one at a time (staff: unlimited). */
+async function serviceUnitsLeft(who, service) {
+  const b = await require('../rag/tariff-ledger').balance({ adminId: who.adminId || null, telegramUserId: who.telegramUserId });
+  if (b.kind === 'staff' || b.legacy) return Infinity;
+  const plan = b.services ? b.services[service].remaining : (b.trialAvailable ? Number(b.trialQuotas[service] || 0) : 0);
+  return plan + Number((b.oneTime && b.oneTime[service]) || 0);
+}
+
+// A master in /testmode tries the AI draft (and the claim agent) with no
+// unit and no Stars: its AI calls run under the test mode's own budget (the
+// callback and message handlers attach it: testAccountFor), nothing is
+// reserved or committed (owner, 2026-10-22). null when that does not apply.
+async function masterDraftTest(chatId, from) {
+  if (!from || !inAdminTestMode(chatId)) return null;
+  try {
+    const linked = await getLinkedAccount(pool, chatId, from.id);
+    const expiresAt = adminTestMode.get(chatId);
+    const account = await testAccounts.resolveMasterTestMode(pool, {
+      chatId, chatType: 'private', fromUserId: from.id,
+      isMaster: !!(linked && isMasterRole(linked.role)), startedAt: expiresAt - TEST_MODE_TTL_MS, expiresAt,
+    });
+    return account && !account.exhausted ? account : null;
+  } catch (e) {
+    console.warn('[TG-DRAFT] master test mode check failed; ordinary rules apply:', e.message);
+    return null;
+  }
+}
+
+/** "AI loyiha" when the person has a draft unit; else the one-time purchase, which then drafts at once. */
+function draftPurchaseMarkup(chatId, from) {
+  oneTimeSales.setResume(chatId, 'draft', () => startAiDraft(chatId, from));
+  return { inline_keyboard: [[oneTimeSales.button('draft', 1, `🤖 AI loyiha — ${require('../rag/one-time-products').starsLabel('draft')}`)]] };
+}
+
+// An AI draft of an ordered document, right away in the chat (2026-10-20):
+// the website's generator (setDraftGenerator), one draft unit from the plan
+// (or one bought for Stars), sent back as a Word file. The lawyer order is
+// kept as well, and a delivered draft can be sent to a lawyer for review.
+let draftGenerator = null;
+const DRAFT_OFFER_TTL_MS = 30 * 60 * 1000;
+const draftOffers = new Map(); // chatId -> { docType, details, at }
+const lastDrafts = new Map(); // chatId -> { docType, details, text, at } (lawyer review)
+async function offerAiDraft(chatId, meta = {}, from = null) {
+  if (!draftGenerator) return;
+  const details = String(meta.caseSummary || '').trim();
+  if (details.length < 20) return;
+  // the source question and answer go with the order: the claim agent reads the story from all of it
+  const story = [meta.sourceQuestion && `Savol: ${meta.sourceQuestion}`, details].filter(Boolean).join('\n\n');
+  draftOffers.set(chatId, { docType: String(meta.documentTypeLabel || 'Yuridik hujjat'), details: story.slice(0, 6000), slug: String(meta.serviceSlug || ''), at: Date.now() });
+  let left = 1;
+  if (from) {
+    try { left = await serviceUnitsLeft(await telegramIdentity({ chat: { id: chatId, type: 'private' }, from }), 'draft'); } catch (_) { left = 1; }
+  }
+  const agentNote = meta.serviceSlug === 'claim' && claimAgent ? "\n⚖️ Da'vo arizasini agent tayyorlaydi: lex.uz'dan asos qidiradi, iqtiboslarni manbada tekshiradi va loyihani shu asosda yozadi." : '';
+  if (await masterDraftTest(chatId, from)) {
+    await bot.sendMessage(chatId,
+      "🤖 Kutmasdan loyiha kerakmi? AI hozir shu ma'lumotlar asosida hujjat loyihasini Word faylda tayyorlaydi.\n🧪 Test rejimi: birlik ham, Stars ham olinmaydi; xarajat test budjetidan." + agentNote,
+      { reply_markup: { inline_keyboard: [[{ text: '🤖 AI loyiha — test rejimi', callback_data: 'tgdraft_ai' }]] } }).catch(() => {});
+    return;
+  }
+  if (left > 0) {
+    await bot.sendMessage(chatId,
+      "🤖 Kutmasdan loyiha kerakmi? AI hozir shu ma'lumotlar asosida hujjat loyihasini Word faylda tayyorlaydi — tarifingizdagi 1 ta hujjat birligi sarflanadi. Yurist buyurtmasi ham saqlanib qoladi." + agentNote,
+      { reply_markup: { inline_keyboard: [[{ text: '🤖 AI loyiha — 1 birlik', callback_data: 'tgdraft_ai' }]] } }).catch(() => {});
+    return;
+  }
+  const p = require('../rag/one-time-products');
+  await bot.sendMessage(chatId,
+    `🤖 Kutmasdan loyiha kerakmi? AI hozir shu ma'lumotlar asosida hujjat loyihasini Word faylda tayyorlaydi.\nNarx: ${p.formatUzs(p.PRODUCTS.draft.priceUzs)} — hozircha Telegram Stars orqali ${p.starsFor('draft')} ⭐ (bir martalik). To'lovdan keyin loyiha darhol tayyorlanadi; xatoda birlik qaytariladi.\nYurist buyurtmasi ham saqlanib qoladi: uning narxini yurist belgilaydi.${agentNote}`,
+    { reply_markup: draftPurchaseMarkup(chatId, from) }).catch(() => {});
+}
+async function runAiDraft(callbackQuery) {
+  await bot.answerCallbackQuery(callbackQuery.id, { text: 'Loyiha tayyorlanmoqda' }).catch(() => {});
+  return startAiDraft(callbackQuery.message.chat.id, callbackQuery.from);
+}
+async function startAiDraft(chatId, from) {
+  const o = draftOffers.get(chatId);
+  if (!o || Date.now() - o.at > DRAFT_OFFER_TTL_MS) {
+    draftOffers.delete(chatId);
+    await bot.sendMessage(chatId, "Taklif muddati o'tdi. Hujjatni qayta buyurtma qiling (sotib olingan birlik saqlanadi).").catch(() => {});
+    return;
+  }
+  const ledger = require('../rag/tariff-ledger');
+  const who = await telegramIdentity({ chat: { id: chatId, type: 'private' }, from });
+  let job;
+  try {
+    job = await masterDraftTest(chatId, from)
+      ? { allowed: true, jobKey: null, testMode: true }
+      : await ledger.reserve({ adminId: who.adminId || null, telegramUserId: who.telegramUserId || from.id, service: 'draft', units: 1, channel: 'telegram', endpoint: '/tg/draft' });
+  } catch (e) {
+    console.warn('[TG-DRAFT] reserve failed:', e.message);
+    await bot.sendMessage(chatId, "Limitni hozir tekshirib bo'lmadi. Birozdan keyin qayta urinib ko'ring.").catch(() => {});
+    return;
+  }
+  if (!job.allowed) {
+    await bot.sendMessage(chatId, `Hujjat tayyorlash birligi qolmagan (Sinov tarifida bu xizmat yo'q). Bitta loyihani alohida sotib olishingiz yoki tarif tanlashingiz mumkin: ${appBase()}/tariff.html\nYurist buyurtmangiz o'z holicha ko'rib chiqiladi.`,
+      { reply_markup: draftPurchaseMarkup(chatId, from) }).catch(() => {});
+    return;
+  }
+  draftOffers.delete(chatId);
+  // a da'vo arizasi goes through the claim agent (src/agents/telegram-claim.js)
+  if (o.slug === 'claim' && claimAgent) return runClaimAgent(chatId, from, o, job);
+  await bot.sendChatAction(chatId, 'upload_document').catch(() => {});
+  try {
+    const r = await draftGenerator(o.docType, o.details);
+    if (!r || !r.html) throw new Error('empty draft');
+    await deliverDraft(chatId, o, r.html, job);
+  } catch (e) {
+    console.error('[TG-DRAFT] failed:', e.message);
+    if (job.jobKey) await ledger.release(job.jobKey, 'failed').catch(() => {});
+    await bot.sendMessage(chatId, "Loyihani tayyorlab bo'lmadi, birlik qaytarildi. Birozdan keyin qayta urinib ko'ring yoki saytda tayyorlang.").catch(() => {});
+  }
+}
+
+/** Send the draft as .docx, commit its unit, offer the lawyer review. */
+async function deliverDraft(chatId, o, html, job, { caption = null } = {}) {
+  const ledger = require('../rag/tariff-ledger');
+  const { htmlToDocx, DOCX_MIME } = require('../drafting/html-to-docx');
+  const buf = await htmlToDocx(html, { title: o.docType, lang: /[\u0400-\u04ff]/u.test(o.details) ? 'ru' : 'uz' });
+  const name = `${o.docType.replace(/[\\/:*?"<>|]+/gu, ' ').trim().slice(0, 60) || 'Hujjat'}.docx`;
+  await bot.sendDocument(chatId, buf, { caption: caption || "📄 AI loyiha. [Qavs ichidagi] joylarni to'ldiring va imzolashdan oldin tekshiring; muhim hujjatni yurist bilan ko'rib chiqing." },
+    { filename: name, contentType: DOCX_MIME });
+  if (job && job.jobKey) await ledger.commit(job.jobKey).catch((e) => console.error('[TG-DRAFT] commit failed:', e.message));
+  const text = String(html).replace(/<[^>]+>/gu, ' ').replace(/&nbsp;/gu, ' ').replace(/\s+/gu, ' ').trim();
+  lastDrafts.set(chatId, { docType: o.docType, details: o.details, text: text.slice(0, 12000), at: Date.now() });
+  await bot.sendMessage(chatId,
+    "👨‍⚖️ Loyihani yurist tekshirib, to'g'rilab berishini xohlaysizmi? Narxni yurist belgilaydi; tasdiqlangach sizga narx yuboriladi va siz rozilik bildirgandan keyingina ish boshlanadi.",
+    { reply_markup: { inline_keyboard: [[{ text: '👨‍⚖️ Yurist tekshiruvi', callback_data: 'tgdraft_review' }]] } }).catch(() => {});
+}
+
+// The claim agent (2026-10-22, src/agents/telegram-claim.js), set by the
+// server (setClaimAgent). Its steps are shown in one message that updates;
+// facts it still needs are asked for (the unit is released, nothing is
+// charged) and the person's next message in this chat resumes it.
+let claimAgent = null;
+const claimAwait = new Map(); // chatId -> { o, from, at }
+async function runClaimAgent(chatId, from, o, job) {
+  const ledger = require('../rag/tariff-ledger');
+  const done = [];
+  let current = "Ma'lumotlarni tekshirish";
+  let status = null, lastEdit = 0, editing = Promise.resolve();
+  const view = () => ["⚖️ Da'vo arizasi agenti ishlamoqda (1–2 daqiqa):", ...done.map(l => `✅ ${l}`), current ? `⏳ ${current}` : ''].filter(Boolean).join('\n');
+  try { status = await bot.sendMessage(chatId, view()); } catch (_) { status = null; }
+  const onStep = (e) => {
+    if (e.type !== 'step') return;
+    if (e.status === 'running') current = e.label;
+    else if (e.status === 'ok') { done.push(e.label); current = null; }
+    const now = Date.now();
+    if (status && now - lastEdit > 1200) {
+      lastEdit = now;
+      editing = editing.then(() => bot.editMessageText(view(), { chat_id: chatId, message_id: status.message_id }).catch(() => {}));
+    }
+  };
+  let r;
+  try {
+    r = await claimAgent.run(o.details, { lang: /[\u0400-\u04ff]/u.test(o.details) ? 'ru' : 'uz', onStep });
+  } catch (e) {
+    r = { status: 'failed', error: e.message };
+  }
+  await editing;
+  if (r.status === 'needs_input') {
+    if (job && job.jobKey) await ledger.release(job.jobKey, 'claim_needs_input').catch(() => {});
+    claimAwait.set(String(chatId), { o, from, at: Date.now() });
+    await bot.sendMessage(chatId, ["Da'vo arizasi uchun yana quyidagilar kerak:", ...(r.missing || []).map((m, i) => `${i + 1}. ${m.question}`), '',
+      "Javobni bitta xabarda yozib yuboring — loyiha shundan keyin tayyorlanadi. Birlik hali yechilmadi."].join('\n')).catch(() => {});
+    return;
+  }
+  if (r.status !== 'done') {
+    console.error('[TG-CLAIM] agent failed:', r.error || r.stoppedAt || r.status);
+    if (job && job.jobKey) await ledger.release(job.jobKey, 'claim_failed').catch(() => {});
+    await bot.sendMessage(chatId, "Da'vo arizasini tayyorlab bo'lmadi, birlik qaytarildi. Birozdan keyin qayta urinib ko'ring yoki saytda (Hujjat tayyorlash → Da'vo arizasi agenti) tayyorlang.").catch(() => {});
+    return;
+  }
+  if (status) await bot.editMessageText(["⚖️ Da'vo arizasi agenti:", ...done.map(l => `✅ ${l}`)].join('\n'), { chat_id: chatId, message_id: status.message_id }).catch(() => {});
+  try {
+    await deliverDraft(chatId, o, r.html, null, { caption: "📄 Da'vo arizasi loyihasi (agent). Moddalar faqat lex.uz'da tasdiqlangan iqtiboslardan; [qavs ichidagi] joylarni to'ldiring. Bu AI loyiha, yuridik xulosa emas." });
+    if (job && job.jobKey) await ledger.commit(job.jobKey).catch((e) => console.error('[TG-CLAIM] commit failed:', e.message));
+    await bot.sendMessage(chatId, require('../agents/telegram-claim').resultText(r), { disable_web_page_preview: true }).catch(() => {});
+  } catch (e) {
+    console.error('[TG-CLAIM] delivery failed:', e.message);
+    if (job && job.jobKey) await ledger.release(job.jobKey, 'claim_not_delivered').catch(() => {});
+    await bot.sendMessage(chatId, "Faylni yuborib bo'lmadi, birlik qaytarildi. Qayta urinib ko'ring.").catch(() => {});
+  }
+}
+/** The person's answer to the agent's questions: added to the order, and the agent runs again. true when handled. */
+async function resumeClaimAgent(msg) {
+  const key = String(msg.chat.id);
+  const w = claimAwait.get(key);
+  if (!w || !msg.text || msg.text.startsWith('/')) return false;
+  claimAwait.delete(key);
+  if (Date.now() - w.at > DRAFT_OFFER_TTL_MS) return false;
+  draftOffers.set(msg.chat.id, { ...w.o, details: `${w.o.details}\n\nQo'shimcha ma'lumot: ${msg.text}`.slice(0, 7000), at: Date.now() });
+  await startAiDraft(msg.chat.id, msg.from || w.from);
+  return true;
+}
+
+/** A delivered AI draft goes to a lawyer for review: an order the lawyer prices (src/services/legal-marketplace.js). */
+async function orderLawyerReview(callbackQuery) {
+  const chatId = callbackQuery.message.chat.id;
+  const d = lastDrafts.get(chatId);
+  if (!d || Date.now() - d.at > 24 * 3600e3) {
+    await bot.answerCallbackQuery(callbackQuery.id, { text: "Loyiha topilmadi. Hujjatni qayta buyurtma qiling.", show_alert: true }).catch(() => {});
+    return;
+  }
+  lastDrafts.delete(chatId);
+  await bot.answerCallbackQuery(callbackQuery.id, { text: 'Yuristga yuborildi' }).catch(() => {});
+  try {
+    const order = await require('../services/legal-marketplace').createServiceOrder({
+      serviceSlug: 'legal-document', telegramChatId: chatId,
+      intakeData: { kind: 'lawyer_review', documentType: d.docType, caseSummary: d.details.slice(0, 4000), draftText: d.text },
+    });
+    await bot.sendMessage(chatId, order
+      ? `✅ Yurist tekshiruvi so'rovi qabul qilindi (#${order.id}). Yurist loyihani ko'rib, narxni belgilaydi; narx shu yerga yuboriladi. Rozilik bermaguningizcha hech narsa to'lanmaydi.`
+      : "So'rovni hozir qabul qilib bo'lmadi. Birozdan keyin qayta urinib ko'ring.").catch(() => {});
+  } catch (e) {
+    console.error('[TG-DRAFT] review order failed:', e.message);
+    await bot.sendMessage(chatId, "So'rovni hozir qabul qilib bo'lmadi. Birozdan keyin qayta urinib ko'ring.").catch(() => {});
+  }
+}
+
+// A PDF / DOCX can be analysed by AI in the chat (src/bot/telegram-documents.js);
+// the analyzer is the website's, set by the server (setDocumentAnalyzer).
+let documentAnalyzer = null;
+const documentFlow = require('./telegram-documents').createDocumentFlow({
+  bot,
+  pool,
+  ledger: require('../rag/tariff-ledger'),
+  extract: (buf, o) => require('../ocr/routes').extractFileText(buf, o),
+  getAnalyzer: () => documentAnalyzer,
+  identityOf: (q) => telegramIdentity(q),
+  sales: oneTimeSales,
+  holdForLawyer: async (chatId, file) => {
+    pendingFiles.set(chatId, { ...file, at: Date.now() });
+    await bot.sendMessage(chatId, tariffTexts.fileHeldText({ tooShortNote: '', minChars: MIN_FILE_DESC }));
+  },
+  tariffUrl: `${String(process.env.APP_URL || 'https://juristai.uz').replace(/\/+$/u, '')}/tariff.html`,
+});
+
 // ========== OPTIONAL CHANNEL SUBSCRIPTION ==========
 // The channel remains available as a promotional link, but ordinary Telegram
 // requests must not be blocked by it. Re-enable the gate only deliberately by
@@ -253,13 +498,27 @@ function startKeyboard(includeVerify = false) {
   };
 }
 
+// The answer pack offered now is the one-time "5 questions" (owner,
+// 2026-10-21); invoices for the old 1-Star pack already issued are still
+// honoured (readAnswerOffer), but it is no longer offered.
 function paidAnswerKeyboard() {
   return {
-    inline_keyboard: [[{
-      text: `${PAID_ANSWER_CREDITS} ta qo'shimcha javob — ${PAID_ANSWER_STARS} ⭐`,
-      callback_data: 'buy_ai_answers',
-    }]],
+    inline_keyboard: [
+      [oneTimeSales.button('chat5', 1, `💬 5 ta savol — ${require('../rag/one-time-products').starsLabel('chat5')}`)],
+      [{ text: '⭐ Tariflar', url: `${appBase()}/tariff.html` }],
+    ],
   };
+}
+
+/** Limit spent: the question pack, the document the last answer pointed to (if any), the plans. */
+async function quotaKeyboard(chatId) {
+  const kb = paidAnswerKeyboard();
+  try {
+    const current = await require('../agents/telegram-agent').loadConversation(chatId);
+    const doc = ((current.context && current.context.nextActions) || []).find(a => a && a.kind === 'document');
+    if (doc) kb.inline_keyboard.splice(1, 0, [{ text: `📄 ${String(doc.label || 'Hujjat').slice(0, 56)}`, callback_data: `nxt_${String(doc.id).slice(0, 48)}` }]);
+  } catch (_) { /* the pack and the plans are offered anyway */ }
+  return kb;
 }
 
 function paymentTermsKeyboard() {
@@ -272,17 +531,20 @@ function paymentTermsKeyboard() {
 }
 
 function paymentTermsText() {
+  const p = require('../rag/one-time-products');
+  const line = (k) => `• ${p.PRODUCTS[k].title}: *${p.formatUzs(p.PRODUCTS[k].priceUzs)}* — Telegram Stars orqali *${p.starsFor(k)} ⭐*`;
   return [
-    '*Qo\'shimcha huquqiy javoblar shartlari*',
+    '*JuristAI bir martalik xizmatlari*',
     '',
-    `• Narx: *${PAID_ANSWER_STARS} Telegram Star* — *${PAID_ANSWER_CREDITS} ta* qo'shimcha AI huquqiy javob.`,
-    '• Bu obuna emas. Kreditlar muddati tugamaydi.',
-    '• Kredit faqat AI huquqiy javobi yuborilganda sarflanadi. Salomlashuv, aniqlashtirish, menyular va xizmat bo\'yicha suhbatlar bepul.',
-    '• Texnik xatoda sarflangan kredit avtomatik qaytariladi.',
-    '• Javob umumiy huquqiy ma\'lumot bo\'lib, rasmiy yuridik xulosa yoki natija kafolati emas.',
+    ...Object.keys(p.PRODUCTS).map(line),
+    '',
+    '• Bu obuna emas. Sotib olingan xizmat muddati tugamaydi va tarif limitingiz tugagandan keyin ishlatiladi.',
+    '• Birlik faqat xizmat yetkazilganda sarflanadi; texnik xatoda avtomatik qaytariladi.',
+    '• Click / Payme ulanguncha to\'lov faqat Telegram Stars orqali; Stars narxi so\'mdagi narxdan biroz yuqori.',
+    '• Javob va hujjat loyihasi umumiy huquqiy yordam bo\'lib, rasmiy yuridik xulosa yoki natija kafolati emas. Yurist tekshiruvi alohida xizmat: narxini yurist belgilaydi.',
     '• To\'lov muammolari uchun /paysupport buyrug\'idan foydalaning. Telegram qo\'llab-quvvatlashi JuristAI xaridlarini ko\'rib chiqmaydi.',
     '',
-    '“Roziman va to\'lash” tugmasini bosib, ushbu shartlarga rozilik bildirasiz.',
+    '“Roziman va to\'lash” tugmasi 5 ta savol paketini ochadi; boshqa xizmatlar o\'z tugmasi orqali sotiladi.',
   ].join('\n');
 }
 
@@ -303,32 +565,26 @@ async function sendPublicStats(chatId) {
   await bot.sendMessage(chatId, formatPublicStats(stats), { parse_mode: 'Markdown' });
 }
 
-async function sendPaidAnswerInvoice(chatId, telegramUserId) {
-  const payload = starsInvoice.buildAnswerInvoicePayload({
-    telegramUserId, stars: PAID_ANSWER_STARS, credits: PAID_ANSWER_CREDITS, secret: token,
-  });
-  return bot.sendInvoice(
-    chatId,
-    `${PAID_ANSWER_CREDITS} ta huquqiy javob`,
-    `JuristAI orqali ${PAID_ANSWER_CREDITS} ta qo'shimcha AI huquqiy javob. Obuna emas, muddati tugamaydi. Salomlashuv, aniqlashtirish va menyular bepul.`,
-    payload,
-    '',
-    'XTR',
-    [{ label: `${PAID_ANSWER_CREDITS} ta AI huquqiy javob`, amount: PAID_ANSWER_STARS }]
-  );
-}
-
 function agentActionKeyboard(agentResult) {
   if (!agentResult) return null;
   if (agentResult.action === 'answered' && agentResult.meta && Array.isArray(agentResult.meta.nextActions)) {
-    return {
-      inline_keyboard: agentResult.meta.nextActions.slice(0, 3).map(action => ([{
-        text: String(action.label || 'Keyingi qadam').slice(0, 64),
-        callback_data: `nxt_${String(action.id || 'action').slice(0, 48)}`,
-      }])),
-    };
+    const rows = agentResult.meta.nextActions.slice(0, 3).map(action => ([{
+      text: String(action.label || 'Keyingi qadam').slice(0, 64),
+      callback_data: `nxt_${String(action.id || 'action').slice(0, 48)}`,
+    }]));
+    // the last Sinov question was just answered: the question pack too
+    if (agentResult.meta.trialSpent) rows.push(paidAnswerKeyboard().inline_keyboard[0]);
+    return { inline_keyboard: rows };
   }
   if (agentResult.action === 'quota_exceeded') return paidAnswerKeyboard();
+  // account deletion is asked for, then confirmed with a button (src/services/account-deletion.js)
+  if (agentResult.action === 'tool_delete_account_confirm') {
+    const ru = agentResult.meta && agentResult.meta.lang === 'ru';
+    return { inline_keyboard: [[
+      { text: ru ? '🗑 Да, удалить' : "🗑 Ha, o'chirish", callback_data: 'acc_del_yes' },
+      { text: ru ? 'Отмена' : 'Bekor qilish', callback_data: 'acc_del_no' },
+    ]] };
+  }
   if (agentResult.action === 'attorney_intake_started') return attorneyFieldKeyboard();
   if (agentResult.action === 'document_intake_started') return documentTypeKeyboard();
   if (agentResult.action === 'greeting' || agentResult.action === 'intake_cancelled') return serviceKeyboard();
@@ -376,13 +632,25 @@ function sendJoinPrompt(chatId) {
 // ========== ADMIN COMMANDS ==========
 
 // /link username password - Link Telegram account to admin
+const linkAttempts = new Map(); // telegram user id -> { n, at } (wrong /link passwords)
 bot.onText(/\/link(?:\s+(\S+)\s+(\S+))?/, async (msg, match) => {
   const chatId = msg.chat.id;
   const username = match[1];
   const password = match[2];
 
+  if (msg.chat.type !== 'private') {
+    bot.sendMessage(chatId, "Bu buyruq faqat bot bilan shaxsiy chatda ishlaydi — parolni guruhga yozmang.");
+    return;
+  }
   if (!username || !password) {
-    bot.sendMessage(chatId, '📋 Foydalanish:\n/link <username> <parol>\n\nMisol: /link admin admin123');
+    bot.sendMessage(chatId, "📋 Saytdagi akkauntni ulashning eng oson yo'li: juristai.uz/app/ ga o'z login yoki parolingiz bilan kiring va \"Telegram'ni ulash\" tugmasini bosing.\n\nYoki: /link <login> <parol>");
+    return;
+  }
+  // wrong passwords: at most 5 tries in 15 minutes per Telegram user
+  const tries = linkAttempts.get(msg.from.id) || { n: 0, at: Date.now() };
+  if (Date.now() - tries.at > 15 * 60e3) { tries.n = 0; tries.at = Date.now(); }
+  if (tries.n >= 5) {
+    bot.sendMessage(chatId, "Juda ko'p urinish. 15 daqiqadan keyin qayta urining yoki saytda \"Telegram'ni ulash\" tugmasidan foydalaning.");
     return;
   }
 
@@ -392,23 +660,21 @@ bot.onText(/\/link(?:\s+(\S+)\s+(\S+))?/, async (msg, match) => {
       [username]
     );
 
-    if (result.rows.length === 0) {
-      bot.sendMessage(chatId, '❌ Username topilmadi.');
-      return;
-    }
-
     const admin = result.rows[0];
-    const isValid = await bcrypt.compare(password, admin.password);
+    const isValid = admin ? await bcrypt.compare(password, admin.password) : false;
 
     if (!isValid) {
-      bot.sendMessage(chatId, '❌ Parol noto\'g\'ri.');
+      // one reply for an unknown login and a wrong password
+      tries.n++; linkAttempts.set(msg.from.id, tries);
+      bot.sendMessage(chatId, "❌ Login yoki parol noto'g'ri.");
       return;
     }
+    linkAttempts.delete(msg.from.id);
 
-    // Check if this chat is already linked to another admin
+    // Check if this Telegram is already linked to another account (either column)
     const existingLink = await pool.query(
-      'SELECT username FROM admins WHERE telegram_chat_id = $1 AND id != $2',
-      [chatId, admin.id]
+      'SELECT username FROM admins WHERE (telegram_chat_id = $1 OR telegram_user_id = $3) AND id != $2',
+      [chatId, admin.id, msg.from.id]
     );
     if (existingLink.rows.length > 0) {
       bot.sendMessage(chatId, `⚠️ Bu Telegram hisob allaqachon @${existingLink.rows[0].username} ga ulangan. Avval /unlink qiling.`);
@@ -416,8 +682,8 @@ bot.onText(/\/link(?:\s+(\S+)\s+(\S+))?/, async (msg, match) => {
     }
 
     await pool.query(
-      'UPDATE admins SET telegram_chat_id = $1 WHERE id = $2',
-      [chatId, admin.id]
+      'UPDATE admins SET telegram_chat_id = $1, telegram_user_id = $3 WHERE id = $2',
+      [chatId, admin.id, msg.from.id]
     );
 
     bot.sendMessage(chatId, isStaffRole(admin.role)
@@ -432,17 +698,24 @@ bot.onText(/\/link(?:\s+(\S+)\s+(\S+))?/, async (msg, match) => {
 // /unlink - Unlink Telegram account
 bot.onText(/\/unlink/, async (msg) => {
   const chatId = msg.chat.id;
+  if (msg.chat.type !== 'private') {
+    bot.sendMessage(chatId, 'Bu buyruq faqat bot bilan shaxsiy chatda ishlaydi.');
+    return;
+  }
 
   try {
+    // both columns: the account is matched by either (getLinkedAccount)
     const result = await pool.query(
-      'UPDATE admins SET telegram_chat_id = NULL WHERE telegram_chat_id = $1 RETURNING full_name',
-      [chatId]
+      `UPDATE admins SET telegram_chat_id = NULL, telegram_user_id = NULL
+        WHERE telegram_chat_id = $1 OR telegram_user_id = $2 RETURNING full_name, username`,
+      [chatId, msg.from.id]
     );
 
     if (result.rowCount > 0) {
-      bot.sendMessage(chatId, `✅ Telegram hisobingiz uzildi, ${result.rows[0].full_name}. Endi bildirishnomalar olmaysiz.`);
+      const names = result.rows.map(r => r.full_name || (r.username ? `@${r.username}` : 'akkaunt')).join(', ');
+      bot.sendMessage(chatId, `✅ Telegram uzildi: ${names}. Endi bu chatdagi savollar o'sha akkaunt tarifidan hisoblanmaydi va bildirishnomalar kelmaydi. Qayta ulash: saytda "Telegram'ni ulash".`);
     } else {
-      bot.sendMessage(chatId, 'ℹ️ Bu Telegram hisob hech qanday admin hisobiga ulanmagan.');
+      bot.sendMessage(chatId, 'ℹ️ Bu Telegram hech qanday JuristAI akkauntiga ulanmagan.');
     }
   } catch (error) {
     console.error('Unlink error:', error);
@@ -543,6 +816,20 @@ async function handleCallbackQuery(callbackQuery) {
   const testAccount = await testAccountFor(callbackQuery);
   const data = callbackQuery.data;
 
+  // a document's AI analysis or its lawyer queue (src/bot/telegram-documents.js)
+  if (await documentFlow.onCallback(callbackQuery)) return;
+  // a document order waiting for its details is dropped: the next message is a new one
+  if (data === 'docin_cancel') {
+    await require('../agents/telegram-agent').setConversationState(chatId, 'idle', {});
+    claimAwait.delete(String(chatId));
+    await bot.answerCallbackQuery(callbackQuery.id, { text: 'Bekor qilindi' }).catch(() => {});
+    await bot.sendMessage(chatId, "Buyurtma bekor qilindi. Huquqiy savolingizni yozavering.").catch(() => {});
+    return;
+  }
+  if (data === 'tgdraft_ai') { await runAiDraft(callbackQuery); return; }
+  if (data === 'tgdraft_review') { await orderLawyerReview(callbackQuery); return; }
+  if (await oneTimeSales.onCallback(callbackQuery)) return;
+
   if (data === 'bot_stats') {
     try {
       await telegramEconomy.recordTelegramActivity(chatId);
@@ -574,10 +861,34 @@ async function handleCallbackQuery(callbackQuery) {
     try {
       await telegramEconomy.recordTelegramActivity(chatId);
       await bot.answerCallbackQuery(callbackQuery.id, { text: 'To\'lov oynasi ochildi' });
-      await sendPaidAnswerInvoice(chatId, callbackQuery.from.id);
+      // the 1-Star pack is retired: an old button opens the 5-question pack
+      await oneTimeSales.sendInvoice(chatId, callbackQuery.from.id, 'chat5', 1);
     } catch (error) {
       console.error('[BOT] confirmed answer invoice failed:', error.message);
       await bot.answerCallbackQuery(callbackQuery.id, { text: 'To\'lov oynasini hozir ochib bo\'lmadi.', show_alert: true });
+    }
+    return;
+  }
+
+  // account deletion: the confirmation of a request asked in the chat
+  if (data === 'acc_del_yes' || data === 'acc_del_no') {
+    const ru = /[\u0400-\u04ff]/u.test(String(callbackQuery.message && callbackQuery.message.text || ''));
+    if (data === 'acc_del_no') {
+      await bot.answerCallbackQuery(callbackQuery.id, { text: ru ? 'Отменено' : 'Bekor qilindi' }).catch(() => {});
+      await bot.sendMessage(chatId, ru ? 'Хорошо, аккаунт остаётся.' : 'Yaxshi, akkaunt saqlanib qoladi.').catch(() => {});
+      return;
+    }
+    try {
+      if (!callbackQuery.message || callbackQuery.message.chat.type !== 'private') throw new Error('private chat only');
+      const ident = await telegramIdentity(callbackQuery);
+      const r = await require('../services/account-deletion').createRequest(pool, { telegramUserId: callbackQuery.from.id, chatId, adminId: ident.adminId || null });
+      await bot.answerCallbackQuery(callbackQuery.id, { text: ru ? 'Запрос принят' : "So'rov qabul qilindi" }).catch(() => {});
+      await bot.sendMessage(chatId, r.duplicate
+        ? (ru ? 'Ваш запрос на удаление уже принят и ожидает обработки. Когда аккаунт будет удалён, мы сообщим здесь.' : "O'chirish so'rovingiz avval qabul qilingan va ko'rib chiqilmoqda. Akkaunt o'chirilganda shu yerda xabar beramiz.")
+        : (ru ? 'Запрос на удаление аккаунта принят. Администратор выполнит его, и мы сообщим здесь. Передумали — напишите администратору.' : "Akkauntni o'chirish so'rovi qabul qilindi. Administrator uni bajaradi va shu yerda xabar beramiz. Fikringiz o'zgarsa, administratorga yozing."));
+    } catch (error) {
+      console.error('[BOT] account deletion request failed:', error.message);
+      await bot.answerCallbackQuery(callbackQuery.id, { text: ru ? 'Не удалось принять запрос' : "So'rovni qabul qilib bo'lmadi", show_alert: true }).catch(() => {});
     }
     return;
   }
@@ -654,12 +965,13 @@ async function handleCallbackQuery(callbackQuery) {
         await bot.answerCallbackQuery(callbackQuery.id, { text: 'Hujjat turi tanlandi' });
         await bot.sendMessage(chatId, [
           `Tanlangan hujjat: *${intake.context.documentTypeLabel}*`,
-          "Bu pullik xizmat; buyurtma mas'ul yurist tasdig'idan keyin qabul qilinadi.",
+          `Ikki yo'l bor: 🤖 AI loyiha — darhol, Word faylda (tarifdagi 1 birlik yoki bir martalik ${require('../rag/one-time-products').formatUzs(require('../rag/one-time-products').PRODUCTS.draft.priceUzs)}); 👨‍⚖️ yurist tayyorlaydi yoki tekshiradi — narxni yurist belgilaydi, rozilik berguningizcha to'lov yo'q.`,
           caseSummary ? "Huquqiy vaziyatingiz va xulosa oldingi savol-javobdan olindi. Faqat yetishmayotgan ma'lumotlarni yozing." : '',
           '',
           questions,
           "Shaxsiy maxfiy ma'lumotlarni hozircha yubormang.",
-        ].filter(Boolean).join('\n'), { parse_mode: 'Markdown' });
+          "Buyurtma 30 daqiqa kutadi; savol bermoqchi bo'lsangiz, ❌ Bekor qilish.",
+        ].filter(Boolean).join('\n'), { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '❌ Bekor qilish', callback_data: 'docin_cancel' }]] } });
         return;
       }
 
@@ -880,17 +1192,33 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
         return;
       }
       const tgId = String(msg.from.id);
+      // this Telegram must not stay on another account by either column
+      // (a Telegram sign-in sets both); the person can free it with /unlink
       const taken = (await pool.query(
-        'SELECT id FROM admins WHERE telegram_user_id = $1 AND id <> $2', [tgId, row.id]
+        'SELECT id FROM admins WHERE (telegram_user_id = $1 OR telegram_chat_id = $1) AND id <> $2', [tgId, row.id]
       )).rows[0];
       if (taken) {
-        bot.sendMessage(chatId, '⚠️ Bu Telegram hisobi allaqachon boshqa akkauntga ulangan.');
+        bot.sendMessage(chatId, "⚠️ Bu Telegram boshqa JuristAI akkauntiga ulangan (masalan, Telegram orqali kirganingizda yangi akkaunt ochilgan bo'lishi mumkin).\n\nUni shu akkauntga o'tkazish uchun: shu chatda /unlink yuboring, so'ng saytdagi \"Telegram'ni ulash\" tugmasini qayta bosing.");
         return;
       }
+      // the account's previous Telegram (old chat id) is detached: one account, one Telegram
       await pool.query(
-        'UPDATE admins SET telegram_user_id = $1, telegram_username = $2, telegram_link_code = NULL WHERE id = $3',
-        [tgId, msg.from.username || null, row.id]
+        `UPDATE admins SET telegram_user_id = $1, telegram_username = $2, telegram_link_code = NULL,
+                telegram_chat_id = CASE WHEN $4 THEN $1::bigint ELSE NULL END
+          WHERE id = $3`,
+        [tgId, msg.from.username || null, row.id, msg.chat.type === 'private']
       );
+      // a paid plan: say so plainly, nothing about the free-access channel
+      let paid = null;
+      try {
+        const b = await require('../rag/tariff-ledger').balance({ adminId: row.id, telegramUserId: tgId });
+        if (b.kind === 'paid' || b.kind === 'test') paid = b;
+      } catch (_) { paid = null; }
+      if (paid) {
+        const label = (require('../rag/tariff-ledger').PLAN_CATALOG[paid.plan] || {}).label || paid.plan;
+        bot.sendMessage(chatId, `✅ Telegram akkauntingizga ulandi. Tarif: ${label}${paid.endsAt ? ` (${new Date(paid.endsAt).toLocaleDateString('ru-RU', { timeZone: 'Asia/Tashkent' })} gacha)` : ''}.\n\nEndi savol, hujjat va ovozli xabarlar shu yerda tarifingizdan hisoblanadi; bot va sayt limiti umumiy. Qoldiq: /balance · Uzish: /unlink`);
+        return;
+      }
       const isMember = await isChannelMember(msg.from.id);
       if (isMember) {
         await pool.query('UPDATE admins SET channel_verified_at = NOW() WHERE id = $1', [row.id]);
@@ -1160,7 +1488,9 @@ bot.onText(/\/terms/, async (msg) => {
 });
 
 bot.on('pre_checkout_query', async (query) => {
-  const valid = starsInvoice.matchesOffer(
+  // a one-time service (src/bot/one-time-sales.js), else the legacy answer pack
+  const service = oneTimeSales.checkPreCheckout(query);
+  const valid = service !== null ? service : starsInvoice.matchesOffer(
     readAnswerOffer(query.invoice_payload, query.from.id), query.currency, query.total_amount);
   await bot.answerPreCheckoutQuery(query.id, valid, valid ? {} : {
     error_message: 'To\'lov ma\'lumotlari eskirgan. Botdagi tugma orqali yangi hisob oching.',
@@ -1214,6 +1544,7 @@ async function handleTelegramMessage(msg) {
   // before normal request routing and never treat it as a legal question.
   if (msg.successful_payment) {
     await telegramEconomy.recordTelegramActivity(chatId);
+    if (await oneTimeSales.onPayment(msg)) return;
     const payment = msg.successful_payment;
     const offer = readAnswerOffer(payment.invoice_payload, msg.from.id);
     if (!starsInvoice.matchesOffer(offer, payment.currency, payment.total_amount)) {
@@ -1264,6 +1595,9 @@ async function handleTelegramMessage(msg) {
   // Ignore commands after recording anonymous activity. Their dedicated
   // command handlers own the response.
   if (msg.text && msg.text.startsWith('/')) return;
+
+  // the claim agent asked for missing facts: this message is the answer
+  if (msg.chat && msg.chat.type === 'private' && await resumeClaimAgent(msg)) return;
 
   if (pendingPaymentSupport.has(chatId)) {
     const supportStartedAt = pendingPaymentSupport.get(chatId);
@@ -1442,6 +1776,16 @@ async function handleTelegramMessage(msg) {
     null;
   const caption = (msg.caption || '').trim();
 
+  // A PDF or DOCX without a full description: AI analysis is offered first
+  // (or the lawyer queue); a scan, photo or video goes on below as before.
+  if (attachedFile && attachedFile.request_type === 'document' && caption.length < MIN_FILE_DESC) {
+    try {
+      if (await documentFlow.offer(msg)) { pendingFiles.delete(chatId); return; }
+    } catch (e) {
+      console.warn('[TG-DOC] offer failed, lawyer queue:', e.message);
+    }
+  }
+
   // A file needs a written description of at least MIN_FILE_DESC characters.
   // If it's missing or too short, hold the file and ask for a proper one.
   if (attachedFile && caption.length < MIN_FILE_DESC) {
@@ -1523,7 +1867,7 @@ async function handleTelegramMessage(msg) {
     // the agent below — same grounding, same quota. The audio stays attached
     // for the human queue. Any failure leaves the old path untouched: the note
     // goes to the queue as '[Ovozli xabar]'.
-    const speech = require('../ai/voicelab-speech');
+    const speech = require('../ai/stt');
     if (speech.sttEnabled()) {
       try {
         await bot.sendChatAction(chatId, 'typing').catch(() => {});
@@ -1534,6 +1878,7 @@ async function handleTelegramMessage(msg) {
         const transcript = await speech.transcribe(audio, {
           filename: 'voice.ogg',
           contentType: msg.voice.mime_type || 'audio/ogg',
+          durationSec: msg.voice.duration,
         });
         if (transcript) {
           requestData.request_text = transcript;
@@ -1627,7 +1972,7 @@ async function handleTelegramMessage(msg) {
 
         if (agentResult && agentResult.handled && agentResult.reply) {
           const replyParts = splitForTelegram(agentResult.reply);
-          const actionKeyboard = agentActionKeyboard(agentResult);
+          const actionKeyboard = agentResult.action === 'quota_exceeded' ? await quotaKeyboard(chatId) : agentActionKeyboard(agentResult);
           let allReplyPartsDelivered = true;
           for (let partIndex = 0; partIndex < replyParts.length; partIndex++) {
             const part = replyParts[partIndex];
@@ -1654,6 +1999,16 @@ async function handleTelegramMessage(msg) {
           // configured voice). Sent in the background: the text answer is
           // already delivered, and a TTS failure must not touch it or the
           // quota bookkeeping below.
+          // a legal answer also lands in the linked web account's chat history
+          if (agentReplyDelivered && agentResult.action === 'answered') {
+            telegramIdentity(msg).then((ident) => ident && ident.adminId
+              ? require('../services/telegram-history').appendTelegramTurn(pool, { adminId: ident.adminId, question: requestData.request_text, answer: agentResult.reply })
+              : null).catch((e) => console.warn('[TG-HISTORY] not saved:', e.message));
+          }
+          // a document ordered from a lawyer can also be drafted by AI right now
+          if (agentReplyDelivered && agentResult.action === 'paid_service') {
+            offerAiDraft(chatId, agentResult.meta || {}, msg.from).catch(() => {});
+          }
           if (agentReplyDelivered && requestData.voiceTranscribed) {
             sendVoiceReply(chatId, agentResult.reply).catch((e) =>
               console.warn('[BOT] voice reply failed (text answer already sent):', e.message));
@@ -1928,6 +2283,6 @@ function getRequestTypeLabel(type) {
 }
 
 // Export bot for use in other modules
-module.exports = { bot, getBot: () => bot, isChannelMember, channelLink, REQUIRED_CHANNEL, INSTAGRAM_URL };
+module.exports = { bot, getBot: () => bot, setClaimAgent: (a) => { claimAgent = a && typeof a.run === 'function' ? a : null; }, setDraftGenerator: (fn) => { draftGenerator = typeof fn === 'function' ? fn : null; }, setDocumentAnalyzer: (fn) => { documentAnalyzer = typeof fn === 'function' ? fn : null; }, isChannelMember, channelLink, REQUIRED_CHANNEL, INSTAGRAM_URL };
 
 console.log('Bot ishlamoqda...');

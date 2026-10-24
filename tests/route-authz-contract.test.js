@@ -34,6 +34,7 @@ const expected = [
   ['post', '/api/assign-request', MASTER], ['post', '/api/unassign-request', MASTER],
   ['post', '/api/assign-student', MASTER], ['post', '/api/unassign-student', MASTER],
   ['post', '/api/rag/verify-chat-answer', MASTER], ['get', '/api/export-excel', MASTER],
+  ['put', '/api/admin/landing-config', MASTER],
 ];
 
 // Run the real canAccessRequest() against a stand-in pool.

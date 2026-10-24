@@ -340,6 +340,37 @@ function stubMemory(clarifyCount = 0) {
     assert.match(context, /kompensatsiya: kontekstdagi 333-modda normasini javobda bayon qiling/u);
   });
 
+  await test('account actions are done by the bot itself, with no AI call and no quota; a legal question with the same words is not one (2026-10-20)', async () => {
+    const d = deps();
+    agent.initTelegramAgent(d);
+    let r = await agent.handleUserMessage({ chatId: 1, text: "Tariflarni ko'rsat" });
+    assert.strictEqual(r.action, 'tool_plans');
+    assert.ok(/Silver/u.test(r.reply) && /tariff\.html/u.test(r.reply), r.reply);
+    r = await agent.handleUserMessage({ chatId: 1, text: 'Nima qila olasan?' });
+    assert.strictEqual(r.action, 'tool_commands');
+    r = await agent.handleUserMessage({ chatId: 1, text: 'ilovani och' });
+    assert.strictEqual(r.action, 'tool_open_app');
+    assert.ok(/\/app\//u.test(r.reply));
+    assert.deepStrictEqual([d.calls.answer, d.calls.intent, d.calls.quota], [0, 0, 0], 'no answer, no intent model, no quota');
+    for (const q of ['Elektr tarifi oshdi, nima qilaman?', 'Bank kredit limitini kamaytirdi, qonuniymi?', 'Parolni unutdim']) {
+      const det = agent.classifyDeterministicIntent(q);
+      assert.ok(!det || det.intent !== 'hisob_amal', q);
+    }
+  });
+
+  await test('the intent model may name an account action; an unknown action is answered as a question', async () => {
+    let d = deps({ intent: { intent: 'hisob_amal', action: 'open_app', missing: [] } });
+    agent.initTelegramAgent(d);
+    let r = await agent.handleUserMessage({ chatId: 1, text: 'Menga JuristAI sahifasiga kirish manzilini yuborib yuboring iltimos' });
+    assert.strictEqual(r.action, 'tool_open_app');
+    assert.strictEqual(d.calls.answer, 0);
+    d = deps({ intent: { intent: 'hisob_amal', action: 'grant_plan', missing: [] } });
+    agent.initTelegramAgent(d);
+    const i = await agent.classifyIntent('Shuni menga tekin qilib bering', []);
+    assert.strictEqual(i.intent, 'huquqiy_savol', 'no such tool: never improvised');
+    assert.strictEqual(i.action, null);
+  });
+
   await test('account questions are routed to the registration bot', async () => {
     const d = deps();
     agent.initTelegramAgent(d);
@@ -382,7 +413,7 @@ function stubMemory(clarifyCount = 0) {
     assert.strictEqual(r.action, 'document_intake_started');
     assert.strictEqual(r.escalate, false);
     assert.strictEqual(r.meta.conversationState, 'document_type');
-    assert.ok(/pullik xizmat/.test(r.reply));
+    assert.ok(/AI loyiha/.test(r.reply) && /to'lov yo'q/.test(r.reply), 'both ways, the lawyer one free until agreed');
     assert.ok(!/\d[\d\s,.]*\s*(so['’]?m|UZS)/i.test(r.reply), 'agent must not invent a price');
     assert.strictEqual(d.calls.intent, 0, 'document keyword routing must not use AI');
   });
@@ -405,17 +436,32 @@ function stubMemory(clarifyCount = 0) {
     const d = deps();
     agent.initTelegramAgent(d);
     dbState.state = 'document_details';
-    dbState.context = { serviceSlug: 'claim', documentTypeLabel: "Da'vo arizasi", category: 'Odil sudlov' };
+    dbState.context = { serviceSlug: 'claim', documentTypeLabel: "Da'vo arizasi", category: 'Odil sudlov', intakeAt: Date.now() };
     const r = await agent.handleUserMessage({
       chatId: 1,
       text: "Qarz oluvchi olti oydan beri 20 million so'm qarzni qaytarmayapti, tilxat bor.",
     });
     assert.strictEqual(r.action, 'paid_service');
+    assert.ok(/yuristga yuborildi/.test(r.reply) && /to'lov yo'q/.test(r.reply) && !/ruxsat berganidan keyin/.test(r.reply), 'does not contradict the AI draft offered next');
     assert.strictEqual(r.escalate, true);
     assert.strictEqual(r.meta.serviceSlug, 'claim');
     assert.strictEqual(r.meta.category, 'Odil sudlov');
     assert.strictEqual(r.meta.requiresLawyerApproval, true);
     assert.strictEqual(d.calls.intent, 0, 'button-selected document intake must not use AI classification');
+    stubMemory();
+  });
+
+  await test('a document order waits 30 minutes: a later message is a new one, not the order details (2026-10-22)', async () => {
+    stubMemory();
+    const d = deps();
+    agent.initTelegramAgent(d);
+    dbState.state = 'document_details';
+    dbState.context = { serviceSlug: 'claim', documentTypeLabel: "Da'vo arizasi", intakeAt: Date.now() - 31 * 60000 };
+    const r = await agent.handleUserMessage({ chatId: 1, text: 'Pudratchi ishni bajarmadi, avansni qaytarmayapti' });
+    assert.notStrictEqual(r.action, 'paid_service');
+    assert.strictEqual(d.calls.intent, 1, 'classified like any new message');
+    assert.ok(agent.docIntakeExpired({}), 'an order without its start time (from before this change) is not waited for');
+    assert.ok(!agent.docIntakeExpired({ intakeAt: Date.now() - 29 * 60000 }));
     stubMemory();
   });
 
@@ -1238,7 +1284,8 @@ function stubMemory(clarifyCount = 0) {
     assert.strictEqual(action.state, 'document_details');
     assert.strictEqual(action.context.serviceSlug, 'claim');
     assert.strictEqual(action.context.category, 'Odil sudlov');
-    assert.ok(/pullik xizmat/i.test(action.message));
+    assert.ok(/AI loyiha/i.test(action.message) && /to'lov yo'q/i.test(action.message));
+    assert.deepStrictEqual(action.replyMarkup.inline_keyboard[0][0], { text: '❌ Bekor qilish', callback_data: 'docin_cancel' }, 'a way out to ask a question instead');
   });
 
   await test('/start reset clears a stale attorney-choice state', async () => {

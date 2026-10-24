@@ -297,8 +297,9 @@
       .catch(function () { /* a receipt that does not land is not worth interrupting the thread over */ });
   }
 
+  /** true when the message was accepted for sending (the box may be cleared). */
   function sendPrivateMessage(text) {
-    if (!live.workspace || !priv.peer || priv.sending || !text.trim()) return;
+    if (!live.workspace || !priv.peer || priv.sending || !text.trim()) return false;
     priv.sending = true;
     api('POST', '/workspaces/' + live.workspace.id + '/direct-messages/' + priv.peer.id, { body: text.trim() })
       .then(function (d) {
@@ -309,8 +310,12 @@
       .catch(function (e) {
         var host = $('[data-chat-private]');
         if (host) { host.appendChild(notice('Yuborilmadi: ' + e.message)); host.scrollTop = host.scrollHeight; }
+        // give the typed text back instead of losing it
+        var box = $('[data-chat-pane="private"] [data-chat-private-input]');
+        if (box && !box.value) box.value = text;
       })
       .then(function () { priv.sending = false; });
+    return true;
   }
 
   function loadThreads() {
@@ -368,7 +373,7 @@
     var send = pane.querySelector('.chat-send');
     var submit = function () {
       if (!box || !box.value.trim()) return;
-      sendPrivateMessage(box.value);
+      if (!sendPrivateMessage(box.value)) return;   // busy or no peer: keep the text
       box.value = '';
       box.style.height = '';
     };
