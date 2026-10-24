@@ -11,11 +11,11 @@ const { buildLegalResearchPolicyPrefix } = require('./legal-prompt-policy');
  * Advanced System Prompt Builder for JuristAI
  *
  * Generates the capability-specific legal-consultation prompt beneath the
- * shared constitution and research playbook. It enforces a 3-part response:
+ * shared constitution and research playbook. It enforces a 2-part response
+ * (2026-10-24, owner: a separate "Huquqiy asos" repeated Tahlil and Xulosa):
  *
- *   1. HUQUQIY ASOS (Applicable law)
- *   2. TAHLIL (Application to the user's facts)
- *   3. XULOSA (Direct conclusion)
+ *   1. TAHLIL (the deciding norm, then its application to the user's facts)
+ *   2. XULOSA (the direct answer, not repeating Tahlil)
  *
  * Design principles:
  *   - EVERY claim must have a source from chunk metadata (article + part)
@@ -64,25 +64,22 @@ Siz O'zbekiston ${topicLabel || "huquqi"} bo'yicha yuqori malakali yuridik masla
 Sizning javoblaringiz aniq, to'liq va FAQAT manba bilan asoslangan bo'lishi SHART.
 
 ══════════════════════════════════════
-MAJBURIY 3-QISMLI JAVOB TUZILMASI:
+MAJBURIY 2-QISMLI JAVOB TUZILMASI:
 ══════════════════════════════════════
 
-Javobingizni QATTIYAN quyidagi 3 bo'limda yozing. Alohida "Manbalar" yoki "Huquqiy manba" bo'limini yaratmang:
+Javobingizni QATTIYAN quyidagi 2 bo'limda yozing. Alohida "Huquqiy asos", "Manbalar" yoki "Huquqiy manba" bo'limini yaratmang:
 
 ${definitionPromptAddendum}
 
-**Huquqiy asos**
-Savolga bevosita tatbiq etiladigan normalarni qisqa bayon qiling. Konstitutsiyadagi iqtibos uslubiga amal qiling; interfeys havolani keyin biriktiradi.
-
 **Tahlil**
-Normalarni foydalanuvchi holatiga BATAFSIL qo'llang:
+Savolni hal qiluvchi normadan boshlang (konstitutsiyadagi iqtibos uslubida; interfeys havolani keyin biriktiradi), so'ng normalarni foydalanuvchi holatiga BATAFSIL qo'llang. Har bir normani bir marta keltiring:
 - Qonun nima deydi VA bu foydalanuvchi uchun ANIQ NIMA degani
 - Modda qismlari (qism, band) bo'yicha BOSQICHMA-BOSQICH tahlil
 - Agar tegishli muddat yoki jarima bo'lsa — ANIQ SON bilan keltiring
 - Agar muddat/jarima KONTEKSTDA bo'lmasa — to'qib chiqarmang
 
 **Xulosa**
-Foydalanuvchi savoliga to'g'ridan-to'g'ri natijani 1-2 gapda ayting. Keyingi amaliy variantlar alohida platforma komponenti tomonidan yaratiladi; javob matnida tasodifiy xizmatlar ro'yxatini tuzmang.
+Foydalanuvchi savoliga to'g'ridan-to'g'ri natijani 1-2 gapda ayting; Tahlildagi dalil, modda va iqtiboslarni takrorlamang. Keyingi amaliy variantlar alohida platforma komponenti tomonidan yaratiladi; javob matnida tasodifiy xizmatlar ro'yxatini tuzmang.
 
 Qo'shimcha imkoniyat qoidalari:
 - "Holat tahlili", "Maslahat", "Amaliy qadamlar" nomli ortiqcha bo'limlar yozmang.

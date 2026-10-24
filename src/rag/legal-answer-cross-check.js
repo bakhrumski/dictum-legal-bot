@@ -117,7 +117,7 @@ QOIDALAR:
 - Javob to'liq to'g'ri bo'lsa status="pass".
 - Tuzatish kerak va dalil yetarli bo'lsa status="revise" hamda corrected_answer ichida to'liq tuzatilgan javobni qaytaring.
 - Dalil yetarli bo'lmasa status="insufficient"; taxminiy corrected_answer yozmang.
-- Corrected_answer bo'lsa, Huquqiy asos / Tahlil / Xulosa tuzilmasini, javob tilini (rus tilidagi javob rus tilida qoladi) va inline (**Hujjatning to'liq nomi (O'RQ/PQ/PF/VMQ-raqami), N-modda yoki N-band, tegishli qism**) uslubini saqlang (rus tilidagi javobda esa: **Полное название на русском (ЗРУ/ПП/УП/ПКМ-номер), статья N, часть первая/вторая…**). Rasmiy raqam faqat LEX.UZ DALILLARI ichida tasdiqlansa yoziladi. Alohida Manbalar bo'limi va xom URL yozmang; interfeys tasdiqlangan iqtiboslarni Lex.uz havolasiga aylantiradi.
+- Corrected_answer bo'lsa, javobning bo'limlarini (Tahlil / Xulosa; eski javobda Huquqiy asos ham bo'lishi mumkin) yangi bo'lim qo'shmasdan, javob tilini (rus tilidagi javob rus tilida qoladi) va inline (**Hujjatning to'liq nomi (O'RQ/PQ/PF/VMQ-raqami), N-modda yoki N-band, tegishli qism**) uslubini saqlang (rus tilidagi javobda esa: **Полное название на русском (ЗРУ/ПП/УП/ПКМ-номер), статья N, часть первая/вторая…**). Rasmiy raqam faqat LEX.UZ DALILLARI ichida tasdiqlansa yoziladi. Alohida Manbalar bo'limi va xom URL yozmang; interfeys tasdiqlangan iqtiboslarni Lex.uz havolasiga aylantiradi.
 - FAQAT JSON qaytaring.
 
 JSON SHAKLI:

@@ -3,8 +3,9 @@
 /**
  * Two parts of a legal answer's layout (2026-10-13, owner, after a
  * competitor's answer: the rule quoted word for word, a link that opens it
- * highlighted, and suggested next questions under the answer). The section
- * names stay "Huquqiy asos / Tahlil / Xulosa" (owner).
+ * highlighted, and suggested next questions under the answer). The sections
+ * are "Tahlil / Xulosa" since 2026-10-24 (owner: a separate "Huquqiy asos"
+ * repeated them); the quote sits in Tahlil where the norm is named.
  *
  * 1. A quote. The model may put the decisive words of a norm on their own
  *    line as `> «...»`, copied from KONTEKST. The server keeps a quote only
@@ -21,8 +22,8 @@
 
 const QUOTE_LINK_LABEL = 'lex.uz ↗';
 
-const QUOTE_RULE_UZ = `- Huquqiy asosda hal qiluvchi normaning aynan so'zlarini (1-2 gap) alohida qatorda "> «...»" ko'rinishida keltiring: faqat KONTEKSTdagi matndan, harfma-harf ko'chirib, tarjima qilmasdan va qisqartirmasdan (o'rtadan tushirib qoldirsangiz "..." qo'ying). Iqtibos qatoriga havola yoki izoh yozmang; normaning nomi va moddasi iqtibosdan oldingi gapda bo'lsin. Server iqtibosni manba bilan solishtiradi: so'zma-so'z topilmagan iqtibos javobdan olib tashlanadi. Iqtibos ko'pi bilan 3 ta.`;
-const QUOTE_RULE_RU = `- В правовом основании приведите точные слова решающей нормы (1-2 предложения) отдельной строкой "> «...»": только из КОНТЕКСТа, буква в букву, без перевода и сокращений (пропуск внутри обозначьте "..."). В строке цитаты нет ссылки и комментария; название акта и статья - в предложении перед цитатой. Сервер сверяет цитату с источником: цитата, не найденная дословно, удаляется. Не более 3 цитат.`;
+const QUOTE_RULE_UZ = `- Tahlilda, hal qiluvchi normani keltirgan joyda, uning aynan so'zlarini (1-2 gap) alohida qatorda "> «...»" ko'rinishida keltiring: faqat KONTEKSTdagi matndan, harfma-harf ko'chirib, tarjima qilmasdan va qisqartirmasdan (o'rtadan tushirib qoldirsangiz "..." qo'ying). Iqtibos qatoriga havola yoki izoh yozmang; normaning nomi va moddasi iqtibosdan oldingi gapda bo'lsin. Server iqtibosni manba bilan solishtiradi: so'zma-so'z topilmagan iqtibos javobdan olib tashlanadi. Iqtibos ko'pi bilan 3 ta.`;
+const QUOTE_RULE_RU = `- В анализе, там где названа решающая норма, приведите её точные слова (1-2 предложения) отдельной строкой "> «...»": только из КОНТЕКСТа, буква в букву, без перевода и сокращений (пропуск внутри обозначьте "..."). В строке цитаты нет ссылки и комментария; название акта и статья - в предложении перед цитатой. Сервер сверяет цитату с источником: цитата, не найденная дословно, удаляется. Не более 3 цитат.`;
 
 const FOLLOWUP_RULE_UZ = `- Javob oxirida, Xulosadan keyin, "KEYINGI SAVOLLAR:" qatori va uning ostida "- " bilan foydalanuvchi keyin berishi mumkin bo'lgan 2 ta qisqa savolni yozing (shu mavzuda, foydalanuvchi tilida, "?" bilan). Bu blok javobdan alohida tugma bo'lib ko'rsatiladi.`;
 const FOLLOWUP_RULE_RU = `- В конце ответа, после вывода, напишите строку "KEYINGI SAVOLLAR:" и под ней через "- " 2 коротких вопроса, которые пользователь может задать дальше (по теме, на языке пользователя, с "?"). Этот блок показывается отдельно кнопками.`;
