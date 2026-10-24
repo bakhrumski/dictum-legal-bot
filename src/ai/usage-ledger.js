@@ -230,6 +230,7 @@ const STAGE_BY_ENDPOINT = [
   [/claim-check/u, 'claim_check'],
   [/cross-check/u, 'cross_check'],
   [/query-plan|lex-plan/u, 'retrieval_plan'],
+  [/lex-relevance/u, 'source_relevance'],
   [/query-rewrite/u, 'query_rewrite'],
   [/corrective/u, 'retrieval_grade'],
   [/classify-topic/u, 'topic'],

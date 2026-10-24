@@ -457,6 +457,10 @@ function researchRoots(value = '') {
   const stop = new Set([
     'ozbekiston', 'respublikasi', 'togrisida', 'haqida', 'uchun', 'bilan', 'hamda',
     'qanday', 'qayerda', 'nima', 'degani', 'kerak', 'qarori', 'farmoni', 'kodeks',
+    // words of a complaint, not of the law: they match any act
+    'beri', 'oydan', 'yildan', 'kundan', 'qilay', 'qilish', 'mumkin', 'mumkinmi', 'bormi',
+    'kerakmi', 'bergan', 'olgan', 'qilgan', 'menga', 'mening', 'meni', 'bizning', 'endi',
+    'boyicha', 'qancha', 'kimlarga', 'kimga', 'beriladi', 'qaysi', 'qachon', 'nimaga',
   ]);
   return String(value || '')
     .normalize('NFKC')
@@ -466,6 +470,24 @@ function researchRoots(value = '') {
     .split(/\s+/u)
     .filter(word => word.length > 3 && !stop.has(word))
     .map(word => word.slice(0, Math.min(7, word.length)));
+}
+
+// One word's root in another's: "pudratc" (pudratchi) and "pudrat", "avansni"
+// and "avans" - a shared start of 5 letters, or a whole root of 4+ letters
+// that begins the other ("qarz" / "qarzga").
+function rootsMeet(a, b) {
+  if (a === b) return true;
+  const short = a.length <= b.length ? a : b;
+  const long = short === a ? b : a;
+  if (short.length >= 4 && long.startsWith(short)) return true;
+  let n = 0;
+  while (n < short.length && a[n] === b[n]) n++;
+  return n >= 5;
+}
+function sharesRoot(root, roots) {
+  if (roots.has(root)) return true;
+  for (const r of roots) if (rootsMeet(root, r)) return true;
+  return false;
 }
 
 function resultActPrefix(result = {}) {
@@ -490,29 +512,53 @@ function scoreLexResearchResult(result = {}, question = '') {
   let titleOverlap = 0;
   let contentOverlap = 0;
   for (const root of qRoots) {
-    if (titleRoots.has(root)) titleOverlap++;
-    if (contentRoots.has(root)) contentOverlap++;
+    if (sharesRoot(root, titleRoots)) titleOverlap++;
+    if (sharesRoot(root, contentRoots)) contentOverlap++;
   }
 
   let score = titleOverlap * 35 + Math.min(contentOverlap, 10) * 8;
+  result._titleOverlap = titleOverlap;
+  result._contentOverlap = contentOverlap;
   if (result.exactIdentityMatch) score += 10_000;
   // the act a named status is governed by, fetched by address and its title
   // checked (SPECIAL_STATUS_QUERIES): above a match by number alone, which may
   // be another year's act with the same number
   if (result.source === 'lex.uz-pinned') score += 20_000;
-  score += Math.max(-100, Math.min(100, Number(result.searchRankScore) || 0));
+  // lex.uz's own row rank rewards the act form looked for (+250 for VMQ in a
+  // VMQ search), so above zero it counts only for an act about the question
+  const aboutIt = titleOverlap > 0 || result.exactIdentityMatch || result.source === 'lex.uz-pinned';
+  const rowRank = Math.max(-100, Math.min(100, Number(result.searchRankScore) || 0));
+  score += aboutIt ? rowRank : Math.min(0, rowRank);
   if (Array.isArray(result.provisionRefs) && result.provisionRefs.length > 0) score += 8;
   if (result.metadata && result.metadata.is_active === false) score -= 1000;
   if (/o['`\u2018\u2019\u02bb]?zgartirish|qo['`\u2018\u2019\u02bb]?shimcha|\u045e\u0437\u0433\u0430\u0440\u0442\u0438\u0440\u0438\u0448|\u0438\u0437\u043c\u0435\u043d\u0435\u043d/iu.test(result.title || '')) score -= 70;
 
   // a code or law found by its form among a handful (pushFormStep)
   if (/^(?:code|law)-search$/u.test(result.researchKind || '')) score += 40;
+  // the act form a PQ / PF / VMQ search looked for counts only when the act
+  // is about the question (2026-10-24: any Cabinet decision got +110 and
+  // "Foydali qazilmalarni maydalash..." outranked the Civil Code on a
+  // contractor's advance)
   const expectedPrefix = queryKindPrefix(result.researchKind || '');
   const actualPrefix = resultActPrefix(result);
-  if (expectedPrefix && actualPrefix === expectedPrefix) score += 55;
-  if (actualPrefix && Array.isArray(result.researchPreferredPrefixes)
+  if (aboutIt && expectedPrefix && actualPrefix === expectedPrefix) score += 55;
+  if (aboutIt && actualPrefix && Array.isArray(result.researchPreferredPrefixes)
     && result.researchPreferredPrefixes.includes(actualPrefix)) score += 55;
   return score;
+}
+
+// An act whose title is not about the question is kept only when its text
+// uses many of the question's words (lex.uz lists the newest acts that merely
+// mention one: "pudratchi" is in every construction decision, 2026-10-24).
+// A code or law found by its form (a handful of acts) needs fewer - a code's
+// title rarely names the matter; pinned and exact acts are always kept.
+const MIN_CONTENT_ROOTS = 5;
+const MIN_CONTENT_ROOTS_FORM = 2;
+function offTopic(result = {}) {
+  if (result.exactIdentityMatch || result.source === 'lex.uz-pinned') return false;
+  if ((result._titleOverlap || 0) > 0) return false;
+  const minRoots = /^(?:code|law)-search$/u.test(result.researchKind || '') ? MIN_CONTENT_ROOTS_FORM : MIN_CONTENT_ROOTS;
+  return (result._contentOverlap || 0) < minRoots;
 }
 
 /**
@@ -539,9 +585,60 @@ function selectLexResearchResults(groups = [], question = '', limit = 6) {
       if (!previous || candidate._researchScore > previous._researchScore) byUrl.set(url, candidate);
     }
   }
-  return Array.from(byUrl.values())
+  const all = Array.from(byUrl.values());
+  const kept = all.filter(r => !offTopic(r));
+  if (kept.length < all.length) console.log(`[LEX-SELECT] ${all.length - kept.length} of ${all.length} lex.uz acts dropped as off the question`);
+  return kept
     .sort((a, b) => b._researchScore - a._researchScore)
     .slice(0, Math.max(1, limit));
+}
+
+/**
+ * The lex.uz acts that govern the question, judged by one cheap model call
+ * (2026-10-24, owner: quality first). Words alone cannot tell an act that
+ * governs the matter from one that mentions it - "Ish beruvchining
+ * fuqarolik javobgarligini sug'urta qilish" shares "ish beruvchi" with a
+ * wage question, a construction decision shares "pudratchi" with a
+ * contractor's advance. The model sees each act's title, form and opening
+ * excerpt (never the answer) and names the ones to keep; the server keeps
+ * only those, in its own order. A reply it cannot read keeps the list as it
+ * was (parseLexRelevanceResponse returns null).
+ */
+function buildLexRelevancePrompt(question = '', results = []) {
+  const safeQuestion = escapeXml(String(question || '').slice(0, 2000));
+  const list = (results || []).map((r, i) => {
+    const title = String(r.lawName || r.title || '').replace(/\s+/gu, ' ').slice(0, 220);
+    const form = r.researchKind === 'code-search' ? 'kodeks' : r.researchKind === 'law-search' ? 'qonun' : (resultActPrefix(r) || 'hujjat');
+    const excerpt = String(r.content || '').replace(/\s+/gu, ' ').slice(0, 280);
+    return `${i + 1}. [${form}] ${escapeXml(title)}\n   ${escapeXml(excerpt)}`;
+  }).join('\n');
+  return `Siz huquqiy manbalarni saralovchisiz. Huquqiy javob BERMANG.
+
+Quyidagi Lex.uz hujjatlaridan qaysilari foydalanuvchi savolidagi huquqiy munosabatni BEVOSITA tartibga soladi? Savoldagi so'zni shunchaki tilga olgan, boshqa soha yoki boshqa subyekt uchun qabul qilingan hujjatni qoldirmang (masalan, mehnat haqi savolida sug'urta yoki bank qarori). Munosabatni tartibga soluvchi kodeks yoki qonun (masalan, shartnoma turi uchun Fuqarolik kodeksi) qoldiriladi.
+
+Faqat JSON qaytaring: {"keep":[raqamlar]} — mos hujjat bo'lmasa {"keep":[]}.
+
+<user_question_data>${safeQuestion}</user_question_data>
+<lex_documents>
+${list}
+</lex_documents>`;
+}
+
+/** The kept positions (0-based, in range, unique), or null when the reply is not readable. */
+function parseLexRelevanceResponse(value = '', count = 0) {
+  let raw = String(value || '').replace(/```(?:json)?/giu, '').trim();
+  const start = raw.indexOf('{');
+  const end = raw.lastIndexOf('}');
+  if (start < 0 || end <= start) return null;
+  let parsed;
+  try { parsed = JSON.parse(raw.slice(start, end + 1)); } catch (_) { return null; }
+  if (!parsed || !Array.isArray(parsed.keep)) return null;
+  const keep = [];
+  for (const n of parsed.keep) {
+    const i = Number(n) - 1;
+    if (Number.isInteger(i) && i >= 0 && i < count && !keep.includes(i)) keep.push(i);
+  }
+  return keep.sort((a, b) => a - b);
 }
 
 function getUniversalLegalResearchPlaybook() {
@@ -630,6 +727,8 @@ module.exports = {
   buildLexResearchQueries,
   selectLexResearchResults,
   scoreLexResearchResult,
+  buildLexRelevancePrompt,
+  parseLexRelevanceResponse,
   buildExactActQueryVariants,
   buildConceptQueries,
   specialStatuses,

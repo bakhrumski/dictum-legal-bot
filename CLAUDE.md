@@ -242,6 +242,14 @@ Known state of the suites (Sept 2026):
   round reads at most `LEX_ROUND_MAX_READS` (48) uncached pages (a shared
   `readBudget`). Same question after: 16 documents kept, 233 MB peak with
   `--max-old-space-size=320` (301 MB without: V8 collects late).
+  Relevance (2026-10-24, owner: quality first; most kept acts only
+  mentioned a word): an act form's bonus and lex.uz's row rank count only for
+  an act whose title is about the question; an act whose title is not needs
+  5 of the question's words (a code or law found by its form, 2); roots meet
+  by their start; complaint words are not counted; then one cheap call
+  (`buildLexRelevancePrompt`, stage `source_relevance`) keeps the acts that
+  govern the question - an unreadable reply or a failure keeps the list,
+  `LEX_RELEVANCE_JUDGE=off` stops it. The judge was not measured here.
   Lessons of 22-24 Oct 2026 (lex.uz behaviour, memory, time, reading the AI
   requests table, Telegram/Render settings) with how each was measured:
   `docs/lessons/2026-10-lexuz-va-javob-zanjiri.md` (Uzbek);

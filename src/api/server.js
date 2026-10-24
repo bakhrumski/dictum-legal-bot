@@ -75,6 +75,8 @@ const {
   lexFollowUpMode,
   shouldRunLexFollowUp,
   buildLexFollowUpPrompt,
+  buildLexRelevancePrompt,
+  parseLexRelevanceResponse,
   parseLexFollowUpResponse,
 } = require('../rag/legal-research-playbook');
 const {
@@ -5736,6 +5738,28 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
         }
       } catch (error) {
         console.warn(`[LEX-FOLLOWUP] failed; round one kept: ${error.message}`);
+      }
+    }
+    // Which of the acts found govern the question: one cheap call reads their
+    // titles and openings (2026-10-24: acts that only mention a word reached
+    // the answer). An unreadable reply or a failure keeps the list;
+    // LEX_RELEVANCE_JUDGE=off turns the call off.
+    if (lexLiveResults.length > 1 && String(process.env.LEX_RELEVANCE_JUDGE || '').toLowerCase() !== 'off') {
+      try {
+        const judged = await callCheapAI(
+          [{ role: 'user', text: buildLexRelevancePrompt(originalQuestion, lexLiveResults) }],
+          { useSearch: false, maxTokens: 200, temperature: 0, endpoint: '/rag/lex-relevance' }
+        );
+        const keep = parseLexRelevanceResponse(judged && judged.text, lexLiveResults.length);
+        if (keep) {
+          const dropped = lexLiveResults.filter((_, i) => !keep.includes(i)).map(r => String(r.lawName || r.title || '').slice(0, 60));
+          lexLiveResults = keep.map(i => lexLiveResults[i]);
+          if (dropped.length) console.log(`[LEX-RELEVANCE] ${dropped.length} acts left out as not governing the question: ${dropped.join(' | ')}`);
+        } else {
+          console.warn('[LEX-RELEVANCE] reply not readable; acts kept as found');
+        }
+      } catch (error) {
+        console.warn(`[LEX-RELEVANCE] failed; acts kept as found: ${error.message}`);
       }
     }
     // Not awaited: suggesting what the corpus lacked must not slow the
