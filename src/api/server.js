@@ -5669,10 +5669,15 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
       const ms = Math.min(own, left - reserve);
       return Number.isFinite(ms) ? Date.now() + Math.max(0, ms) : 0;
     };
-    const runLexSteps = (steps, deadline = lexDeadline()) => Promise.all(steps.map(async (step) => ({
+    // lex.uz pages one round may read that are not cached yet (2026-10-24:
+    // 63 pages, ~60 MB of HTML, for one question took the 512 MB instance
+    // down); LEX_ROUND_MAX_READS
+    const roundReads = () => ({ left: Math.max(1, Number(process.env.LEX_ROUND_MAX_READS) || 48) });
+    const runLexSteps = (steps, deadline = lexDeadline(), readBudget = roundReads()) => Promise.all(steps.map(async (step) => ({
       step,
       results: await searchLexUz(step.query, {
         deadline,
+        readBudget,
         topic,
         scoreText: originalQuestion,
         includeRegistry: step.includeRegistry,

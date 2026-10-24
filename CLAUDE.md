@@ -234,6 +234,14 @@ Known state of the suites (Sept 2026):
   (`relaxedQueries`). Live on 10 questions that day: 0 of 110 old
   deterministic searches found acts, 110 of 128 new ones; the AI planner's
   new prompt was not measured (no key here).
+  Memory (2026-10-24: with those queries finding acts, one question read 63
+  pages, ~60 MB of HTML, in parallel; locally 57 -> 515 MB, the 512 MB
+  Render instance went down and the answer never came): at most
+  `LEX_FETCH_CONCURRENCY` (2) pages are read at once, the cache keeps the
+  text without the page's HTML (`LEX_DOCUMENT_CACHE_LIMIT` 64), and one
+  round reads at most `LEX_ROUND_MAX_READS` (48) uncached pages (a shared
+  `readBudget`). Same question after: 16 documents kept, 233 MB peak with
+  `--max-old-space-size=320` (301 MB without: V8 collects late).
   Answer layout (2026-10-13, `src/rag/answer-structure.js`, no AI; the
   sections stay Huquqiy asos / Tahlil / Xulosa): a `> «...»` quote of the
   law is kept only when its words are in a retrieved source word for word
