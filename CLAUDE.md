@@ -242,6 +242,11 @@ Known state of the suites (Sept 2026):
   round reads at most `LEX_ROUND_MAX_READS` (48) uncached pages (a shared
   `readBudget`). Same question after: 16 documents kept, 233 MB peak with
   `--max-old-space-size=320` (301 MB without: V8 collects late).
+  Lessons of 22-24 Oct 2026 (lex.uz behaviour, memory, time, reading the AI
+  requests table, Telegram/Render settings) with how each was measured:
+  `docs/lessons/2026-10-lexuz-va-javob-zanjiri.md` (Uzbek);
+  `scripts/lex-round-probe.js` replays one lex.uz round locally (live lex.uz,
+  no AI): time, event-loop block, peak memory, pages, documents kept.
   Answer sections (2026-10-24, owner: "Huquqiy asos" repeated Tahlil and
   Xulosa): two, **Tahlil** (opens with the deciding norm - name, number,
   article, the quote - and applies it, each norm once) and **Xulosa** (1-2
