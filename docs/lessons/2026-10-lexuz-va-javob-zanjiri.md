@@ -44,10 +44,22 @@ oxiridagi ikki so'z bilan bir marta qayta qidiriladi, bog'lovchilar
 tashlanadi. O'lchov: 10 savolda eski reja 110 qidiruvdan **0** tasida,
 yangisi 128 tadan **110** tasida hujjat topdi.
 
-**Ochiq muammo:** sana tartibi tufayli saqlangan hujjatlar orasida mavzuga
-aloqasiz yangi qarorlar ham bo'ladi (2026-10-24 sinovida "Atom
-energiyasidan foydalanish..." kabi). Ular so'z mosligi tekshiruvidan o'tib
-qolyapti. Javob modeliga ular kontekst sifatida boradi.
+**Moslik (2026-10-24, keyingi PR):** sana tartibi tufayli saqlangan
+hujjatlarning ko'pi savol so'zini shunchaki tilga olardi. 4 savolda VMQ
+qarori faqat VMQ bo'lgani uchun +110 ball olgan ("Foydali qazilmalarni
+maydalash..." 234, Fuqarolik kodeksi 72). Endi:
+- tur bonusi va lex.uz qator reytingi faqat nomi savolga mos hujjatga beriladi;
+- nomi mos bo'lmagan hujjat savolning kamida 5 so'zini ishlatishi kerak
+  (kodeks yoki qonun filtri bilan topilgani uchun 2);
+- o'zaklar boshlanishi bo'yicha solishtiriladi ("pudratchi" / "pudrat");
+- shikoyat so'zlari ("beri", "bo'yicha", "qancha"...) hisobga olinmaydi;
+- oxirida bitta arzon AI chaqiruvi (`source_relevance` bosqichi) qaysi
+  hujjat munosabatni tartibga solishini tanlaydi. Bir xil so'z, boshqa
+  ma'no ("Madaniy meros" — meros savolida) faqat shu yerda ajraladi.
+  O'qib bo'lmaydigan javob ro'yxatni o'zgartirmaydi; `LEX_RELEVANCE_JUDGE=off`.
+Mexanik qism o'lchandi (pudrat savolida faqat Fuqarolik kodeksi qoldi), AI
+tanlovchi bu yerda o'lchanmadi — kalit yo'q; jonli loglarda
+`[LEX-RELEVANCE]` qatoriga qarang.
 
 ## 2. Xotira: 512 MB instance
 
