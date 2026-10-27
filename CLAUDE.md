@@ -270,6 +270,16 @@ Known state of the suites (Sept 2026):
   every legal-answer prompt (`buildTopicPrompt` for chat and Telegram, the
   search prompt, the Gemini fallback, advanced RAG, playbook 1.5.0);
   `tests/answer-layout.test.js`.
+  Exception first (2026-10-27, owner: an IT Park answer cited VMQ-589 band 5
+  and said no exemption exists; band 17 of its regulation grants one): an
+  act the server identified itself (pinned, or the number asked) opens its
+  excerpt with `SAVOLGA ENG YAQIN QATOR (<unit>)` - the line with the most
+  question roots (5-letter starts, common words out, the unit's heading
+  counted), +2 for an exception or a right (`findKeyLine`, no AI; not on
+  general questions, where it misled: a Labour Code strike line for unpaid
+  wages); every legal-answer prompt has `exceptionRule` - an exception or a
+  right in the sources comes first, "no exception" only after reading all
+  sources. `tests/answer-key-line.test.js`.
   Answer layout (2026-10-13, `src/rag/answer-structure.js`, no AI): a `> «...»` quote of the
   law is kept only when its words are in a retrieved source word for word
   (spaces, case, apostrophe forms aside; "..." parts in order in one

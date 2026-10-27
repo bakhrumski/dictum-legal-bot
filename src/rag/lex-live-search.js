@@ -242,7 +242,7 @@ async function searchLexUz(query, opts = {}) {
         continue;
       }
 
-      const excerpt = extractRelevantSections(doc.body, effectiveScoreText, maxChars);
+      const excerpt = extractRelevantSections(doc.body, effectiveScoreText, maxChars, { keyLine: candidate.source === 'lex.uz-pinned' || candidate.exactIdentityMatch === true });
       // A search-row title is used to verify document identity, but it must
       // not automatically make an unrelated result relevant. The sole safe
       // exception is an exact match between the requested act number and the
@@ -641,7 +641,11 @@ function relevanceScore(value = '', query = '') {
  * Extract the most relevant sections from a document body given a query.
  * Splits by article boundaries, scores by keyword overlap, returns best sections.
  */
-function extractRelevantSections(body, query, maxChars) {
+// keyLine: put the act's best-answering line first (findKeyLine) - only for an
+// act the server identified itself (pinned for a named status, or the number
+// asked): on a general question the line most like the words can mislead
+// (Labour Code: "may withhold pay during a strike" for unpaid wages).
+function extractRelevantSections(body, query, maxChars, { keyLine = false } = {}) {
   const keywords = (query || '')
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')
@@ -724,7 +728,61 @@ function extractRelevantSections(body, query, maxChars) {
     result += (result ? '\n\n' : '') + text;
   }
 
-  return result || body.substring(0, maxChars);
+  const excerpt = result || body.substring(0, maxChars);
+  // the line that answers best goes first, word for word, with its unit
+  const key = keyLine ? findKeyLine(body, query) : null;
+  if (!key) return excerpt;
+  const label = `SAVOLGA ENG YAQIN QATOR${key.unit ? ` (${key.unit})` : ''} [server so'zlar bo'yicha tanlagan - o'qing va tekshiring]: ${key.line}`;
+  const rest = excerpt.length + label.length + 2 > maxChars ? excerpt.slice(0, Math.max(0, maxChars - label.length - 2)) : excerpt;
+  return `${label}\n\n${rest}`;
+}
+
+// A line that grants an exception or a right ("...olmasdan turib ... jalb
+// etish", "talab qilinmaydi", "ozod etiladi", "huquqiga ega") answers a
+// question about a requirement more directly than the requirement itself.
+const EXCEPTION_MARK = /olmasdan|olinmasdan|talab\s+qilinmaydi|talab\s+etilmaydi|qilinmaydi|ozod\s+et|ozod\s+qilin|istisno|mustasno|huquqiga\s+ega|(?:^|\s)без\s|не\s+требуется|освобожда|за\s+исключением|вправе/iu;
+
+// words of any sentence, not of the matter ("olib", "uchun" matched a customs
+// line in VMQ-589); compared by their 5-letter start
+const KEY_STOP = new Set(['uchun', 'bilan', 'haqid', 'kerak', 'olib', 'qanda', 'nima', 'mumki', 'menga', 'menin',
+  'bizni', 'ularn', 'bunda', 'shuni', 'amalg', 'oshir', 'tartib', 'belgi', 'boyic', 'respu', 'ozbek', 'tomon', 'etish', 'qilis',
+  'mavju', 'hamda', 'yoki', 'agar', 'ammo', 'lekin', 'kelis', 'bolad', 'bolsa', 'beril', 'chun', 'для', 'когда', 'нужно', 'можно']);
+const keyRoots = (text = '') => Array.from(new Set(String(text || '')
+  .normalize('NFKC').toLocaleLowerCase('uz')
+  .replace(/[\u02bb\u02bc\u2018\u2019`']/gu, '')
+  .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+  .split(/\s+/u)
+  .filter(w => w.length >= 4)
+  .map(w => w.slice(0, 5))
+  .filter(r => !KEY_STOP.has(r))));
+
+/**
+ * The act's one line that answers the question best (2026-10-27: an IT Park
+ * answer cited band 5 of VMQ-589 - the Ministry shall issue confirmations -
+ * and said no exemption exists, while band 17, deep in the excerpt among the
+ * tax privileges, lets a resident hire foreign specialists without one). A
+ * line counts its distinct question roots (5-letter starts), and an exception
+ * or a right is worth two more; at least two roots, else none. Returned with
+ * its band or article number. No AI; it points, it does not judge.
+ */
+function findKeyLine(body = '', query = '') {
+  const qRoots = new Set(keyRoots(query));
+  if (qRoots.size < 2) return null;
+  let best = null;
+  let unit = '';
+  let unitRoots = [];
+  for (const raw of String(body || '').split(/\n+/u)) {
+    const line = raw.trim();
+    const head = line.match(/^(\d{1,4})(?:[\u2070\u00B9\u00B2\u00B3\u2074-\u2079]*)\s*[-.]\s*(modda)?/u);
+    // a list item reads with its unit's opening line ("17. Texnopark rezidenti:")
+    if (head) { unit = head[2] ? `${head[1]}-modda` : `${head[1]}-band`; unitRoots = keyRoots(line.slice(0, 200)); }
+    if (line.length < 20 || line.length > 600) continue;
+    const hits = new Set([...keyRoots(line), ...unitRoots].filter(r => qRoots.has(r))).size;
+    if (hits < 2) continue;
+    const score = hits + (EXCEPTION_MARK.test(line) ? 2 : 0);
+    if (!best || score > best.score) best = { line, unit, score, hits };
+  }
+  return best;
 }
 
 function inferExcerptProvision(excerpt = '') {
@@ -771,6 +829,7 @@ module.exports = {
   extractActIdentifiers,
   canonicalLexUrl,
   extractRelevantSections,
+  findKeyLine,
   inferExcerptProvision,
   fetchCachedLexDocument,
   isLexDocumentCached,
