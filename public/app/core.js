@@ -251,8 +251,11 @@
       .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
       .replace(/(^|[\s(])\*([^*\n]+)\*(?=[\s).,;:!?]|$)/g, '$1<i>$2</i>');
   }
-  /** Javob matnini HTML'ga aylantiradi. Qaytaradi {html, sources:[{n,title,url}]} */
-  J.md = function (text) {
+  /** Javob matnini HTML'ga aylantiradi. Qaytaradi {html, sources:[{n,title,url}]}
+      opts.answer: huquqiy javob ko'rinishi - "**Tahlil**" kabi yolg'iz qalin qator
+      sarlavha, ⚠️ izohi kichik, Xulosa bo'limi och ko'k fonda (2026-10-27, egasi). */
+  J.md = function (text, opts) {
+    var ans = !!(opts && opts.answer);
     text = String(text || '')
       .replace(/<!--REASONING-->[\s\S]*?<!--\/REASONING-->\s*/g, '')
       .replace(/<!--YURXIZMAT-->[\s\S]*?<!--\/YURXIZMAT-->\s*/g, '');
@@ -260,7 +263,12 @@
     function addSrc(title, url) {
       var key = url.replace(/#.*$/, '') + '|' + (url.split('#')[1] || '');
       if (byUrl[key]) return byUrl[key];
-      var n = sources.length + 1; sources.push({ n: n, title: title, url: url }); byUrl[key] = n; return n;
+      // an iqtibos link reads "O'RQ-1137, 21-modda · lex.uz ↗": the list shows the act part
+      // and one act unit cited twice (an iqtibos and the text) keeps one number
+      title = String(title || '').replace(/\s*·?\s*(?:lex\.uz)?\s*↗\s*$/i, '').trim() || 'lex.uz';
+      var tk = 't|' + title.toLowerCase();
+      if (title !== 'lex.uz' && byUrl[tk]) return (byUrl[key] = byUrl[tk]);
+      var n = sources.length + 1; sources.push({ n: n, title: title, url: url }); byUrl[key] = n; byUrl[tk] = n; return n;
     }
     // "Manbalar:" pastki qismi — manba sifatida olinadi, matndan olib tashlanadi
     var foot = text.match(/(?:^|\n)\s*(?:---\s*\n\s*)?(?:#{1,6}\s*)?(?:\*{0,2})\s*(?:📎\s*)?(?:Manbalar|Источники|Sources)\s*(?:\*{0,2})\s*:?\s*([\s\S]*)$/iu);
@@ -288,7 +296,17 @@
       var held = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, function (m) { kept.push(m); return '\u0000' + (kept.length - 1) + '\u0000'; });
       return inline(held).replace(/\u0000(\d+)\u0000/g, function (m, k) { return links(kept[+k]); });
     }
-    function para(buf) { if (buf.length) out.push('<p>' + rich(buf.join('<br>')) + '</p>'); }
+    var HEAD_ONLY = /^\s*\*\*([^*]{2,40}?)\s*:?\s*\*\*\s*:?\s*$/;
+    var NOTE = /^\s*(?:⚠️|⚠|ℹ️)/;
+    function para(buf) {
+      if (!buf.length) return;
+      if (ans) {
+        var hh = buf[0].match(HEAD_ONLY);
+        if (hh) { out.push('<h3 class="ans-h">' + rich(hh[1]) + '</h3>'); buf = buf.slice(1); if (!buf.length) return; }
+        if (NOTE.test(buf[0])) { out.push('<p class="ans-note">' + rich(buf.join('<br>')) + '</p>'); return; }
+      }
+      out.push('<p>' + rich(buf.join('<br>')) + '</p>');
+    }
     var buf = [];
     while (i < lines.length) {
       var l = lines[i];
@@ -299,7 +317,9 @@
       if (/^\s*&gt;\s?/.test(l)) {
         para(buf); buf = []; var q = [];
         while (i < lines.length && /^\s*&gt;\s?/.test(lines[i])) { q.push(lines[i].replace(/^\s*&gt;\s?/, '')); i++; }
-        out.push('<blockquote>' + rich(q.join('<br>')) + '</blockquote>'); continue;
+        if (ans && NOTE.test(q[0])) out.push('<p class="ans-note">' + rich(q.join('<br>')) + '</p>');
+        else out.push('<blockquote>' + rich(q.join('<br>')) + '</blockquote>');
+        continue;
       }
       if (/^\s*\|.*\|\s*$/.test(l) && i + 1 < lines.length && /^\s*\|?\s*:?-{2,}/.test(lines[i + 1])) {
         para(buf); buf = [];
@@ -320,6 +340,15 @@
       buf.push(l); i++;
     }
     para(buf);
+    if (ans) {
+      // Xulosa: sarlavhasidan keyingi sarlavha, izoh yoki chiziqqacha
+      var k = out.findIndex(function (x) { return /^<h\d/.test(x) && /^(?:xulosa|вывод|заключение|conclusion)\b/i.test(x.replace(/<[^>]*>/g, '').trim()); });
+      if (k >= 0) {
+        var j = k + 1;
+        while (j < out.length && !/^<h\d|^<hr|class="ans-note"/.test(out[j])) j++;
+        out.splice(k, j - k, '<section class="ans-sum">' + out.slice(k, j).join('') + '</section>');
+      }
+    }
     return { html: out.join(''), sources: sources };
   };
   /** Matndagi barcha lex.uz havolalari (oqim paytida ham) */
