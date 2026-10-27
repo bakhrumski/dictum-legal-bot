@@ -363,6 +363,16 @@ Known state of the suites (Sept 2026):
   `openai/gpt-6-sol`; `OPINION_MODEL`, `OPINION_MODEL_<PLAN>` and
   `OPINION_FALLBACK_MODEL` pick the models. A provider error is scrubbed of
   the key before it is logged.
+  DeepSeek Search / Fetch (2026-10-27, owner: a Boshqaruv button; evaluation
+  only, nothing in the pipeline uses them): `/app/#/boshqaruv/sinov` ->
+  `POST /api/admin/deepseek-tools-eval` (master, `no-store`, one run at a
+  time, 503 without `DEEPSEEK_API_KEY`), `src/services/deepseek-tools-eval.js`:
+  5 questions with a known governing act - our lex.uz search pages (the
+  pipeline's plan: AI planner terms, code / law by form, relaxation; no act
+  downloaded) vs DeepSeek Search with `site:lex.uz` (place among 10) - and
+  Fetch of VMQ-589, the Civil and Tax Codes (whole? the deciding line?);
+  13 requests, each a ledger row (stage admin_test) priced per successful
+  request (`REQUEST_PRICES`, $0.75 / 1 000, billed from 2026-11-01).
   A master can try any of them on the platform with no env change: the
   dashboard's "🧪" picker (`public/js/test-model.js`) sends
   `X-JAI-Test-Model`, applied by `src/ai/test-model.js` only for a database

@@ -1155,6 +1155,54 @@ app.get('/api/admin/model-ab', requireMasterAdmin, async (req, res) => {
 // ── Account deletion requests (asked in the bot, carried out by a master;
 // src/services/account-deletion.js) ───────────────────────────────────────
 // one-time purchases (service_credits): master only, read only (src/services/one-time-report.js)
+// DeepSeek Search / Fetch against our own lex.uz search (2026-10-27, owner: a
+// Boshqaruv button). Evaluation only, master only; one run at a time, the last
+// report kept in memory (src/services/deepseek-tools-eval.js). Our side reads
+// lex.uz search pages only - no act is downloaded (the instance has 512 MB).
+let lastToolsEval = null;
+let toolsEvalRunning = false;
+app.get('/api/admin/deepseek-tools-eval', requireMasterAdmin, (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ report: lastToolsEval, running: toolsEvalRunning, configured: !!process.env.DEEPSEEK_API_KEY });
+});
+app.post('/api/admin/deepseek-tools-eval', requireMasterAdmin, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (toolsEvalRunning) return res.status(409).json({ error: "Sinov hozir ishlayapti, tugashini kuting.", code: 'RUNNING' });
+  if (!process.env.DEEPSEEK_API_KEY) return res.status(503).json({ error: 'DEEPSEEK_API_KEY sozlanmagan.', code: 'NO_KEY' });
+  toolsEvalRunning = true;
+  try {
+    const lex = require('../rag/lex-live-search');
+    const { httpGet } = require('../rag/fetch-lex');
+    const toolsEval = require('../services/deepseek-tools-eval').createDeepseekToolsEval({
+      apiKey: process.env.DEEPSEEK_API_KEY,
+      track: usageLedger.track,
+      // the plan as the pipeline builds it: the AI planner's terms, then the deterministic ones
+      plan: async (question, topic) => {
+        const deterministic = buildLexResearchPlan(question, topic);
+        try {
+          const planned = await callCheapAI([{ role: 'user', text: buildLexQueryPlannerPrompt(question, topic) }],
+            { useSearch: false, maxTokens: 700, temperature: 0, endpoint: '/rag/lex-query-plan' });
+          return mergeLexResearchPlans(parseLexQueryPlannerResponse(planned && planned.text), deterministic);
+        } catch (_) { return deterministic; }
+      },
+      // a search page, and as in searchLexUz a phrase that found nothing searched again shorter
+      lexSearchPage: async (query, { actForm } = {}) => {
+        const page = async (q) => lex.parseSearchCandidates(await httpGet(lex.buildLexSearchUrl(q, { actForm }), 5, null, 2048 * 1024)).map(c => c.url);
+        let urls = await page(query);
+        for (const shorter of urls.length ? [] : lex.relaxedQueries(query)) { urls = await page(shorter); if (urls.length) break; }
+        return urls;
+      },
+    });
+    lastToolsEval = await toolsEval.run();
+    res.json({ report: lastToolsEval });
+  } catch (error) {
+    console.error('[TOOLS-EVAL] failed:', usageLedger.safeMessage(error));
+    res.status(500).json({ error: 'Sinov bajarilmadi: ' + String(usageLedger.safeMessage(error)).slice(0, 200) });
+  } finally {
+    toolsEvalRunning = false;
+  }
+});
+
 app.get('/api/admin/one-time-purchases', requireMasterAdmin, async (req, res) => {
   try {
     res.json(await require('../services/one-time-report').oneTimeReport(pool, { days: req.query.days, limit: req.query.limit }));
