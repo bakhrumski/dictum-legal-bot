@@ -18,6 +18,15 @@
       'adm.cov': 'Korpus qamrovi', 'adm.cov.d': "Kuchsiz savollar va eng ko'p so'ralganlar",
       'adm.audit': 'Audit jurnali', 'adm.audit.d': 'Muhim amallar va kim bajargani',
       'adm.landing': 'Landing', 'adm.landing.d': 'juristai.uz fon bezagi',
+      'adm.lab': 'DeepSeek qidiruv sinovi', 'adm.lab.d': "DeepSeek Search va Fetch'ni bizning lex.uz qidiruvimiz bilan solishtirish (faqat sinov)",
+      'adm.lab.run': 'Sinovni boshlash', 'adm.lab.running': 'Ishlayapti… (1–2 daqiqa)', 'adm.lab.none': "Hali sinov o'tkazilmagan.", 'adm.lab.nokey': "Render'da DEEPSEEK_API_KEY yo'q.",
+      'adm.lab.note': "5 ta savol × 2 qidiruv + 3 ta katta hujjat = 13 so'rov, ko'pi bilan $0,01. Natija javoblarga ta'sir qilmaydi.",
+      'adm.lab.q': 'Savol', 'adm.lab.expect': 'Kutilgan hujjat', 'adm.lab.ours': 'Bizning qidiruv', 'adm.lab.ds1': 'DeepSeek: savol', 'adm.lab.ds2': 'DeepSeek: atama', 'adm.lab.top': 'DeepSeek top-3',
+      'adm.lab.fetch': 'Fetch: katta hujjatlar', 'adm.lab.doc': 'Hujjat', 'adm.lab.chars': 'Belgilar: DeepSeek / bizda', 'adm.lab.found': 'Kerakli joy', 'adm.lab.ms': 'Vaqt',
+      'adm.lab.pinned': "manzil bo'yicha", 'adm.lab.miss': 'topilmadi', 'adm.lab.place': "-o'rin", 'adm.lab.of': 'dan',
+      'adm.lab.s.ours': 'Bizda topildi', 'adm.lab.s.ds': 'DeepSeek topdi', 'adm.lab.s.top': 'DeepSeek top-3', 'adm.lab.s.fetch': "Fetch to'liq", 'adm.lab.s.req': "So'rovlar", 'adm.lab.s.cost': "Ko'pi bilan",
+      'adm.lab.last': 'Oxirgi sinov',
+      'adm.lab.how': "Bizning qidiruv: lex.uz qidiruv sahifalari (AI rejalashtiruvchi atamalari, kodeks/qonun filtri), birlashgan ro'yxatdagi o'rni. DeepSeek: site:lex.uz bilan, 10 ta natija ichidagi o'rni.",
       'adm.offers': 'Chegirmalar', 'adm.offers.d': 'Individual tarif takliflari',
       'adm.tg': 'Telegram agent', 'adm.tg.d': 'Suhbatlar, operator rejimi, Hermes',
       'adm.att': 'Advokatlar', 'adm.att.d': 'Litsenziya tekshiruvi va katalog',
@@ -63,6 +72,15 @@
       'adm.cov': 'Покрытие корпуса', 'adm.cov.d': 'Слабые вопросы и самые частые',
       'adm.audit': 'Журнал аудита', 'adm.audit.d': 'Важные действия и кто их выполнил',
       'adm.landing': 'Лендинг', 'adm.landing.d': 'Фон juristai.uz',
+      'adm.lab': 'Тест поиска DeepSeek', 'adm.lab.d': 'Сравнение DeepSeek Search и Fetch с нашим поиском по lex.uz (только тест)',
+      'adm.lab.run': 'Запустить тест', 'adm.lab.running': 'Идёт… (1–2 минуты)', 'adm.lab.none': 'Тест ещё не запускался.', 'adm.lab.nokey': 'В Render нет DEEPSEEK_API_KEY.',
+      'adm.lab.note': '5 вопросов × 2 поиска + 3 больших документа = 13 запросов, не более $0,01. На ответы не влияет.',
+      'adm.lab.q': 'Вопрос', 'adm.lab.expect': 'Ожидаемый акт', 'adm.lab.ours': 'Наш поиск', 'adm.lab.ds1': 'DeepSeek: вопрос', 'adm.lab.ds2': 'DeepSeek: термин', 'adm.lab.top': 'DeepSeek топ-3',
+      'adm.lab.fetch': 'Fetch: большие документы', 'adm.lab.doc': 'Документ', 'adm.lab.chars': 'Символы: DeepSeek / у нас', 'adm.lab.found': 'Нужное место', 'adm.lab.ms': 'Время',
+      'adm.lab.pinned': 'по адресу', 'adm.lab.miss': 'не найден', 'adm.lab.place': '-е место', 'adm.lab.of': 'из',
+      'adm.lab.s.ours': 'Найдено у нас', 'adm.lab.s.ds': 'Нашёл DeepSeek', 'adm.lab.s.top': 'DeepSeek топ-3', 'adm.lab.s.fetch': 'Fetch целиком', 'adm.lab.s.req': 'Запросы', 'adm.lab.s.cost': 'Не более',
+      'adm.lab.last': 'Последний тест',
+      'adm.lab.how': 'Наш поиск: страницы поиска lex.uz (термины AI-планировщика, фильтр кодекс/закон), место в общем списке. DeepSeek: с site:lex.uz, место среди 10 результатов.',
       'adm.offers': 'Скидки', 'adm.offers.d': 'Индивидуальные тарифные предложения',
       'adm.tg': 'Telegram-агент', 'adm.tg.d': 'Диалоги, режим оператора, Hermes',
       'adm.att': 'Адвокаты', 'adm.att.d': 'Проверка лицензий и каталог',
@@ -101,7 +119,7 @@
       'nav.admin': 'Admin', 'adm.sub': 'Platform management: requests, costs, corpus, users.', 'adm.back': 'Admin',
       'adm.old': 'Open in the old dashboard', 'adm.refresh': 'Refresh', 'adm.empty': 'No data',
       'adm.ai': 'AI requests', 'adm.spend': 'Spend', 'adm.reg': 'Applications & plans', 'adm.fb': 'Quality', 'adm.src': 'Suggested sources',
-      'adm.cov': 'Corpus coverage', 'adm.audit': 'Audit log', 'adm.landing': 'Landing', 'adm.offers': 'Discounts', 'adm.tg': 'Telegram agent',
+      'adm.cov': 'Corpus coverage', 'adm.audit': 'Audit log', 'adm.landing': 'Landing', 'adm.lab': 'DeepSeek search test', 'adm.offers': 'Discounts', 'adm.tg': 'Telegram agent',
       'adm.att': 'Lawyers', 'adm.svc': 'Paid services', 'adm.more': 'Still in the old dashboard', 'adm.today': 'Today', 'adm.buy': 'One-time purchases', 'adm.g.daily': 'Daily work', 'adm.g.money': 'Plans and spend', 'adm.g.catalog': 'Lawyers and sources', 'adm.g.tech': 'Technical', 'adm.del': 'Deletion requests'
     }
   };
@@ -134,7 +152,7 @@
     ['sifat', 'flag', 'adm.fb', 'daily'], ['telegram', 'tg', 'adm.tg', 'daily'],
     ['xaridlar', 'tg', 'adm.buy', 'money'], ['chegirmalar', 'spark', 'adm.offers', 'money'], ['ai', 'chat', 'adm.ai', 'money'],
     ['advokatlar', 'scale', 'adm.att', 'catalog'], ['manbalar', 'book', 'adm.src', 'catalog'],
-    ['korpus', 'search', 'adm.cov', 'tech'], ['audit', 'shield', 'adm.audit', 'tech'], ['landing', 'globe', 'adm.landing', 'tech']
+    ['korpus', 'search', 'adm.cov', 'tech'], ['audit', 'shield', 'adm.audit', 'tech'], ['landing', 'globe', 'adm.landing', 'tech'], ['sinov', 'spark', 'adm.lab', 'tech']
   ];
   var GROUPS = [['daily', 'adm.g.daily'], ['money', 'adm.g.money'], ['catalog', 'adm.g.catalog'], ['tech', 'adm.g.tech']];
 
@@ -717,8 +735,46 @@
     });
   }
 
+  /* ---------- DeepSeek Search / Fetch sinovi (2026-10-27) ---------- */
+  function viewLab() {
+    shell('sinov', function (body, again) {
+      body.innerHTML = '<div class="card" style="margin-bottom:16px"><p style="margin:0 0 12px">' + esc(t('adm.lab.note')) + '</p><button class="pill lab-go" type="button">' + esc(t('adm.lab.run')) + '</button></div><div class="lab-b">' + skel() + '</div>';
+      var box = $('.lab-b', body), go = $('.lab-go', body);
+      function rank(r) { return r == null ? '<span class="muted">' + esc(t('adm.lab.miss')) + '</span>' : esc(r + t('adm.lab.place')); }
+      function show(d) {
+        if (!d.configured && !d.report) { box.innerHTML = '<div class="empty-state">' + esc(t('adm.lab.nokey')) + '</div>'; go.disabled = true; return; }
+        var r = d.report;
+        if (!r) { box.innerHTML = '<div class="empty-state">' + esc(t('adm.lab.none')) + '</div>'; return; }
+        var s = r.summary || {};
+        box.innerHTML = '<p class="muted" style="font-size:12.5px;margin:0 0 10px">' + esc(t('adm.lab.last')) + ': ' + esc(dt(r.finishedAt)) + '</p>' +
+          kv([[t('adm.lab.s.ours'), s.oursFound + ' / ' + s.cases], [t('adm.lab.s.ds'), s.deepseekFound + ' / ' + s.cases], [t('adm.lab.s.top'), s.deepseekTop3 + ' / ' + s.cases], [t('adm.lab.s.fetch'), s.fetchWhole + ' / ' + (r.fetch || []).length], [t('adm.lab.s.req'), n0(s.requests)], [t('adm.lab.s.cost'), '$' + s.maxUsd]]) +
+          '<p class="muted" style="font-size:12.5px;margin:8px 0 16px">' + esc(t('adm.lab.how')) + '</p>' +
+          table([t('adm.lab.q'), t('adm.lab.expect'), t('adm.lab.ours'), t('adm.lab.ds1'), t('adm.lab.ds2'), t('adm.lab.top')], (r.search || []).map(function (x) {
+            var ours = x.ours.how === 'pinned' ? esc(t('adm.lab.pinned')) : rank(x.ours.rank) + (x.ours.seen ? ' <span class="muted">' + esc(t('adm.lab.of')) + ' ' + n0(x.ours.seen) + '</span>' : '');
+            var ds = (x.deepseek || []).map(function (q) { return q.error ? '<span class="muted">' + esc(q.error) + '</span>' : rank(q.rank); });
+            var top = ((x.deepseek || [])[0] || {}).top || [];
+            return '<tr>' + td(x.question) + td(x.expect.label) + td(ours, true) + td(ds[0] || '', true) + td(ds[1] || '', true) +
+              td(top.map(function (y) { return esc(y.title) + (y.score != null ? ' <span class="muted">(' + Number(y.score).toFixed(2) + ')</span>' : ''); }).join('<br>'), true) + '</tr>';
+          })) +
+          '<h3 style="font-size:16px;margin:22px 0 10px">' + esc(t('adm.lab.fetch')) + '</h3>' +
+          table([t('adm.lab.doc'), t('adm.lab.chars'), t('adm.lab.found'), t('adm.lab.ms')], (r.fetch || []).map(function (f) {
+            return '<tr>' + td(f.label) + td(f.error ? '<span class="muted">' + esc(f.error) + '</span>' : esc(n0(f.chars) + ' / ' + n0(f.ourChars)), true) +
+              td(f.error ? '—' : (f.found ? '✓ ' : '✗ ') + f.mustHave) + td(f.ms != null ? (f.ms / 1000).toFixed(1) + ' s' : '—') + '</tr>';
+          }));
+      }
+      J.api('/api/admin/deepseek-tools-eval').then(function (r) { if (!r.ok) { box.innerHTML = errBox(r); return; } show(r.data); if (r.data.running) { go.disabled = true; go.textContent = t('adm.lab.running'); } });
+      go.onclick = async function () {
+        busy(go, true); go.textContent = t('adm.lab.running'); box.innerHTML = skel();
+        var x = await J.api('/api/admin/deepseek-tools-eval', { method: 'POST' });
+        busy(go, false); go.textContent = t('adm.lab.run');
+        if (!x.ok) { box.innerHTML = errBox(x); return; }
+        show({ configured: true, report: x.data.report });
+      };
+    });
+  }
+
   /* ---------- marshrutlar ---------- */
-  var VIEWS = { ai: viewAi, xaridlar: viewBuy, qabul: viewReg, sifat: viewFb, manbalar: viewSrc, korpus: viewCov, audit: viewAudit, landing: viewLanding, chegirmalar: viewOffers, telegram: viewTg, advokatlar: viewAtt, xizmatlar: viewSvc, ochirish: viewDel };
+  var VIEWS = { sinov: viewLab, ai: viewAi, xaridlar: viewBuy, qabul: viewReg, sifat: viewFb, manbalar: viewSrc, korpus: viewCov, audit: viewAudit, landing: viewLanding, chegirmalar: viewOffers, telegram: viewTg, advokatlar: viewAtt, xizmatlar: viewSvc, ochirish: viewDel };
   function guard(fn) { return function () { if (!J.isMaster()) { J.go('#/'); return; } fn.apply(null, arguments); }; }
   J.route(/^\/boshqaruv$/, guard(function () { J.viewAdmin(); }));
   J.route(/^\/boshqaruv\/([a-z]+)$/, guard(function (k) { (VIEWS[k] || J.viewAdmin)(); }));

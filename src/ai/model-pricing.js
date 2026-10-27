@@ -215,8 +215,21 @@ function pricingSnapshot(model) {
  * Token rules: cached input is part of input (billed at the cached rate);
  * reasoning tokens are part of output and are not added again.
  */
+// Priced per successful request, not per token (2026-10-27): DeepSeek's Search
+// and Fetch APIs, $0.75 per 1 000 requests that return HTTP 200 with a result;
+// a failed or empty request is not billed (api-docs.deepseek.com/guides/search).
+const REQUEST_PRICES = Object.freeze({
+  'deepseek/tools-search': Object.freeze({ usd: 0.00075, source: 'https://api-docs.deepseek.com/quick_start/pricing/ (Search: $0.75 / 1 000 successful requests; billed from 2026-11-01)', checkedAt: '2026-10-27' }),
+  'deepseek/tools-fetch': Object.freeze({ usd: 0.00075, source: 'https://api-docs.deepseek.com/quick_start/pricing/ (Fetch: $0.75 / 1 000 successful requests; billed from 2026-11-01)', checkedAt: '2026-10-27' }),
+});
+
 function costForUsage(model, usage = {}) {
   const u = usage || {};
+  const perRequest = REQUEST_PRICES[model];
+  if (perRequest) {
+    const billed = Math.max(0, Number(u.billedRequests) || 0);
+    return { costUsd: billed * perRequest.usd, costSource: 'calculated', snapshot: { basis: 'per successful request', usdPerRequest: perRequest.usd, currency: 'USD', source: perRequest.source, checkedAt: perRequest.checkedAt } };
+  }
   if (Number.isFinite(Number(u.providerCostUsd)) && u.providerCostUsd !== null && u.providerCostUsd !== undefined) {
     return { costUsd: Number(u.providerCostUsd), costSource: 'provider_reported', snapshot: { basis: 'provider-reported cost', currency: 'USD' } };
   }
@@ -302,4 +315,4 @@ function callCostBound({ model, inputTokensMax = null, outputTokensMax = null, t
   return { usd, basis: { model: key, inputTokensMax: Number(inputTokensMax), outputTokensMax: Number(outputTokensMax), in: snap.in, out: snap.out, multiplier: mult, priceSource: snap.source, checkedAt: snap.checkedAt } };
 }
 
-module.exports = { MODEL_PRICING, PRICE_SCHEDULE, priceAt, PRICING_SOURCES, VOICELAB_CREDIT, calculateTokenCost, pricingSnapshot, costForUsage, voicelabCreditUsd, inputTokenBound, callCostBound };
+module.exports = { REQUEST_PRICES, MODEL_PRICING, PRICE_SCHEDULE, priceAt, PRICING_SOURCES, VOICELAB_CREDIT, calculateTokenCost, pricingSnapshot, costForUsage, voicelabCreditUsd, inputTokenBound, callCostBound };
