@@ -104,7 +104,7 @@ function findQuote(quote = '', chunks = []) {
         own.push(m[0]);
         from += m.index + m[0].length;
       }
-      if (own.length === parts.length) return { chunk, parts: own };
+      if (own.length === parts.length) return { chunk, parts: own, text, at: from };
     }
   }
   return null;
@@ -139,13 +139,42 @@ function protectQuotes(text = '') {
   return { text: out.join('\n'), held };
 }
 
+/**
+ * Where a quote stands, for its link (2026-10-27, owner: an answer opened
+ * with a law quote whose act and band were nowhere): the act's own number
+ * (VMQ-589, PQ-4008...) or its short name, and the article or band the quote
+ * sits in - the heading nearest above it in the source text, or the unit of a
+ * "SAVOLGA ENG YAQIN QATOR (17-band)" line. "" when neither is known.
+ */
+function quoteSourceLabel(hit = {}) {
+  const chunk = hit.chunk || {};
+  let id = '';
+  try { id = require('./citation-utils').getChunkDocumentIdentifier(chunk) || ''; } catch (_) { id = ''; }
+  const name = String(chunk.law_name || chunk.lawName || '')
+    .replace(/^\s*O['\u2018\u2019\u02bb]?zbekiston\s+Respublikasi(?:ning)?\s+/iu, '')
+    .replace(/\s+/gu, ' ').trim();
+  const act = id || (name.length > 48 ? `${name.slice(0, 46).replace(/\s+\S*$/u, '')}…` : name);
+  const text = String(hit.text || '');
+  const at = Number(hit.at) || 0;
+  const before = text.slice(0, at);
+  const lineStart = before.lastIndexOf('\n') + 1;
+  const keyUnit = /^SAVOLGA ENG YAQIN QATOR \(([^)]+)\)/u.exec(text.slice(lineStart, lineStart + 80));
+  let unit = keyUnit ? keyUnit[1] : '';
+  if (!unit) {
+    const heads = [...before.matchAll(/(?:^|\n)[ \t]*(\d{1,4})(?:[\u2070\u00B9\u00B2\u00B3\u2074-\u2079]*)[ \t]*(?:-[ \t]*(modda)|\.[ \t])/gu)];
+    const last = heads[heads.length - 1];
+    if (last) unit = last[2] ? `${last[1]}-modda` : `${last[1]}-band`;
+  }
+  return [act, unit].filter(Boolean).join(', ');
+}
+
 function restoreQuotes(text = '', held = [], chunks = [], linkFor = () => '') {
   const report = { kept: 0, removed: 0, removedQuotes: [] };
   const restored = String(text || '').replace(/\u0000Q(\d+)\u0000/gu, (whole, i) => {
     const line = held[Number(i)] || '';
     const words = quoteWords(line);
     // a quote that already carries its verified link (a cached answer) stays
-    if (new RegExp(`\\[${escapeRx(QUOTE_LINK_LABEL)}\\]\\(https?://(?:www\\.)?lex\\.uz/[^)\\s]+#:~:text=`, 'u').test(line) && !(chunks || []).length) {
+    if (new RegExp(`\\[(?:[^\\]]* · )?${escapeRx(QUOTE_LINK_LABEL)}\\]\\(https?://(?:www\\.)?lex\\.uz/[^)\\s]+#:~:text=`, 'u').test(line) && !(chunks || []).length) {
       report.kept++;
       return line;
     }
@@ -159,7 +188,8 @@ function restoreQuotes(text = '', held = [], chunks = [], linkFor = () => '') {
     const link = linkFor(hit.chunk, hit.parts);
     // the source's own words are shown (its letters, its apostrophes)
     const own = hit.parts.map(p => p.replace(/\s+/gu, ' ').trim()).join(' ... ');
-    return `> «${own}»${link ? ` [${QUOTE_LINK_LABEL}](${link})` : ''}`;
+    const where = quoteSourceLabel(hit);
+    return `> «${own}»${link ? ` [${where ? `${where} · ` : ''}${QUOTE_LINK_LABEL}](${link})` : ''}`;
   });
   const cleaned = restored
     .split('\n').filter(l => !l.includes('\u0000DROP\u0000')).join('\n')
@@ -169,5 +199,5 @@ function restoreQuotes(text = '', held = [], chunks = [], linkFor = () => '') {
 
 module.exports = {
   exceptionRule,
-  QUOTE_LINK_LABEL, promptRules, extractFollowUpQuestions, findQuote, quoteWords, protectQuotes, restoreQuotes,
+  QUOTE_LINK_LABEL, quoteSourceLabel, promptRules, extractFollowUpQuestions, findQuote, quoteWords, protectQuotes, restoreQuotes,
 };

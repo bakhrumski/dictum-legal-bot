@@ -556,7 +556,10 @@ function stripRawLexAttributions(value = '') {
         // Preserve that canonical link when the cache row no longer includes
         // the original RAG chunks needed to reconstruct it.
         const plain = String(label || '').replace(/[*_]/gu, '').trim();
-        const canonicalProvision = /\p{L}[\s\S]*\d+\s*[-–—]\s*(?:modda|band)\s*,\s*(?:\d+\s*[-–—]\s*qism|tegishli\s+(?:qism|band))/iu.test(plain);
+        // "Act, N-modda, M-qism", an older "..., tegishli qism", or since
+        // 2026-10-27 "Act, N-modda" alone when no part is known
+        const canonicalProvision = /\p{L}[\s\S]*,\s*\d+\s*[-–—]\s*(?:modda|band)(?:\s*,\s*(?:\d+\s*[-–—]\s*qism|tegishli\s+(?:qism|band)))?\s*$/iu.test(plain)
+          || /\p{L}[\s\S]*\d+\s*[-–—]\s*(?:modda|band)\s*,\s*(?:\d+\s*[-–—]\s*qism|tegishli\s+(?:qism|band))/iu.test(plain);
         const canonicalAct = /\p{L}[\s\S]*\((?:O['\u02bb\u02bc\u2018\u2019`]?RQ|PQ|PF|VMQ)-\d+(?:-[IVXLCDM]+)?\)/iu.test(plain);
         return canonicalProvision || canonicalAct ? whole : label;
       }
@@ -723,8 +726,9 @@ function citationLocatorLabel(ref = '', type = 'modda', partNumber = '', lang = 
     const word = type === 'band' ? 'пункт' : 'статья';
     return `${word} ${ref}${partNumber ? `, часть ${ruPartOrdinal(partNumber)}` : ''}`;
   }
-  const partLabel = partNumber ? `${partNumber}-qism` : (type === 'band' ? 'tegishli band' : 'tegishli qism');
-  return `${ref}-${type}, ${partLabel}`;
+  // no part known: the article alone (2026-10-27, owner: "523-modda, tegishli
+  // qism" read as filler)
+  return partNumber ? `${ref}-${type}, ${partNumber}-qism` : `${ref}-${type}`;
 }
 
 /** Regex sources for an act's Russian title in any case form ([] when it has none). */

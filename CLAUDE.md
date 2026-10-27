@@ -280,6 +280,14 @@ Known state of the suites (Sept 2026):
   wages); every legal-answer prompt has `exceptionRule` - an exception or a
   right in the sources comes first, "no exception" only after reading all
   sources. `tests/answer-key-line.test.js`.
+  Answer polish (2026-10-27, owner): a citation with no known part is
+  "N-modda" alone, never "tegishli qism" (prompts, `citationLocatorLabel`;
+  a cached "..., tegishli qism" link still survives); a verified quote's link
+  names its act and unit (`quoteSourceLabel`: "VMQ-589, 17-band · lex.uz ↗");
+  the claim guard puts the sources holding an exception first for an
+  absence claim (VMQ-589 band 17 had fallen past the 14 000-character
+  evidence limit) and its notice names such a claim as a claim, still saying
+  "not found is not absent from the law" (`tests/claim-guard-exception.test.js`).
   Answer layout (2026-10-13, `src/rag/answer-structure.js`, no AI): a `> «...»` quote of the
   law is kept only when its words are in a retrieved source word for word
   (spaces, case, apostrophe forms aside; "..." parts in order in one

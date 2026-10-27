@@ -830,6 +830,7 @@ module.exports = {
   canonicalLexUrl,
   extractRelevantSections,
   findKeyLine,
+  EXCEPTION_MARK,
   inferExcerptProvision,
   fetchCachedLexDocument,
   isLexDocumentCached,

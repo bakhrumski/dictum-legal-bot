@@ -30,7 +30,7 @@ function buildOpinionPrompt({ lang, ragContext = '', lexUnresolved = [], lexFore
       `- Ground EVERY legal claim ONLY on the KONTEKST below (internal qa-korpus excerpts + live lex.uz excerpts). These are the ONLY permitted sources — no other website, no memory.
 - CITATION PRECISION (required): for every norm you rely on, give the most precise locator the KONTEKST supports, in this order of preference:
     1) Hujjatning to'liq nomi + tasdiqlangan rasmiy raqami + modda/band + qism.
-    2) Qism topilmasa: to'liq nom + rasmiy raqam + modda/band + "tegishli qism/band".
+    2) Qism topilmasa: to'liq nom + rasmiy raqam + modda/band, qismsiz ("tegishli qism" demang).
     3) If no article/band number is available: full document name + confirmed official number.
   Never state a norm without at least option 3. Never invent an article, clause or number that is not in the KONTEKST.
 - Every Uzbek legal-act mention must be a clickable HTML <a href="verified Lex.uz URL"><strong>full name (official number), locator</strong></a>. Use O'RQ for laws, PQ for Presidential decisions, PF for Presidential decrees and VMQ for Cabinet decisions. Never leave a relied-on act as plain text.
