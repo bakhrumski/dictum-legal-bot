@@ -4904,6 +4904,8 @@ Javob strukturasini murojaat turiga moslang.`;
 
 **Xulosa** — 1-2 gap: savolga to'g'ridan-to'g'ri javob va eng muhim keyingi qadam; Tahlildagi dalil va moddalarni takrorlamang.
 
+${require('../rag/answer-structure').exceptionRule('uz')}
+
 JIDDIY TAQIQLAR:
 - Modda matnini so'zma-so'z ko'chirib chiqarmang.
 - Bir xil ma'lumotni ikki bo'limda takrorlamang.
@@ -6113,6 +6115,7 @@ ${ragContext ? `\nKONTEKST — FAQAT SHU MANBALARGA TAYANING:\n${ragContext}\n` 
 
 **Tahlil** — Hal qiluvchi normadan konstitutsiyadagi iqtibos uslubida boshlang, so'ng uni vaziyatga qo'llang. Subyektlar bo'yicha farq bo'lsa har birini alohida jumlada ko'rsating (jismoniy / mansabdor / yuridik shaxs). Jarima va sanksiyalarni ANIQ BHM ko'paytmasida, muddatlarni ANIQ kun/oy/yilda yozing. Har bir normani bir marta keltiring.
 **Xulosa** — 1-2 gap: savolga to'g'ridan-to'g'ri javob va keyingi qadam; Tahlilni takrorlamang.
+${require('../rag/answer-structure').exceptionRule('uz')}
 
 "Yuridik maslahat" yoki "Eslatma" kabi qo'shimcha sarlavha yaratmang.
 

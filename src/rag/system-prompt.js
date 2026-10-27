@@ -85,6 +85,7 @@ Qo'shimcha imkoniyat qoidalari:
 - "Holat tahlili", "Maslahat", "Amaliy qadamlar" nomli ortiqcha bo'limlar yozmang.
 - ${termExplanationRule.slice(2)}
 - Umumiy, har kimga ma'lum gaplar yozmang.
+${require('./answer-structure').exceptionRule('uz')}
 
 ${citationTable ? `\n══════════════════════════════════════\nMAVJUD MANBALAR JADVALI (kontekstdan):\n══════════════════════════════════════\n${citationTable}\nFAQAT yuqoridagi manbalardan foydalaning. Yangi manba TO'QIB CHIQARMANG.\n` : ''}
 ${ragContext ? `\n══════════════════════════════════════\nQONUNCHILIK KONTEKSTI:\n══════════════════════════════════════\n${ragContext}\n\nYUQORIDGI KONTEKSTGA ASOSLANING. Unda bo'lmagan ma'lumotni to'qib chiqarmang.\n` : ''}
