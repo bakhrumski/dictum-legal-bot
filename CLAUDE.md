@@ -64,6 +64,14 @@ Known state of the suites (Sept 2026):
   it; update the assertion to the current design rather than reverting the
   code.
 
+## Roadmap
+
+- **Legora darajasi (2026-10-27, owner: "oxirgi bosqichga olib borishimiz
+  kerak"):** `docs/roadmap/legora-darajasi.md` is the single list of stages
+  and PRs. Tick it and add a journal line with every merge. The current
+  design is `docs/design/matter-va-agent-runs.md` (Matter, `agent_runs`, the
+  planner agent); no code starts until the owner answers its section 8.
+
 ## Layout
 
 - `src/api/server.js` — Express app and most routes.
