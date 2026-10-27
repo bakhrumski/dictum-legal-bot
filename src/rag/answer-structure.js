@@ -28,8 +28,21 @@ const QUOTE_RULE_RU = `- В анализе, там где названа реш�
 const FOLLOWUP_RULE_UZ = `- Javob oxirida, Xulosadan keyin, "KEYINGI SAVOLLAR:" qatori va uning ostida "- " bilan foydalanuvchi keyin berishi mumkin bo'lgan 2 ta qisqa savolni yozing (shu mavzuda, foydalanuvchi tilida, "?" bilan). Bu blok javobdan alohida tugma bo'lib ko'rsatiladi.`;
 const FOLLOWUP_RULE_RU = `- В конце ответа, после вывода, напишите строку "KEYINGI SAVOLLAR:" и под ней через "- " 2 коротких вопроса, которые пользователь может задать дальше (по теме, на языке пользователя, с "?"). Этот блок показывается отдельно кнопками.`;
 
+// 2026-10-27: an IT Park answer cited the general rule (VMQ-589 band 5) and
+// said no exemption exists, while band 17 grants one. An exception or a right
+// in the sources decides such a question and comes first.
+const EXCEPTION_RULE_UZ = `- Istisno birinchi: KONTEKSTda savoldagi talabdan istisno, ozod qilish yoki maxsus huquq bo'lsa ("...olmasdan", "...talab qilinmaydi", "ozod etiladi", "...huquqiga ega"), Tahlilni o'sha normadan boshlang va Xulosani unga asoslang; umumiy talabni undan keyin keltiring. "SAVOLGA ENG YAQIN QATOR" belgisi server so'zlar bo'yicha tanlagan qator - uni albatta o'qing, lekin matn bilan tekshirmasdan asos qilmang. "Istisno yo'q" deb faqat KONTEKSTdagi barcha manbalarni o'qib, bunday norma topilmaganda yozing.`;
+const EXCEPTION_RULE_RU = `- Сначала исключение: если в КОНТЕКСТе есть исключение, освобождение или особое право относительно требования из вопроса ("...без получения", "не требуется", "освобождается", "вправе"), начните анализ с этой нормы и основывайте вывод на ней; общее требование - после. Метка "SAVOLGA ENG YAQIN QATOR" - строка, выбранная сервером по словам: прочтите её, но не делайте основанием без сверки с текстом. "Исключения нет" пишите только прочитав все источники КОНТЕКСТа.`;
+
+/** The exception-first rule alone, for prompts that do not take promptRules. */
+function exceptionRule(lang = 'uz') {
+  return lang === 'ru' ? EXCEPTION_RULE_RU : EXCEPTION_RULE_UZ;
+}
+
 function promptRules(lang = 'uz') {
-  return lang === 'ru' ? `${QUOTE_RULE_RU}\n${FOLLOWUP_RULE_RU}` : `${QUOTE_RULE_UZ}\n${FOLLOWUP_RULE_UZ}`;
+  return lang === 'ru'
+    ? `${QUOTE_RULE_RU}\n${EXCEPTION_RULE_RU}\n${FOLLOWUP_RULE_RU}`
+    : `${QUOTE_RULE_UZ}\n${EXCEPTION_RULE_UZ}\n${FOLLOWUP_RULE_UZ}`;
 }
 
 const FOLLOWUP_HEAD = /^[ \t]*(?:#{1,6}[ \t]*)?\**[ \t]*(?:keyingi\s+savollar|следующие\s+вопросы)[ \t]*\**[ \t]*:?[ \t]*\**[ \t]*$/imu;
@@ -155,5 +168,6 @@ function restoreQuotes(text = '', held = [], chunks = [], linkFor = () => '') {
 }
 
 module.exports = {
+  exceptionRule,
   QUOTE_LINK_LABEL, promptRules, extractFollowUpQuestions, findQuote, quoteWords, protectQuotes, restoreQuotes,
 };
