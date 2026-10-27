@@ -83,6 +83,17 @@ Sabablar:
 
 Shu savolda: 16–18 hujjat saqlanadi, cho'qqi ~233–241 MB.
 
+**2026-10-26: 502 yana.** Render logi `[FETCH-LEX] Downloaded 7665 KB`
+qatorida tugadi va `npm start` bilan qayta boshlandi: 8 MB lik qaror sahifasi
+(ilovalari bilan) boshqa sahifalar bilan birga o'qilgan. O'lchov: bitta 6 MB
+sahifani o'qish heap'dan tashqarida ~100 MB oladi (buferlar); bosqichning
+haqiqiy heap'i 128 MB ga sig'adi. Tuzatish: bir vaqtda 1 sahifa; 7 MB dan
+katta sahifa o'qilmaydi (yuklash to'xtatiladi; eng katta kodeks — Soliq
+kodeksi — 6 MB); oddiy qidiruv natijasi uchun chegara 2 MB (kodeks/qonun
+filtri, reyestr va aniq manzil 7 MB); kesh jami 8 mln belgi. Asosiy
+kodekslar hajmi (bayt): Soliq 5 952 399, Jinoyat 4 624 250, Ma'muriy
+javobgarlik 4 029 536, Fuqarolik 3 365 455.
+
 **Qoida:** qidiruvni kengaytiradigan har bir o'zgarishdan keyin
 `scripts/lex-round-probe.js` bilan xotira cho'qqisini o'lchang.
 

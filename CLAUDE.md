@@ -242,6 +242,14 @@ Known state of the suites (Sept 2026):
   round reads at most `LEX_ROUND_MAX_READS` (48) uncached pages (a shared
   `readBudget`). Same question after: 16 documents kept, 233 MB peak with
   `--max-old-space-size=320` (301 MB without: V8 collects late).
+  2026-10-26 (502 on juristai.uz: the log ended at "Downloaded 7665 KB", an
+  8 MB decree page with annexes, then npm start): one page at a time
+  (`LEX_FETCH_CONCURRENCY` 1), a page over `LEX_PAGE_MAX_KB` (7000: the Tax
+  Code is 6 MB) is not read - the download stops - and a plain search
+  result over `LEX_PAGE_MAX_KB_OTHER` (2000) neither; codes / laws found by
+  form, registry and pinned acts get the larger limit; the cache holds at
+  most `LEX_DOCUMENT_CACHE_MAX_CHARS` (8 M) of text. A 6 MB page read costs
+  ~100 MB outside the heap; the round's live heap fit in 128 MB.
   Relevance (2026-10-24, owner: quality first; most kept acts only
   mentioned a word): an act form's bonus and lex.uz's row rank count only for
   an act whose title is about the question; an act whose title is not needs

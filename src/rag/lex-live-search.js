@@ -34,11 +34,24 @@ const DOCUMENT_CACHE_TTL_MS = Math.max(
   Number.parseInt(process.env.LEX_DOCUMENT_CACHE_TTL_MS || String(24 * 60 * 60 * 1000), 10) || 24 * 60 * 60 * 1000
 );
 const DOCUMENT_CACHE_LIMIT = Math.max(8, Number(process.env.LEX_DOCUMENT_CACHE_LIMIT) || 64);
+// The cache also holds at most this many characters of act text (the Civil
+// Code alone is 685 000): the oldest acts leave first.
+const DOCUMENT_CACHE_MAX_CHARS = () => Math.max(500000, Number(process.env.LEX_DOCUMENT_CACHE_MAX_CHARS) || 8000000);
+// A lex.uz page larger than this is not read (2026-10-26: an 8 MB decree page
+// took the instance down; the largest code, the Tax Code, is 6 MB).
+// That limit is for a code or law (found by its form, the topic registry or
+// its address); any other search result is read up to LEX_PAGE_MAX_KB_OTHER
+// (2 MB): the multi-MB pages a plain search brings are decrees with long
+// annexes, and each one read costs ~100 MB outside the heap (measured).
+const PAGE_MAX_BYTES = () => Math.max(256, Number(process.env.LEX_PAGE_MAX_KB) || 7000) * 1024;
+const PAGE_MAX_BYTES_OTHER = () => Math.max(256, Number(process.env.LEX_PAGE_MAX_KB_OTHER) || 2000) * 1024;
+let cachedChars = 0;
 // Documents read at once, across every search of every request (2026-10-24:
 // with #477's queries finding acts, one question's 22 searches read dozens of
 // 0.3-1 MB pages in parallel and the process went from 57 to 515 MB - the
 // Render instance has 512 MB, the answer never came). A read waits for a slot.
-const FETCH_SLOTS = () => Math.max(1, Number(process.env.LEX_FETCH_CONCURRENCY) || 2);
+// one page at a time since 2026-10-26 (two large pages at once, plus the cache, went over 512 MB)
+const FETCH_SLOTS = () => Math.max(1, Number(process.env.LEX_FETCH_CONCURRENCY) || 1);
 let activeFetches = 0;
 const fetchQueue = [];
 function acquireFetchSlot() {
@@ -205,7 +218,8 @@ async function searchLexUz(query, opts = {}) {
     inspectedCandidates += 1;
     try {
       // the read has its own limit (fetchCachedLexDocument); here only the round's deadline
-      const doc = await within(fetchCachedLexDocument(docUrl), leftMs());
+      const big = actForm || candidate.source === 'lex.uz-registry' || candidate.source === 'lex.uz-pinned' || candidate.exactIdentityMatch;
+      const doc = await within(fetchCachedLexDocument(docUrl, { maxBytes: big ? PAGE_MAX_BYTES() : PAGE_MAX_BYTES_OTHER() }), leftMs());
       if (!doc.body || doc.body.trim().length === 0) continue;
 
       // Skip if still a historical version after the auto-follow attempt
@@ -520,28 +534,38 @@ function isLexDocumentCached(url) {
   return !!(cached && cached.expiresAt > Date.now()) || documentInFlight.has(key);
 }
 
-async function fetchCachedLexDocument(url) {
+async function fetchCachedLexDocument(url, { maxBytes = PAGE_MAX_BYTES() } = {}) {
   const key = canonicalLexUrl(url);
   const cached = documentCache.get(key);
   if (cached && cached.expiresAt > Date.now()) return cached.document;
-  if (cached) documentCache.delete(key);
+  if (cached) { cachedChars -= String((cached.document || {}).body || '').length; documentCache.delete(key); }
   if (documentInFlight.has(key)) return documentInFlight.get(key);
 
-  // the slot is held until the read itself ends (one that is no longer waited
-  // for still holds its memory); the caller waits at most LEX_FETCH_MAX_MS
-  // from the start of the read, not of the wait for a slot
+  // the slot is held until the read itself ends; a read past LEX_FETCH_MAX_MS
+  // (from its start, not from the wait for a slot) is cancelled, so a page
+  // that never finishes cannot hold the only slot (2026-10-26)
   const pending = acquireFetchSlot().then(() => {
-    const read = fetchLexDocument(key);
-    read.then(releaseFetchSlot, releaseFetchSlot);
-    return within(read, DOC_FETCH_MAX_MS());
+    const controller = new AbortController();
+    let released = false;
+    const release = () => { if (!released) { released = true; releaseFetchSlot(); } };
+    const read = Promise.resolve().then(() => fetchLexDocument(key, { maxBytes, signal: controller.signal }));
+    read.then(release, release);
+    return within(read, DOC_FETCH_MAX_MS()).catch((err) => {
+      controller.abort();
+      release();
+      throw err;
+    });
   }).then((full) => {
     // the page's HTML (0.3-1 MB) is not kept: live search reads the text only;
     // ingest reads lex.uz itself (fetchLexDocument), never this cache
     const document = { title: full.title, body: full.body, metadata: full.metadata };
-    if (documentCache.size >= DOCUMENT_CACHE_LIMIT) {
+    const size = String(document.body || '').length;
+    while (documentCache.size && (documentCache.size >= DOCUMENT_CACHE_LIMIT || cachedChars + size > DOCUMENT_CACHE_MAX_CHARS())) {
       const oldest = documentCache.keys().next().value;
-      if (oldest) documentCache.delete(oldest);
+      cachedChars -= String((documentCache.get(oldest).document || {}).body || '').length;
+      documentCache.delete(oldest);
     }
+    cachedChars += size;
     documentCache.set(key, {
       document,
       expiresAt: Date.now() + DOCUMENT_CACHE_TTL_MS,
@@ -556,6 +580,7 @@ async function fetchCachedLexDocument(url) {
 
 function clearLexDocumentCache() {
   documentCache.clear();
+  cachedChars = 0;
   documentInFlight.clear();
   searchPageCache.clear();
   searchPageInFlight.clear();
