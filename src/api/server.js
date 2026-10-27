@@ -77,6 +77,7 @@ const {
   buildLexFollowUpPrompt,
   buildLexRelevancePrompt,
   parseLexRelevanceResponse,
+  applyLexRelevance,
   parseLexFollowUpResponse,
 } = require('../rag/legal-research-playbook');
 const {
@@ -5752,9 +5753,11 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
         );
         const keep = parseLexRelevanceResponse(judged && judged.text, lexLiveResults.length);
         if (keep) {
-          const dropped = lexLiveResults.filter((_, i) => !keep.includes(i)).map(r => String(r.lawName || r.title || '').slice(0, 60));
-          lexLiveResults = keep.map(i => lexLiveResults[i]);
-          if (dropped.length) console.log(`[LEX-RELEVANCE] ${dropped.length} acts left out as not governing the question: ${dropped.join(' | ')}`);
+          // an act pinned by address or matching the asked number stays whatever the judge says
+          const { kept, dropped } = applyLexRelevance(lexLiveResults, keep);
+          lexLiveResults = kept;
+          console.log(`[LEX-RELEVANCE] kept ${kept.length}: ${kept.map(r => String(r.lawName || r.title || '').slice(0, 50)).join(' | ')}`);
+          if (dropped.length) console.log(`[LEX-RELEVANCE] ${dropped.length} acts left out as not governing the question: ${dropped.map(r => String(r.lawName || r.title || '').slice(0, 60)).join(' | ')}`);
         } else {
           console.warn('[LEX-RELEVANCE] reply not readable; acts kept as found');
         }

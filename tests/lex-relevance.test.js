@@ -69,11 +69,25 @@ test('the judge: titles, form and openings go in as data; only readable numbers 
   assert.strictEqual(pb.parseLexRelevanceResponse('{"ok":true}', 3), null);
 });
 
+test('the judge never drops an act pinned by address or matching the asked number (2026-10-27: VMQ-589 band 17)', () => {
+  const acts = [
+    { url: 'p', title: 'Dasturiy mahsulotlar va axborot texnologiyalari texnologik parki', source: 'lex.uz-pinned' },
+    { url: 'x', title: 'VMQ-86', exactIdentityMatch: true },
+    { url: 'n', title: 'Banklarni sanatsiya qilish' },
+    { url: 'k', title: 'Mehnat kodeksi' },
+  ];
+  const { kept, dropped } = pb.applyLexRelevance(acts, [3]);
+  assert.deepStrictEqual(kept.map(r => r.url), ['p', 'x', 'k'], 'order as found');
+  assert.deepStrictEqual(dropped.map(r => r.url), ['n']);
+  assert.deepStrictEqual(pb.applyLexRelevance(acts, []).kept.map(r => r.url), ['p', 'x'], 'an empty choice still keeps them');
+});
+
 test('the pipeline runs the judge once on the final list, keeps the list on any failure, LEX_RELEVANCE_JUDGE=off stops it', () => {
   const server = fs.readFileSync(path.join(__dirname, '../src/api/server.js'), 'utf8');
   assert.match(server, /if \(lexLiveResults\.length > 1 && String\(process\.env\.LEX_RELEVANCE_JUDGE \|\| ''\)\.toLowerCase\(\) !== 'off'\)/u);
   assert.match(server, /endpoint: '\/rag\/lex-relevance'/u);
-  assert.match(server, /if \(keep\) \{\n\s+const dropped[^\n]+\n\s+lexLiveResults = keep\.map\(i => lexLiveResults\[i\]\);/u);
+  assert.match(server, /const \{ kept, dropped \} = applyLexRelevance\(lexLiveResults, keep\);\n\s+lexLiveResults = kept;/u);
+  assert.match(server, /\[LEX-RELEVANCE\] kept \$\{kept\.length\}/u, 'what was kept is logged too');
   assert.match(server, /\[LEX-RELEVANCE\] failed; acts kept as found/u);
   assert.match(fs.readFileSync(path.join(__dirname, '../src/ai/usage-ledger.js'), 'utf8'), /\[\/lex-relevance\/u, 'source_relevance'\]/u);
 });

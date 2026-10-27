@@ -624,6 +624,25 @@ ${list}
 </lex_documents>`;
 }
 
+/**
+ * The judge's choice applied: the acts it kept, plus every act whose identity
+ * the server itself confirmed - one pinned by its address for a named status
+ * or one matching the act number asked for. Those are never the judge's to
+ * drop (2026-10-27: an IT Park answer cited band 5 of VMQ-589 and said no
+ * exemption exists, while its band 17 lets a resident hire foreign
+ * specialists without the confirmation). Order kept as found.
+ */
+function applyLexRelevance(results = [], keep = []) {
+  const kept = [];
+  const dropped = [];
+  (results || []).forEach((r, i) => {
+    const protectedAct = r && (r.source === 'lex.uz-pinned' || r.exactIdentityMatch === true);
+    if (keep.includes(i) || protectedAct) kept.push(r);
+    else dropped.push(r);
+  });
+  return { kept, dropped };
+}
+
 /** The kept positions (0-based, in range, unique), or null when the reply is not readable. */
 function parseLexRelevanceResponse(value = '', count = 0) {
   let raw = String(value || '').replace(/```(?:json)?/giu, '').trim();
@@ -729,6 +748,7 @@ module.exports = {
   scoreLexResearchResult,
   buildLexRelevancePrompt,
   parseLexRelevanceResponse,
+  applyLexRelevance,
   buildExactActQueryVariants,
   buildConceptQueries,
   specialStatuses,

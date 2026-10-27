@@ -258,6 +258,9 @@ Known state of the suites (Sept 2026):
   (`buildLexRelevancePrompt`, stage `source_relevance`) keeps the acts that
   govern the question - an unreadable reply or a failure keeps the list,
   `LEX_RELEVANCE_JUDGE=off` stops it. The judge was not measured here.
+  The judge never drops an act pinned by address or matching the asked
+  number (`applyLexRelevance`; 2026-10-27: an IT Park answer missed VMQ-589
+  band 17); both kept and dropped acts are logged.
   Lessons of 22-24 Oct 2026 (lex.uz behaviour, memory, time, reading the AI
   requests table, Telegram/Render settings) with how each was measured:
   `docs/lessons/2026-10-lexuz-va-javob-zanjiri.md` (Uzbek);
