@@ -279,6 +279,16 @@ function buildEvidence(claims = [], chunks = [], maxChars = DEFAULTS.maxEvidence
     ordered.push(c);
   };
   for (const claim of claims) for (const c of chunksForArticles(chunks, claim.articles)) add(c);
+  // a claim that a rule does not apply is decided by an exception: the sources
+  // that hold one go first, before the limit cuts them off (2026-10-27: an IT
+  // Park answer's "no confirmation is required" was not confirmed - VMQ-589,
+  // whose band 17 says exactly that, came after 14 000 characters of others)
+  if (claims.some(c => c.kind === 'absence')) {
+    const { EXCEPTION_MARK } = require('./lex-live-search');
+    const pool = chunks.filter(isEvidenceChunk);
+    for (const c of pool.filter(c => /^SAVOLGA ENG YAQIN QATOR/u.test(chunkText(c)))) add(c);
+    for (const c of pool.filter(c => EXCEPTION_MARK.test(chunkText(c)))) add(c);
+  }
   for (const c of chunks.filter(isEvidenceChunk)) add(c);
   let out = '';
   for (let i = 0; i < ordered.length; i++) {
@@ -302,7 +312,7 @@ Har bir da'voning "kind" maydoni bor:
 - absence: da'vo "qonunda bunday norma yo'q / nazarda tutilmagan" deydi.
 
 Har bir da'vo uchun faqat MANBALAR matniga qarab hukm chiqaring:
-- "supported": manbada aynan shu qiymat (muddat, summa, foiz, stavka) aynan shu holatga va aynan shu taraflarga nisbatan aytilgan; basis uchun - keltirilgan modda matni aynan shu vaziyatga va shu taraflarga tegishli va da'vo uni to'g'ri bayon qilgan; absence uchun - manbaning o'zi bunday norma yo'qligini yoki istisnoni aniq aytgan.
+- "supported": manbada aynan shu qiymat (muddat, summa, foiz, stavka) aynan shu holatga va aynan shu taraflarga nisbatan aytilgan; basis uchun - keltirilgan modda matni aynan shu vaziyatga va shu taraflarga tegishli va da'vo uni to'g'ri bayon qilgan; absence uchun - manbaning o'zi bunday norma yo'qligini yoki istisnoni aniq aytgan (masalan, "...olmasdan turib ... jalb etish", "talab qilinmaydi", "ozod etiladi", "...huquqiga ega" - shu taraf uchun bo'lsa, talab yo'qligi haqidagi da'vo "supported"; "SAVOLGA ENG YAQIN QATOR" belgisi bilan berilgan qatorni ham o'qing).
 - "contradicted": manbada boshqa qiymat yoki boshqa holat/taraf uchun aytilgan, yoki da'vo taraflarni teskari yozgan (masalan, kim kimga zarar yetkazgani, kim talab qilayotgani almashgan), yoki hisoblash usuli manbadagidan farq qiladi; basis uchun - modda boshqa subyekt yoki boshqa holatga oid (masalan, savoldagi ish beruvchi yuridik shaxs, modda esa yakka tartibdagi tadbirkor ish beruvchi haqida), yoki da'vo modda mazmunini noto'g'ri bayon qilgan; absence uchun - manbada shu masala bo'yicha norma bor.
 - "not_found": manbada bu da'voni tasdiqlaydigan yoki rad etadigan norma yo'q. absence da'vosi manbada norma topilmagani uchungina "supported" bo'lmaydi - u "not_found".
 
@@ -453,10 +463,21 @@ function unverifiedBlock(withheld = [], lang = 'uz', needsFacts = [], { noCalc =
       : `⚠️ ${topic}: norma manbada bor${refs ? ` (${refs})` : ''}, lekin javobdagi aniq ${value} uning matnida tasdiqlanmadi, shuning uchun olib tashlandi.${method}`);
   }
   if (wrong.length) lines.push(ru ? `⚠️ Не соответствует тексту источника, убрано из ответа: ${wrong.join('; ')}.` : `⚠️ Manba matniga mos kelmadi, javobdan olib tashlandi: ${wrong.join('; ')}.`);
-  if (missing.length) {
+  // a claim that a rule does not apply carries no value to withhold: the
+  // notice names the claim, not a missing figure (2026-10-27: "Manbada
+  // tasdiqlanmadi: IT park rezidentlariga tasdiqnoma talabi ... aniq qiymat
+  // keltirilmaydi" under an answer saying no confirmation is required)
+  const absent = uniq(rest.filter(w => !w.normFound && w.kind === 'absence'));
+  if (absent.length) {
     lines.push(ru
-      ? `⚠️ Не подтверждено источником: ${missing.join('; ')}. Норма не найдена в просмотренных источниках — это не значит, что в законе её нет; точное значение не приводится, пока норма не проверена по тексту закона.`
-      : `⚠️ Manbada tasdiqlanmadi: ${missing.join('; ')}. Norma ko'rib chiqilgan manbalarda topilmadi — bu qonunda yo'q degani emas; qonun matnida tekshirilmaguncha aniq qiymat keltirilmaydi.`);
+      ? `⚠️ Утверждение ответа, что нормы нет или она не применяется (${absent.join('; ')}), просмотренными источниками не подтверждено - это не значит, что в законе её нет. Проверьте его по тексту акта с юристом.`
+      : `⚠️ Javobdagi «bunday norma yo'q yoki qo'llanmaydi» degan gap (${absent.join('; ')}) ko'rib chiqilgan manbalarda tasdiqlanmadi — manbada topilmagani bu qonunda yo'q degani emas. Uni akt matni bo'yicha yurist bilan tekshiring.`);
+  }
+  const missingValues = missing.filter(t => !absent.includes(t));
+  if (missingValues.length) {
+    lines.push(ru
+      ? `⚠️ Не подтверждено источником: ${missingValues.join('; ')}. Норма не найдена в просмотренных источниках — это не значит, что в законе её нет; точное значение не приводится, пока норма не проверена по тексту закона.`
+      : `⚠️ Manbada tasdiqlanmadi: ${missingValues.join('; ')}. Norma ko'rib chiqilgan manbalarda topilmadi — bu qonunda yo'q degani emas; qonun matnida tekshirilmaguncha aniq qiymat keltirilmaydi.`);
   }
   if (noCalc) {
     lines.push(ru

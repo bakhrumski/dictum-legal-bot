@@ -744,7 +744,7 @@ function stubMemory(clarifyCount = 0) {
     agent.initTelegramAgent(d);
     const r = await agent.handleUserMessage({ chatId: 1, text: "Ish beruvchi meni ishdan bo'shatdi." });
     assert.doesNotMatch(r.reply, /Manbalar/);
-    assert.match(r.reply, /\[\*\*Mehnat kodeksi, 100-modda, tegishli qism\*\*\]\(https:\/\/lex\.uz/u);
+    assert.match(r.reply, /\[\*\*Mehnat kodeksi, 100-modda\*\*\]\(https:\/\/lex\.uz/u);
     assert.doesNotMatch(r.reply, /Ma'muriy sud ishlarini yuritish kodeksi/);
     assert.doesNotMatch(r.reply, /Fuqarolik kodeksi/);
   });
@@ -784,8 +784,8 @@ function stubMemory(clarifyCount = 0) {
     });
     agent.initTelegramAgent(d);
     const r = await agent.handleUserMessage({ chatId: 1, text: "Yo'l harakati jarimasiga qanday shikoyat qilaman?" });
-    assert.match(r.reply, /\[\*\*Ma'muriy javobgarlik to'g'risidagi kodeks, 128-modda, tegishli qism\*\*\]/u);
-    assert.match(r.reply, /\[\*\*Ma'muriy sud ishlarini yuritish kodeksi, 126-modda, tegishli qism\*\*\]/u);
+    assert.match(r.reply, /\[\*\*Ma'muriy javobgarlik to'g'risidagi kodeks, 128-modda\*\*\]/u);
+    assert.match(r.reply, /\[\*\*Ma'muriy sud ishlarini yuritish kodeksi, 126-modda\*\*\]/u);
   });
 
   await test('Telegram links every distinct article applied in Tahlil', async () => {
@@ -806,8 +806,8 @@ function stubMemory(clarifyCount = 0) {
     });
     agent.initTelegramAgent(d);
     const r = await agent.handleUserMessage({ chatId: 1, text: 'Shartnomani qanday o\'zgartirish mumkin?' });
-    assert.match(r.reply, /Fuqarolik kodeksi, 382-modda, tegishli qism/u);
-    assert.match(r.reply, /Fuqarolik kodeksi, 384-modda, tegishli qism/u);
+    assert.match(r.reply, /Fuqarolik kodeksi, 382-modda/u);
+    assert.match(r.reply, /Fuqarolik kodeksi, 384-modda/u);
     assert.doesNotMatch(r.reply, /Iqtisodiy protsessual kodeksi/u);
   });
 
