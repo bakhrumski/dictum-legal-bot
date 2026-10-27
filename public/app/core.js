@@ -269,32 +269,44 @@
       text = text.slice(0, foot.index);
     }
     var lines = J.esc(text).split('\n'), out = [], i = 0;
+    // a link's own text: inline marks kept inside it, a stray "**" dropped; the
+    // source list and the cite title get plain text (2026-10-27: "<b>Mehnat
+    // kodeksi..." and "</b>...1-qism**" showed in the source chips)
     function links(s) {
       return s.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, function (m, t, u) {
         var url = u.replace(/&amp;/g, '&');
-        if (/lex\.uz/i.test(url)) { var n = addSrc(t, url); return '<a href="' + J.esc(url) + '" target="_blank" rel="noopener">' + t + '</a><a class="cite" href="#" data-src="' + n + '" title="' + t + '">' + n + '</a>'; }
-        return '<a href="' + J.esc(url) + '" target="_blank" rel="noopener">' + t + '</a>';
+        var shown = inline(t).replace(/\*\*/g, '');
+        var plain = shown.replace(/<[^>]*>/g, '').trim();
+        if (/lex\.uz/i.test(url)) { var n = addSrc(plain, url); return '<a href="' + J.esc(url) + '" target="_blank" rel="noopener">' + shown + '</a><a class="cite" href="#" data-src="' + n + '" title="' + plain + '">' + n + '</a>'; }
+        return '<a href="' + J.esc(url) + '" target="_blank" rel="noopener">' + shown + '</a>';
       });
     }
-    function para(buf) { if (buf.length) out.push('<p>' + links(inline(buf.join('<br>'))) + '</p>'); }
+    // links are set aside before bold / italic, so a "**" outside a link never
+    // pairs with one inside it, then put back
+    function rich(s) {
+      var kept = [];
+      var held = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, function (m) { kept.push(m); return '\u0000' + (kept.length - 1) + '\u0000'; });
+      return inline(held).replace(/\u0000(\d+)\u0000/g, function (m, k) { return links(kept[+k]); });
+    }
+    function para(buf) { if (buf.length) out.push('<p>' + rich(buf.join('<br>')) + '</p>'); }
     var buf = [];
     while (i < lines.length) {
       var l = lines[i];
       var hm = l.match(/^(#{1,6})\s+(.*)$/);
       if (/^\s*$/.test(l)) { para(buf); buf = []; i++; continue; }
-      if (hm) { para(buf); buf = []; var lv = Math.min(4, Math.max(2, hm[1].length)); out.push('<h' + lv + '>' + links(inline(hm[2])) + '</h' + lv + '>'); i++; continue; }
+      if (hm) { para(buf); buf = []; var lv = Math.min(4, Math.max(2, hm[1].length)); out.push('<h' + lv + '>' + rich(hm[2]) + '</h' + lv + '>'); i++; continue; }
       if (/^\s*(---|\*\*\*)\s*$/.test(l)) { para(buf); buf = []; out.push('<hr>'); i++; continue; }
       if (/^\s*&gt;\s?/.test(l)) {
         para(buf); buf = []; var q = [];
         while (i < lines.length && /^\s*&gt;\s?/.test(lines[i])) { q.push(lines[i].replace(/^\s*&gt;\s?/, '')); i++; }
-        out.push('<blockquote>' + links(inline(q.join('<br>'))) + '</blockquote>'); continue;
+        out.push('<blockquote>' + rich(q.join('<br>')) + '</blockquote>'); continue;
       }
       if (/^\s*\|.*\|\s*$/.test(l) && i + 1 < lines.length && /^\s*\|?\s*:?-{2,}/.test(lines[i + 1])) {
         para(buf); buf = [];
         var head = l.trim().replace(/^\||\|$/g, '').split('|'); i += 2; var rows = [];
         while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) { rows.push(lines[i].trim().replace(/^\||\|$/g, '').split('|')); i++; }
-        out.push('<div class="tbl-wrap"><table><thead><tr>' + head.map(function (c) { return '<th>' + links(inline(c.trim())) + '</th>'; }).join('') + '</tr></thead><tbody>' +
-          rows.map(function (r) { return '<tr>' + r.map(function (c) { return '<td>' + links(inline(c.trim())) + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table></div>');
+        out.push('<div class="tbl-wrap"><table><thead><tr>' + head.map(function (c) { return '<th>' + rich(c.trim()) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+          rows.map(function (r) { return '<tr>' + r.map(function (c) { return '<td>' + rich(c.trim()) + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table></div>');
         continue;
       }
       if (/^\s*([-*•]|\d+[.)])\s+/.test(l)) {
@@ -302,7 +314,7 @@
         var ordered = /^\s*\d+[.)]\s+/.test(l), items = [];
         while (i < lines.length && /^\s*([-*•]|\d+[.)])\s+/.test(lines[i])) { items.push(lines[i].replace(/^\s*([-*•]|\d+[.)])\s+/, '')); i++; }
         var tag = ordered ? 'ol' : 'ul';
-        out.push('<' + tag + '>' + items.map(function (x) { return '<li>' + links(inline(x)) + '</li>'; }).join('') + '</' + tag + '>');
+        out.push('<' + tag + '>' + items.map(function (x) { return '<li>' + rich(x) + '</li>'; }).join('') + '</' + tag + '>');
         continue;
       }
       buf.push(l); i++;
