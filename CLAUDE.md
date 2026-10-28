@@ -600,13 +600,25 @@ Known state of the suites (Sept 2026):
   is a failed row), each cell's quote checked word for word in the document
   (page from `[Sahifa n]`; unverified cells keep the answer, marked) - a found
   quote proves the words are there, not that the answer is right. Route
-  `POST /api/agent/tabular-review` (6 MB body): one `chat` unit per document,
+  `POST /api/agent/tabular-review`: one `chat` unit per document,
   reserved together (`reserveMany`), committed per row read, released per
   row failed. Page `/app/#/jadval` (`public/app/tabular.js`, CSV export);
   a scan goes through the shared OCR step (`J.readFile` -> scan-quote ->
   confirmed ocr-image, service `chat`: the OCR pages from the plan's pool)
   and is sent as `scanId` (this account's only, from `document_scans`;
-  `=== PAGE n ===` marks give the page). Third workflow (2026-10-22):
+  `=== PAGE n ===` marks give the page). Stage 2 (2026-10-28): up to 100
+  documents (`TABULAR_MAX_DOCS`, <= 200), 20 MB body; the run keeps the
+  columns and each document's excerpt only (`prepareInput`); extraction is
+  one checkpointed step per 10 documents; the run carries its own AI limits
+  (docs + 8 calls, $0.05 a document, min $1, `TABULAR_RUN_USD_PER_DOC`; 15 s
+  a document, <= 20 min); a run stopped by its limits or a cancel shows and
+  charges the rows it read and releases the rest (`verifyRows`); a `choice`
+  column (2-8 options, an answer outside them is "Topilmadi"); row tags in
+  the run's result (`PUT /api/agent/runs/:id/tags`); Excel `POST
+  /api/agent/tabular-review/export` (`tabular-export.js`, every cell text,
+  never a formula); the page reads files 3 at a time, sends more than 10
+  documents `async` and follows them at `#/jadval/<runId>`. Not yet run on
+  100 real documents with live AI. Third workflow (2026-10-22):
   `src/agents/workflows/playbook-review.js` - a contract against a firm's
   own rules (not the law): clauses matching the rules (`selectExcerpt`), one
   AI call (mos / farq / yoq / noaniq, the clause's words, a note, a proposed

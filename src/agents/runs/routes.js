@@ -8,6 +8,7 @@
  *   GET  /api/agent/runs/:id             status, steps, and the result once it ended
  *   GET  /api/agent/runs/:id/events      SSE: `step` for each new or changed step, `done` with the result
  *   POST /api/agent/runs/:id/cancel      a queued run ends now, a running one before its next step
+ *   PUT  /api/agent/runs/:id/tags        a finished table's row tags { tags: { d1: ['muhim'] } }
  *
  * The SSE stream reads the database (the run may be worked by another
  * process after a deploy), every `pollMs`, with a heartbeat every 25 s, and
@@ -15,6 +16,7 @@
  */
 
 const { TERMINAL } = require('./store');
+const { normTags } = require('../workflows/tabular-export');
 
 function mountRunRoutes(app, { requireAuth, requireSameOrigin, store, pollMs = 1500, maxStreamMs = 20 * 60 * 1000, kick = null }) {
   const notFound = res => res.status(404).json({ error: 'not_found', message: 'Agent ishi topilmadi' });
@@ -42,6 +44,13 @@ function mountRunRoutes(app, { requireAuth, requireSameOrigin, store, pollMs = 1
     if (!r) return notFound(res);
     if (kick) kick();
     res.json({ id: r.id, status: r.status, cancelRequested: !TERMINAL.includes(r.status) });
+  }));
+
+  app.put('/api/agent/runs/:id/tags', requireSameOrigin, requireAuth, safe(async (req, res) => {
+    if (typeof store.setTags !== 'function') return notFound(res);
+    const tags = normTags(req.body && req.body.tags);
+    if (!(await store.setTags(req.params.id, me(req), tags))) return notFound(res);
+    res.json({ tags });
   }));
 
   app.get('/api/agent/runs/:id/events', requireAuth, safe(async (req, res) => {

@@ -338,8 +338,8 @@ app.use(cors((req, cb) => {
 // Body limits: uploads go through multer (multipart), so no JSON route needs
 // more than a couple of MB. The previous global 50mb limit was a memory-DoS
 // vector — any authed user could post 50MB JSON at every endpoint.
-// tabular review sends the text of up to 20 documents (src/agents/workflows/tabular-review.js)
-app.use('/api/agent/tabular-review', express.json({ limit: '6mb' }));
+// tabular review sends the text of up to 100 documents (src/agents/workflows/tabular-review.js)
+app.use('/api/agent/tabular-review', express.json({ limit: '20mb' }));
 app.use('/api/agent/playbook-review', express.json({ limit: '3mb' }));
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
