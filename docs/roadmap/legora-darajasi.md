@@ -79,9 +79,9 @@ Tartib va PR bo'linishi dizayn hujjatining 9-bo'limida.
   100 hujjatda sinalmagan.
 - [~] Word: playbook tahlili Word ichida (izoh va Track Changes bilan), "ishga
   saqlash". #505 merge (2026-10-28); haqiqiy Word'da sinalmagan.
-- [~] Natijalar: Excel (jadval), PowerPoint (ish bo'yicha qisqa taqdimot).
-  Jadval Excel'i #504 da. Ish taqdimoti va Excel'i PR ochildi (2026-10-28);
-  haqiqiy PowerPoint'da ochib ko'rilmagan.
+- [x] Natijalar: Excel (jadval), PowerPoint (ish bo'yicha qisqa taqdimot).
+  Jadval Excel'i #504, ish taqdimoti va Excel'i #508 (2026-10-28). Haqiqiy
+  PowerPoint'da ochib ko'rilmagan.
 
 ## 3-bosqich. Raqobat ustunligi
 
@@ -94,6 +94,10 @@ Tartib va PR bo'linishi dizayn hujjatining 9-bo'limida.
 - [ ] Firma bilim bazasi: firmaning shablonlari va avvalgi hujjatlari, qidiruv
   bilan (Workspace xotirasidan kengaytiriladi); jamoaviy prompt va ko'nikma
   kutubxonasi.
+- [ ] Adaptiv akkaunt va platformaning o'zini yaxshilashi (egasi, 2026-10-28):
+  dizayn `docs/design/adaptiv-akkaunt.md`, PR A1-A8. Egasi 9-bo'limdagi
+  savollarga javob bermaguncha kod yozilmaydi. Birinchi qismi: shaxsiy ovoz
+  glossariysi (#507).
 
 ## 4-bosqich. Korporativ daraja
 
@@ -207,3 +211,8 @@ nima o'lchandi.
     bog'liq, shuning uchun qo'shilmadi.
   - `python-pptx` o'qidi, LibreOffice Impress ochdi va PDF'ga aylantirdi.
     Haqiqiy PowerPoint'da ochib ko'rilmagan.
+- 2026-10-28: #507 (shaxsiy glossariy, migratsiya 021) va #508 (ish taqdimoti
+  va Excel) merge. #507 CI'da Workspace to'plami yiqilgan edi: migratsiyalar
+  ro'yxatini tekshiradigan testga 021 qo'shilmagan; qo'shildi. #508 #507
+  ustiga rebase qilindi (versiya qatorlari). Adaptiv akkaunt dizayn hujjati
+  ochildi (`docs/design/adaptiv-akkaunt.md`, egasining savollari 9-bo'limda).

@@ -71,6 +71,13 @@ Known state of the suites (Sept 2026):
   and PRs. Tick it and add a journal line with every merge. The current
   design is `docs/design/matter-va-agent-runs.md` (Matter, `agent_runs`, the
   planner agent); no code starts until the owner answers its section 8.
+  Adaptive account and self-improvement (2026-10-28, owner): design
+  `docs/design/adaptiv-akkaunt.md` (draft) - personal adaptation (profile
+  from text-free signals, visible and editable, matter facts the person
+  confirmed) apart from platform improvement (only through a lawyer queue
+  and the reviewed evaluation set); sources and the claim guard never
+  adapt, no fine-tuning on user data. No code until the owner answers its
+  section 9.
 
 ## Layout
 
