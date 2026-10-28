@@ -238,7 +238,8 @@ function playbookService({ callAI, ledger, pool, budget = {} }) {
         return fail(503, { error: 'quota_unavailable', message: "Limitni hozir tekshirib bo'lmadi" });
       }
       if (!job.allowed) return fail(402, { error: 'no_units', message: `Bu shartnoma uchun ${size.units} ta tahlil birligi kerak, limit yetarli emas.`, needed: size.units });
-      return { input, ctx: { units: size.units, unlimited: !!job.unlimited }, jobs: job.jobKey ? [{ jobKey: job.jobKey, service: 'analysis', adopted: !!job.adopted }] : [] };
+      const pbKey = req.body && req.body.builtin && playbook.BUILTIN[String(req.body.builtin)] ? String(req.body.builtin) : 'own';
+      return { input, ctx: { units: size.units, unlimited: !!job.unlimited, playbook: pbKey }, jobs: job.jobKey ? [{ jobKey: job.jobKey, service: 'analysis', adopted: !!job.adopted }] : [] };
     },
     async run(prep, opts = {}) {
       try {

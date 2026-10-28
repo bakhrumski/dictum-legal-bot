@@ -76,8 +76,18 @@ Known state of the suites (Sept 2026):
   from text-free signals, visible and editable, matter facts the person
   confirmed) apart from platform improvement (only through a lawyer queue
   and the reviewed evaluation set); sources and the claim guard never
-  adapt, no fine-tuning on user data. No code until the owner answers its
-  section 9.
+  adapt, no fine-tuning on user data. Accepted (#509); the owner's answers
+  are in its section 9. PR A1 (2026-10-28): migration 022 (`user_signals`,
+  `user_profile`), `src/adaptive/profile.js` - a signal is a code only
+  (area, lex.uz act id + title, script, lang, service, built-in playbook
+  key), never the text of a question, answer or document; recorded after a
+  web-chat reply is sent (`answerRecorder` on `/api/legal-chat`; the route
+  only sets `res.locals.answerTopic`), after a delivered Telegram answer to a
+  linked account, and when an agent run ends done; the profile is computed
+  with no AI (half-life 60 days, signals kept `USER_SIGNALS_DAYS` 180,
+  `manual` wins, `paused` records nothing, `ADAPTIVE=off`); account deletion
+  removes it; `GET /api/adaptive/profile` reads one's own. Nothing uses the
+  profile yet (A2 page, A3 UI, A6/A7 answer and search later).
 
 ## Layout
 

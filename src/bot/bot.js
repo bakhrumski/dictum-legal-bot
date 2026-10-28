@@ -2086,6 +2086,15 @@ async function handleTelegramMessage(msg) {
           // configured voice). Sent in the background: the text answer is
           // already delivered, and a TTS failure must not touch it or the
           // quota bookkeeping below.
+          // the linked account's adaptive profile records the answer's area and acts as codes (src/adaptive/profile.js)
+          if (agentReplyDelivered && agentResult.action === 'answered') {
+            telegramIdentity(msg).then((ident) => {
+              if (!ident || !ident.adminId) return;
+              const p = require('../adaptive/profile');
+              return p.profileStore().record(ident.adminId, p.answerSignals({ question: requestData.request_text, answer: agentResult.reply,
+                topic: agentResult.meta && agentResult.meta.topic, channel: 'telegram' }), { channel: 'telegram' });
+            }).catch(() => {});
+          }
           // a legal answer also lands in the linked web account's chat history
           if (agentReplyDelivered && agentResult.action === 'answered') {
             telegramIdentity(msg).then((ident) => ident && ident.adminId

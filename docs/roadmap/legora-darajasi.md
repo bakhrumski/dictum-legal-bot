@@ -94,10 +94,10 @@ Tartib va PR bo'linishi dizayn hujjatining 9-bo'limida.
 - [ ] Firma bilim bazasi: firmaning shablonlari va avvalgi hujjatlari, qidiruv
   bilan (Workspace xotirasidan kengaytiriladi); jamoaviy prompt va ko'nikma
   kutubxonasi.
-- [ ] Adaptiv akkaunt va platformaning o'zini yaxshilashi (egasi, 2026-10-28):
-  dizayn `docs/design/adaptiv-akkaunt.md`, PR A1-A8. Egasi 9-bo'limdagi
-  savollarga javob bermaguncha kod yozilmaydi. Birinchi qismi: shaxsiy ovoz
-  glossariysi (#507).
+- [~] Adaptiv akkaunt va platformaning o'zini yaxshilashi (egasi, 2026-10-28):
+  dizayn `docs/design/adaptiv-akkaunt.md` (#509, qabul qilingan), PR A1-A8.
+  Birinchi qismi: shaxsiy ovoz glossariysi (#507). A1 (signallar va profil)
+  PR ochildi.
 
 ## 4-bosqich. Korporativ daraja
 
@@ -216,3 +216,14 @@ nima o'lchandi.
   ro'yxatini tekshiradigan testga 021 qo'shilmagan; qo'shildi. #508 #507
   ustiga rebase qilindi (versiya qatorlari). Adaptiv akkaunt dizayn hujjati
   ochildi (`docs/design/adaptiv-akkaunt.md`, egasining savollari 9-bo'limda).
+- 2026-10-28: #509 (adaptiv dizayn) merge. Egasining javoblari: standart
+  yoqiq, A/B ha, yurist navbatini egasi ko'radi (haftasiga 5 soat), firma
+  profili ha, Telegram ha. Signallar ro'yxati va muddat A1 PR'ida ko'rsatildi.
+  A1 PR ochildi:
+  - migratsiya 022 (`user_signals`, `user_profile`), `src/adaptive/profile.js`;
+  - veb-chat (javob yuborilgandan keyin), Telegram (bog'langan akkaunt) va
+    agent run'lari signal yozadi;
+  - profil AI'siz hisoblanadi, 180 kundan eski signallar o'chadi, akkaunt
+    o'chirilganda profil ham o'chadi;
+  - `GET /api/adaptive/profile` faqat o'qish uchun. Profil hali hech qayerda
+    ishlatilmaydi.
