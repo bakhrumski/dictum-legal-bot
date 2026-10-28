@@ -60,8 +60,9 @@ Tartib va PR bo'linishi dizayn hujjatining 9-bo'limida.
 - [~] PR-D: Vositalar reestri va reja tuzuvchi agent. Avval faqat master
   uchun (`AGENT_PLANNER=master`). Reja va narxni tasdiqlash shu PR'da
   (PR-E'dan oldinga olindi).
-- [ ] PR-V: Ishlarni ovoz bilan boshqarish: Telegram'da ulangan akkaunt
-  orqali va ilova ichida (egasi, 2026-10-28).
+- [~] PR-V: Ishlarni ovoz bilan boshqarish: Telegram'da ulangan akkaunt
+  orqali va ilova ichida (egasi, 2026-10-28). `src/matters/commands.js`.
+  Keyingi qadam: ovoz bilan agent topshirig'i (reja → tasdiq) - PR-F bilan.
 - [ ] PR-E: Parallel qadamlar, `needs_input`
   dan keyin davom ettirish.
 - [ ] PR-F: Telegram: ish holati bitta xabarda yangilanadi, tasdiq tugmalari.
@@ -122,3 +123,11 @@ nima o'lchandi.
   (8) va `tests/agent-planner.db.test.js` (5) o'tdi; ish sahifasidagi agent
   kartasi stub javoblar bilan 1280 / 390 px'da tekshirildi. Haqiqiy AI bilan
   hali ishga tushirilmadi (bu yerda kalit yo'q).
+- 2026-10-28: PR-V ochildi: ishlar uchun ovozli va matnli buyruqlar (uz / ru):
+  ro'yxat, yangi ish, yozuv, ko'rsatish, yopish va qayta ochish (tasdiq
+  bilan). Telegram'da (ulangan akkaunt, ovozli xabar STT orqali) va
+  ilovada (🎙 tugma, diktovka). `tests/matter-commands.test.js` (6): test
+  fayllaridagi 6 384 ta satrdan birortasi buyruq deb olinmadi.
+  `tests/matters.db.test.js`ga route testi qo'shildi (8). Ilova 1280 / 390
+  px'da Chromium soxta mikrofoni bilan tekshirildi (STT stub). Haqiqiy
+  Telegram va haqiqiy STT bilan sinalmagan.

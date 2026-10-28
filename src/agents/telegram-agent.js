@@ -27,6 +27,13 @@
  */
 
 const { pool } = require('../database/db');
+// the matter store for matter commands (one per process) and the matter each chat last worked in
+let matterStoreInstance = null;
+function matterStore() {
+  if (!matterStoreInstance) matterStoreInstance = require('../matters/store').createMatterStore({ db: pool, resolveEntitlement: require('../rag/tariff-ledger').resolveEntitlement });
+  return matterStoreInstance;
+}
+const lastMatterByChat = new Map();
 const {
   extractAnalysisSection,
   selectRelevantSourceRefs,
@@ -381,6 +388,11 @@ function classifyDeterministicIntent(text) {
   if (HELP_RE.test(t))     return { intent: 'noaniq', missing: ['Qanday huquqiy muammo yoki vaziyat bo\'yicha yordam kerak?'] };
   if (DOCUMENT_RE.test(t)) return { intent: 'hujjat_tayyorlash', missing: [] };
   if (ATTORNEY_RE.test(t)) return { intent: 'advokat_kerak', missing: [] };
+  // a matter command, typed or spoken (src/matters/commands.js): anchored phrases, no AI
+  if (String(process.env.MATTERS || '').toLowerCase() !== 'off') {
+    const command = require('../matters/commands').parseCommand(t);
+    if (command) return { intent: 'ish_amal', command, missing: [] };
+  }
   // an account action the bot does itself (src/agents/account-tools.js)
   const tool = require('./account-tools').detectAccountAction(t);
   if (tool) return { intent: 'hisob_amal', action: tool, missing: [] };
@@ -1183,6 +1195,32 @@ Agar texnik uzilish yuz bersa, limitingiz avtomatik tiklanadi.`,
       console.warn('[TG-AGENT] account tool failed:', intent.action, e.message);
       const reply = toolLang === 'ru' ? 'Не удалось получить данные аккаунта. Попробуйте чуть позже или откройте приложение.' : "Akkaunt ma'lumotini hozir olib bo'lmadi. Birozdan keyin qayta urinib ko'ring yoki ilovani oching.";
       return complete({ handled: true, reply, action: 'tool_failed', escalate: false, meta: { intent: intent.intent, tool: intent.action } });
+    }
+  }
+
+  // ── Matters by voice or text (src/matters/commands.js): the linked account's
+  // own matters through the matter store; closing or reopening is confirmed
+  // with a button (src/bot/bot.js mtc_). No AI call, no quota.
+  if (intent.intent === 'ish_amal' && intent.command) {
+    const commands = require('../matters/commands');
+    const cmdLang = /[\u0400-\u04ff]/u.test(question) ? 'ru' : 'uz';
+    try {
+      const account = await require('../bot/telegram-roles').getLinkedAccount(pool, chatId, who && who.telegramUserId != null && Number(chatId) > 0 ? who.telegramUserId : null);
+      if (!account) {
+        const reply = commands.texts(cmdLang).noLink;
+        await remember(reply, 0);
+        return complete({ handled: true, reply, action: 'matter_no_link', escalate: false, meta: { intent: intent.intent } });
+      }
+      const store = matterStore();
+      const out = await commands.runCommand(intent.command, { adminId: account.id, store, lang: cmdLang, lastId: lastMatterByChat.get(String(chatId)) || null });
+      if (out.matterId) lastMatterByChat.set(String(chatId), out.matterId);
+      await remember(out.reply, 0);
+      return complete({ handled: true, reply: out.reply, action: out.confirm ? 'tool_matter_confirm' : out.action, escalate: false,
+        meta: { intent: intent.intent, command: intent.command.action, lang: cmdLang, token: out.confirm ? out.confirm.token : undefined } });
+    } catch (e) {
+      console.warn('[TG-AGENT] matter command failed:', intent.command.action, e.message);
+      const reply = e && e.status && e.message ? e.message : (cmdLang === 'ru' ? 'Не удалось выполнить команду. Попробуйте ещё раз.' : "Buyruqni bajarib bo'lmadi. Qayta urinib ko'ring.");
+      return complete({ handled: true, reply, action: 'matter_failed', escalate: false, meta: { intent: intent.intent } });
     }
   }
 

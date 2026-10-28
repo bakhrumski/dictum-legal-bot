@@ -65,6 +65,7 @@ const CASES = [
   ['POST', '/api/agent/claim-draft', REJECTED, 'agent: claim draft'],
   ['POST', '/api/agent/tabular-review', REJECTED, 'agent: tabular review'],
   ['POST', '/api/agent/plan', REJECTED, 'agent: plan a task'],
+  ['POST', '/api/matters/command', REJECTED, 'matters: a voice or typed command'],
   ['POST', '/api/agent/runs/00000000-0000-0000-0000-000000000000/approve', REJECTED, 'agent: approve a plan'],
 
   // ── staff-only ──

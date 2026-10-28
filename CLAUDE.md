@@ -653,6 +653,17 @@ Known state of the suites (Sept 2026):
   `planned` executor runs the steps; the chat unit is committed only with a
   verified answer). `AGENT_PLANNER` master (default) / gold / all / off. UI:
   the "Agent topshirig'i" card on a matter page (master only for now).
+- Matter commands by voice or text (2026-10-28, owner): `src/matters/commands.js`
+  - anchored uz / ru phrases (no AI, <= 300 chars: "ishlarim", "yangi ish och:
+  …", "<ish> ishiga yozuv: …", "<ish> ishini ko'rsat / yop / qayta och",
+  "мои дела", "новое дело: …"); a matter is found by its words, an unknown or
+  ambiguous name is asked about, never guessed; close / reopen need a
+  confirmation (a 10-minute token of that account, used once, in memory).
+  Telegram: `classifyDeterministicIntent` -> `ish_amal` (typed, or a voice
+  note after STT), the linked account of any role, buttons `mtc_y_` / `mtc_n_`
+  in bot.js. App: `POST /api/matters/command` and the command bar with 🎙
+  (dictation) on the Ishlar pages. No AI, no unit; `MATTERS=off` stops it.
+  `tests/matter-commands.test.js` scans every string in tests/ for false hits.
 - `src/workspace/` — Platinum Workspace: routes, authz, Supabase
   realtime/storage, Workspace AI.
 - `public/` — static pages: `index.html` (landing), `login.html`,

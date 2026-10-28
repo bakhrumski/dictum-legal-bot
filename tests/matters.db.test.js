@@ -229,6 +229,29 @@ async function http(a, method, url, body) {
     assert.strictEqual(r.rows[0].n, 0);
   });
 
+  await test('commands: create, a note to the matter on screen, close confirmed by its own account only; a non-command is 422', async () => {
+    const owner = await makeUser('silver');
+    const other = await makeUser('silver');
+    let who = owner;
+    const a = app(() => who);
+    const made = await http(a, 'POST', '/api/matters/command', { text: 'Yangi ish och: Ijara nizosi' });
+    assert.deepStrictEqual([made.status, made.body.action], [200, 'matter_created']);
+    const id = made.body.matterId;
+    const noted = await http(a, 'POST', '/api/matters/command', { text: "Yozuv qo'sh: ijarachi to'lovni kechiktirdi", lastMatterId: id });
+    assert.strictEqual(noted.body.action, 'matter_noted');
+    assert.strictEqual((await store.get(id, owner)).items[0].note, "ijarachi to'lovni kechiktirdi");
+    const ask = await http(a, 'POST', '/api/matters/command', { text: 'ijara ishini yop' });
+    assert.strictEqual(ask.body.action, 'matter_confirm');
+    assert.strictEqual((await store.get(id, owner)).status, 'open', 'not closed before the confirmation');
+    who = other;
+    assert.strictEqual((await http(a, 'POST', '/api/matters/command', { confirm: ask.body.confirm.token })).body.action, 'matter_confirm_expired');
+    assert.strictEqual((await http(a, 'POST', '/api/matters/command', { text: 'ijara ishini yop' })).body.action, 'matter_not_found', "another account's matter is not found by name");
+    who = owner;
+    assert.strictEqual((await http(a, 'POST', '/api/matters/command', { confirm: ask.body.confirm.token })).body.action, 'matter_closed');
+    assert.strictEqual((await store.get(id, owner)).status, 'closed');
+    assert.strictEqual((await http(a, 'POST', '/api/matters/command', { text: 'Ijara shartnomasi qachon bekor qilinadi?' })).status, 422);
+  });
+
   await test('MATTERS=off answers 503', async () => {
     const owner = await makeUser('silver');
     process.env.MATTERS = 'off';

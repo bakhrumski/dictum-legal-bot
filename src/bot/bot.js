@@ -585,6 +585,14 @@ function agentActionKeyboard(agentResult) {
       { text: ru ? 'Отмена' : 'Bekor qilish', callback_data: 'acc_del_no' },
     ]] };
   }
+  // a matter closed or reopened by voice or text is confirmed first (src/matters/commands.js)
+  if (agentResult.action === 'tool_matter_confirm' && agentResult.meta && agentResult.meta.token) {
+    const ru = agentResult.meta.lang === 'ru';
+    return { inline_keyboard: [[
+      { text: ru ? '✅ Да' : '✅ Ha', callback_data: `mtc_y_${agentResult.meta.token}` },
+      { text: ru ? 'Отмена' : 'Bekor qilish', callback_data: `mtc_n_${agentResult.meta.token}` },
+    ]] };
+  }
   if (agentResult.action === 'attorney_intake_started') return attorneyFieldKeyboard();
   if (agentResult.action === 'document_intake_started') return documentTypeKeyboard();
   if (agentResult.action === 'greeting' || agentResult.action === 'intake_cancelled') return serviceKeyboard();
@@ -871,6 +879,29 @@ async function handleCallbackQuery(callbackQuery) {
   }
 
   // account deletion: the confirmation of a request asked in the chat
+  if (data.startsWith('mtc_y_') || data.startsWith('mtc_n_')) {
+    const commands = require('../matters/commands');
+    const token = data.slice(6);
+    const ru = /[\u0400-\u04ff]/u.test(String(callbackQuery.message && callbackQuery.message.text || ''));
+    try {
+      const account = await require('./telegram-roles').getLinkedAccount(pool, chatId, require('./telegram-roles').privateSenderId(callbackQuery));
+      if (!account) throw new Error('not linked');
+      if (data.startsWith('mtc_n_')) {
+        commands.cancelConfirm(token, account.id);
+        await bot.answerCallbackQuery(callbackQuery.id, { text: ru ? 'Отменено' : 'Bekor qilindi' }).catch(() => {});
+        return;
+      }
+      const store = require('../matters/store').createMatterStore({ db: pool, resolveEntitlement: require('../rag/tariff-ledger').resolveEntitlement });
+      const out = await commands.confirmCommand(token, { adminId: account.id, store, lang: ru ? 'ru' : 'uz' });
+      await bot.answerCallbackQuery(callbackQuery.id).catch(() => {});
+      await bot.sendMessage(chatId, out.reply).catch(() => {});
+    } catch (error) {
+      console.warn('[BOT] matter confirm failed:', error.message);
+      await bot.answerCallbackQuery(callbackQuery.id, { text: ru ? 'Не удалось' : "Bajarib bo'lmadi", show_alert: true }).catch(() => {});
+    }
+    return;
+  }
+
   if (data === 'acc_del_yes' || data === 'acc_del_no') {
     const ru = /[\u0400-\u04ff]/u.test(String(callbackQuery.message && callbackQuery.message.text || ''));
     if (data === 'acc_del_no') {
