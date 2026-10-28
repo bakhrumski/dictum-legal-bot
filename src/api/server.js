@@ -11617,6 +11617,13 @@ async function runMigrations() {
       });
       if (runStore) {
         require('../agents/runs/routes').mountRunRoutes(app, { requireAuth, requireSameOrigin: sameOrigin, store: runStore, kick: runs.kick });
+        // the planner agent (PR-D): a checked plan, approved with its price, run by the worker
+        const tariffLedger = require('../rag/tariff-ledger');
+        const plannerMatters = require('../matters/store').createMatterStore({ db: pool, resolveEntitlement: tariffLedger.resolveEntitlement });
+        executors.planned = require('../agents/planner-routes').mountPlannerRoutes(app, {
+          requireAuth, requireSameOrigin: sameOrigin, pool, ledger: tariffLedger, runs, matters: plannerMatters, callCheapAI,
+          deps: { callAI, callCheapAI, retrieve: (query, topic) => retrieveLegalContext(query, topic, null, {}) },
+        }).executor;
         agentRunWorker = require('../agents/runs/worker').createRunWorker({
           store: runStore, executors, attachTestBudget: (adminId) => require('../ai/test-budget').attach(adminId),
         });

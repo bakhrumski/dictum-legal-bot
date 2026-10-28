@@ -586,3 +586,10 @@ textarea.inp{height:auto;min-height:96px;padding:10px 13px;resize:vertical;line-
   .mt-head{flex-direction:column;align-items:stretch;gap:14px}
   .mt-head>div:first-child{flex:none}
 }
+.mt-agent{margin-bottom:16px}
+.mt-agent h4{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.mt-agent textarea.inp{min-height:70px}
+.mt-agent-b{display:flex;justify-content:flex-end;margin-top:10px}
+.mt-plan-b{margin-top:14px;border-top:1px solid var(--line);padding-top:14px}
+.mt-plan-b>b{display:block;margin-bottom:10px;font-weight:500}
+.mt-vf{margin-top:12px;font-size:13px;color:var(--muted)}

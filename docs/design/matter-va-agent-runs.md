@@ -412,6 +412,31 @@ qat'iy workflow taklif qilinadi.
 - Yangi reja narxi tasdiqlanganidan oshmasligi kerak, aks holda yana tasdiq
   so'raladi.
 
+### 4.2.1 PR-D'da amalga oshirilgani (2026-10-28)
+
+- **Vositalar** (`src/agents/tools/index.js`): `matter_context`,
+  `doc_excerpt`, `lex_search`, `answer`, `verify`. `tabular`, `playbook` va
+  `draft_claim` hozircha alohida workflow sifatida qoladi, rejaga keyin
+  qo'shiladi.
+- **Reja tuzuvchi** (`src/agents/planner.js`):
+  - bitta arzon chaqiruv, bepul;
+  - server rejani mexanik tekshiradi;
+  - yaroqsiz reja bir marta xatolari bilan qayta so'raladi, keyin standart
+    reja olinadi (`source: fallback`).
+- **Route'lar** (`src/agents/planner-routes.js`):
+  - `POST /api/agent/plan`: run `awaiting_approval` holatida yaratiladi,
+    hech narsa band qilinmaydi; ish ko'rsatilsa, run unga darhol bog'lanadi;
+  - `POST /api/agent/runs/:id/approve`: narx `reserveMany` bilan band
+    qilinadi (`holdUntil`) va run navbatga qo'yiladi;
+  - bekor qilish kutayotgan rejani darhol tugatadi;
+  - 24 soat tasdiqlanmagan reja tugaydi.
+- **Kim ishlata oladi:** `AGENT_PLANNER` = `master` (standart), `gold`,
+  `all` yoki `off`.
+- **UI:** ish sahifasida "Agent topshirig'i" kartasi, hozircha faqat master
+  uchun: reja, narx, tasdiqlash, qadamlar va javob.
+- **Hisob-kitob:** birlik faqat `verify` dan o'tgan javob bilan commit
+  qilinadi, aks holda release qilinadi.
+
 ### 4.3 Parallel ijro
 
 - Harness'ga qadam turi qo'shiladi: `{ id, parallel: [step, step], limit }`.

@@ -52,14 +52,17 @@ O'zgarmas tamoyillar:
 Tartib va PR bo'linishi dizayn hujjatining 9-bo'limida.
 
 - [x] PR-A: `matters`, `matter_items` (migratsiya 019) va API (#494, 2026-10-28). UI hali yo'q.
-- [~] PR-B: `agent_runs` va `agent_run_steps` (migratsiya 020), DB'dagi
+- [x] PR-B (#495): `agent_runs` va `agent_run_steps` (migratsiya 020), DB'dagi
   navbat va worker. Mavjud 3 ta workflow run sifatida ishlaydi, eski route'lar
   javob shaklini saqlaydi.
-- [ ] PR-C: Matter UI (`/app/#/ishlar`): ro'yxat, ish sahifasi, "ishga
+- [x] PR-C (#496): Matter UI (`/app/#/ishlar`): ro'yxat, ish sahifasi, "ishga
   qo'shish" tugmalari (chat, jadval, playbook, loyiha).
-- [ ] PR-D: Vositalar reestri va reja tuzuvchi agent. Avval faqat master
-  uchun (`AGENT_PLANNER=master`).
-- [ ] PR-E: Parallel qadamlar, reja va narxni tasdiqlash, `needs_input`
+- [~] PR-D: Vositalar reestri va reja tuzuvchi agent. Avval faqat master
+  uchun (`AGENT_PLANNER=master`). Reja va narxni tasdiqlash shu PR'da
+  (PR-E'dan oldinga olindi).
+- [ ] PR-V: Ishlarni ovoz bilan boshqarish: Telegram'da ulangan akkaunt
+  orqali va ilova ichida (egasi, 2026-10-28).
+- [ ] PR-E: Parallel qadamlar, `needs_input`
   dan keyin davom ettirish.
 - [ ] PR-F: Telegram: ish holati bitta xabarda yangilanadi, tasdiq tugmalari.
 - [ ] PR-G: Agent baholash to'plami (`docs/quality/agent-eval.md`): har bir
@@ -110,3 +113,12 @@ nima o'lchandi.
   tugagan qadam qayta ishlamadi), 3 urinishdan keyin birliklar qaytishi,
   bekor qilish, bir kishiga bittadan ish, eski javob shakli. Boot smoke ham
   o'tdi: worker ishga tushdi va SIGTERM'da toza to'xtadi.
+- 2026-10-28: #495 merge (PR-B). #496 merge (PR-C, frontend): ishlar
+  ro'yxati, ish sahifasi, "Ishga qo'shish", 202 kuzatuvi; lokal server va
+  haqiqiy API bilan 1280 / 390 px'da tekshirildi; barcha modallar 390 px'da
+  ekrandan chiqmaydigan qilindi.
+- 2026-10-28: PR-D ochildi: vositalar reestri (5 ta), reja tuzuvchi, server
+  tekshiruvi, tasdiq va narx, `planned` run. `tests/agent-planner.test.js`
+  (8) va `tests/agent-planner.db.test.js` (5) o'tdi; ish sahifasidagi agent
+  kartasi stub javoblar bilan 1280 / 390 px'da tekshirildi. Haqiqiy AI bilan
+  hali ishga tushirilmadi (bu yerda kalit yo'q).
