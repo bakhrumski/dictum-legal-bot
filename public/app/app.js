@@ -12,7 +12,7 @@
 
   /* ---------- chap panel ---------- */
   var NAV = [
-    ['#/', 'home', 'nav.home'], ['#/tahlil', 'scan', 'nav.analyze'], ['#/tayyorlash', 'pen', 'nav.draft'],
+    ['#/', 'home', 'nav.home'], ['#/ishlar', 'folder', 'nav.matters'], ['#/tahlil', 'scan', 'nav.analyze'], ['#/tayyorlash', 'pen', 'nav.draft'],
     ['#/konikmalar', 'spark', 'nav.skills'], ['#/yozuvlar', 'mic', 'nav.voice'], ['#/jamoa', 'team', 'nav.team'], ['#/advokatlar', 'scale', 'nav.lawyers']
   ];
   function drawNav() {

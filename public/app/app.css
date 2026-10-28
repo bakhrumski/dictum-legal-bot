@@ -277,7 +277,7 @@ textarea.inp{height:auto;min-height:96px;padding:10px 13px;resize:vertical;line-
 @keyframes sk{to{background-position:-200% 0}}
 
 /* ---------- modal: tariflar va to'lov ---------- */
-.ovl{position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:20px;background:rgba(17,18,20,.28);overflow:auto;animation:fade .25s}
+.ovl{position:fixed;inset:0;z-index:60;display:grid;grid-template-columns:minmax(0,1fr);place-items:center;padding:20px;background:rgba(17,18,20,.28);overflow:auto;animation:fade .25s}
 :root[data-theme="dark"] .ovl{background:rgba(0,0,0,.5)}
 @keyframes fade{from{opacity:0}}
 .modal{position:relative;width:min(1080px,100%);background:var(--surface);border:1px solid var(--line);border-radius:24px;box-shadow:var(--shadow);padding:30px 32px 26px;animation:rise .35s cubic-bezier(.3,.7,.2,1)}
@@ -536,3 +536,53 @@ textarea.inp{height:auto;min-height:96px;padding:10px 13px;resize:vertical;line-
 .pb-sug p{margin:4px 0 8px;font-size:14px}
 .pe-rules{display:flex;flex-direction:column;gap:10px;margin:10px 0}
 .pe-rule .field{margin-bottom:8px}
+/* Ishlar (matters.js, 2026-10-28): ro'yxat, ish sahifasi; rangli fon faqat och ko'k */
+.mt-bar{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+.mt-bar .search{flex:1;min-width:200px}
+.mt-row{color:inherit;text-decoration:none}
+.mt-row>svg.i{flex:none;color:var(--muted)}
+.mt-row>span:not(.mt-meta){display:flex;flex-direction:column;gap:2px;white-space:normal}
+.mt-row>span.mt-meta{flex:none;overflow:visible}
+.mt-ttl{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mt-sum1{color:var(--muted);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mt-meta{display:flex;align-items:center;gap:8px;flex:none;flex-wrap:wrap;justify-content:flex-end}
+.mt-meta small{color:var(--muted);font-size:12.5px;white-space:nowrap}
+.mt-tag{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:99px;background:var(--accent-soft);color:var(--cta);font-size:12px;font-weight:500;white-space:nowrap}
+.mt-back{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-size:13.5px;text-decoration:none;margin-bottom:14px}
+.mt-back:hover{color:var(--fg)}
+.mt-back svg.i{width:16px;height:16px}
+.mt-head{align-items:flex-start}
+.mt-head>div:first-child{flex:1 1 320px}
+.mt-head>div:first-child{min-width:0;flex:1}
+.mt-head h2{overflow-wrap:anywhere}
+.mt-head .mt-meta{justify-content:flex-start;margin-top:10px}
+.mt-summary{color:var(--muted);margin-top:10px;white-space:pre-wrap;overflow-wrap:anywhere}
+.mt-summary:empty{display:none}
+.mt-acts{display:flex;gap:8px;flex-wrap:wrap}
+.mt-start{margin-bottom:16px}
+.mt-start h4{margin-bottom:10px}
+.mt-starts{display:flex;gap:8px;flex-wrap:wrap}
+.mt-starts .chip{text-decoration:none}
+.mt-noteform{display:flex;gap:10px;align-items:flex-end;margin-bottom:18px}
+.mt-noteform textarea.inp{min-height:46px;height:46px;flex:1}
+.mt-items{border-top:1px solid var(--line)}
+.mt-item{display:flex;gap:12px;align-items:flex-start;padding:14px 4px;border-bottom:1px solid var(--line)}
+.mt-item.go{cursor:pointer}
+.mt-item.go:hover{background:var(--panel)}
+.mt-item.gone{opacity:.55}
+.mt-ic{flex:none;width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:var(--panel);color:var(--muted)}
+.mt-ic svg.i{width:17px;height:17px}
+.mt-it{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.mt-it b{font-weight:500;overflow-wrap:anywhere}
+.mt-it small{color:var(--muted);font-size:12.5px}
+.mt-note{margin:0;font-size:14.5px;white-space:pre-wrap;overflow-wrap:anywhere}
+.mt-basis{margin:6px 0 14px;padding-left:18px}
+.mt-basis li{margin:5px 0;font-size:14px}
+.mt-run .tb-wrap{max-height:50vh}
+@media (max-width:600px){
+  .mt-row{flex-wrap:wrap}
+  .mt-row .mt-meta{width:100%;justify-content:flex-start;padding-left:30px}
+  .mt-noteform{flex-direction:column;align-items:stretch}
+  .mt-head{flex-direction:column;align-items:stretch;gap:14px}
+  .mt-head>div:first-child{flex:none}
+}
