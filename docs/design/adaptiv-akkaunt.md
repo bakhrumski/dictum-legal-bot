@@ -1,7 +1,8 @@
 # Dizayn: akkaunt foydalanuvchiga moslashib boradi (adaptiv) va platforma o'zini yaxshilaydi
 
-Holat: **loyiha**, 2026-10-28. Egasi 9-bo'limdagi savollarga javob bermaguncha
-kod yozilmaydi. Yo'l xaritasi: `docs/roadmap/legora-darajasi.md`, 3-bosqich.
+Holat: **qabul qilingan**, 2026-10-28 (#509). Egasining javoblari 9-bo'limda;
+2- va 3-savollar (signallar ro'yxati, saqlash muddati) A1 PR'ida ko'rsatilgan
+ro'yxat bo'yicha javob kutmoqda. Yo'l xaritasi: `docs/roadmap/legora-darajasi.md`, 3-bosqich.
 
 Egasining so'zi (2026-10-28): *"akkauntdagi AI-chatbot, hujjatlar, Workspace va
 boshqa barcha featurelar adaptive bo'la olishi, ya'ni akkaunt qancha ko'p
@@ -248,7 +249,34 @@ to'plami tayyor bo'lgandan keyin.
 
 ---
 
-## 9. Egasiga savollar (javobsiz kod yozilmaydi)
+## 9. Egasining javoblari (2026-10-28)
+
+| # | Savol | Javob |
+|---|---|---|
+| 1 | Standart holatda yoqiqmi | **Ha** (odam o'chira oladi) |
+| 2 | Signallar ro'yxati | Ro'yxatni ko'rib javob beradi. A1 da yig'iladigan aniq ro'yxat quyida (9.1) |
+| 3 | Saqlash muddati | Ro'yxatdan keyin. A1 da standart 180 kun, `USER_SIGNALS_DAYS` bilan o'zgaradi |
+| 4 | Javob zanjiri, A/B | **Ha**, yurist ko'rib chiqqan baholashdan keyin |
+| 5 | Yurist navbati | **Egasining o'zi**, haftasiga 5 soat (kuniga 1 soat) |
+| 6 | Firma profili | **Ha**, standart holatda yoqiq; egasi o'zgartiradi |
+| 7 | Telegram | **Ha**, bog'langan akkaunt bo'lsa |
+
+### 9.1. A1 da yig'iladigan signallar (aniq ro'yxat)
+
+Har signal bitta kod. Savol, javob yoki hujjat matni hech qachon yozilmaydi.
+
+| Signal | Qiymati | Qachon yoziladi | Misol |
+|---|---|---|---|
+| `area` | huquq sohasi kodi (`LEGAL_TOPICS`) | veb-chat yoki Telegram'da huquqiy javob berilganda | `mehnat` |
+| `act` | javobda keltirilgan lex.uz akt id'si va havola matni (akt nomi) | o'sha paytda, javobga eng ko'pi 8 ta | `6257288` · "Mehnat kodeksi" |
+| `script` | savol yozilgan alifbo | o'sha paytda | `latn` / `cyrl` |
+| `lang` | til (kirill + rus harflari bo'lsa `ru`) | o'sha paytda | `uz` / `ru` |
+| `service` | ishlatilgan xizmat | javob, jadval, playbook, da'vo loyihasi, agent topshirig'i tugaganda | `chat`, `telegram`, `tabular_review`… |
+| `playbook` | tayyor playbook kaliti yoki `own` | playbook tekshiruvi tugaganda | `supply_buyer` |
+
+Yig'ilmaydi: savol va javob matni, hujjatlar, ismlar, summalar, jadval ustunlari matni, o'qish vaqti.
+
+### 9.2. Avvalgi savollar (tarix uchun)
 
 1. **Rozilik matni.** Moslashish standart holatda yoqiqmi (odam o'chira oladi)
    yoki odam o'zi yoqadimi? Tavsiya: yoqiq, birinchi kirishda bir qatorli

@@ -108,6 +108,7 @@ async function complete(db, id, { handledBy, revoke = async () => {} } = {}) {
       await db.query(`DELETE FROM document_scans WHERE admin_id = $1`, [adminId]).catch(() => {});
       await require('../agents/runs/store').deleteAccountRuns(db, adminId).catch(() => {});
       await require('../voice/user-glossary').deleteAccountGlossary(db, adminId).catch(() => {});
+      await require('../adaptive/profile').deleteAccountProfile(db, adminId).catch(() => {});
       await revoke(adminId);
     }
   }

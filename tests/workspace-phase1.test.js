@@ -331,6 +331,7 @@ function transactionalPool(handler) {
       '20261028_019_matters.sql',
       '20261028_020_agent_runs.sql',
       '20261028_021_voice_glossary.sql',
+      '20261028_022_user_profile.sql',
     ]);
     assert.strictEqual(stripOuterTransaction('BEGIN;\nSELECT 1;\nCOMMIT;'), 'SELECT 1;');
   });

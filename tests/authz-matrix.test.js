@@ -67,6 +67,7 @@ const CASES = [
   ['POST', '/api/agent/tabular-review', REJECTED, 'agent: tabular review'],
   ['POST', '/api/agent/tabular-review/export', REJECTED, 'agent: tabular review as Excel'],
   ['GET', '/api/voice/glossary', REJECTED, 'own speech glossary'],
+  ['GET', '/api/adaptive/profile', REJECTED, 'own adaptive profile'],
   ['POST', '/api/voice/glossary', REJECTED, 'add to own speech glossary'],
   ['POST', '/api/voice/glossary/learn', REJECTED, 'speech glossary learns'],
   ['PUT', '/api/agent/runs/00000000-0000-0000-0000-000000000000/tags', REJECTED, 'agent: table row tags'],

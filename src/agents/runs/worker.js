@@ -104,6 +104,13 @@ function createRunWorker({
         const result = { httpStatus: out.httpStatus, body: out.body };
         const ok = await store.finish(run.id, { workerId, status, result, error: out.error || null, spent });
         if (ok) await notify.done(run, status, result);
+        // the adaptive profile records which service the person used (src/adaptive/profile.js), and a playbook's key
+        if (ok && status === 'done') {
+          const ctx = (run.input && run.input.ctx) || {};
+          const p = require('../../adaptive/profile');
+          p.profileStore().record(run.admin_id, [{ kind: 'service', value: run.workflow }, ...(ctx.playbook ? [{ kind: 'playbook', value: ctx.playbook }] : [])],
+            { channel: run.channel === 'telegram' ? 'telegram' : 'web' }).catch(() => {});
+        }
         if (!ok) log.warn(`[AGENT-RUN] ${run.id}: not finished by this worker (taken over or already ended)`);
         await usageLedger.finishRequest(scope, { outcome: `agent_${status}` }).catch(() => {});
       });

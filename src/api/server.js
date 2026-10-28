@@ -6912,6 +6912,11 @@ const markQuestionTrigger = (req, res, next) => {
   if (String((req.body && req.body.message) || '').trim()) require('../ai/ai-trigger').markTrigger('user_question');
   next();
 };
+// Adaptive account, PR A1: a sent legal answer's area, acts and the
+// question's script are recorded as codes after the reply has gone; the
+// answer itself is not read or changed (src/adaptive/profile.js answerRecorder)
+app.use('/api/legal-chat', require('../adaptive/profile').answerRecorder());
+
 app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, tariffModule.enforceChatQuota('/api/legal-chat'), async (req, res) => {
   try {
     const { message, history, databases, topic: rawTopic, topics, autoDetect } = req.body;
@@ -7037,6 +7042,8 @@ app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, t
       topic = deterministicTopic || await classifyLegalTopic(message, { forcePick: true });
       console.log(`[Legal Chat] no topic resolved — ${deterministicTopic ? 'deterministically routed' : 'force-classified'} to ${topic}`);
     }
+    // the adaptive profile records the area once the answer is sent (src/adaptive/profile.js); nothing here reads it
+    res.locals.answerTopic = topic || null;
 
     // ── VERIFIED ANSWER OVERRIDE ──
     // The lawyer's "Korpusga qo'shish" button writes corrected answers to
@@ -11645,6 +11652,18 @@ async function runMigrations() {
         resolveEntitlement: require('../rag/tariff-ledger').resolveEntitlement,
       });
     } catch (e) { console.log('[MATTERS] Mount skipped:', e.message); }
+
+    // Adaptive account, PR A1 (docs/design/adaptiv-akkaunt.md): the person's
+    // own profile, read only (the page that edits it is A2); old signals go daily
+    try {
+      const adaptive = require('../adaptive/profile');
+      app.get('/api/adaptive/profile', requireAuth, async (req, res) => {
+        try { res.set('Cache-Control', 'no-store').json(await adaptive.profileStore().get(req.session.adminId)); }
+        catch (e) { res.status(/does not exist/u.test(e.message) ? 503 : 500).json({ error: 'unavailable' }); }
+      });
+      const sweep = setInterval(() => { adaptive.profileStore().sweep().catch(e => console.warn('[ADAPTIVE] sweep failed:', e.message)); }, 24 * 3600 * 1000);
+      if (sweep.unref) sweep.unref();
+    } catch (e) { console.log('[ADAPTIVE] Mount skipped:', e.message); }
 
     // Mount OCR & AI Document Analyzer routes
     try {
