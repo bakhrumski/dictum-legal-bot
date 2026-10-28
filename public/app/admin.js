@@ -689,8 +689,18 @@
   /* ---------- CustDev pilot: agentlar, offer link, pilot so'rovlari (src/sales/) ---------- */
   function viewPilot() {
     shell('pilot', function (body, again) {
-      body.innerHTML = '<p class="muted" style="font-size:13px;margin-bottom:14px">' + esc(t('adm.pl.note')) + '</p><h3 style="font-size:16px;margin:0 0 10px">' + esc(t('adm.pl.req')) + '</h3><div class="pl-q">' + skel() + '</div>' +
-        '<h3 style="font-size:16px;margin:22px 0 10px">' + esc(t('adm.pl.agents')) + '</h3><div class="pl-a">' + skel() + '</div>';
+      body.innerHTML = '<p class="muted" style="font-size:13px;margin-bottom:14px">' + esc(t('adm.pl.note')) + '</p><div class="pl-ws"></div><h3 style="font-size:16px;margin:0 0 10px">' + esc(t('adm.pl.req')) + '</h3><div class="pl-q">' + skel() + '</div>' +
+        '<h3 style="font-size:16px;margin:22px 0 10px">' + esc(t('adm.pl.agents')) + '</h3><div class="pl-a">' + skel() + '</div><div class="pl-fb"></div>';
+      // stage 3: the pilot's internal Workspace (migration 025/027) - opened once by a master; agents join it with their code
+      J.api('/api/admin/sales/workspace').then(function (r) {
+        var box = $('.pl-ws', body); if (!r.ok) return;
+        box.innerHTML = r.data.workspace
+          ? '<p style="font-size:13.5px;margin:0 0 16px">Pilot Workspace ochiq: har bir pilot mijozga vazifa, mijoz fikrlari uning kichik vazifalari. <a href="#/jamoa">Workspace’ni ochish →</a></p>'
+          : '<div class="card" style="margin-bottom:16px"><p style="font-size:13.5px;margin:0 0 10px">Pilot uchun ichki (xodimlar) Workspace hali ochilmagan. Ochilganda kodli agentlar a’zo bo‘ladi, har bir pilot mijozga vazifa ochiladi. Mijoz a’zo bo‘lmaydi.</p><button class="pill sm" type="button" data-ws>Pilot Workspace ochish</button></div>';
+        var b = $('[data-ws]', box);
+        if (b) b.onclick = async function () { busy(b, true); var x = await J.api('/api/admin/sales/workspace', { method: 'POST', body: { name: 'CustDev pilot' } }); busy(b, false); if (!x.ok) return J.toast(J.errMsg(x.data), 6000); again(); };
+      });
+      if (J.pilotFeedback) J.pilotFeedback($('.pl-fb', body));
       J.api('/api/admin/sales/pilot-requests?status=pending').then(function (r) {
         var box = $('.pl-q', body); if (!r.ok) { box.innerHTML = errBox(r); return; }
         // what the client does (migration 026): a pending professional one waits only because a cap was reached

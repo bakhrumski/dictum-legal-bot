@@ -15,6 +15,13 @@
  * Agent (a staff account with a code):
  *   GET  /api/sales/me                                 own code, links, demo, own clients (no question or answer text)
  *   POST /api/sales/clients/:id/type        { type }   correct the type of a client who came through this agent
+ * Stage 3 (src/sales/pilot-workspace.js; the client's agent or a master, staff only):
+ *   GET  /api/admin/sales/workspace / POST { name }    the pilot's internal Workspace (master opens it once)
+ *   POST /api/sales/clients/:id/task                   open the client's task by hand
+ *   GET  /api/sales/feedback                           feedback of own clients (master: all)
+ *   POST /api/sales/feedback/:id/tag      { tag }      xato / chalkash / yangi_imkoniyat / narx
+ *   POST /api/sales/feedback/:id/reply    { text, confirmed: true }   once the sub-task is done; sent once
+ *   GET  /api/sales/feedback/weekly?days=7             by tag: feedback and distinct clients
  * Anyone signed in (an ordinary account):
  *   PUT  /api/client-type                   { type }   what I do: lawyer / accountant / hr / business / user
  *
@@ -23,6 +30,7 @@
  */
 
 const sales = require('./agents');
+const pilotWs = require('./pilot-workspace');
 
 const REF_COOKIE = 'jai_ref';
 const PILOT_OPEN = "✅ 14 kunlik JuristAI pilotingiz boshlandi. Savollaringizni shu botga yoki saytga yozing; limitingizni «limitim qancha?» deb bilasiz.";
@@ -41,7 +49,7 @@ function refCookieMiddleware(req, res, next) {
   next();
 }
 
-function mountSalesRoutes(app, { pool, requireAuth, requireMasterAdmin, requireSameOrigin, ledger, logAudit = () => {}, botUsername, appUrl, notify = null }) {
+function mountSalesRoutes(app, { pool, requireAuth, requireMasterAdmin, requireSameOrigin, ledger, logAudit = () => {}, botUsername, appUrl, notify = null, sendReply = null }) {
   const me = req => req.session.adminId;
   const safe = fn => async (req, res) => {
     try { res.set('Cache-Control', 'no-store'); await fn(req, res); } catch (e) {
@@ -108,6 +116,37 @@ function mountSalesRoutes(app, { pool, requireAuth, requireMasterAdmin, requireS
     if (!out.ok) return reply(res, out);
     const pilot = await afterType(me(req));
     res.json({ ...out, pilot: { approved: !!pilot.approved } });
+  }));
+  // stage 3: staff only (the role read in the database); a client gets 404
+  const staffOnly = async (req, res, next) => {
+    try {
+      const r = await pool.query('SELECT role FROM admins WHERE id = $1', [me(req)]);
+      if (r.rows[0] && ['master', 'student', 'lawyer'].includes(r.rows[0].role)) return next();
+    } catch (_) { /* below */ }
+    res.status(404).json({ error: 'not_found' });
+  };
+  app.get('/api/admin/sales/workspace', requireMasterAdmin, safe(async (req, res) => { res.json({ workspace: await pilotWs.pilotWorkspace(pool) }); }));
+  app.post('/api/admin/sales/workspace', requireSameOrigin, requireMasterAdmin, safe(async (req, res) => {
+    const out = await pilotWs.openWorkspace(pool, { masterId: me(req), name: req.body && req.body.name });
+    if (out.ok && !out.existed) logAudit(req, 'sales.pilot_workspace', 'workspace', null);
+    reply(res, out);
+  }));
+  app.post('/api/sales/clients/:id/task', requireSameOrigin, requireAuth, staffOnly, safe(async (req, res) => {
+    reply(res, await pilotWs.ensureClientTask(pool, { adminId: id(req.params.id), actorId: me(req) }));
+  }));
+  app.get('/api/sales/feedback', requireAuth, staffOnly, safe(async (req, res) => {
+    res.json({ feedback: await pilotWs.listFeedback(pool, { actorId: me(req) }), tags: pilotWs.TAGS });
+  }));
+  app.get('/api/sales/feedback/weekly', requireAuth, staffOnly, safe(async (req, res) => {
+    res.json(await pilotWs.weekly(pool, { actorId: me(req), days: req.query && req.query.days }));
+  }));
+  app.post('/api/sales/feedback/:id/tag', requireSameOrigin, requireAuth, staffOnly, safe(async (req, res) => {
+    reply(res, await pilotWs.tagFeedback(pool, { feedbackId: id(req.params.id), tag: req.body && req.body.tag, actorId: me(req) }));
+  }));
+  app.post('/api/sales/feedback/:id/reply', requireSameOrigin, requireAuth, staffOnly, safe(async (req, res) => {
+    const out = await pilotWs.replyFeedback(pool, { feedbackId: id(req.params.id), text: req.body && req.body.text, confirmed: !!(req.body && req.body.confirmed === true), actorId: me(req), send: sendReply });
+    if (out.ok) logAudit(req, 'sales.feedback_reply', 'pilot_feedback', id(req.params.id));
+    reply(res, out);
   }));
   app.get('/api/sales/me', requireAuth, safe(async (req, res) => {
     const page = await sales.agentPage(pool, { agentId: me(req), botUsername, appUrl });

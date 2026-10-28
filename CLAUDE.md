@@ -812,8 +812,28 @@ no master's click (`maybeAutoApprove`, one at a time under an advisory lock;
 in all and `PILOT_AUTO_PER_AGENT` (4) for that agent; "user" and anything
 past a cap waits for a master; `PILOT_AUTO=off` stops it.
 `tests/pilot-join.db.test.js`.
-Stages 3-4 (pilot Workspace, feedback, interview recordings): the pilot
-runs in an internal Workspace (migration 025, the owner's option 1).
+Stage 3 (migration 027, `src/sales/pilot-workspace.js`, no AI): a master
+opens the pilot's internal Workspace once (Boshqaruv → CustDev pilot,
+`pilot_workspace`); agents with a code are members (also when a code is
+given later); a client is never a member. An approved pilot (button or
+standing rule) gets one task "Mijoz: <ism> — <tur>" with the sections
+Muammo / Hozirgi yechim / Demo / 7-kun / 14-kun / Narx javoblari, due at
+the pilot's end, assigned to the agent (`pilot_client_tasks`; the agent or a
+master can open it by hand). Feedback: the bot's "💬 Fikr bildirish" (on the
+pilot-open message) or `/fikr` puts an active pilot client's private chat in
+feedback mode (`src/bot/pilot-feedback.js`, 15 min) - only the NEXT text or
+voice note (after STT) is feedback, intercepted before the agent and the
+request queue; it becomes one sub-task (`workspace_task_links` subtask) per
+Telegram message (`pilot_feedback` unique chat + message). The agent tags it
+(xato / chalkash / yangi_imkoniyat / narx) and, once the sub-task is done,
+writes a short reply and confirms it - the bot sends it once (a failed
+delivery may be resent) with "🔕" to turn replies off
+(`admins.pilot_replies_off`). Tag and reply are also task comments. Weekly
+view by tag with distinct clients (`/api/sales/feedback/weekly`). Every
+Workspace write runs in the Workspace transaction as the acting staff
+account, so the triggers log it. Pages: "Mijozlarim" (feedback, tags,
+replies, open task) and Boshqaruv → CustDev pilot. `tests/pilot-feedback.db.test.js`.
+Stage 4 (interview recordings) is next.
 
 ## The 2026 Latin alphabet (OʻRQ-1184 of 21.10.2026)
 

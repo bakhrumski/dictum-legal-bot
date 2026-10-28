@@ -10030,10 +10030,13 @@ app.post('/api/register', regUpload.single('document'), async (req, res) => {
 require('../sales/routes').mountSalesRoutes(app, { pool, requireAuth, requireMasterAdmin, requireSameOrigin: require('../auth/same-origin').requireSameOrigin,
   ledger: require('../rag/tariff-ledger'), logAudit, botUsername: LEGAL_BOT_USERNAME,
   // an approved pilot is told in the bot when the client's Telegram is linked
+  // (an opened pilot carries the "💬 Fikr bildirish" button: src/bot/pilot-feedback.js)
   notify: async (adminId, text) => {
     const a = (await pool.query('SELECT telegram_chat_id FROM admins WHERE id = $1', [adminId])).rows[0];
-    if (a && a.telegram_chat_id) await bot.sendMessage(a.telegram_chat_id, text, { disable_web_page_preview: true });
+    if (a && a.telegram_chat_id) await bot.sendMessage(a.telegram_chat_id, text, { disable_web_page_preview: true, reply_markup: require('../bot/pilot-feedback').feedbackButton() });
   },
+  // the agent's confirmed reply to a feedback, with the client's way to turn these off
+  sendReply: (chatId, text) => bot.sendMessage(chatId, require('../bot/pilot-feedback').replyText(text), { disable_web_page_preview: true, reply_markup: require('../bot/pilot-feedback').replyOffButton() }),
   appUrl: String(process.env.APP_URL || 'https://juristai.uz').replace(/\/+$/u, '') });
 
 require('../auth/telegram-auth-routes').mountTelegramAuthRoutes(app, {

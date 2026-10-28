@@ -57,6 +57,19 @@ function newCode() {
 }
 const cleanCode = c => (typeof c === 'string' && CODE_RE.test(c.trim().toLowerCase()) ? c.trim().toLowerCase() : null);
 
+// stage 3 (src/sales/pilot-workspace.js): an approved pilot gets its task in the
+// pilot Workspace; that never undoes or blocks the approval
+async function openClientTask(pool, adminId) {
+  try {
+    const r = await require('./pilot-workspace').ensureClientTask(pool, { adminId });
+    if (!r.ok && r.error !== 'no_pilot_workspace') console.warn('[SALES] pilot task not opened:', r.error);
+    return r;
+  } catch (e) {
+    if (!/does not exist/u.test(String(e && e.message))) console.warn('[SALES] pilot task not opened:', e.message);
+    return { ok: false, error: 'failed' };
+  }
+}
+
 async function isMaster(db, id) {
   const r = await db.query('SELECT role FROM admins WHERE id = $1', [id]);
   return !!(r.rows[0] && r.rows[0].role === 'master');
@@ -72,6 +85,11 @@ async function assignCode(db, { masterId, agentId }) {
     try {
       const code = newCode();
       await db.query('UPDATE admins SET sales_agent_code = $2 WHERE id = $1', [agentId, code]);
+      // an agent works in the pilot Workspace (when a master has opened it)
+      try {
+        const pw = require('./pilot-workspace');
+        await pw.ensureMember(db, await pw.pilotWorkspace(db), agentId);
+      } catch (e) { if (!/does not exist/u.test(String(e && e.message))) console.warn('[SALES] agent not added to the pilot Workspace:', e.message); }
       return { ok: true, code };
     } catch (e) { if (e.code !== '23505') throw e; }
   }
@@ -162,6 +180,12 @@ async function setClientType(db, { adminId, type, by = 'self', actorId = null })
  * lock), so parallel joins cannot pass a cap. Returns { approved, reason }.
  */
 async function maybeAutoApprove(pool, { adminId, ledger, env = process.env }) {
+  const r = await autoApprove(pool, { adminId, ledger, env });
+  if (r.approved && r.reason === 'auto') await openClientTask(pool, adminId);
+  return r;
+}
+
+async function autoApprove(pool, { adminId, ledger, env }) {
   const lim = autoLimits(env);
   if (!lim.on) return { approved: false, reason: 'off' };
   const client = await pool.connect();
@@ -254,7 +278,8 @@ async function approve(db, { masterId, requestId, ledger }) {
   if (!g.ok) return { ok: false, status: 409, error: g.reason };
   const r = await db.query(`UPDATE pilot_requests SET status = 'approved', decided_by = $2, decided_at = now(), period_id = $3 WHERE id = $1 AND status = 'pending' RETURNING *`,
     [requestId, masterId, g.period.id]);
-  return { ok: true, request: r.rows[0] || q, period: g.period };
+  const task = await openClientTask(db, q.admin_id);
+  return { ok: true, request: r.rows[0] || q, period: g.period, task: task.ok ? { taskId: task.taskId } : null };
 }
 
 async function decline(db, { masterId, requestId, note = '' }) {
@@ -286,7 +311,9 @@ async function clientsOf(db, agentId) {
     `SELECT c.id, c.full_name, c.created_at AS registered_at, c.referral_channel, c.client_type, c.client_type_by,
             q.status AS pilot_status, q.decided_at, q.auto AS pilot_auto,
             (SELECT p.ends_at FROM tariff_periods p WHERE p.id = q.period_id) AS pilot_ends_at,
-            ${USED} AS units_used, ${PAID} AS paid
+            ${USED} AS units_used, ${PAID} AS paid,
+            (SELECT t.task_id FROM pilot_client_tasks t WHERE t.admin_id = c.id) AS task_id,
+            (SELECT count(*)::int FROM pilot_feedback f WHERE f.admin_id = c.id) AS feedback
        FROM admins c LEFT JOIN pilot_requests q ON q.admin_id = c.id
       WHERE c.referred_by_agent_id = $1 ORDER BY c.created_at DESC LIMIT 500`, [agentId]);
   return r.rows;
