@@ -178,6 +178,9 @@
           reset();
           if (!r.ok) { J.toast(J.errMsg(r.data), 5000); return; }
           ta.value = (ta.value.trim() ? ta.value.trim() + ' ' : '') + r.data.text; grow(); sync(); ta.focus();
+          // a word that looks like a mis-heard legal term is named, never changed (src/voice/glossary.js)
+          var sg = r.data.suggestions || [];
+          if (sg.length) J.toast(t('cmp.mic.check') + ' ' + sg.map(function (x) { return '«' + x.from + '» → «' + x.to + '»?'; }).join(', '), 7000);
         };
         rec.start();
         // the level and the time are shown by the meter; the label stays for "transcribing…"

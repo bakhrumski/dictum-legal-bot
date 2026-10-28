@@ -709,6 +709,17 @@ Known state of the suites (Sept 2026):
   in bot.js. App: `POST /api/matters/command` and the command bar with 🎙
   (dictation) on the Ishlar pages. No AI, no unit; `MATTERS=off` stops it.
   `tests/matter-commands.test.js` scans every string in tests/ for false hits.
+  Spoken commands are checked (2026-10-28, owner: "Pudratchi" was heard as
+  "Qudratxo'ja" and a matter opened under that name): the app's 🎙 puts the
+  text in the box and never runs it; in Telegram a spoken "yangi ish" /
+  "yozuv" is shown as heard with buttons (as heard / as the glossary
+  suggests `mtc_a_` / cancel), and the next short typed message (not a
+  question, not a command, 10 min) replaces the heard name or note
+  (`correctPending`). `src/voice/glossary.js`: no engine here takes a
+  vocabulary, so after STT a word that is not a known legal term (or a
+  suffixed form of one) but shares most of a term's stem is suggested -
+  never replaced (a real name stays as said); `/api/voice/dictate` returns
+  `suggestions`, the chat names them in a toast.
 - `src/workspace/` — Platinum Workspace: routes, authz, Supabase
   realtime/storage, Workspace AI.
 - `public/` — static pages: `index.html` (landing), `login.html`,

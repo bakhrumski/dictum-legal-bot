@@ -604,10 +604,17 @@ function agentActionKeyboard(agentResult) {
   // a matter closed or reopened by voice or text is confirmed first (src/matters/commands.js)
   if (agentResult.action === 'tool_matter_confirm' && agentResult.meta && agentResult.meta.token) {
     const ru = agentResult.meta.lang === 'ru';
-    return { inline_keyboard: [[
-      { text: ru ? '✅ Да' : '✅ Ha', callback_data: `mtc_y_${agentResult.meta.token}` },
-      { text: ru ? 'Отмена' : 'Bekor qilish', callback_data: `mtc_n_${agentResult.meta.token}` },
-    ]] };
+    const yes = { text: ru ? '✅ Да' : '✅ Ha', callback_data: `mtc_y_${agentResult.meta.token}` };
+    const no = { text: ru ? 'Отмена' : 'Bekor qilish', callback_data: `mtc_n_${agentResult.meta.token}` };
+    // a spoken name with a glossary suggestion: "as heard" or "as suggested"
+    if (agentResult.meta.alt) {
+      const alt = String(agentResult.meta.alt);
+      return { inline_keyboard: [
+        [{ text: `✅ «${alt.length > 40 ? `${alt.slice(0, 39)}…` : alt}»`, callback_data: `mtc_a_${agentResult.meta.token}` }],
+        [{ text: ru ? '✅ Как услышано' : '✅ Eshitilgandek', callback_data: `mtc_y_${agentResult.meta.token}` }, no],
+      ] };
+    }
+    return { inline_keyboard: [[yes, no]] };
   }
   if (agentResult.action === 'attorney_intake_started') return attorneyFieldKeyboard();
   if (agentResult.action === 'document_intake_started') return documentTypeKeyboard();
@@ -923,7 +930,7 @@ async function handleCallbackQuery(callbackQuery) {
     return;
   }
 
-  if (data.startsWith('mtc_y_') || data.startsWith('mtc_n_')) {
+  if (data.startsWith('mtc_y_') || data.startsWith('mtc_n_') || data.startsWith('mtc_a_')) {
     const commands = require('../matters/commands');
     const token = data.slice(6);
     const ru = /[\u0400-\u04ff]/u.test(String(callbackQuery.message && callbackQuery.message.text || ''));
@@ -936,7 +943,7 @@ async function handleCallbackQuery(callbackQuery) {
         return;
       }
       const store = require('../matters/store').createMatterStore({ db: pool, resolveEntitlement: require('../rag/tariff-ledger').resolveEntitlement });
-      const out = await commands.confirmCommand(token, { adminId: account.id, store, lang: ru ? 'ru' : 'uz' });
+      const out = await commands.confirmCommand(token, { adminId: account.id, store, lang: ru ? 'ru' : 'uz', alt: data.startsWith('mtc_a_') });
       await bot.answerCallbackQuery(callbackQuery.id).catch(() => {});
       await bot.sendMessage(chatId, out.reply).catch(() => {});
     } catch (error) {
@@ -2042,6 +2049,7 @@ async function handleTelegramMessage(msg) {
             firstName,
             testAccount,
             identity: await telegramIdentity(msg),
+            voice: !!requestData.voiceTranscribed,
           });
         } finally {
           clearInterval(typing);
