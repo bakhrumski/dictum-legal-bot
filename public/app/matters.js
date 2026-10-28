@@ -16,7 +16,7 @@
       name: 'Ish nomi', namePh: 'Masalan: Pudratchi bilan nizo', summary: 'Qisqa tavsif (ixtiyoriy)', summaryPh: 'Tomonlar, vaziyat, muhim sanalar',
       wsPick: 'Workspace (ixtiyoriy)', wsNone: 'Shaxsiy ish', create: 'Ochish', cancel: 'Bekor qilish', save: 'Saqlash',
       limit: 'Tarifni ko‘rish', back: 'Ishlar',
-      edit: 'Tahrirlash', close: 'Yopish', reopen: 'Qayta ochish', del: 'O‘chirish', delQ: 'Ish o‘chirilsinmi? Unga bog‘langan chat va hujjatlar o‘chmaydi, faqat bog‘lanish yo‘qoladi.',
+      edit: 'Tahrirlash', export: 'Yuklab olish:', close: 'Yopish', reopen: 'Qayta ochish', del: 'O‘chirish', delQ: 'Ish o‘chirilsinmi? Unga bog‘langan chat va hujjatlar o‘chmaydi, faqat bog‘lanish yo‘qoladi.',
       note: 'Yozuv qo‘shish', notePh: 'Masalan: sud majlisi 12-noyabr, soat 10:00', addNote: 'Qo‘shish',
       start: 'Shu ish uchun boshlash', startChat: 'Savol berish', startTable: 'Jadvalli tahlil', startPb: 'Playbook', startClaim: 'Da’vo loyihasi',
       startHint: 'Natija ostidagi «Ishga qo‘shish» tugmasi shu ishni tanlaydi.',
@@ -48,7 +48,7 @@
       name: 'Название дела', namePh: 'Например: спор с подрядчиком', summary: 'Краткое описание (необязательно)', summaryPh: 'Стороны, ситуация, важные даты',
       wsPick: 'Workspace (необязательно)', wsNone: 'Личное дело', create: 'Открыть', cancel: 'Отмена', save: 'Сохранить',
       limit: 'Посмотреть тарифы', back: 'Дела',
-      edit: 'Изменить', close: 'Закрыть', reopen: 'Открыть снова', del: 'Удалить', delQ: 'Удалить дело? Связанные чаты и документы не удаляются, исчезает только связь.',
+      edit: 'Изменить', export: 'Скачать:', close: 'Закрыть', reopen: 'Открыть снова', del: 'Удалить', delQ: 'Удалить дело? Связанные чаты и документы не удаляются, исчезает только связь.',
       note: 'Добавить заметку', notePh: 'Например: заседание 12 ноября, 10:00', addNote: 'Добавить',
       start: 'Начать для этого дела', startChat: 'Задать вопрос', startTable: 'Табличный анализ', startPb: 'Playbook', startClaim: 'Проект иска',
       startHint: 'Кнопка «Добавить в дело» под результатом выберет это дело.',
@@ -80,7 +80,7 @@
       name: 'Matter name', namePh: 'E.g. dispute with the contractor', summary: 'Short description (optional)', summaryPh: 'Parties, situation, key dates',
       wsPick: 'Workspace (optional)', wsNone: 'Personal matter', create: 'Open', cancel: 'Cancel', save: 'Save',
       limit: 'See plans', back: 'Matters',
-      edit: 'Edit', close: 'Close', reopen: 'Reopen', del: 'Delete', delQ: 'Delete the matter? Linked chats and documents stay; only the links go.',
+      edit: 'Edit', export: 'Download:', close: 'Close', reopen: 'Reopen', del: 'Delete', delQ: 'Delete the matter? Linked chats and documents stay; only the links go.',
       note: 'Add a note', notePh: 'E.g. hearing on 12 November, 10:00', addNote: 'Add',
       start: 'Start for this matter', startChat: 'Ask a question', startTable: 'Table review', startPb: 'Playbook', startClaim: 'Claim draft',
       startHint: 'The “Add to matter” button under a result picks this matter.',
@@ -341,6 +341,12 @@
     load();
   }
 
+  /** a file name a browser keeps: typographic quotes and dashes as plain ones, no path characters */
+  J.fileName = function (t) {
+    var n = String(t || '').replace(/[«»“”„"]/g, '').replace(/[‘’ʻʼ`]/g, "'").replace(/[—–]/g, '-').replace(/[\\/:*?<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
+    return n || 'ish';
+  };
+
   J.viewMatters = function () {
     J.setTitle(s('title'));
     var filter = 'open';
@@ -519,7 +525,8 @@
       var w = M.access === 'write', own = M.own;
       body.innerHTML = '<div class="vh mt-head"><div><h2></h2>' +
         '<div class="mt-meta">' + statusTag(M) + (M.workspaceId ? '<span class="mt-tag">' + esc(s('ws')) + '</span>' : '') + (w ? '' : '<span class="mt-tag">' + esc(s('ro')) + '</span>') + '<small>' + esc(s('items', { n: M.items.length })) + '</small></div>' +
-        '<p class="mt-summary"></p></div>' +
+        '<p class="mt-summary"></p>' +
+        '<div class="mt-exp"><span class="muted">' + esc(s('export')) + '</span><button class="chip" data-x="pptx" type="button">' + J.icon('doc') + 'PowerPoint</button><button class="chip" data-x="xlsx" type="button">' + J.icon('doc') + 'Excel</button></div></div>' +
         (w ? '<div class="mt-acts"><button class="pill sm ghost" data-a="edit" type="button">' + J.icon('pen') + esc(s('edit')) + '</button>' +
           '<button class="pill sm ghost" data-a="toggle" type="button">' + esc(M.status === 'open' ? s('close') : s('reopen')) + '</button>' +
           (own ? '<button class="pill sm ghost" data-a="del" type="button">' + J.icon('trash') + esc(s('del')) + '</button>' : '') + '</div>' : '') + '</div>' +
@@ -571,6 +578,18 @@
       if ($('.mt-cmd', body)) wireCmd(body, M.id, function (d) { if (d.matterId === M.id) load(); });
       var pb = $('[data-a=plan]', body);
       if (pb) pb.onclick = function () { agentPlan(pb); };
+      // the matter as a short deck or a workbook (GET /api/matters/:id/export; no AI, no unit)
+      $$('[data-x]', body).forEach(function (b) {
+        b.onclick = async function () {
+          b.disabled = true;
+          var r = await J.api('/api/matters/' + encodeURIComponent(M.id) + '/export?format=' + b.dataset.x, { raw: true });
+          b.disabled = false;
+          if (!r.ok) { J.toast(J.t('err.generic')); return; }
+          var blob = await r.res.blob(), a = document.createElement('a');
+          a.href = URL.createObjectURL(blob); a.download = J.fileName(M.title || 'ish') + '.' + b.dataset.x;
+          document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+        };
+      });
       var eb = $('[data-a=edit]', body);
       if (eb) eb.onclick = function () {
         var m = J.modal({ cls: 'sm', html: '<h2>' + esc(s('edit')) + '</h2><div class="field" style="margin-top:14px"><label>' + esc(s('name')) + '</label><input class="inp mt-name" maxlength="160"></div>' +

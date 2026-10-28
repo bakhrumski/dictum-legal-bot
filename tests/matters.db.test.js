@@ -205,6 +205,11 @@ async function http(a, method, url, body) {
     assert.strictEqual((await store.get(m.id, viewer)).access, 'read');
     assert.strictEqual(await store.get(m.id, outsider), null);
     assert.ok((await store.list(viewer)).some(x => x.id === m.id && x.access === 'read'));
+    // the export reads the owner's agent results with the matter's access: a viewer reads, an outsider gets null
+    const run = (await pool.query(`INSERT INTO agent_runs (admin_id, workflow, status, result, request_id, finished_at) VALUES ($1, 'playbook_review', 'done', '{"httpStatus":200,"body":{"counts":{"mos":1}}}'::jsonb, gen_random_uuid(), now()) RETURNING id`, [owner])).rows[0].id;
+    await store.addItem(m.id, owner, { kind: 'agent_run', ref: run });
+    assert.deepStrictEqual((await store.results(m.id, viewer))[run].body.counts, { mos: 1 });
+    assert.strictEqual(await store.results(m.id, outsider), null);
 
     await store.addItem(m.id, member, { kind: 'note', note: "A'zo yozuvi" });
     assert.strictEqual(await store.addItem(m.id, viewer, { kind: 'note', note: 'x' }), null, 'a viewer does not write');

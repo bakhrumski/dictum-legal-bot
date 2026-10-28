@@ -78,8 +78,10 @@ Tartib va PR bo'linishi dizayn hujjatining 9-bo'limida.
   ustuni, qator teglari, Excel, fonda ishlash va bosqichlar. Jonli AI bilan
   100 hujjatda sinalmagan.
 - [~] Word: playbook tahlili Word ichida (izoh va Track Changes bilan), "ishga
-  saqlash". PR ochildi (2026-10-28); haqiqiy Word'da sinalmagan.
-- [ ] Natijalar: Excel (jadval), PowerPoint (ish bo'yicha qisqa taqdimot).
+  saqlash". #505 merge (2026-10-28); haqiqiy Word'da sinalmagan.
+- [~] Natijalar: Excel (jadval), PowerPoint (ish bo'yicha qisqa taqdimot).
+  Jadval Excel'i #504 da. Ish taqdimoti va Excel'i PR ochildi (2026-10-28);
+  haqiqiy PowerPoint'da ochib ko'rilmagan.
 
 ## 3-bosqich. Raqobat ustunligi
 
@@ -190,3 +192,18 @@ nima o'lchandi.
     yubormaydi, shuning uchun uni boshqa saytdan soxtalashtirib bo'lmaydi.
   - Brauzerda 320 va 450 px'da soxta hujjat muhiti bilan tekshirildi.
     Haqiqiy Word va Google Docs'da sinalmagan.
+- 2026-10-28: #505 (Word playbook) va #506 (ovozli buyruq tasdig'i, glossariy)
+  merge; #507 ochildi (har akkauntning o'z glossariysi). Ish eksporti PR
+  ochildi:
+  - Ish sahifasida "Yuklab olish: PowerPoint / Excel".
+  - Taqdimot faqat ishda bor narsadan yig'iladi: muqova, tarkib, yozuvlar,
+    har bog'langan natija (jadval, playbook, da'vo loyihasining asosi,
+    agent javobining Xulosasi), chatlar. Oxirgi slayd: bu AI material,
+    yakuniy xulosa emas.
+  - Excel: ish, elementlar, har jadval va playbook natijasi alohida varaqda.
+  - AI chaqirilmaydi, birlik yechilmaydi. Ish ko'ruvchisi ham yuklab oladi,
+    begonaga 404.
+  - PPTX `jszip` bilan yig'iladi: `pptxgenjs` npm'dagi "https" paketiga
+    bog'liq, shuning uchun qo'shilmadi.
+  - `python-pptx` o'qidi, LibreOffice Impress ochdi va PDF'ga aylantirdi.
+    Haqiqiy PowerPoint'da ochib ko'rilmagan.

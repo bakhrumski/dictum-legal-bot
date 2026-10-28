@@ -171,6 +171,22 @@ function createMatterStore({ db, resolveEntitlement = null }) {
     };
   }
 
+  /**
+   * The agent results a matter links, for its export (src/matters/export.js):
+   * { runId: { workflow, status, body } } of the matter owner's runs, read
+   * with the same access as the matter (a viewer reads, anyone else null).
+   */
+  async function results(id, adminId) {
+    const m = await load(id, adminId, 'read');
+    if (!m) return null;
+    const r = await db.query(
+      `SELECT a.id, a.workflow, a.status, a.result FROM matter_items i JOIN agent_runs a ON a.id = i.ref_uuid AND a.admin_id = $2
+        WHERE i.matter_id = $1 AND i.kind = 'agent_run' AND a.result IS NOT NULL`, [m.id, m.owner_id]).catch(() => ({ rows: [] }));
+    const out = {};
+    for (const row of r.rows) out[row.id] = { workflow: row.workflow, status: row.status, body: (row.result && row.result.body) || {} };
+    return out;
+  }
+
   async function holdScans(matterId) {
     // a scan an open matter holds stays; one no open matter holds any more gets 30 days
     await db.query(
@@ -289,7 +305,7 @@ function createMatterStore({ db, resolveEntitlement = null }) {
     return true;
   }
 
-  return { list, create, get, update, remove, addItem, removeItem };
+  return { list, create, get, results, update, remove, addItem, removeItem };
 }
 
 /** Account deletion: the person's matters and their links go (the sources are handled by their own rules). */
