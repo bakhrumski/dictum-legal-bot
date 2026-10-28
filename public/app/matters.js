@@ -232,8 +232,12 @@
   /** Wires a command bar; `matterId` is the matter on screen (the default for "yozuv qo'sh: …"). */
   function wireCmd(root, matterId, after) {
     var input = $('.mt-cmd-in', root), st = $('.mt-cmd-st', root), mic = $('.mt-mic', root), go = $('[data-a=cmd]', root);
+    var awaitingTitle = false;
     async function run(text, extra) {
       if (!extra && !String(text || '').trim()) { input.focus(); return; }
+      // "yangi ish och" came with no name: the next words are the name (unless they are a command)
+      if (!extra && awaitingTitle && !/^(?:yangi ish|ish och|ishlar|новое дело|мои дела)/i.test(String(text).trim())) text = (J.lang === 'ru' ? 'новое дело: ' : 'yangi ish och: ') + String(text).trim();
+      awaitingTitle = false;
       go.disabled = true; st.textContent = '';
       var r = await J.api('/api/matters/command', { method: 'POST', body: extra || { text: text, lastMatterId: matterId || current() || null, lang: J.lang === 'ru' ? 'ru' : 'uz' } });
       go.disabled = false;
@@ -249,6 +253,7 @@
         return;
       }
       input.value = '';
+      if (d.needsTitle) { awaitingTitle = true; st.textContent = d.reply; input.focus(); return; }
       if (d.matterId) setCurrent(d.matterId);
       // a command that redraws the page says what it did in a toast (the bar is drawn again)
       if ((d.action === 'matter_created' || d.action === 'matter_shown') && d.matterId) { J.toast(d.reply, 5000); J.go('#/ishlar/' + d.matterId); return; }

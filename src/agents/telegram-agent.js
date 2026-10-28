@@ -34,6 +34,7 @@ function matterStore() {
   return matterStoreInstance;
 }
 const lastMatterByChat = new Map();
+const pendingMatterTitle = new Map(); // chatId -> when "yangi ish och" came with no name
 const {
   extractAnalysisSection,
   selectRelevantSourceRefs,
@@ -903,7 +904,13 @@ Agar texnik uzilish yuz bersa, limitingiz avtomatik tiklanadi.`,
   } else if (['attorney_intake', 'attorney_field', 'attorney_region', 'document_type', 'legal_question_intake'].includes(state)) {
     intent = { intent: 'noaniq', missing: [] };
   } else {
-    const deterministicIntent = classifyDeterministicIntent(question);
+    // the matter's name, asked for after "yangi ish och" with no name (5 minutes; not a command itself)
+    const waitingTitle = pendingMatterTitle.get(String(chatId));
+    pendingMatterTitle.delete(String(chatId));
+    const titleReply = waitingTitle && Date.now() - waitingTitle < 5 * 60 * 1000
+      && !require('../matters/commands').parseCommand(question) && String(question).trim().length >= 2 && String(question).trim().length <= 160
+      ? { intent: 'ish_amal', command: { action: 'create', title: String(question).replace(/\s+/gu, ' ').trim().replace(/[.!?]+$/u, '') }, missing: [] } : null;
+    const deterministicIntent = titleReply || classifyDeterministicIntent(question);
     if (deterministicIntent) {
       intent = deterministicIntent;
     } else {
@@ -1214,6 +1221,7 @@ Agar texnik uzilish yuz bersa, limitingiz avtomatik tiklanadi.`,
       const store = matterStore();
       const out = await commands.runCommand(intent.command, { adminId: account.id, store, lang: cmdLang, lastId: lastMatterByChat.get(String(chatId)) || null });
       if (out.matterId) lastMatterByChat.set(String(chatId), out.matterId);
+      if (out.needsTitle) pendingMatterTitle.set(String(chatId), Date.now());
       await remember(out.reply, 0);
       return complete({ handled: true, reply: out.reply, action: out.confirm ? 'tool_matter_confirm' : out.action, escalate: false,
         meta: { intent: intent.intent, command: intent.command.action, lang: cmdLang, token: out.confirm ? out.confirm.token : undefined } });

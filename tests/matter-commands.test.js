@@ -53,6 +53,8 @@ function stubStore(seed = []) {
       ['Ishni yop', { action: 'close', matter: null }],
       ['закрой дело аренда', { action: 'close', matter: 'аренда' }],
       ['Pudrat nizosi ishini qayta och', { action: 'reopen', matter: 'pudrat nizosi' }],
+      ['Yangi ish och.', { action: 'create', title: null }],
+      ['Новое дело', { action: 'create', title: null }],
       ['pudrat ishi holati', { action: 'show', matter: 'pudrat' }],
     ];
     for (const [text, want] of cases) assert.deepStrictEqual(c.parseCommand(text), want, text);
@@ -100,6 +102,19 @@ function stubStore(seed = []) {
     assert.match(unknown.reply, /«mehnat» degan ish topilmadi\. Ishlaringiz: «Pudratchi bilan nizo»/u);
     const ru = await c.runCommand({ action: 'list' }, { adminId: 7, store, lang: 'ru' });
     assert.match(ru.reply, /^Ваши открытые дела:/u);
+  });
+
+  await test('"yangi ish och" with no name asks for the name and opens nothing (2026-10-28, owner\'s screenshot)', async () => {
+    const store = stubStore([]);
+    const out = await c.runCommand({ action: 'create', title: null }, { adminId: 7, store });
+    assert.deepStrictEqual([out.action, out.needsTitle], ['matter_needs_title', true]);
+    assert.match(out.reply, /Ish nomi nima bo'lsin/u);
+    assert.strictEqual(store.calls.length, 0);
+    const src = fs.readFileSync(path.join(__dirname, '../src/agents/telegram-agent.js'), 'utf8');
+    assert.match(src, /pendingMatterTitle\.set\(String\(chatId\), Date\.now\(\)\)/u, 'Telegram waits for the name');
+    assert.match(src, /command: \{ action: 'create', title:/u, 'the next message becomes the name');
+    const page = fs.readFileSync(path.join(__dirname, '../public/app/matters.js'), 'utf8');
+    assert.match(page, /if \(d\.needsTitle\) \{ awaitingTitle = true;/u, 'the app takes the next words as the name');
   });
 
   await test('close: asked first; confirmed once, only by the same account; a cancel drops it; a stale token is refused', async () => {
