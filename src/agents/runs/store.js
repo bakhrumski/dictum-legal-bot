@@ -28,17 +28,18 @@ function createRunStore({ db, maxActivePerUser = Number(process.env.AGENT_RUNS_A
   if (!db) throw new Error('db is required');
 
   /** A new queued run. `requestId` is the usage-ledger request its AI calls go under (and its reservations were made under). */
-  async function create({ adminId, workflow, input, jobs = [], budget = {}, channel = 'web', requestId = null, matterId = null }) {
+  async function create({ adminId, workflow, input, jobs = [], budget = {}, channel = 'web', requestId = null, matterId = null, status = 'queued', plan = null, price = null }) {
+    if (!['queued', 'awaiting_approval'].includes(status)) throw new Error(`a run starts queued or awaiting approval, not ${status}`);
     const active = await db.query(
       `SELECT count(*)::int AS n FROM agent_runs WHERE admin_id = $1 AND status IN ('queued', 'running', 'awaiting_approval')`, [adminId]);
     if (active.rows[0].n >= maxActivePerUser) {
       throw new RunError(429, 'too_many_runs', `Bir vaqtda ${maxActivePerUser} tadan ortiq agent ishi bo'lmaydi. Avvalgilari tugashini kuting.`);
     }
     const r = await db.query(
-      `INSERT INTO agent_runs (admin_id, matter_id, workflow, channel, input, jobs, budget, request_id)
-       VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb, $8) RETURNING *`,
+      `INSERT INTO agent_runs (admin_id, matter_id, workflow, channel, input, jobs, budget, request_id, status, plan, price)
+       VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb, $8, $9, $10::jsonb, $11::jsonb) RETURNING *`,
       [adminId, matterId, workflow, channel, JSON.stringify(input == null ? {} : input), JSON.stringify(jobs || []),
-        JSON.stringify(budget || {}), requestId || crypto.randomUUID()]);
+        JSON.stringify(budget || {}), requestId || crypto.randomUUID(), status, plan ? JSON.stringify(plan) : null, price ? JSON.stringify(price) : null]);
     return r.rows[0];
   }
 
@@ -111,11 +112,36 @@ function createRunStore({ db, maxActivePerUser = Number(process.env.AGENT_RUNS_A
     return r.rowCount > 0;
   }
 
-  /** The person asks to stop: a queued run ends now, a running one before its next step. */
+  /**
+   * The person asks to stop: a run waiting for approval ends now (nothing
+   * was reserved), a queued run ends at the worker's next poll (its units
+   * released), a running one before its next step.
+   */
   async function requestCancel(id, adminId) {
     if (!isUuid(id)) return null;
+    const w = await db.query(
+      `UPDATE agent_runs SET status = 'cancelled', cancel_requested = true, input = NULL, finished_at = now()
+        WHERE id = $1 AND admin_id = $2 AND status = 'awaiting_approval' RETURNING id, status`, [id, adminId]);
+    if (w.rows[0]) return w.rows[0];
     const r = await db.query(
       `UPDATE agent_runs SET cancel_requested = true WHERE id = $1 AND admin_id = $2 RETURNING id, status`, [id, adminId]);
+    return r.rows[0] || null;
+  }
+
+  /** The person approved the plan: its reservations are recorded and the run is queued. Null if it was not waiting. */
+  async function approve(id, adminId, jobs = []) {
+    if (!isUuid(id)) return null;
+    const r = await db.query(
+      `UPDATE agent_runs SET status = 'queued', jobs = $3::jsonb
+        WHERE id = $1 AND admin_id = $2 AND status = 'awaiting_approval' AND NOT cancel_requested RETURNING *`,
+      [id, adminId, JSON.stringify(jobs || [])]);
+    return r.rows[0] || null;
+  }
+
+  /** The person's own run row, plan and price included (never to the page as is). */
+  async function row(id, adminId) {
+    if (!isUuid(id)) return null;
+    const r = await db.query('SELECT * FROM agent_runs WHERE id = $1 AND admin_id = $2', [id, adminId]);
     return r.rows[0] || null;
   }
 
@@ -134,7 +160,7 @@ function createRunStore({ db, maxActivePerUser = Number(process.env.AGENT_RUNS_A
   async function get(id, adminId) {
     if (!isUuid(id)) return null;
     const r = await db.query(
-      `SELECT id, admin_id, matter_id, workflow, channel, status, result, error, attempts, cancel_requested, spent,
+      `SELECT id, admin_id, matter_id, workflow, channel, status, result, error, attempts, cancel_requested, spent, plan, price,
               created_at, started_at, finished_at, expires_at
          FROM agent_runs WHERE id = $1 AND admin_id = $2`, [id, adminId]);
     const run = r.rows[0];
@@ -145,7 +171,7 @@ function createRunStore({ db, maxActivePerUser = Number(process.env.AGENT_RUNS_A
       id: run.id, workflow: run.workflow, channel: run.channel, status: run.status, matterId: run.matter_id,
       attempts: run.attempts, cancelRequested: run.cancel_requested,
       createdAt: run.created_at, startedAt: run.started_at, finishedAt: run.finished_at, expiresAt: run.expires_at,
-      error: run.error, result: run.result,
+      error: run.error, result: run.result, plan: run.plan || null, price: run.price || null,
       steps: s.rows.map(x => ({ id: x.step_id, label: x.label, status: x.status, note: x.note || undefined, error: x.error || undefined, ms: x.ms })),
     };
   }
@@ -159,6 +185,9 @@ function createRunStore({ db, maxActivePerUser = Number(process.env.AGENT_RUNS_A
 
   /** Results past their 90 days are emptied unless an open matter links the run. */
   async function sweep() {
+    // a plan nobody approved in a day ends (nothing was reserved for it)
+    await db.query(`UPDATE agent_runs SET status = 'cancelled', input = NULL, finished_at = now(), error = 'approval_expired'
+                     WHERE status = 'awaiting_approval' AND created_at < now() - interval '24 hours'`);
     const r = await db.query(
       `UPDATE agent_runs r SET result = NULL
         WHERE r.result IS NOT NULL AND r.expires_at < now()
@@ -167,7 +196,7 @@ function createRunStore({ db, maxActivePerUser = Number(process.env.AGENT_RUNS_A
     return r.rowCount;
   }
 
-  return { create, claim, heartbeat, saveStep, checkpoints, finish, requestCancel, isCancelled, cancelledQueued, get, list, sweep };
+  return { create, claim, heartbeat, saveStep, checkpoints, finish, requestCancel, approve, row, isCancelled, cancelledQueued, get, list, sweep };
 }
 
 /** Account deletion: the person's runs and their steps go. */

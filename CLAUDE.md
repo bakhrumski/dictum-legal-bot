@@ -642,6 +642,17 @@ Known state of the suites (Sept 2026):
   matter links them. `/api/agent/runs[/:id[/events|/cancel]]` (own only,
   404 otherwise). `AGENT_RUNS=off` runs in the request as before; the
   Telegram claim agent is not a run yet (PR-F).
+- Planner agent (2026-10-28, PR-D): `src/agents/tools/index.js` (matter_context,
+  doc_excerpt, lex_search, answer, verify - wrappers of existing code),
+  `src/agents/planner.js` (one cheap call, not charged; the server checks the
+  plan with no AI: known tools and args, `after` only to earlier steps, <= 12
+  steps, <= 4 searches, one answer, verify last, documents only from the
+  matter; one retry, then a fixed plan), `src/agents/planner-routes.js`
+  (`POST /api/agent/plan` -> a run `awaiting_approval`, nothing reserved;
+  `POST /api/agent/runs/:id/approve` reserves the price and queues it; the
+  `planned` executor runs the steps; the chat unit is committed only with a
+  verified answer). `AGENT_PLANNER` master (default) / gold / all / off. UI:
+  the "Agent topshirig'i" card on a matter page (master only for now).
 - `src/workspace/` — Platinum Workspace: routes, authz, Supabase
   realtime/storage, Workspace AI.
 - `public/` — static pages: `index.html` (landing), `login.html`,
