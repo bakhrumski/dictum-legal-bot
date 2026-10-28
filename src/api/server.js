@@ -443,6 +443,8 @@ app.use('/api/', testModel.createMiddleware({
 // A test entitlement (pilot) has one total AI budget (src/ai/test-budget.js):
 // a request of that account reserves its per-request limit before its first
 // AI call. Every other account is untouched (a cached id set, no query).
+// the agent-run worker (src/agents/runs/worker.js), set where the agent routes mount
+let agentRunWorker = null;
 const testBudget = require('../ai/test-budget');
 app.use('/api/', async (req, res, next) => {
   try {
@@ -11597,14 +11599,30 @@ async function runMigrations() {
       mountDraftingRoutes(app, { requireAuth, callAI, tariffModule });
     } catch (e) { console.log('[DRAFT] Mount skipped:', e.message); }
 
-    // Agent workflows on the harness (src/agents/harness.js): the claim draft first
+    // Agent workflows on the harness (src/agents/harness.js): the claim draft first.
+    // Since PR-B they run as agent runs (migration 020): queued in Postgres and
+    // worked by src/agents/runs/worker.js in this process, so a run outlives a
+    // deploy; AGENT_RUNS=off runs them in the request as before.
     try {
       const { generateDraftHtml } = require('../drafting/routes');
-      require('../agents/agent-routes').mountAgentRoutes(app, {
-        requireAuth, requireSameOrigin: require('../auth/same-origin').requireSameOrigin,
+      const sameOrigin = require('../auth/same-origin').requireSameOrigin;
+      const runsOn = String(process.env.AGENT_RUNS || '').toLowerCase() !== 'off';
+      const runStore = runsOn ? require('../agents/runs/store').createRunStore({ db: pool }) : null;
+      const runs = runStore ? { store: runStore, kick: () => agentRunWorker && agentRunWorker.tick() } : null;
+      const { executors } = require('../agents/agent-routes').mountAgentRoutes(app, {
+        requireAuth, requireSameOrigin: sameOrigin,
         callAI, callCheapAI, generateDraftHtml, ledger: require('../rag/tariff-ledger'), pool,
         retrieve: (query, topic) => retrieveLegalContext(query, topic, null, {}),
+        runs,
       });
+      if (runStore) {
+        require('../agents/runs/routes').mountRunRoutes(app, { requireAuth, requireSameOrigin: sameOrigin, store: runStore, kick: runs.kick });
+        agentRunWorker = require('../agents/runs/worker').createRunWorker({
+          store: runStore, executors, attachTestBudget: (adminId) => require('../ai/test-budget').attach(adminId),
+        });
+        agentRunWorker.start();
+        console.log(`[AGENT] run worker ${agentRunWorker.workerId} started`);
+      }
     } catch (e) { console.log('[AGENT] Mount skipped:', e.message); }
 
     // Matters: one legal matter and the links to its chats, scans and notes
@@ -11859,7 +11877,11 @@ lifecycle.waitForDatabase(pool)
     lifecycle.installGracefulShutdown({
       server,
       pool,
-      stopBots: [async () => { const rb = getRegBot(); if (rb && rb.isPolling && rb.isPolling()) await rb.stopPolling(); }],
+      stopBots: [
+        async () => { const rb = getRegBot(); if (rb && rb.isPolling && rb.isPolling()) await rb.stopPolling(); },
+        // agent runs: stop taking new ones; a running one resumes in the next process after its lease
+        async () => { if (agentRunWorker) await agentRunWorker.stop(); },
+      ],
     });
   })
   .catch((error) => {

@@ -32,6 +32,7 @@ const MAX_ITEMS = Math.max(1, Number(process.env.MATTER_MAX_ITEMS) || 500);
 const SCAN_HELD = "interval '10 years'";
 const SCAN_AFTER_CLOSE_DAYS = 30;
 const KINDS = Object.freeze(['chat', 'scan', 'agent_run', 'note']);
+const RUN_TITLE = Object.freeze({ claim_draft: "Da'vo arizasi loyihasi", tabular_review: 'Jadvalli tahlil', playbook_review: 'Playbook tekshiruvi' });
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
 class MatterError extends Error {
@@ -133,6 +134,12 @@ function createMatterStore({ db, resolveEntitlement = null }) {
     const owner = m.owner_id;
     const chatIds = items.filter(i => i.kind === 'chat').map(i => Number(i.ref_int));
     const scanIds = items.filter(i => i.kind === 'scan').map(i => i.ref_uuid);
+    const runIds = items.filter(i => i.kind === 'agent_run').map(i => i.ref_uuid);
+    const runs = new Map();
+    if (runIds.length) {
+      const a = await db.query('SELECT id, workflow, status, finished_at, (result IS NOT NULL) AS has_result FROM agent_runs WHERE id = ANY($1) AND admin_id = $2', [runIds, owner]).catch(() => ({ rows: [] }));
+      for (const row of a.rows) runs.set(row.id, row);
+    }
     const chats = new Map();
     const scans = new Map();
     if (chatIds.length) {
@@ -157,8 +164,9 @@ function createMatterStore({ db, resolveEntitlement = null }) {
           const s = scans.get(i.ref_uuid);
           return s ? { ...base, ref: i.ref_uuid, available: true, pages: s.pages } : { ...base, ref: i.ref_uuid, available: false };
         }
-        // agent runs come with PR-B; until then a link is shown as not available
-        return { ...base, ref: i.ref_uuid, available: false };
+        const a = runs.get(i.ref_uuid);
+        return a ? { ...base, ref: i.ref_uuid, available: !!a.has_result || !['done', 'failed', 'cancelled', 'budget', 'needs_input'].includes(a.status), workflow: a.workflow, status: a.status, finishedAt: a.finished_at }
+          : { ...base, ref: i.ref_uuid, available: false };
       }),
     };
   }
@@ -213,8 +221,7 @@ function createMatterStore({ db, resolveEntitlement = null }) {
   async function addItem(id, adminId, { kind, ref, title, note } = {}) {
     const m = await load(id, adminId, 'write');
     if (!m) return null;
-    if (!KINDS.includes(kind)) throw new MatterError(400, 'invalid', "Element turi: chat, scan yoki note");
-    if (kind === 'agent_run') throw new MatterError(400, 'unsupported', "Agent natijalari keyingi bosqichda qo'shiladi");
+    if (!KINDS.includes(kind)) throw new MatterError(400, 'invalid', "Element turi: chat, scan, agent_run yoki note");
     const count = await db.query('SELECT count(*)::int AS n FROM matter_items WHERE matter_id = $1', [m.id]);
     if (count.rows[0].n >= MAX_ITEMS) throw new MatterError(402, 'limit', `Bitta ishda ${MAX_ITEMS} tadan ortiq element bo'lmaydi.`);
     // sources are read as the matter owner's: a member adds notes, not their own chats or scans
@@ -239,6 +246,13 @@ function createMatterStore({ db, resolveEntitlement = null }) {
       if (!s.rows[0]) throw new MatterError(404, 'not_found', 'Hujjat topilmadi');
       refUuid = ref;
       if (!name) name = 'Hujjat';
+    } else if (kind === 'agent_run') {
+      // an agent run's result (migration 020): the caller's own, and one that still has a result
+      if (!isUuid(ref)) throw new MatterError(404, 'not_found', 'Agent ishi topilmadi');
+      const a = await db.query('SELECT id, workflow FROM agent_runs WHERE id = $1 AND admin_id = $2', [ref, adminId]);
+      if (!a.rows[0]) throw new MatterError(404, 'not_found', 'Agent ishi topilmadi');
+      refUuid = ref;
+      if (!name) name = RUN_TITLE[a.rows[0].workflow] || 'Agent natijasi';
     }
     let r;
     try {

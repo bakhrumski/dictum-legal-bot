@@ -245,10 +245,18 @@ istalgan holat (done/failed'dan tashqari) ──(foydalanuvchi)──► cancell
   RETURNING *;
   ```
   Ish ketayotganda `lease_until` har 30 soniyada yangilanadi.
-- **Bir vaqtda ishlaydigan run'lar.** `AGENT_RUN_CONCURRENCY` = 1 (512 MB).
-  Bitta foydalanuvchining bitta run'i navbatda kutadi (`AGENT_RUNS_PER_USER`
-  = 1, keyingisi `queued`da qoladi). Yangi tekshiruvsiz bu son oshirilmaydi:
-  lex.uz o'qishlari xotira bilan bog'liq (`docs/lessons/2026-10-lexuz-va-javob-zanjiri.md`).
+- **Bir vaqtda ishlaydigan run'lar.** PR-B'da `AGENT_RUN_CONCURRENCY` = 2.
+  Bu loyihadagi 1 dan farq qiladi, sababi:
+  - PR-B'gacha bu uchta route bir jarayonda cheklovsiz parallel ishlardi,
+    shuning uchun 2 avvalgidan qattiqroq;
+  - 1 bo'lganda bir kishining jadvali boshqa kishining da'vo loyihasini
+    kutib turardi.
+
+  lex.uz o'qishlari baribir jarayon bo'ylab bittadan
+  (`LEX_FETCH_CONCURRENCY` 1, `docs/lessons/2026-10-lexuz-va-javob-zanjiri.md`).
+  Bitta foydalanuvchining bir vaqtda bitta run'i ishlaydi, keyingisi
+  `queued`da kutadi. Bir kishiga 5 tagacha faol run
+  (`AGENT_RUNS_ACTIVE_PER_USER`), oshsa 429.
 - **Qayta ishga tushish.** Deploy yoki crash bo'lsa, lease tugaydi va boshqa
   (yoki yangi) jarayon run'ni oladi. Tugagan qadamlar checkpoint'dan
   tiklanadi. `attempts` > 3 bo'lsa, run `failed` bo'ladi va birliklar
@@ -304,13 +312,29 @@ istalgan holat (done/failed'dan tashqari) ──(foydalanuvchi)──► cancell
 ### 3.6 Mavjud workflow'lar run sifatida (PR-B)
 
 `POST /api/agent/{claim-draft,tabular-review,playbook-review}` javob shakli
-o'zgarmaydi:
-- **Ish ≤ 60 s davom etishi kutilsa** (masalan, ≤ 5 hujjatli jadval), route
-  run yaratadi, uning tugashini kutadi va hozirgidek javob beradi.
-- **Uzoqroq bo'lsa** (yoki `async: true` yuborilsa), `202 { runId }` qaytadi
-  va sahifa SSE orqali kuzatadi.
+o'zgarmaydi. PR-B'da amalga oshirilgani (`src/agents/agent-routes.js`):
 
-Shunday qilib front-end ikki bosqichda o'tadi va eski sahifa buzilmaydi.
+- **Uch qism.** Har bir workflow xizmat sifatida uch qismga bo'lindi:
+  - `prepare`: kirish, manbalar va rezerv. AI chaqiruvi yo'q.
+  - `run`: harness.
+  - `settle`: yetkazilgan qism commit qilinadi, qolgani release qilinadi; javob shu yerda tuziladi.
+
+  Shu bitta kod so'rov ichida ham, run sifatida ham ishlaydi.
+- **Route kutadi.** Route run yaratadi va uning tugashini kutadi: workflow
+  vaqti + 120 soniya navbat (`AGENT_SYNC_QUEUE_MS`). Keyin hozirgidek javob
+  beradi, javobga faqat `runId` qo'shiladi.
+- **202 qachon qaytadi.** `async: true` yuborilsa yoki kutish vaqti tugasa,
+  `202 { runId }` qaytadi. Sahifa SSE'ga PR-C/PR-E'da o'tadi; hozirgi sahifa
+  o'zgarmagan.
+- **Rezerv.** Run uchun rezerv `meta.holdUntil` bilan ushlanadi: 45 daqiqa,
+  `AGENT_RUN_HOLD_MIN`.
+- **Eski yo'l.** `AGENT_RUNS=off` bo'lsa yoki jadval bo'lmasa, ish
+  avvalgidek so'rov ichida bajariladi.
+- **Telegram.** Botdagi da'vo agenti (`src/agents/telegram-claim.js`) hali
+  so'rov ichida ishlaydi; u PR-F'da run'ga o'tadi.
+- **Ma'lum cheklov.** Masterning "🧪" model tanlovi (`X-JAI-Test-Model`)
+  so'rovga tegishli, shuning uchun worker ichidagi run'ga o'tmaydi. Pilot
+  test-byudjeti esa o'tadi (`test-budget.attach`).
 
 ---
 

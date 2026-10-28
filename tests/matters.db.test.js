@@ -143,7 +143,7 @@ async function http(a, method, url, body) {
     await assert.rejects(store.addItem(m.id, owner, { kind: 'chat', ref: foreignChat }), e => e.status === 404);
     await assert.rejects(store.addItem(m.id, owner, { kind: 'scan', ref: foreignScan }), e => e.status === 404);
     await assert.rejects(store.addItem(m.id, owner, { kind: 'chat', ref: chat }), e => e.status === 409);
-    await assert.rejects(store.addItem(m.id, owner, { kind: 'agent_run', ref: scan }), e => e.status === 400);
+    await assert.rejects(store.addItem(m.id, owner, { kind: 'agent_run', ref: scan }), e => e.status === 404, 'not an agent run of this account');
     await assert.rejects(store.addItem(m.id, owner, { kind: 'note', note: '   ' }), e => e.status === 400);
 
     await pool.query('DELETE FROM ai_chat_sessions WHERE id = $1', [chat]);

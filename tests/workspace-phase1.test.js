@@ -329,6 +329,7 @@ function transactionalPool(handler) {
       '20261021_017_one_time_credits.sql',
       '20261022_018_playbooks.sql',
       '20261028_019_matters.sql',
+      '20261028_020_agent_runs.sql',
     ]);
     assert.strictEqual(stripOuterTransaction('BEGIN;\nSELECT 1;\nCOMMIT;'), 'SELECT 1;');
   });
