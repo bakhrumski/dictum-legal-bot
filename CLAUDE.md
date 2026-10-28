@@ -86,8 +86,13 @@ Known state of the suites (Sept 2026):
   linked account, and when an agent run ends done; the profile is computed
   with no AI (half-life 60 days, signals kept `USER_SIGNALS_DAYS` 180,
   `manual` wins, `paused` records nothing, `ADAPTIVE=off`); account deletion
-  removes it; `GET /api/adaptive/profile` reads one's own. Nothing uses the
-  profile yet (A2 page, A3 UI, A6/A7 answer and search later).
+  removes it. PR A2 (2026-10-28): `src/adaptive/routes.js` - GET/PUT
+  `/api/adaptive/profile` (`manual`: answerLength, script, hidden areas /
+  acts, partyRoles from a fixed role list - the side is only ever set by
+  the person), `POST .../pause`, `POST .../clear`, `GET /api/adaptive/signals`
+  (own codes, newest first); page `#/moslashish` (`public/app/adaptive.js`,
+  a tile on Hisob). `effectiveOf` drops hidden items and puts what the person
+  set on top. Nothing uses the profile yet (A3 UI, A6/A7 answer and search later).
 
 ## Layout
 

@@ -400,7 +400,9 @@
         var x = b.services[s], pct = x.limit ? Math.round(100 * x.used / x.limit) : 0;
         return '<div style="margin-top:14px"><div style="display:flex;justify-content:space-between;font-size:14px"><span>' + esc(t('ac.svc.' + s)) + '</span><span class="num muted">' + x.used + ' / ' + x.limit + '</span></div><div class="meter"><i style="width:' + Math.min(100, pct) + '%"></i></div></div>';
       }).join('') + '</div>' : '') +
-      '<div class="grid2" style="margin-top:14px"><a class="tile" href="/account.html"><div class="tile-h">' + J.icon('lock') + '</div><b>' + esc(t('ac.login')) + '</b><p>' + esc(t('ac.login.d')) + '</p></a><div class="tile" style="cursor:default"><div class="tile-h">' + J.icon('shield') + '</div><b>' + esc(t('ac.security')) + '</b><p>' + esc(t('ac.security.d')) + '</p></div></div><div class="tg-acc" style="margin-top:14px"></div></div>');
+      '<div class="grid2" style="margin-top:14px"><a class="tile" href="/account.html"><div class="tile-h">' + J.icon('lock') + '</div><b>' + esc(t('ac.login')) + '</b><p>' + esc(t('ac.login.d')) + '</p></a><div class="tile" style="cursor:default"><div class="tile-h">' + J.icon('shield') + '</div><b>' + esc(t('ac.security')) + '</b><p>' + esc(t('ac.security.d')) + '</p></div>' +
+        (J.adaptiveText ? '<a class="tile" href="#/moslashish"><div class="tile-h">' + J.icon('spark') + '</div><b>' + esc(J.adaptiveText('title')) + '</b><p>' + esc(J.adaptiveText('card')) + '</p></a>' : '') +
+        '</div><div class="tg-acc" style="margin-top:14px"></div></div>');
     J.tg.card($('.tg-acc', v));
     $('.av', v).textContent = J.initials(u.fullName || u.username); $('.nm', v).textContent = u.fullName || u.username || '';
     var pb = $('[data-a=plans]', v); if (pb) pb.onclick = function () { J.openPlans({}); };
