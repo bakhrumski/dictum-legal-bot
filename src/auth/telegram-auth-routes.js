@@ -100,6 +100,8 @@ function mountTelegramAuthRoutes(app, { pool, loginSessions, regSessions, logAud
           parseInt(tgUserId, 10), BigInt(tgUserId), dfp || null]
       );
       const admin = insert.rows[0];
+      // the CustDev agent the client came through (?ref= cookie, or ref_ in the bot), the first one only (src/sales/agents.js)
+      await require('../sales/agents').claimAtRegistration(pool, { adminId: admin.id, refCode: require('../sales/routes').refFromCookie(req), telegramUserId: tgUserId });
       await startSession(req, admin);
       logAudit(req, 'register.telegram_code', 'admin', admin.id, admin.id);
       res.json({ success: true, role: admin.role, fullName: admin.full_name, redirect: APP_HOME || '/tariff.html' });

@@ -1197,8 +1197,29 @@ async function handleCallbackQuery(callbackQuery) {
 bot.onText(/\/start(.*)/, async (msg, match) => {
   const chatId = msg.chat.id;
   const username = msg.from.username || '';
-  const param = (match[1] || '').trim();
+  let param = (match[1] || '').trim();
   await telegramEconomy.recordTelegramActivity(chatId);
+
+  // CustDev offer link: /start ref_<code> (src/sales/agents.js). The first agent
+  // stays; an unknown code is ignored and the start goes on as a plain /start.
+  // The other prefixes (verify_, plink_, login_, reg_, stepup_ ...) never start with "ref_".
+  if (/^ref_/.test(param)) {
+    const code = param.slice(4);
+    param = '';
+    try {
+      const r = await require('../sales/agents').rememberTelegramRef(pool, { telegramUserId: msg.from.id, code });
+      if (r.known && msg.chat.type === 'private') {
+        const appUrl = String(process.env.APP_URL || 'https://juristai.uz').replace(/\/+$/, '');
+        await bot.sendMessage(chatId, r.hasAccount
+          ? "Taklif havolasi qabul qilindi. 14 kunlik pilot so'rovingiz JuristAI jamoasiga yuborildi — tasdiqlanganda shu yerda xabar olasiz."
+          : `Taklif havolasi qabul qilindi. 14 kunlik pilotda qatnashish uchun saytda Telegram orqali ro'yxatdan o'ting: ${appUrl}/app/kirish.html\n\nSavollaringizni shu botga hozir ham yozishingiz mumkin.`).catch(() => {});
+        return;
+      }
+    } catch (e) {
+      console.warn('[BOT] ref link not recorded:', e.message);
+    }
+  }
+  const fromRefLink = !param && /^\/start\s+ref_/.test(String(msg.text || ''));
 
   // Authentication never happens in the public legal-question bot. Preserve
   // the deep-link payload and send the user to the dedicated auth bot.
@@ -1436,7 +1457,7 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
   // Fallback for bare /start (Telegram sometimes strips the start parameter on
   // existing chats). Find the most recently created pending session and attach
   // this user to it, then send the OTP code as if the deep link had worked.
-  if (!param && LEGAL_BOT_AUTH_FALLBACK_ENABLED) {
+  if (!param && !fromRefLink && LEGAL_BOT_AUTH_FALLBACK_ENABLED) {
     const WINDOW_MS = 120000; // 2 minutes
     const now = Date.now();
     let bestReg = null, bestRegTime = 0;

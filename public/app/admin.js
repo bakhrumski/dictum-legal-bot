@@ -32,6 +32,12 @@
       'adm.att': 'Advokatlar', 'adm.att.d': 'Litsenziya tekshiruvi va katalog',
       'adm.svc': 'Pullik xizmatlar', 'adm.svc.d': 'Hujjat buyurtmalari va narxlar',
       'adm.more': "Eski dashboardda qolganlar", 'adm.more.d': "Korpusga yuklash, inson navbati, model testi",
+      'adm.pilot': 'CustDev pilot', 'adm.pilot.d': 'Shogird-yurist agentlar, offer link, 14 kunlik pilot so\'rovlari', 'adm.t.pilot': 'Pilot so\'rovlari',
+      'adm.pl.req': 'Kutilayotgan pilot so\'rovlari', 'adm.pl.client': 'Mijoz', 'adm.pl.agent': 'Agent', 'adm.pl.via': 'Qayerdan', 'adm.pl.approve': '14 kunlik pilotni berish', 'adm.pl.decline': 'Rad etish',
+      'adm.pl.approved': 'Pilot berildi: 14 kun, chat 120 · tahlil 8 · xulosa 4 · loyiha 6 · OCR 20, AI budjeti $10', 'adm.pl.agents': 'Agentlar', 'adm.pl.code': 'Kod', 'adm.pl.links': 'Offer link',
+      'adm.pl.give': 'Kod berish', 'adm.pl.renew': 'Yangilash', 'adm.pl.revoke': 'Olib qo\'yish', 'adm.pl.reg': 'Ro\'yxatdan o\'tgan', 'adm.pl.piloted': 'Pilotda', 'adm.pl.paid': 'Pullik',
+      'adm.pl.demo': 'Demo akkaunt', 'adm.pl.demoUnits': 'Demo sarfi (birlik)', 'adm.pl.demoLink': 'Demo ulash', 'adm.pl.demoQ': 'Master yaratgan test akkauntning ID raqami (Boshqaruv → test akkaunt). Unga 14 kunlik pilot huquqi beriladi.',
+      'adm.pl.note': 'Agent huquq, tarif yoki chegirma bera olmaydi: kod, pilot va demo faqat shu yerda, master tomonidan. Agent faqat o\'z mijozlari ro\'yxatini ko\'radi (savol-javob matnisiz).', 'adm.pl.copied': 'Nusxa olindi',
       'adm.today': 'Bugun', 'adm.t.reg': 'Kutilayotgan arizalar', 'adm.t.orders': 'Yurist narxini kutayotgan buyurtmalar', 'adm.t.del': "O'chirish so'rovlari", 'adm.t.fb': 'Yangi xato xabarlari', 'adm.t.ai': 'Bugungi AI xarajati', 'adm.t.buy': 'Bugungi xaridlar', 'adm.buy': 'Bir martalik xaridlar', 'adm.buy.d': 'Telegram Stars orqali sotilgan xizmatlar', 'adm.buy.count': 'Xaridlar', 'adm.buy.uzs': "Katalog narxi, so'm", 'adm.buy.today': 'Bugun', 'adm.buy.product': 'Xizmat', 'adm.buy.units': 'Birlik', 'adm.buy.list': "So'nggi xaridlar", 'adm.buy.left': 'Qolgan', 'adm.buy.refunded': 'Qaytarilgan', 'adm.buy.ok': "To'langan", 'adm.buy.none': "Hali xarid yo'q (jadval migratsiyasi ishlamagan bo'lishi mumkin).", 'adm.buy.note': "So'mdagi summa — sotuv paytidagi katalog narxi. Stars'dan haqiqatda tushgan pul bu yerda ko'rinmaydi; qaytarilganlar hisoblanmaydi.", 'adm.p.chat5': '5 ta savol', 'adm.p.draft': 'AI hujjat loyihasi', 'adm.p.analysis': 'AI tahlil', 'adm.p.opinion': 'AI xulosa', 'adm.t.unknown': "ta narxi noma'lum",
       'adm.g.daily': 'Kundalik ishlar', 'adm.g.money': 'Tarif va xarajat', 'adm.g.catalog': 'Advokatlar va manbalar', 'adm.g.tech': 'Texnik',
       'adm.day': 'Kunlik', 'adm.month': 'Oylik', 'adm.days': 'kun', 'adm.calls': 'chaqiruv', 'adm.requests': "so'rov",
@@ -86,6 +92,7 @@
       'adm.att': 'Адвокаты', 'adm.att.d': 'Проверка лицензий и каталог',
       'adm.svc': 'Платные услуги', 'adm.svc.d': 'Заказы документов и цены',
       'adm.more': 'Остальное в старом дашборде', 'adm.more.d': 'Загрузка в корпус, очередь, опрос, прогноз',
+      'adm.pilot': 'CustDev-пилот', 'adm.pilot.d': 'Агенты-стажёры, ссылки, заявки на 14-дневный пилот', 'adm.t.pilot': 'Заявки на пилот',
       'adm.today': 'Сегодня', 'adm.t.reg': 'Заявки в ожидании', 'adm.t.orders': 'Заказы ждут цену юриста', 'adm.t.del': 'Запросы на удаление', 'adm.t.fb': 'Новые сообщения об ошибках', 'adm.t.ai': 'Расход AI сегодня', 'adm.t.buy': 'Покупки сегодня', 'adm.buy': 'Разовые покупки', 'adm.buy.d': 'Услуги, проданные за Telegram Stars', 'adm.buy.count': 'Покупки', 'adm.buy.uzs': 'Цена каталога, сум', 'adm.buy.today': 'Сегодня', 'adm.buy.product': 'Услуга', 'adm.buy.units': 'Единиц', 'adm.buy.list': 'Последние покупки', 'adm.buy.left': 'Осталось', 'adm.buy.refunded': 'Возврат', 'adm.buy.ok': 'Оплачено', 'adm.buy.none': 'Покупок пока нет (возможно, миграция не применена).', 'adm.buy.note': 'Сумма в сумах — цена каталога на момент продажи. Фактическая выплата за Stars здесь не видна; возвраты не учитываются.', 'adm.p.chat5': '5 вопросов', 'adm.p.draft': 'AI-проект документа', 'adm.p.analysis': 'AI-анализ', 'adm.p.opinion': 'AI-заключение', 'adm.t.unknown': 'без цены',
       'adm.g.daily': 'Ежедневные дела', 'adm.g.money': 'Тарифы и расходы', 'adm.g.catalog': 'Адвокаты и источники', 'adm.g.tech': 'Техническое',
       'adm.day': 'По дням', 'adm.month': 'По месяцам', 'adm.days': 'дн.', 'adm.calls': 'вызовов', 'adm.requests': 'запросов',
@@ -120,6 +127,7 @@
       'adm.old': 'Open in the old dashboard', 'adm.refresh': 'Refresh', 'adm.empty': 'No data',
       'adm.ai': 'AI requests', 'adm.spend': 'Spend', 'adm.reg': 'Applications & plans', 'adm.fb': 'Quality', 'adm.src': 'Suggested sources',
       'adm.cov': 'Corpus coverage', 'adm.audit': 'Audit log', 'adm.landing': 'Landing', 'adm.lab': 'DeepSeek search test', 'adm.offers': 'Discounts', 'adm.tg': 'Telegram agent',
+      'adm.pilot': 'CustDev pilot', 'adm.pilot.d': 'Student agents, offer links, 14-day pilot requests', 'adm.t.pilot': 'Pilot requests',
       'adm.att': 'Lawyers', 'adm.svc': 'Paid services', 'adm.more': 'Still in the old dashboard', 'adm.today': 'Today', 'adm.buy': 'One-time purchases', 'adm.g.daily': 'Daily work', 'adm.g.money': 'Plans and spend', 'adm.g.catalog': 'Lawyers and sources', 'adm.g.tech': 'Technical', 'adm.del': 'Deletion requests'
     }
   };
@@ -148,7 +156,7 @@
   // [key, icon, title key, group]; the hub shows the groups in this order (2026-10-21: "Xarajat" removed -
   // "AI so'rovlar" shows the same spend with unknown cost counted)
   var SECTIONS = [
-    ['qabul', 'user', 'adm.reg', 'daily'], ['xizmatlar', 'doc', 'adm.svc', 'daily'], ['ochirish', 'trash', 'adm.del', 'daily'],
+    ['qabul', 'user', 'adm.reg', 'daily'], ['pilot', 'spark', 'adm.pilot', 'daily'], ['xizmatlar', 'doc', 'adm.svc', 'daily'], ['ochirish', 'trash', 'adm.del', 'daily'],
     ['sifat', 'flag', 'adm.fb', 'daily'], ['telegram', 'tg', 'adm.tg', 'daily'],
     ['xaridlar', 'tg', 'adm.buy', 'money'], ['chegirmalar', 'spark', 'adm.offers', 'money'], ['ai', 'chat', 'adm.ai', 'money'],
     ['advokatlar', 'scale', 'adm.att', 'catalog'], ['manbalar', 'book', 'adm.src', 'catalog'],
@@ -185,7 +193,7 @@
     var v = J.mount('<div class="wrap"><div class="vh"><div><h2>' + esc(t('nav.admin')) + '</h2><p>' + esc(t('adm.sub')) + '</p></div></div>' + today + groups + '</div>');
     var todayItems = {};
     function drawToday() {
-      var order = [['qabul', 'adm.t.reg'], ['xizmatlar', 'adm.t.orders'], ['ochirish', 'adm.t.del'], ['sifat', 'adm.t.fb'], ['xaridlar', 'adm.t.buy'], ['ai', 'adm.t.ai']];
+      var order = [['qabul', 'adm.t.reg'], ['pilot', 'adm.t.pilot'], ['xizmatlar', 'adm.t.orders'], ['ochirish', 'adm.t.del'], ['sifat', 'adm.t.fb'], ['xaridlar', 'adm.t.buy'], ['ai', 'adm.t.ai']];
       $('.adm-today-b', v).innerHTML = '<div class="kv">' + order.map(function (o) {
         var x = todayItems[o[0]];
         return '<a href="#/boshqaruv/' + o[0] + '" style="color:inherit;text-decoration:none"><small>' + esc(t(o[1])) + '</small><b class="num">' + (x == null ? '…' : esc(x)) + '</b></a>';
@@ -194,6 +202,7 @@
     drawToday();
     function put(k, val) { todayItems[k] = val; drawToday(); }
     J.api('/api/admin/service-orders?limit=100&status=pending_lawyer_review').then(function (r) { put('xizmatlar', r.ok ? String((r.data.items || []).length) : '—'); });
+    J.api('/api/admin/sales/pilot-requests?status=pending').then(function (r) { put('pilot', r.ok ? String((r.data.requests || []).length) : '—'); });
     J.api('/api/admin/one-time-purchases?days=1&limit=1').then(function (r) { put('xaridlar', r.ok && r.data.available ? r.data.today.count + (r.data.today.stars ? ' · ' + r.data.today.stars + ' ⭐' : '') : '—'); });
     J.api('/api/admin/ai-usage/report?period=day').then(function (r) {
       var ps = r.ok ? (r.data.periods || []) : [], last = ps[ps.length - 1] || null;
@@ -677,6 +686,45 @@
     });
   }
 
+  /* ---------- CustDev pilot: agentlar, offer link, pilot so'rovlari (src/sales/) ---------- */
+  function viewPilot() {
+    shell('pilot', function (body, again) {
+      body.innerHTML = '<p class="muted" style="font-size:13px;margin-bottom:14px">' + esc(t('adm.pl.note')) + '</p><h3 style="font-size:16px;margin:0 0 10px">' + esc(t('adm.pl.req')) + '</h3><div class="pl-q">' + skel() + '</div>' +
+        '<h3 style="font-size:16px;margin:22px 0 10px">' + esc(t('adm.pl.agents')) + '</h3><div class="pl-a">' + skel() + '</div>';
+      J.api('/api/admin/sales/pilot-requests?status=pending').then(function (r) {
+        var box = $('.pl-q', body); if (!r.ok) { box.innerHTML = errBox(r); return; }
+        box.innerHTML = table([t('adm.time'), t('adm.pl.client'), t('adm.pl.agent'), t('adm.pl.via'), ''], (r.data.requests || []).map(function (q) {
+          return '<tr>' + td(dt(q.created_at)) + td((q.full_name || '') + ' @' + (q.username || '') + ' · #' + q.admin_id) + td((q.agent_name || '') + ' · #' + q.agent_id) + td(q.referral_channel || '') +
+            '<td style="white-space:nowrap"><button class="pill sm" data-ok="' + q.id + '" type="button">' + esc(t('adm.pl.approve')) + '</button> <button class="pill ghost sm" data-no="' + q.id + '" type="button">' + esc(t('adm.pl.decline')) + '</button></td></tr>';
+        }));
+        $$('[data-ok]', box).forEach(function (b) { b.onclick = async function () { busy(b, true); var x = await J.api('/api/admin/sales/pilot-requests/' + b.dataset.ok + '/approve', { method: 'POST', body: {} }); busy(b, false); if (!x.ok) return J.toast(J.errMsg(x.data), 6000); J.toast(t('adm.pl.approved'), 6000); again(); }; });
+        $$('[data-no]', box).forEach(function (b) { b.onclick = async function () { if (!(await J.confirm(t('adm.pl.decline') + '?', t('adm.pl.decline')))) return; var x = await J.api('/api/admin/sales/pilot-requests/' + b.dataset.no + '/decline', { method: 'POST', body: {} }); if (!x.ok) return J.toast(J.errMsg(x.data), 6000); again(); }; });
+      });
+      J.api('/api/admin/sales/agents').then(function (r) {
+        var box = $('.pl-a', body); if (!r.ok) { box.innerHTML = errBox(r); return; }
+        var list = r.data.agents || [];
+        box.innerHTML = table([t('adm.pl.agent'), t('adm.pl.code'), t('adm.pl.reg'), t('adm.pl.piloted'), t('adm.pl.paid'), t('adm.pl.demo'), t('adm.pl.demoUnits'), ''], list.map(function (a) {
+          return '<tr>' + td((a.full_name || '') + ' @' + (a.username || '') + ' · ' + a.role) + td(a.sales_agent_code ? '<code>' + esc(a.sales_agent_code) + '</code> <button class="pill ghost sm" data-cp="' + esc(a.sales_agent_code) + '" type="button">' + esc(t('adm.pl.links')) + '</button>' : '—', true) +
+            td(n0(a.registered)) + td(n0(a.piloted)) + td(n0(a.paid)) + td(a.demo_id ? '#' + a.demo_id : '—') + td(n0(a.demo_units)) +
+            '<td style="white-space:nowrap"><button class="pill sm" data-code="' + a.id + '" type="button">' + esc(a.sales_agent_code ? t('adm.pl.renew') : t('adm.pl.give')) + '</button>' +
+            (a.sales_agent_code ? ' <button class="pill ghost sm" data-rv="' + a.id + '" type="button">' + esc(t('adm.pl.revoke')) + '</button>' : '') +
+            ' <button class="pill ghost sm" data-demo="' + a.id + '" type="button">' + esc(t('adm.pl.demoLink')) + '</button></td></tr>';
+        }));
+        $$('[data-cp]', box).forEach(function (b) { b.onclick = function () {
+          var c = b.dataset.cp, txt = location.origin + '/?ref=' + c + '\nhttps://t.me/' + (J.bots && J.bots.legal || 'yuristga_savolbot') + '?start=ref_' + c;
+          navigator.clipboard.writeText(txt).then(function () { J.toast(t('adm.pl.copied')); });
+        }; });
+        $$('[data-code]', box).forEach(function (b) { b.onclick = async function () { busy(b, true); var x = await J.api('/api/admin/sales/agents/' + b.dataset.code + '/code', { method: 'POST', body: {} }); busy(b, false); if (!x.ok) return J.toast(J.errMsg(x.data), 6000); again(); }; });
+        $$('[data-rv]', box).forEach(function (b) { b.onclick = async function () { if (!(await J.confirm(t('adm.pl.revoke') + '?', t('adm.pl.revoke')))) return; var x = await J.api('/api/admin/sales/agents/' + b.dataset.rv + '/code/revoke', { method: 'POST', body: {} }); if (!x.ok) return J.toast(J.errMsg(x.data), 6000); again(); }; });
+        $$('[data-demo]', box).forEach(function (b) { b.onclick = async function () {
+          var v = G.prompt(t('adm.pl.demoQ')); if (!v) return;
+          var x = await J.api('/api/admin/sales/agents/' + b.dataset.demo + '/demo', { method: 'POST', body: { userId: Number(String(v).replace(/\D/g, '')) } });
+          if (!x.ok) return J.toast(J.errMsg(x.data), 6000); J.toast(t('adm.pl.approved'), 6000); again();
+        }; });
+      });
+    });
+  }
+
   /* ---------- Bir martalik xaridlar (service_credits) ---------- */
   var PRODUCT_T = { chat5: 'adm.p.chat5', draft: 'adm.p.draft', analysis: 'adm.p.analysis', opinion: 'adm.p.opinion' };
   var buyDays = 30;
@@ -774,7 +822,7 @@
   }
 
   /* ---------- marshrutlar ---------- */
-  var VIEWS = { sinov: viewLab, ai: viewAi, xaridlar: viewBuy, qabul: viewReg, sifat: viewFb, manbalar: viewSrc, korpus: viewCov, audit: viewAudit, landing: viewLanding, chegirmalar: viewOffers, telegram: viewTg, advokatlar: viewAtt, xizmatlar: viewSvc, ochirish: viewDel };
+  var VIEWS = { pilot: viewPilot, sinov: viewLab, ai: viewAi, xaridlar: viewBuy, qabul: viewReg, sifat: viewFb, manbalar: viewSrc, korpus: viewCov, audit: viewAudit, landing: viewLanding, chegirmalar: viewOffers, telegram: viewTg, advokatlar: viewAtt, xizmatlar: viewSvc, ochirish: viewDel };
   function guard(fn) { return function () { if (!J.isMaster()) { J.go('#/'); return; } fn.apply(null, arguments); }; }
   J.route(/^\/boshqaruv$/, guard(function () { J.viewAdmin(); }));
   J.route(/^\/boshqaruv\/([a-z]+)$/, guard(function (k) { (VIEWS[k] || J.viewAdmin)(); }));
