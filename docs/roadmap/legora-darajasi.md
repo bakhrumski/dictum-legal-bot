@@ -72,8 +72,11 @@ Tartib va PR bo'linishi dizayn hujjatining 9-bo'limida.
 
 ## 2-bosqich. Mavjudini Legora tajribasiga yaqinlashtirish
 
-- [ ] Tabular Review: 100+ hujjat run sifatida (fon navbati); ustun turlari
+- [~] Tabular Review: 100+ hujjat run sifatida (fon navbati); ustun turlari
   (ha/yo'q, sana, summa, tanlov); teglar; Excel eksport; natija ishda saqlanadi.
+  PR ochildi (2026-10-28): 100 hujjat (`TABULAR_MAX_DOCS`, <= 200), tanlov
+  ustuni, qator teglari, Excel, fonda ishlash va bosqichlar. Jonli AI bilan
+  100 hujjatda sinalmagan.
 - [ ] Word: playbook tahlili Word ichida (izoh va Track Changes bilan), "ishga
   saqlash".
 - [ ] Natijalar: Excel (jadval), PowerPoint (ish bo'yicha qisqa taqdimot).
@@ -155,3 +158,19 @@ nima o'lchandi.
   `reviewed: false`), AI'siz baholovchi, runner (dry standart; jonli -
   server API orqali master sessiyasi, run sha tasdig'i bilan). Yurist
   ko'rib chiqmaguncha sifat haqida xulosa yo'q.
+- 2026-10-28: #503 (PR-G) merge. 2-bosqich, jadval PR ochildi:
+  - 100 tagacha hujjat. Run faqat ustunlar va har hujjatning savollarga mos
+    qismlarini saqlaydi; har 10 hujjat alohida qadam (checkpoint).
+  - Run'ning o'z chegaralari: hujjat soni + 8 chaqiruv, har hujjatga $0.05
+    (kamida $1), 15 s (20 daqiqagacha).
+  - Chegara yoki bekor qilish o'rtada to'xtatsa, o'qilgan qatorlar
+    ko'rsatiladi va haqi olinadi, qolganining birliklari qaytariladi.
+  - Tanlov ustuni (2-8 variant). Variantdan tashqari javob "Topilmadi"
+    bo'ladi.
+  - Qator teglari run natijasida saqlanadi (`PUT /api/agent/runs/:id/tags`).
+  - Excel (Jadval, Iqtiboslar, Izoh).
+  - Sahifa: fayllar 3 tadan o'qiladi; 10 dan ortiq hujjat fonda ishlaydi,
+    `#/jadval/<runId>` bosqichlarni ko'rsatadi; teglar bo'yicha filtr.
+  - Brauzerda 1280 va 390 px'da tekshirildi, AI javobi bazaga tayyor
+    yozilgan. Haqiqiy AI bilan 100 hujjat sinalmagan: vaqt va narx
+    o'lchanmagan.

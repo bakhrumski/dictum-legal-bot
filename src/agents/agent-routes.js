@@ -31,6 +31,7 @@ const crypto = require('crypto');
 const { runWorkflow } = require('./harness');
 const { createClaimDraftWorkflow, readIntake } = require('./workflows/claim-draft');
 const tabular = require('./workflows/tabular-review');
+const tabularExport = require('./workflows/tabular-export');
 const playbook = require('./workflows/playbook-review');
 
 const HOLD_MIN = Math.max(20, Number(process.env.AGENT_RUN_HOLD_MIN) || 45);
@@ -105,8 +106,16 @@ function claimService({ callAI, callCheapAI, retrieve, generateDraftHtml, ledger
 
 /** Tabular review as a service (src/agents/workflows/tabular-review.js). */
 function tabularService({ callAI, ledger, pool = null, budget = {} }) {
-  const workflow = tabular.createTabularReviewWorkflow();
   const maxMs = Number(process.env.AGENT_TABLE_MAX_MS) || 180000;
+  // a large table (stage 2, up to 100 documents): its time and its AI limits
+  // grow with the documents - 15 s and one call each, $0.05 each, never past
+  // 20 minutes; the run carries them (agent_runs.budget.ai)
+  const sizeOf = (docs) => {
+    const ms = Math.min(20 * 60e3, Math.max(maxMs, docs * 15e3));
+    const usd = Number(process.env.TABULAR_RUN_USD_PER_DOC) || 0.05;
+    return { maxMs: ms, ai: { maxCalls: docs + 8, maxMs: ms + 60e3, maxCostUsd: Number(Math.max(1, docs * usd).toFixed(2)) } };
+  };
+  const workflowOf = docCount => tabular.createTabularReviewWorkflow({ docCount });
   return {
     id: 'tabular_review', maxMs,
     async prepare(req, { requestId, holdUntil } = {}) {
@@ -115,12 +124,15 @@ function tabularService({ callAI, ledger, pool = null, budget = {} }) {
       // a scanned document comes as its scanId: the text read by the OCR step
       // (POST /api/analyze/ocr-image, its pages paid there), this account's only
       if (Array.isArray(input.documents) && input.documents.some(d => d && d.scanId)) {
-        const r = await scanDocuments(pool, req.session.adminId, input.documents);
+        const r = await scanDocuments(pool, req.session.adminId, input.documents, tabular.LIMITS.docs);
         if (r.error) return fail(r.status, r.error);
         input.documents = r.documents;
       }
       const first = tabular.readInput(input);
       if (first.missing.length) return fail(422, { error: 'needs_input', message: "Jadval uchun ma'lumot yetarli emas", missing: first.missing });
+      // the run keeps the columns and each document's excerpt, not whole documents
+      const { prepared } = tabular.prepareInput(input);
+      const size = sizeOf(first.docs.length);
       let jobs;
       try {
         jobs = await ledger.reserveMany({ adminId: req.session.adminId, channel: 'web', ...(requestId ? { requestId } : {}),
@@ -133,14 +145,17 @@ function tabularService({ callAI, ledger, pool = null, budget = {} }) {
         return fail(402, { error: 'no_units', message: `Har bir hujjat uchun 1 ta savol birligi kerak (${first.docs.length} ta), limit yetarli emas.`, needed: first.docs.length, remaining: jobs.remaining == null ? null : jobs.remaining });
       }
       return {
-        input,
-        ctx: { staff: jobs.kind === 'staff' },
+        input: { prepared },
+        ctx: { staff: jobs.kind === 'staff', docCount: first.docs.length },
+        maxMs: size.maxMs, budget: { ai: size.ai },
         jobs: first.docs.map((d, i) => ({ docId: d.id, jobKey: (jobs.jobs[i] && jobs.jobs[i].jobKey) || null })).filter(j => j.jobKey),
       };
     },
     async run(prep, opts = {}) {
       try {
-        return await runWorkflow(workflow, prep.input, { deps: { callAI }, budget: { maxSteps: 6, maxMs, ...budget }, ...opts });
+        const docCount = (prep.ctx && prep.ctx.docCount) || 0;
+        const wf = workflowOf(docCount);
+        return await runWorkflow(wf, prep.input, { deps: { callAI }, budget: { maxSteps: wf.steps.length, maxMs: sizeOf(docCount).maxMs, ...budget }, ...opts });
       } catch (e) {
         if (e && e.checkpointFailed) throw e;
         return failedOut();
@@ -148,23 +163,29 @@ function tabularService({ callAI, ledger, pool = null, budget = {} }) {
     },
     async settle(prep, out) {
       const steps = (out.state && out.state.steps) || {};
-      const rows = (steps.verify && steps.verify.rows) || [];
+      // a run stopped by its limits or a cancel still shows (and charges) the rows it read
+      const checked = steps.verify || (out.status !== 'done' ? tabular.verifyRows(out.state) : null) || { rows: [], verified: 0, unverified: 0 };
+      const rows = checked.rows;
       const ok = new Set(rows.filter(r => r.status === 'ok').map(r => r.docId));
+      const delivered = ok.size > 0 && (out.status === 'done' || out.status === 'budget' || out.status === 'cancelled');
       let charged = 0;
       for (const { docId, jobKey } of prep.jobs || []) {
-        if (out.status === 'done' && ok.has(docId)) { await ledger.commit(jobKey).catch(() => {}); charged++; }
+        if (delivered && ok.has(docId)) { await ledger.commit(jobKey).catch(() => {}); charged++; }
         else await ledger.release(jobKey, out.status === 'done' ? 'tabular_row_failed' : `tabular_${out.status}`).catch(() => {});
       }
+      const total = (prep.ctx && prep.ctx.docCount) || (prep.jobs || []).length;
+      const partial = delivered && out.status !== 'done';
       return {
-        httpStatus: out.status === 'done' ? 200 : 502,
+        httpStatus: delivered ? 200 : 502,
         body: {
           status: out.status,
-          ...(out.status === 'done' ? {} : { message: "Jadvalni tayyorlab bo'lmadi; birliklar qaytarildi.", stoppedAt: out.stoppedAt || null }),
+          ...(delivered ? {} : { message: "Jadvalni tayyorlab bo'lmadi; birliklar qaytarildi.", stoppedAt: out.stoppedAt || null }),
+          ...(partial ? { partial: true, message: `Jadval to'liq emas: ${total} hujjatdan ${ok.size} tasi o'qildi${out.status === 'cancelled' ? ' (bekor qilindi)' : ' (vaqt yoki AI chegarasi tugadi)'}. Qolganlari uchun birliklar qaytarildi.` } : {}),
           columns: steps.validate ? steps.validate.columns : [],
-          rows,
+          rows: delivered ? rows : [],
           droppedDocs: steps.validate ? steps.validate.droppedDocs : 0,
-          verified: steps.verify ? steps.verify.verified : 0,
-          unverified: steps.verify ? steps.verify.unverified : 0,
+          verified: delivered ? checked.verified : 0,
+          unverified: delivered ? checked.unverified : 0,
           trace: out.trace, ms: out.ms,
           charged: prep.ctx.staff ? 0 : charged,
         },
@@ -283,7 +304,7 @@ function serve(svc, runs) {
     let run = null;
     if (useRuns) {
       try {
-        run = await runs.store.create({ adminId: req.session.adminId, workflow: svc.id, input: { input: prep.input, ctx: prep.ctx }, jobs: prep.jobs, requestId, channel: 'web' });
+        run = await runs.store.create({ adminId: req.session.adminId, workflow: svc.id, input: { input: prep.input, ctx: prep.ctx }, jobs: prep.jobs, requestId, channel: 'web', ...(prep.budget ? { budget: prep.budget } : {}) });
       } catch (e) {
         if (e && e.status === 429) {
           await svc.settle(prep, failedOut('failed')).catch(() => {});
@@ -304,7 +325,7 @@ function serve(svc, runs) {
     // wait for the worker; the page keeps its reply shape
     let gone = false;
     req.on('close', () => { gone = true; });
-    const deadline = Date.now() + svc.maxMs + (Number(process.env.AGENT_SYNC_QUEUE_MS) || 120000);
+    const deadline = Date.now() + (prep.maxMs || svc.maxMs) + (Number(process.env.AGENT_SYNC_QUEUE_MS) || 120000);
     const poll = Number(runs.pollMs) || 1000;
     while (!gone && Date.now() < deadline) {
       await new Promise(r => setTimeout(r, poll));
@@ -330,7 +351,8 @@ function mountAgentRoutes(app, { requireAuth, requireSameOrigin, callAI, callChe
 module.exports = { mountAgentRoutes, mountTabularRoute, mountPlaybookRoutes, claimService, tabularService, playbookService, executorFor };
 
 /**
- *   POST /api/agent/tabular-review   { documents: [{ name, text }], columns: [{ label, type }] }
+ *   POST /api/agent/tabular-review          { documents: [{ name, text | scanId }], columns: [{ label, type, options? }], async? }
+ *   POST /api/agent/tabular-review/export   { columns, rows, tags } -> .xlsx (no AI, nothing stored)
  *
  * Each document is one row and costs one question unit ('chat') for up to
  * 10 questions - reserved for all rows together before any AI call (all or
@@ -340,6 +362,21 @@ module.exports = { mountAgentRoutes, mountTabularRoute, mountPlaybookRoutes, cla
 function mountTabularRoute(app, { requireAuth, requireSameOrigin, callAI, ledger, pool = null, budget = {}, runs = null }) {
   const svc = tabularService({ callAI, ledger, pool, budget });
   app.post('/api/agent/tabular-review', requireSameOrigin, requireAuth, serve(svc, runs));
+  // the table the person has, as an Excel file (no AI, nothing stored)
+  app.post('/api/agent/tabular-review/export', requireSameOrigin, requireAuth, (req, res) => {
+    const b = req.body || {};
+    if (!Array.isArray(b.rows) || !b.rows.length || !Array.isArray(b.columns) || !b.columns.length) {
+      return res.status(400).json({ error: 'invalid', message: "Eksport uchun jadval bo'sh" });
+    }
+    try {
+      const buf = tabularExport.buildWorkbook({ columns: b.columns, rows: b.rows, tags: b.tags });
+      res.set({ 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Content-Disposition': `attachment; filename="jadval-${new Date().toISOString().slice(0, 10)}.xlsx"`, 'Cache-Control': 'no-store' });
+      res.send(buf);
+    } catch (e) {
+      console.error('[AGENT] tabular export failed:', e.message);
+      res.status(500).json({ error: 'export_failed', message: "Excel faylni tuzib bo'lmadi" });
+    }
+  });
   return { executor: executorFor(svc) };
 }
 
@@ -418,12 +455,12 @@ function mountPlaybookRoutes(app, { requireAuth, requireSameOrigin, callAI, ledg
  * unexpired; the OCR text with its "=== PAGE n ===" marks.
  * Returns { documents, rows } or { status, error }.
  */
-async function scanDocuments(pool, adminId, docs) {
+async function scanDocuments(pool, adminId, docs, limit = 20) {
   if (!pool) return { status: 503, error: { error: 'scan_unavailable', message: "Skan hujjatni o'qib bo'lmadi" } };
   const { getScan } = require('../ocr/scan-store');
   const out = [], rows = [];
   try {
-    for (const d of docs.slice(0, 20)) {
+    for (const d of docs.slice(0, limit)) {
       if (!d || !d.scanId) { out.push(d); continue; }
       const row = await getScan(pool, { adminId, scanId: d.scanId });
       if (!row) return { status: 404, error: { error: 'scan_not_found', code: 'SCAN_NOT_FOUND', message: "Skan hujjat topilmadi yoki muddati o'tgan — uni qayta yuklang." } };

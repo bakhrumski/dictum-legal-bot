@@ -34,7 +34,7 @@ const { runWorkflow } = require('../src/agents/harness');
 const { createRunStore } = require('../src/agents/runs/store');
 const { createRunWorker } = require('../src/agents/runs/worker');
 const { mountRunRoutes } = require('../src/agents/runs/routes');
-const { mountPlaybookRoutes } = require('../src/agents/agent-routes');
+const { mountPlaybookRoutes, mountTabularRoute } = require('../src/agents/agent-routes');
 const pb = require('../src/agents/workflows/playbook-review');
 const { createMatterStore } = require('../src/matters/store');
 
@@ -257,6 +257,61 @@ async function queueRun(store, adminId, x = 1) {
       assert.strictEqual((await call('GET', `/api/agent/runs/${queued.body.runId}`)).status, 404);
       assert.strictEqual((await call('POST', `/api/agent/runs/${queued.body.runId}/cancel`)).status, 404);
       await assert.rejects(matters.addItem(m.id, user, { kind: 'agent_run', ref: '00000000-0000-0000-0000-000000000000' }), e => e.status === 404);
+    } finally {
+      server.close();
+      await worker.stop();
+    }
+  });
+
+  await test('a 23-document table runs in the background: its own AI limits, one extract step per 10, excerpts only in the run, tags kept with the result', async () => {
+    const user = await makeUser('gold');
+    const other = await makeUser(null);
+    let who = user, seenBudget = null, calls = 0;
+    const DOC = "IJARA SHARTNOMASI\n1. Ijaraga beruvchi Karimov A., ijarachi Saidov B.\n2. Oylik ijara haqi 3 000 000 so'm.\n" + 'Boshqa shartlar matni. '.repeat(40);
+    const app = express();
+    app.use(express.json({ limit: '20mb' }));
+    app.use((req, _r, next) => { req.session = { adminId: who }; next(); });
+    let worker = null;
+    const runs = { store, kick: () => worker && worker.tick(), pollMs: 100 };
+    let inputSeen = null;
+    const callAI = async () => {
+      calls++;
+      if (!seenBudget) seenBudget = usageLedger.current().budget;
+      return { text: JSON.stringify({ answers: [{ id: 'c1', answer: "3 000 000 so'm", quote: "Oylik ijara haqi 3 000 000 so'm." }] }) };
+    };
+    const { executor } = mountTabularRoute(app, { requireAuth: (_q, _s, n) => n(), requireSameOrigin: (_q, _s, n) => n(), callAI, ledger, pool, runs });
+    mountRunRoutes(app, { requireAuth: (_q, _s, n) => n(), requireSameOrigin: (_q, _s, n) => n(), store, pollMs: 100 });
+    const spy = { execute: async (run, opts) => { inputSeen = JSON.stringify(run.input); return executor.execute(run, opts); }, abort: executor.abort };
+    worker = createRunWorker({ store, executors: { tabular_review: spy }, pollMs: 100 });
+    worker.start();
+    const server = app.listen(0);
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const call = async (method, url, body) => {
+      const r = await fetch(base + url, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+      return { status: r.status, body: await r.json().catch(() => null) };
+    };
+    try {
+      const docs = Array.from({ length: 23 }, (_, i) => ({ name: `ijara-${i}.docx`, text: DOC }));
+      const queued = await call('POST', '/api/agent/tabular-review', { documents: docs, columns: [{ label: 'Oylik ijara haqi qancha?', type: 'amount' }], async: true });
+      assert.strictEqual(queued.status, 202);
+      let got = null;
+      for (let i = 0; i < 200; i++) {
+        got = await call('GET', `/api/agent/runs/${queued.body.runId}`);
+        if (got.body && got.body.status === 'done') break;
+        await sleep(50);
+      }
+      assert.strictEqual(got.body.status, 'done');
+      assert.deepStrictEqual(got.body.steps.map(s => s.id), ['validate', 'excerpt', 'extract_1', 'extract_2', 'extract_3', 'verify']);
+      assert.strictEqual(got.body.result.body.rows.length, 23);
+      assert.strictEqual(got.body.result.body.charged, 23);
+      assert.strictEqual(calls, 23);
+      assert.deepStrictEqual([seenBudget.maxCalls, seenBudget.maxCostUsd, seenBudget.maxMs], [31, 1.15, 405000], 'the run carries the table\'s own limits');
+      assert.ok(inputSeen.includes('"prepared"') && !inputSeen.includes('"documents"'), 'the run holds the prepared excerpts, not the request');
+      const tagged = await call('PUT', `/api/agent/runs/${queued.body.runId}/tags`, { tags: { d1: ['muhim', 'muhim'], d2: ['muddati o\'tgan'] } });
+      assert.deepStrictEqual(tagged.body.tags, { d1: ['muhim'], d2: ["muddati o'tgan"] });
+      assert.deepStrictEqual((await call('GET', `/api/agent/runs/${queued.body.runId}`)).body.result.body.tags, { d1: ['muhim'], d2: ["muddati o'tgan"] });
+      who = other;
+      assert.strictEqual((await call('PUT', `/api/agent/runs/${queued.body.runId}/tags`, { tags: { d1: ['x'] } })).status, 404, "another account's table");
     } finally {
       server.close();
       await worker.stop();
