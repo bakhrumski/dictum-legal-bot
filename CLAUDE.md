@@ -670,6 +670,14 @@ Known state of the suites (Sept 2026):
   or the question - the chat's state `agent_answer` makes the next message
   the answer ("yo'q" is an answer there; only "bekor" stops it). A staff
   account reaches this only in /testmode (staff messages are not questions).
+  PR-G: `docs/quality/agent-eval.md` - 24 synthetic cases
+  (`docs/quality/agent-eval/cases.json`, all `reviewed: false` until a lawyer
+  reviews them; no article numbers guessed), a scorer with no AI
+  (`scripts/lib/agent-eval-score.js`: delivered, asked, acts, structure,
+  must_say, must_not_say, verification) and `scripts/agent-eval.js` (dry by
+  default; live only through a running server's API as a master session,
+  with `AGENT_EVAL_LIVE=yes` and `--approve <runSha>`). Only reviewed cases
+  speak for quality.
 - Matter commands by voice or text (2026-10-28, owner): `src/matters/commands.js`
   - anchored uz / ru phrases (no AI, <= 300 chars: "ishlarim", "yangi ish och:
   …", "<ish> ishiga yozuv: …", "<ish> ishini ko'rsat / yop / qayta och",
