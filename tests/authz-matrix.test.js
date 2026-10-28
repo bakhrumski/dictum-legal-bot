@@ -67,6 +67,7 @@ const CASES = [
   ['POST', '/api/agent/plan', REJECTED, 'agent: plan a task'],
   ['POST', '/api/matters/command', REJECTED, 'matters: a voice or typed command'],
   ['POST', '/api/agent/runs/00000000-0000-0000-0000-000000000000/approve', REJECTED, 'agent: approve a plan'],
+  ['POST', '/api/agent/runs/00000000-0000-0000-0000-000000000000/input', REJECTED, 'agent: answer the run\'s question'],
 
   // ── staff-only ──
   ['GET', '/api/files/AgACAgTEST/download', REJECTED, 'client file download'],

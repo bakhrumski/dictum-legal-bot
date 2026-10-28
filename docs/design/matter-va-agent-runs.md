@@ -447,6 +447,29 @@ qat'iy workflow taklif qilinadi.
 - lex.uz o'qishlari parallel bo'lsa ham `LEX_FETCH_CONCURRENCY` (1) va
   `readBudget` bilan cheklanadi. Bu xotira qoidasi agentda ham o'zgarmaydi.
 
+### 4.3.1 PR-E'da amalga oshirilgani (2026-10-28)
+
+- **Graf rejimi** (`src/agents/harness.js`). Qadamlarda `after` bo'lsa, ular
+  graf sifatida bajariladi:
+  - qadam `after`dagi hamma qadamlar tugagach boshlanadi;
+  - bir vaqtda ko'pi bilan `workflow.parallel` (reja uchun 3,
+    `AGENT_PLAN_PARALLEL`) qadam ishlaydi;
+  - xato, savol (halt), bekor qilish yoki limit bo'lsa, yangi qadam
+    boshlanmaydi; ishlab turganlari tugaydi va yoziladi.
+
+  `after`siz workflow'lar avvalgidek ketma-ket ishlaydi.
+- **Reja normallashtiriladi:** `answer` o'zidan oldingi barcha qadamlarni,
+  `verify` esa hammasini kutadi.
+- **`ask_user`:** ko'pi bilan bir marta va `answer`dan oldin.
+  1. Javob yo'q bo'lsa, run `needs_input` holatida to'xtaydi. Birliklar
+     qaytariladi, input va checkpoint'lar saqlanadi. Savol bergan qadam
+     checkpoint emas.
+  2. `POST /api/agent/runs/:id/input { answer }` narxni qayta band qiladi va
+     run'ni navbatga qo'yadi. Savol bergan qadam javob bilan qayta ishlaydi,
+     tugagan qadamlar qayta ishlamaydi.
+  3. 7 kun javob berilmasa, run bekor qilinadi va input o'chiriladi.
+     Bekor qilish ham input'ni o'chiradi.
+
 ### 4.4 O'zgarmas qoidalar
 
 1. **Yakuniy matnni faqat `answer` / `draft_claim` / `tabular` / `playbook`

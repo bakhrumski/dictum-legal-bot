@@ -6,6 +6,7 @@
  *
  *   POST /api/agent/plan                 { task, matterId? } -> 201 { runId, plan, price, source, errors }
  *   POST /api/agent/runs/:id/approve     the owner approves: the price is reserved, the run is queued
+ *   POST /api/agent/runs/:id/input       { answer }: the run asked (ask_user, needs_input); reserved again, queued again
  *
  * A plan is made (one cheap call, not charged), checked by the server and
  * kept as an agent run waiting for approval; nothing is reserved and no
@@ -53,12 +54,17 @@ function plannedExecutor({ registry, deps, ledger, budget = {} }) {
     const steps = (out.state && out.state.steps) || {};
     const verified = Object.values(steps).find(o => o && typeof o.text === 'string' && o.status !== undefined && 'withheld' in o);
     const delivered = out.status === 'done' && verified && verified.substantive;
+    // the run asks the person (ask_user): the units go back now and are reserved again with the answer
+    const asking = out.status === 'needs_input' ? Object.entries(steps).find(([, o]) => o && o.halt === 'needs_input') : null;
     for (const j of run.jobs || []) {
       if (delivered) await ledger.commit(j.jobKey).catch(() => {});
       else await ledger.release(j.jobKey, `planned_${out.status}`).catch(() => {});
     }
     const { chunksOf } = require('./tools');
     const sources = chunksOf(steps).slice(0, 30).map(c => ({ act: clean(c.law_name, 200), article: c.article_number_display || c.article_number || null, url: c.source_url || null }));
+    if (asking) {
+      return { httpStatus: 202, body: { status: 'needs_input', question: asking[1].question, stoppedAt: asking[0], plan: run.plan, trace: out.trace, ms: out.ms, charged: false } };
+    }
     return {
       httpStatus: delivered ? 200 : 502,
       body: {
@@ -78,16 +84,19 @@ function plannedExecutor({ registry, deps, ledger, budget = {} }) {
       const plan = run.plan || { nodes: [] };
       const matterId = run.matter_id || null;
       const base = { adminId: run.admin_id, matterId, deps };
+      const answers = (run.input && run.input.answers) || {};
       const workflow = {
         id: 'planned',
+        parallel: Math.max(1, Math.min(3, Number(process.env.AGENT_PLAN_PARALLEL) || 3)),
         steps: plan.nodes.map((n) => {
           const tool = registry.get(n.tool);
           return {
             id: n.id,
             label: tool ? tool.label : n.tool,
+            after: Array.isArray(n.after) ? n.after : [],
             run: async (state) => {
               if (!tool) throw new Error(`noma'lum vosita ${n.tool}`);
-              return tool.run(n.args || {}, { ...base, inputs: (n.after || []).map(a => state.steps[a]), all: state.steps });
+              return tool.run(n.args || {}, { ...base, nodeId: n.id, answers, inputs: (n.after || []).map(a => state.steps[a]), all: state.steps });
             },
             note: (o) => (o && o.note) || '',
           };
@@ -150,21 +159,50 @@ function mountPlannerRoutes(app, { requireAuth, requireSameOrigin, pool, ledger,
     }
   });
 
+  /** The plan's price reserved for the run (held for it): the jobs, [] when free, null when the units are not there. */
+  async function reservePrice(run, adminId) {
+    const holdUntil = new Date(Date.now() + HOLD_MIN * 60e3).toISOString();
+    const want = Object.entries(run.price || {}).filter(([, u]) => u > 0)
+      .map(([service, units]) => ({ service, units, endpoint: '/api/agent/plan', meta: { holdUntil, runId: run.id } }));
+    if (!want.length) return [];
+    const r = await ledger.reserveMany({ adminId, channel: 'web', jobs: want, requestId: run.request_id });
+    if (!r.allowed) return null;
+    return (r.jobs || []).filter(j => j && j.jobKey).map((j, i) => ({ jobKey: j.jobKey, service: want[i] && want[i].service }));
+  }
+
+  // the person answers the question a planned run stopped on (ask_user): reserved again, queued again
+  app.post('/api/agent/runs/:id/input', requireSameOrigin, requireAuth, async (req, res) => {
+    const adminId = req.session.adminId;
+    try {
+      const run = await runs.store.row(req.params.id, adminId);
+      if (!run) return res.status(404).json({ error: 'not_found', message: 'Agent ishi topilmadi' });
+      const asked = run.result && run.result.body && run.result.body.stoppedAt;
+      if (run.status !== 'needs_input' || run.workflow !== 'planned' || !asked) return res.status(409).json({ error: 'not_waiting', message: "Bu ish javob kutmayapti", status: run.status });
+      const answer = clean(req.body && req.body.answer, 2000);
+      if (answer.length < 1) return res.status(422).json({ error: 'needs_input', message: "Javobni yozing" });
+      const jobs = await reservePrice(run, adminId);
+      if (!jobs) return res.status(402).json({ error: 'no_units', message: "Davom etish uchun birlik yetarli emas.", price: run.price });
+      const queued = await runs.store.resume(run.id, adminId, { answers: { [asked]: answer }, jobs });
+      if (!queued) {
+        for (const j of jobs) await ledger.release(j.jobKey, 'resume_lost').catch(() => {});
+        return res.status(409).json({ error: 'not_waiting', message: "Bu ish javob kutmayapti" });
+      }
+      if (runs.kick) runs.kick();
+      res.json({ runId: run.id, status: 'queued' });
+    } catch (e) {
+      console.error('[AGENT-PLAN] input:', e.message);
+      res.status(500).json({ error: 'failed', message: "Javobni qabul qilib bo'lmadi" });
+    }
+  });
+
   app.post('/api/agent/runs/:id/approve', requireSameOrigin, requireAuth, async (req, res) => {
     const adminId = req.session.adminId;
     try {
       const run = await runs.store.row(req.params.id, adminId);
       if (!run) return res.status(404).json({ error: 'not_found', message: 'Agent ishi topilmadi' });
       if (run.status !== 'awaiting_approval' || run.cancel_requested) return res.status(409).json({ error: 'not_waiting', message: "Bu reja tasdiq kutmayapti", status: run.status });
-      const holdUntil = new Date(Date.now() + HOLD_MIN * 60e3).toISOString();
-      const want = Object.entries(run.price || {}).filter(([, u]) => u > 0)
-        .map(([service, units]) => ({ service, units, endpoint: '/api/agent/plan', meta: { holdUntil, runId: run.id } }));
-      let jobs = [];
-      if (want.length) {
-        const r = await ledger.reserveMany({ adminId, channel: 'web', jobs: want, requestId: run.request_id });
-        if (!r.allowed) return res.status(402).json({ error: 'no_units', message: "Bu reja uchun birlik yetarli emas. Tarif yoki bir martalik xizmat kerak.", price: run.price });
-        jobs = (r.jobs || []).filter(j => j && j.jobKey).map((j, i) => ({ jobKey: j.jobKey, service: want[i] && want[i].service }));
-      }
+      const jobs = await reservePrice(run, adminId);
+      if (!jobs) return res.status(402).json({ error: 'no_units', message: "Bu reja uchun birlik yetarli emas. Tarif yoki bir martalik xizmat kerak.", price: run.price });
       const queued = await runs.store.approve(run.id, adminId, jobs);
       if (!queued) {
         for (const j of jobs) await ledger.release(j.jobKey, 'approve_lost').catch(() => {});

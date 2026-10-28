@@ -57,13 +57,13 @@ Tartib va PR bo'linishi dizayn hujjatining 9-bo'limida.
   javob shaklini saqlaydi.
 - [x] PR-C (#496): Matter UI (`/app/#/ishlar`): ro'yxat, ish sahifasi, "ishga
   qo'shish" tugmalari (chat, jadval, playbook, loyiha).
-- [~] PR-D: Vositalar reestri va reja tuzuvchi agent. Avval faqat master
+- [x] PR-D (#497): Vositalar reestri va reja tuzuvchi agent. Avval faqat master
   uchun (`AGENT_PLANNER=master`). Reja va narxni tasdiqlash shu PR'da
   (PR-E'dan oldinga olindi).
-- [~] PR-V: Ishlarni ovoz bilan boshqarish: Telegram'da ulangan akkaunt
+- [x] PR-V (#498): Ishlarni ovoz bilan boshqarish: Telegram'da ulangan akkaunt
   orqali va ilova ichida (egasi, 2026-10-28). `src/matters/commands.js`.
   Keyingi qadam: ovoz bilan agent topshirig'i (reja → tasdiq) - PR-F bilan.
-- [ ] PR-E: Parallel qadamlar, `needs_input`
+- [~] PR-E: Parallel qadamlar, `needs_input`
   dan keyin davom ettirish.
 - [ ] PR-F: Telegram: ish holati bitta xabarda yangilanadi, tasdiq tugmalari.
 - [ ] PR-G: Agent baholash to'plami (`docs/quality/agent-eval.md`): har bir
@@ -131,3 +131,11 @@ nima o'lchandi.
   `tests/matters.db.test.js`ga route testi qo'shildi (8). Ilova 1280 / 390
   px'da Chromium soxta mikrofoni bilan tekshirildi (STT stub). Haqiqiy
   Telegram va haqiqiy STT bilan sinalmagan.
+- 2026-10-28: #497 (PR-D) va #498 (PR-V) merge. #498 PR-D ustiga qurilgani
+  uchun squash'dan keyin konflikt berdi; PR-V commit'i yangi staging ustiga
+  cherry-pick qilinib, CI'dan qayta o'tkazildi.
+- 2026-10-28: PR-E ochildi: harness grafi (qadam `after`ga ko'ra, bir
+  vaqtda <= 3), `ask_user` vositasi va `needs_input`dan davom etish
+  (birlik qaytariladi, javob bilan qayta band qilinadi). Test ikki qadam
+  bir vaqtda tugaganda natija yo'qolish xatosini topdi (tuzatildi).
+  `agent-planner.test.js` 12, `agent-planner.db.test.js` 6 ta test.

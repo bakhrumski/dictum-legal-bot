@@ -37,7 +37,8 @@ function plannerPrompt({ task, toolLines, matter = null }) {
         `- Ko'pi bilan ${MAX_NODES} qadam, lex_search ko'pi bilan ${MAX_SEARCHES} marta (har biri savolning boshqa huquqiy jihati uchun, lex.uz so'z shakllarida: masalan "pudrat shartnomasi avans qaytarish").`,
         "- Aynan bitta answer qadami bo'ladi va oxirgi qadam verify (answer'dan keyin).",
         "- Ish bo'lsa, matter_context birinchi qadam bo'lsin. doc_excerpt faqat ISH HUJJATLARI ro'yxatidagi scanId bilan.",
-        "- after: shu qadamdan oldin tugashi kerak bo'lgan qadamlar id'lari (faqat oldingi qadamlar).",
+        "- after: shu qadamdan oldin tugashi kerak bo'lgan qadamlar id'lari (faqat oldingi qadamlar). Bir-biriga bog'liq bo'lmagan qidiruvlar after:[] bilan parallel ishlaydi.",
+        "- ask_user faqat javob uchun zarur fakt topshiriqda ham, ishda ham bo'lmasa (ko'pi bilan bir marta, answer'dan oldin).",
         'Faqat JSON qaytaring: {"goal":"...","nodes":[{"id":"n1","tool":"...","args":{...},"after":[]}]}',
       ].join('\n'),
     },
@@ -85,6 +86,13 @@ function validatePlan(raw, registry, ctx = {}) {
   const answerAt = out.findIndex(n => n.tool === 'answer');
   if (!last || last.tool !== 'verify' || answerAt < 0 || answerAt > out.length - 2) errors.push("oxirgi qadam answer'dan keyingi verify bo'lishi kerak");
   if (out.filter(n => n.tool === 'verify').length !== 1) errors.push("aynan bitta verify qadami bo'lishi kerak");
+  if (out.filter(n => n.tool === 'ask_user').length > 1) errors.push("ask_user ko'pi bilan bir marta");
+  if (out.some((n, i) => n.tool === 'ask_user' && answerAt >= 0 && i > answerAt)) errors.push("ask_user answer'dan oldin bo'lishi kerak");
+  // the steps run as a graph (PR-E): the answer waits for every step before it,
+  // verify for everything; other steps keep their own `after`
+  for (const [i, n] of out.entries()) {
+    if (n.tool === 'answer' || n.tool === 'verify') n.after = out.slice(0, i).map(x => x.id);
+  }
   return { ok: !errors.length, plan: { goal: clean(raw && raw.goal, 300), nodes: out }, errors: errors.slice(0, 10), price: priceOf(out, registry) };
 }
 

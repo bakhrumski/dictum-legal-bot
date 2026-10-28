@@ -653,6 +653,13 @@ Known state of the suites (Sept 2026):
   `planned` executor runs the steps; the chat unit is committed only with a
   verified answer). `AGENT_PLANNER` master (default) / gold / all / off. UI:
   the "Agent topshirig'i" card on a matter page (master only for now).
+  PR-E: steps with `after` run as a graph in the harness (<= 3 at once,
+  `AGENT_PLAN_PARALLEL`; a failure, halt, cancel or limit starts nothing new,
+  running steps finish and are recorded); the answer waits for every earlier
+  step, verify for all. `ask_user` (once, before the answer) stops the run
+  `needs_input` (units released, input and checkpoints kept);
+  `POST /api/agent/runs/:id/input` reserves again and requeues; unanswered
+  7 days -> cancelled.
 - Matter commands by voice or text (2026-10-28, owner): `src/matters/commands.js`
   - anchored uz / ru phrases (no AI, <= 300 chars: "ishlarim", "yangi ish och:
   …", "<ish> ishiga yozuv: …", "<ish> ishini ko'rsat / yop / qayta och",

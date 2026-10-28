@@ -64,8 +64,9 @@ const ANSWER = "**Tahlil**\n\nPudratchi ishni boshlamasa, buyurtmachi shartnomad
   const store = createRunStore({ db: pool });
   const matters = createMatterStore({ db: pool, resolveEntitlement: ledger.resolveEntitlement });
   const calls = { plan: 0, answer: 0 };
+  let planNow = PLAN;
   const callCheapAI = async (messages) => {
-    if (/reja/u.test(messages[0].text)) { calls.plan++; return { text: JSON.stringify(PLAN) }; }
+    if (/reja/u.test(messages[0].text)) { calls.plan++; return { text: JSON.stringify(planNow) }; }
     return { text: '{"verdicts":[]}' };
   };
   const callAI = async () => { calls.answer++; return { text: ANSWER }; };
@@ -164,6 +165,43 @@ const ANSWER = "**Tahlil**\n\nPudratchi ishni boshlamasa, buyurtmachi shartnomad
       const c = await call('POST', `/api/agent/runs/${p.body.runId}/cancel`);
       assert.strictEqual(c.body.status, 'cancelled');
       assert.strictEqual((await call('POST', `/api/agent/runs/${p.body.runId}/approve`)).status, 409);
+    });
+
+    await test('the run asks (ask_user): needs_input, units released; the answer reserves again and the run finishes; a waiting run can be cancelled', async () => {
+      process.env.AGENT_PLANNER = 'all';
+      who = await makeUser({ plan: 'silver' });
+      planNow = { goal: 'avans', nodes: [
+        { id: 'n1', tool: 'lex_search', args: { query: 'pudrat shartnomasi avans qaytarish' }, after: [] },
+        { id: 'n2', tool: 'ask_user', args: { question: "Avans qachon va qancha to'langan?" }, after: [] },
+        { id: 'n3', tool: 'answer', args: { question: 'Avansni qaytarish mumkinmi?' }, after: [] },
+        { id: 'n4', tool: 'verify', args: {}, after: [] },
+      ] };
+      try {
+        const p = await call('POST', '/api/agent/plan', { task: 'Pudratchi avansni qaytarmayapti, nima qilay?' });
+        assert.strictEqual((await call('POST', `/api/agent/runs/${p.body.runId}/approve`)).status, 200);
+        let r = null;
+        for (let i = 0; i < 100; i++) { r = (await call('GET', `/api/agent/runs/${p.body.runId}`)).body; if (r.status === 'needs_input') break; await sleep(60); }
+        assert.strictEqual(r.status, 'needs_input');
+        assert.match(r.result.body.question, /Avans qachon/u);
+        const usage = async () => (await pool.query(`SELECT status FROM tariff_usage WHERE meta->>'runId' = $1 ORDER BY id`, [p.body.runId])).rows.map(x => x.status);
+        assert.deepStrictEqual(await usage(), ['released'], 'nothing held while waiting for the answer');
+        const raw = (await pool.query('SELECT input FROM agent_runs WHERE id = $1', [p.body.runId])).rows[0];
+        assert.ok(raw.input && raw.input.task, 'the input is kept while the run waits');
+        assert.strictEqual((await call('POST', `/api/agent/runs/${p.body.runId}/input`, { answer: '' })).status, 422);
+        const before = calls.answer;
+        assert.strictEqual((await call('POST', `/api/agent/runs/${p.body.runId}/input`, { answer: "2026-yil mart, 12 mln so'm" })).status, 200);
+        const done = await waitDone(p.body.runId);
+        assert.strictEqual(done.status, 'done');
+        assert.strictEqual(calls.answer, before + 1);
+        assert.deepStrictEqual(await usage(), ['released', 'committed']);
+        assert.strictEqual((await call('POST', `/api/agent/runs/${p.body.runId}/input`, { answer: 'yana' })).status, 409, 'answered once');
+
+        const p2 = await call('POST', '/api/agent/plan', { task: 'Pudratchi avansni qaytarmayapti, nima qilay?' });
+        await call('POST', `/api/agent/runs/${p2.body.runId}/approve`);
+        for (let i = 0; i < 100; i++) { r = (await call('GET', `/api/agent/runs/${p2.body.runId}`)).body; if (r.status === 'needs_input') break; await sleep(60); }
+        assert.strictEqual((await call('POST', `/api/agent/runs/${p2.body.runId}/cancel`)).body.status, 'cancelled');
+        assert.strictEqual((await pool.query('SELECT input FROM agent_runs WHERE id = $1', [p2.body.runId])).rows[0].input, null, 'the documents go with the cancel');
+      } finally { planNow = PLAN; }
     });
 
     await test('a plan nobody approves in 24 hours ends', async () => {
