@@ -76,7 +76,7 @@ const ANSWER = "**Tahlil**\n\nPudratchi ishni boshlamasa, buyurtmachi shartnomad
   app.use((req, _r, next) => { req.session = { adminId: who }; next(); });
   const pass = (_q, _s, n) => n();
   const runs = { store, kick: () => worker && worker.tick() };
-  const { executor } = mountPlannerRoutes(app, { requireAuth: pass, requireSameOrigin: pass, pool, ledger, runs, matters, callCheapAI,
+  const { executor, service } = mountPlannerRoutes(app, { requireAuth: pass, requireSameOrigin: pass, pool, ledger, runs, matters, callCheapAI,
     deps: { callAI, callCheapAI, retrieve: async () => ({ chunks: [CHUNK] }) } });
   mountRunRoutes(app, { requireAuth: pass, requireSameOrigin: pass, store, pollMs: 100 });
   worker = createRunWorker({ store, executors: { planned: executor }, pollMs: 100 });
@@ -202,6 +202,43 @@ const ANSWER = "**Tahlil**\n\nPudratchi ishni boshlamasa, buyurtmachi shartnomad
         assert.strictEqual((await call('POST', `/api/agent/runs/${p2.body.runId}/cancel`)).body.status, 'cancelled');
         assert.strictEqual((await pool.query('SELECT input FROM agent_runs WHERE id = $1', [p2.body.runId])).rows[0].input, null, 'the documents go with the cancel');
       } finally { planNow = PLAN; }
+    });
+
+    await test('Telegram (PR-F): a plan made in the bot reports its steps to one status message and sends the answer; a question comes to the chat and the answer resumes it', async () => {
+      process.env.AGENT_PLANNER = 'all';
+      const notify = require('../src/agents/runs/notify');
+      const seen = [];
+      notify.setTelegramNotifier({ progress: async (r) => seen.push(['progress', r.input.telegram.messageId]), done: async (r, st, res) => seen.push(['done', st, r.input.telegram.chatId, (res.body.answer || res.body.question || '').slice(0, 12)]) });
+      try {
+        who = await makeUser({ plan: 'silver' });
+        const out = await service.plan({ adminId: who, task: 'Pudratchi avansni qaytarmayapti, nima qilay?', channel: 'telegram', telegram: { chatId: 4242 } });
+        assert.strictEqual((await pool.query('SELECT channel FROM agent_runs WHERE id = $1', [out.runId])).rows[0].channel, 'telegram');
+        assert.ok(await service.attachTelegram(out.runId, who, { chatId: 4242, messageId: 77 }));
+        await service.approve(out.runId, who);
+        const done = await waitDone(out.runId);
+        assert.strictEqual(done.status, 'done');
+        assert.ok(seen.some(x => x[0] === 'progress' && x[1] === 77), 'the status message was edited');
+        assert.deepStrictEqual(seen[seen.length - 1].slice(0, 3), ['done', 'done', 4242]);
+        assert.match(seen[seen.length - 1][3], /^\*\*Tahlil/u, 'the answer goes to the chat');
+        assert.strictEqual(await service.attachTelegram(out.runId, await makeUser(), { chatId: 1, messageId: 1 }), false, "another account cannot point it at its chat");
+
+        seen.length = 0;
+        planNow = { goal: 'avans', nodes: [
+          { id: 'n1', tool: 'ask_user', args: { question: "Avans qachon va qancha to'langan?" }, after: [] },
+          { id: 'n2', tool: 'answer', args: { question: 'Avansni qaytarish mumkinmi?' }, after: [] },
+          { id: 'n3', tool: 'verify', args: {}, after: [] },
+        ] };
+        const asks = await service.plan({ adminId: who, task: 'Pudratchi avansni qaytarmayapti, nima qilay?', channel: 'telegram', telegram: { chatId: 4242 } });
+        await service.attachTelegram(asks.runId, who, { chatId: 4242, messageId: 78 });
+        await service.approve(asks.runId, who);
+        let r = null;
+        for (let i = 0; i < 100; i++) { r = (await call('GET', `/api/agent/runs/${asks.runId}`)).body; if (r.status === 'needs_input') break; await sleep(60); }
+        assert.deepStrictEqual(seen[seen.length - 1], ['done', 'needs_input', 4242, 'Avans qachon']);
+        await service.answer(asks.runId, who, "2026-yil mart, 12 mln so'm");
+        const fin = await waitDone(asks.runId);
+        assert.strictEqual(fin.status, 'done');
+        assert.deepStrictEqual(seen[seen.length - 1].slice(0, 3), ['done', 'done', 4242], 'the resumed run still reports to the same chat');
+      } finally { planNow = PLAN; notify.setTelegramNotifier(null); }
     });
 
     await test('a plan nobody approves in 24 hours ends', async () => {

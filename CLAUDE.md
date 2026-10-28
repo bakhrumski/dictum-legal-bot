@@ -660,6 +660,16 @@ Known state of the suites (Sept 2026):
   `needs_input` (units released, input and checkpoints kept);
   `POST /api/agent/runs/:id/input` reserves again and requeues; unanswered
   7 days -> cancelled.
+  PR-F (Telegram): the planner is a service (`createPlannerService`:
+  plan / approve / answer / cancel / attachTelegram) shared by the web
+  routes and the bot. "agent: <topshiriq>" (typed or a voice note) ->
+  `agent_task` -> the plan with `agp_y_` / `agp_n_` buttons; approving sends
+  one status message whose id goes into the run's input (`telegram`), the
+  worker reports steps and the end through `src/agents/runs/notify.js` (the
+  bot's notifier, `src/bot/agent-runs.js`): the answer in Telegram Markdown,
+  or the question - the chat's state `agent_answer` makes the next message
+  the answer ("yo'q" is an answer there; only "bekor" stops it). A staff
+  account reaches this only in /testmode (staff messages are not questions).
 - Matter commands by voice or text (2026-10-28, owner): `src/matters/commands.js`
   - anchored uz / ru phrases (no AI, <= 300 chars: "ishlarim", "yangi ish och:
   …", "<ish> ishiga yozuv: …", "<ish> ishini ko'rsat / yop / qayta och",

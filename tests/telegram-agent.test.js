@@ -95,6 +95,8 @@ const fakePool = {
       dbState.clarifyCount = Number(params[2]) || 0;
       return { rows: [] };
     }
+    // the linked account (src/bot/telegram-roles.js getLinkedAccount)
+    if (/FROM admins/i.test(sql) && /telegram_chat_id = \$1/i.test(sql)) return { rows: dbState.linked ? [dbState.linked] : [] };
     return { rows: [] };
   },
 };
@@ -1324,6 +1326,57 @@ function stubMemory(clarifyCount = 0) {
     assert.ok(/categoryFromAgentMeta\(agentMeta\)/.test(botSource), 'guided intake category must reach the Master Admin queue without another classifier');
     assert.ok(/'identity', 'answer_pending', 'quota_exceeded', 'quota_unavailable'/.test(botSource), 'non-legal guardrail replies must not create queue rows');
   });
+
+  // ── Agent tasks in the bot (2026-10-28, PR-F, src/bot/agent-runs.js) ──
+  {
+    const plannerRoutes = require('../src/agents/planner-routes');
+    const original = plannerRoutes.plannerService;
+    const calls = [];
+    plannerRoutes.plannerService = () => ({
+      plan: async (o) => { calls.push(['plan', o]); return { runId: 'run-1', plan: { goal: 'g', nodes: [{ label: 'Qonunchilikni qidirish (lex.uz)', args: { query: 'avans' } }] }, price: { chat: 1 }, matterTitle: null }; },
+      answer: async (runId, adminId, text) => { calls.push(['answer', runId, adminId, text]); return { status: 'queued' }; },
+      cancel: async (runId, adminId) => { calls.push(['cancel', runId, adminId]); return { status: 'cancelled' }; },
+    });
+    try {
+      await test('"agent: …" with no linked account: told how to link, nothing planned', async () => {
+        stubMemory(); dbState.linked = null; calls.length = 0;
+        const d = deps(); agent.initTelegramAgent(d);
+        const r = await agent.handleUserMessage({ chatId: 77, text: 'agent: Pudratchi avansni qaytarmayapti, nima qilay?', identity: { telegramUserId: 77, adminId: null } });
+        assert.strictEqual(r.action, 'agent_unavailable');
+        assert.match(r.reply, /akkauntini ulang/u);
+        assert.strictEqual(calls.length, 0);
+        assert.deepStrictEqual([d.calls.intent, d.calls.answer], [0, 0], 'no AI call');
+      });
+      await test('"agent: …" from a linked account: a plan for that account in this chat, with the buttons, no AI call in the bot', async () => {
+        stubMemory(); dbState.linked = { id: 5, role: 'user' }; calls.length = 0;
+        const d = deps(); agent.initTelegramAgent(d);
+        const r = await agent.handleUserMessage({ chatId: 77, text: 'agent: Pudratchi avansni qaytarmayapti, nima qilay?', identity: { telegramUserId: 77, adminId: 5 } });
+        assert.deepStrictEqual([r.action, r.meta.runId], ['tool_agent_plan', 'run-1']);
+        assert.match(r.reply, /🤖 Agent rejasi:[\s\S]*Narx: limitdan 1 ta savol/u);
+        assert.deepStrictEqual(calls[0], ['plan', { adminId: 5, task: 'Pudratchi avansni qaytarmayapti, nima qilay?', matterId: null, channel: 'telegram', telegram: { chatId: 77 } }]);
+        assert.deepStrictEqual([d.calls.intent, d.calls.answer], [0, 0]);
+      });
+      await test('the run asked a question: the next message is the answer (state cleared); "bekor" stops it', async () => {
+        stubMemory(); dbState.linked = { id: 5, role: 'user' }; calls.length = 0;
+        dbState.state = 'agent_answer'; dbState.context = { runId: 'run-1' };
+        const d = deps(); agent.initTelegramAgent(d);
+        const r = await agent.handleUserMessage({ chatId: 77, text: "2026-yil mart, 12 mln so'm", identity: { telegramUserId: 77, adminId: 5 } });
+        assert.strictEqual(r.action, 'agent_answered');
+        assert.deepStrictEqual(calls[0], ['answer', 'run-1', 5, "2026-yil mart, 12 mln so'm"]);
+        assert.strictEqual(dbState.state, 'idle');
+        assert.deepStrictEqual([d.calls.intent, d.calls.answer], [0, 0], 'the answer is not taken for a legal question');
+        dbState.state = 'agent_answer'; dbState.context = { runId: 'run-1' }; calls.length = 0;
+        const no = await agent.handleUserMessage({ chatId: 77, text: "Yo'q", identity: { telegramUserId: 77, adminId: 5 } });
+        assert.deepStrictEqual([no.action, calls[0]], ['agent_answered', ['answer', 'run-1', 5, "Yo'q"]], '"yo\'q" is an answer to the agent, not a cancel');
+        dbState.state = 'agent_answer'; dbState.context = { runId: 'run-1' }; calls.length = 0;
+        const c = await agent.handleUserMessage({ chatId: 77, text: 'bekor', identity: { telegramUserId: 77, adminId: 5 } });
+        assert.deepStrictEqual([c.action, calls[0]], ['agent_cancelled', ['cancel', 'run-1', 5]]);
+      });
+    } finally {
+      plannerRoutes.plannerService = original;
+      dbState.linked = null;
+    }
+  }
 
   console.log(`\n${passed} passed, ${failed} failed\n`);
   process.exit(failed ? 1 : 0);
