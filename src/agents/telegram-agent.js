@@ -824,7 +824,8 @@ async function handleUserMessage({ chatId, text, firstName = '', testAccount = n
 
   if (!AUTO_ANSWER) return skip('auto-answer disabled');
   if (!isReady())   return skip('agent not initialized');
-  const question = String(text || '').trim();
+  // a question in the 2026 alphabet (ö ğ ş ç) is read in the old one: lex.uz and the checks are written in it
+  const question = require('../../public/js/uz-alphabet').toOld(String(text || '').trim());
   if (!question)    return skip('empty message');
 
   const started = Date.now();

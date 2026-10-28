@@ -6919,6 +6919,8 @@ app.use('/api/legal-chat', require('../adaptive/profile').answerRecorder());
 
 app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, tariffModule.enforceChatQuota('/api/legal-chat'), async (req, res) => {
   try {
+    // a question in the 2026 alphabet (ö ğ ş ç) is read in the old one: lex.uz, the corpus and the quote checks are written in it
+    if (req.body && typeof req.body.message === 'string') req.body.message = require('../../public/js/uz-alphabet').toOld(req.body.message);
     const { message, history, databases, topic: rawTopic, topics, autoDetect } = req.body;
     if (!message || typeof message !== 'string') {
       return res.status(400).json({ error: 'Xabar matni topilmadi' });

@@ -120,6 +120,7 @@ const ROLES = Object.freeze(['xaridor', 'sotuvchi', 'ijarachi', 'ijaraga_beruvch
  * manual (what the person set on the page):
  *   answerLength  qisqa | orta | batafsil
  *   script        latn | cyrl
+ *   alphabet      new | old   (the Latin alphabet text is shown in; new by default)
  *   hidden        { areas: [code], acts: [docId] }   items the person removed
  *   partyRoles    [{ area, role }]                    their side, by area - only ever set here
  */
@@ -128,6 +129,8 @@ function cleanManual(m = {}) {
   if (!m || typeof m !== 'object') return out;
   if (LENGTHS.includes(m.answerLength)) out.answerLength = m.answerLength;
   if (['latn', 'cyrl'].includes(m.script)) out.script = m.script;
+  // the Latin alphabet text is shown in: the 2026 one (default) or the old one (OʻRQ-1184)
+  if (['new', 'old'].includes(m.alphabet)) out.alphabet = m.alphabet;
   const h = m.hidden && typeof m.hidden === 'object' ? m.hidden : {};
   const areas = [...new Set((Array.isArray(h.areas) ? h.areas : []).filter(a => /^[a-z][a-z-]{1,30}$/u.test(String(a))))].slice(0, 40);
   const acts = [...new Set((Array.isArray(h.acts) ? h.acts : []).map(String).filter(a => /^\d{3,12}$/u.test(a)))].slice(0, 100);
@@ -152,6 +155,7 @@ function effectiveOf(profile = {}, manual = {}) {
     services: p.services || [],
     playbook: p.playbook || null,
     answerLength: m.answerLength || null,
+    alphabet: m.alphabet || 'new',
     partyRoles: m.partyRoles || [],
   };
 }

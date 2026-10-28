@@ -67,7 +67,8 @@ const PATTERNS = [
 
 /** { action, title?, matter?, text? } for a command, or null (then it is not one). */
 function parseCommand(text = '') {
-  const raw = String(text || '').trim();
+  // a command in the 2026 alphabet (ö ğ ş ç) is read, and its name kept, in the old one
+  const raw = require('../../public/js/uz-alphabet').toOld(String(text || '').trim());
   if (!raw || raw.length > MAX_LEN) return null;
   // the command's own words (a dictated text may end with a full stop)
   const t = norm(raw).replace(/[.!?]+$/u, '');

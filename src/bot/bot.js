@@ -181,6 +181,9 @@ const INSTAGRAM_URL = normalizeInstagramUrl(
 
 // NEVER start polling in constructor — polling is started explicitly when needed
 const bot = new TelegramBot(token, { polling: false });
+// the 2026 alphabet (OʻRQ-1184: ö ğ ş ç) by default, the old one on the chat's choice (src/bot/alphabet.js)
+const alphabetPrefs = require('./alphabet').createAlphabetPrefs({ db: pool });
+require('./alphabet').wrapBot(bot, alphabetPrefs);
 
 // agent tasks given in the bot report their steps and end here (src/bot/agent-runs.js, PR-F)
 require('../agents/runs/notify').setTelegramNotifier(require('./agent-runs').createTelegramRunNotifier({
@@ -847,6 +850,20 @@ async function handleCallbackQuery(callbackQuery) {
   const testAccount = await testAccountFor(callbackQuery);
   const data = callbackQuery.data;
 
+  // the script the bot writes in: the new alphabet or the old one (src/bot/alphabet.js)
+  if (data === 'alpha_old' || data === 'alpha_new') {
+    const al = require('./alphabet');
+    try {
+      const v = await alphabetPrefs.set(chatId, data === 'alpha_old' ? 'old' : 'new');
+      await bot.answerCallbackQuery(callbackQuery.id).catch(() => {});
+      await bot.sendMessage(chatId, v === 'old' ? al.TEXT.old : al.TEXT.new).catch(() => {});
+    } catch (e) {
+      console.warn('[BOT] alphabet choice failed:', e.message);
+      await bot.answerCallbackQuery(callbackQuery.id, { text: "Saqlab bo'lmadi", show_alert: true }).catch(() => {});
+    }
+    return;
+  }
+
   // a document's AI analysis or its lawyer queue (src/bot/telegram-documents.js)
   if (await documentFlow.onCallback(callbackQuery)) return;
   // a document order waiting for its details is dropped: the next message is a new one
@@ -1499,6 +1516,11 @@ Javoblar umumiy huquqiy ma'lumot bo'lib, rasmiy yuridik xulosa hisoblanmaydi.`;
     reply_markup: startKeyboard(false)
   });
   pendingRequests[chatId] = { username: username || 'Noma\'lum', messages: [] };
+});
+
+bot.onText(/^\/alifbo(?:@\w+)?$/, (msg) => {
+  const al = require('./alphabet');
+  bot.sendMessage(msg.chat.id, al.TEXT.ask, { reply_markup: al.keyboard }).catch(() => {});
 });
 
 bot.onText(/\/help/, (msg) => {
