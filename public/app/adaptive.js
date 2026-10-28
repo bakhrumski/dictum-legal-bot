@@ -10,7 +10,7 @@
       title: 'Moslashish', lead: 'JuristAI siz ko‘p ishlatgan sohalar, aktlar va xizmatlarni eslab qoladi, shunda javoblar va sahifalar sizga moslashadi. Savol, javob va hujjat matni saqlanmaydi — faqat qisqa kodlar.',
       on: 'Moslashish yoqiq', off: 'Moslashish to‘xtatilgan', pause: 'To‘xtatish', resume: 'Yoqish', pausedNote: 'To‘xtatilgan: yangi signal yozilmaydi va profil ishlatilmaydi.',
       know: 'JuristAI siz haqingizda nima biladi', areas: 'Ko‘p so‘raydigan sohalaringiz', acts: 'Ko‘p keltirilgan aktlar', none: 'Hali yetarli ma’lumot yo‘q.',
-      script: 'Alifbo', latn: 'Lotin', cyrl: 'Kirill', auto: 'Avtomatik', services: 'Ko‘p ishlatadigan xizmatlar', hide: 'Olib tashlash', hidden: 'Olib tashlangan', restore: 'Qaytarish',
+      script: 'Yozuv', latn: 'Lotin', cyrl: 'Kirill', alpha: 'Lotin alifbosi', alphaNew: 'Yangi: Ö ö, Ğ ğ, Ş ş, Ç ç', alphaOld: 'Eski: Oʻ oʻ, Gʻ gʻ, Sh sh, Ch ch', auto: 'Avtomatik', services: 'Ko‘p ishlatadigan xizmatlar', hide: 'Olib tashlash', hidden: 'Olib tashlangan', restore: 'Qaytarish',
       prefs: 'Sizning sozlamalaringiz', length: 'Javob uzunligi', len: { qisqa: 'Qisqa', orta: 'O‘rtacha', batafsil: 'Batafsil' },
       sides: 'Sizning tarafingiz', sidesLead: 'Faqat siz tanlaysiz — JuristAI tarafni o‘zi taxmin qilmaydi.', area: 'Soha', role: 'Taraf', add: 'Qo‘shish', saved: 'Saqlandi',
       signals: 'Yig‘ilgan signallar', signalsLead: 'Har savol yoki xizmatdan qolgan qisqa kodlar. {d} kundan keyin o‘zi o‘chadi.', total: 'Jami: {n}', when: 'Qachon', kind: 'Turi', value: 'Qiymati', ch: 'Qayerdan',
@@ -23,7 +23,7 @@
       title: 'Адаптация', lead: 'JuristAI запоминает области права, акты и сервисы, которыми вы пользуетесь чаще, чтобы ответы и страницы подстраивались под вас. Тексты вопросов, ответов и документов не сохраняются — только короткие коды.',
       on: 'Адаптация включена', off: 'Адаптация остановлена', pause: 'Остановить', resume: 'Включить', pausedNote: 'Остановлено: новые сигналы не записываются, профиль не используется.',
       know: 'Что JuristAI знает о вас', areas: 'Частые области', acts: 'Часто цитируемые акты', none: 'Пока недостаточно данных.',
-      script: 'Алфавит', latn: 'Латиница', cyrl: 'Кириллица', auto: 'Автоматически', services: 'Частые сервисы', hide: 'Убрать', hidden: 'Убрано', restore: 'Вернуть',
+      script: 'Письмо', latn: 'Латиница', cyrl: 'Кириллица', alpha: 'Узбекская латиница', alphaNew: 'Новая: Ö ö, Ğ ğ, Ş ş, Ç ç', alphaOld: 'Старая: Oʻ oʻ, Gʻ gʻ, Sh sh, Ch ch', auto: 'Автоматически', services: 'Частые сервисы', hide: 'Убрать', hidden: 'Убрано', restore: 'Вернуть',
       prefs: 'Ваши настройки', length: 'Длина ответа', len: { qisqa: 'Коротко', orta: 'Средне', batafsil: 'Подробно' },
       sides: 'Ваша сторона', sidesLead: 'Выбираете только вы — JuristAI не угадывает сторону.', area: 'Область', role: 'Сторона', add: 'Добавить', saved: 'Сохранено',
       signals: 'Собранные сигналы', signalsLead: 'Короткие коды от каждого вопроса или сервиса. Удаляются сами через {d} дней.', total: 'Всего: {n}', when: 'Когда', kind: 'Тип', value: 'Значение', ch: 'Откуда',
@@ -39,6 +39,24 @@
     return v;
   }
   J.adaptiveText = s;
+
+  /* Alifbo: tanlov shu brauzerda va akkauntda (manual.alphabet) saqlanadi; boshqa qurilmadagi tanlov shu yerga ham keladi */
+  var AL = G.JAIAlphabet;
+  if (AL) {
+    AL.onSave = function (v) {
+      return fetch('/api/adaptive/profile', { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (p) {
+        if (!p) return;
+        var m = p.manual || {}; m.alphabet = v;
+        return fetch('/api/adaptive/profile', { method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ manual: m }) });
+      }).catch(function () {});
+    };
+    if (!AL.choice()) {
+      fetch('/api/adaptive/profile', { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (p) {
+        var a = p && p.manual && p.manual.alphabet;
+        if (a && !AL.choice()) AL.set(a, { noReload: a === 'new' });
+      }).catch(function () {});
+    }
+  }
 
   J.viewAdaptive = function () {
     J.setTitle(s('title'));
@@ -78,6 +96,7 @@
         '</div>' +
         '<div class="card"><h4>' + esc(s('prefs')) + '</h4><div class="ad-grid">' +
           '<label class="field"><span>' + esc(s('length')) + '</span><select class="inp" data-m="answerLength"><option value="">' + esc(s('auto')) + '</option>' + (labels.lengths || []).map(function (k) { return '<option value="' + k + '"' + (m.answerLength === k ? ' selected' : '') + '>' + esc(s('len')[k] || k) + '</option>'; }).join('') + '</select></label>' +
+          '<label class="field"><span>' + esc(s('alpha')) + '</span><select class="inp ad-alpha" data-noalpha><option value="new"' + ((m.alphabet || (AL && AL.mode())) !== 'old' ? ' selected' : '') + '>' + esc(s('alphaNew')) + '</option><option value="old"' + ((m.alphabet || (AL && AL.mode())) === 'old' ? ' selected' : '') + '>' + esc(s('alphaOld')) + '</option></select></label>' +
           '<label class="field"><span>' + esc(s('script')) + '</span><select class="inp" data-m="script"><option value="">' + esc(s('auto')) + (prof.script ? ' (' + esc(s(prof.script)) + ')' : '') + '</option><option value="latn"' + (m.script === 'latn' ? ' selected' : '') + '>' + esc(s('latn')) + '</option><option value="cyrl"' + (m.script === 'cyrl' ? ' selected' : '') + '>' + esc(s('cyrl')) + '</option></select></label></div>' +
           '<p class="ad-h">' + esc(s('sides')) + '</p><p class="muted" style="font-size:13px;margin-bottom:8px">' + esc(s('sidesLead')) + '</p>' +
           '<ul class="ad-list">' + (m.partyRoles || []).map(function (r, i) { return '<li class="ad-it"><span class="ad-n">' + esc(areaName(r.area)) + '</span><small class="muted">' + esc(s('roles')[r.role] || r.role) + '</small><button type="button" class="ad-x" data-r="' + i + '">' + esc(s('hide')) + '</button></li>'; }).join('') + '</ul>' +
@@ -101,6 +120,8 @@
         };
       });
       $$('[data-m]', body).forEach(function (sel) { sel.onchange = function () { var mm = manual(); if (sel.value) mm[sel.dataset.m] = sel.value; else delete mm[sel.dataset.m]; save(mm); }; });
+      var al = $('.ad-alpha', body);
+      if (al) al.onchange = function () { if (AL) AL.save(al.value); };
       $$('[data-r]', body).forEach(function (b) { b.onclick = function () { var mm = manual(); mm.partyRoles.splice(+b.dataset.r, 1); save(mm); }; });
       $('[data-a=side]', body).onclick = function () {
         var a = $('.ad-area', body).value, r = $('.ad-role', body).value;

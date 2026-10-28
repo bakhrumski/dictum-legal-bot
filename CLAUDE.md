@@ -764,6 +764,31 @@ Known state of the suites (Sept 2026):
   `dashboard.html` (the app), `ai-dashboard.html` (the design reference the
   dashboard follows), plus tariff, attorneys, templates, legal pages.
 
+## The 2026 Latin alphabet (OʻRQ-1184 of 21.10.2026)
+
+Oʻ → Ö, Gʻ → Ğ, Sh → Ş, Ch → Ç (owner, 2026-10-28: the new alphabet by
+default, the old one on request, either one always available). Inside,
+everything stays in the OLD script: lex.uz, the corpus, prompts and every
+word-for-word quote check are written in it. `public/js/uz-alphabet.js`
+(UMD, used by the server too): `toOld` at the entry points (`/api/legal-chat`
+message, the Telegram question, matter commands), `fold` in search and
+document matching (`normalizeUzbekForSearch`, document-job `lower`), `toNew`
+only for display - the app and the landing convert their text nodes and
+placeholders (inputs, textareas, code, `[data-noalpha]` untouched; links,
+emails, `code`, mixed-case names like MChJ / JuristAI and act codes like
+OʻRQ-1184 kept; a U+200C keeps a sample of the old letters as it is), copy
+buttons copy what is shown, a one-time bar offers the old alphabet (no
+answer = new). The choice: `localStorage jai-alphabet` and, signed in,
+`user_profile.manual.alphabet` (the Moslashish page). The bot
+(`src/bot/alphabet.js`, migration 023 `tg_alphabet`): `sendMessage` /
+`editMessageText` and button labels in the chat's script, the old one
+offered once, `/alifbo` to switch; a linked account's site choice is used
+when the chat has none. Not converted yet: the Word pane, generated .docx,
+.pptx/.xlsx exports, the old dashboard. Golos Text's upstream Ğ/ğ had no
+breve (the composite held only G/g); `public/fonts/golos-text/*latin-ext*`
+were rebuilt with fontTools from the Google Fonts variable font with the
+breve added the way the font builds Ă (OFL, no reserved name).
+
 ## Frontend rules
 
 - **Design source of truth:** `docs/brand/*.dc.html` canvases and
