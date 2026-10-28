@@ -10039,6 +10039,11 @@ require('../sales/routes').mountSalesRoutes(app, { pool, requireAuth, requireMas
   sendReply: (chatId, text) => bot.sendMessage(chatId, require('../bot/pilot-feedback').replyText(text), { disable_web_page_preview: true, reply_markup: require('../bot/pilot-feedback').replyOffButton() }),
   appUrl: String(process.env.APP_URL || 'https://juristai.uz').replace(/\/+$/u, '') });
 
+// CustDev stage 4: interview recordings on a Matter, with consent (src/interviews/)
+require('../interviews/routes').mountInterviewRoutes(app, { pool, requireAuth, requireSameOrigin: require('../auth/same-origin').requireSameOrigin,
+  ai: (messages, options) => callCheapAI(messages, options), logAudit });
+require('../interviews/routes').startInterviewSweep(pool);
+
 require('../auth/telegram-auth-routes').mountTelegramAuthRoutes(app, {
   pool, loginSessions, regSessions, logAudit, authBotUsername: AUTH_BOT_USERNAME,
 });

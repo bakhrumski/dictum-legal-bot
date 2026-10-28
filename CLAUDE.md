@@ -833,7 +833,25 @@ view by tag with distinct clients (`/api/sales/feedback/weekly`). Every
 Workspace write runs in the Workspace transaction as the acting staff
 account, so the triggers log it. Pages: "Mijozlarim" (feedback, tags,
 replies, open task) and Boshqaruv → CustDev pilot. `tests/pilot-feedback.db.test.js`.
-Stage 4 (interview recordings) is next.
+Stage 4 (migration 028, `src/interviews/`, page: the "Intervyu yozuvlari"
+card on a matter, `public/app/interviews.js`, staff only): an interview
+recording is stored only with its consent - who, when, how (said at the
+start of the recording / written) and the uploader's tick that the person
+was told it is transcribed and sent to AI providers (VoiceLab, DeepSeek) and
+the audio is deleted after `INTERVIEW_AUDIO_DAYS` (30); without it 422 and
+nothing stored. Only the uploader and a master see a recording (not other
+members of a Workspace the matter is attached to). STT (`src/ai/stt.js`, its
+ledger rows) runs in the background as its own usage request, in chunks of
+`INTERVIEW_CHUNK_SEC` (600, ffmpeg to Opus) up to `INTERVIEW_MAX_SEC` (2 h) /
+`INTERVIEW_MAX_MB` (50); the transcript is versioned
+(`interview_transcripts`: 1 = STT, then edits) and stays when the audio goes
+(the hourly retention sweep or by hand; `interview_events` logs every step).
+The optional AI summary (`callCheapAI`, ledger + bound) gives quotes,
+problem, current solution and price, confusing, missing, signal, price
+answers; a quote not in the transcript word for word is removed and counted;
+labelled "AI xulosasi, transkript bilan tekshiring". A client's account
+deletion removes the recordings made with them. `INTERVIEWS=off` stops it.
+`tests/interviews.db.test.js`.
 
 ## The 2026 Latin alphabet (OʻRQ-1184 of 21.10.2026)
 

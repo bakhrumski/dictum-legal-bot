@@ -105,6 +105,8 @@ async function complete(db, id, { handledBy, revoke = async () => {} } = {}) {
       await db.query(`DELETE FROM ai_chat_sessions WHERE admin_id = $1`, [adminId]).catch(() => {});
       // matters and their links; the scans go too (a matter may hold one for years)
       await require('../matters/store').deleteAccountMatters(db, adminId).catch(() => {});
+      // interview recordings made with this person as the client (CustDev stage 4): audio, transcripts and consents
+      await db.query('DELETE FROM interview_recordings WHERE client_admin_id = $1', [adminId]).catch(() => {});
       await db.query(`DELETE FROM document_scans WHERE admin_id = $1`, [adminId]).catch(() => {});
       await require('../agents/runs/store').deleteAccountRuns(db, adminId).catch(() => {});
       await require('../voice/user-glossary').deleteAccountGlossary(db, adminId).catch(() => {});

@@ -244,3 +244,7 @@ nima o'lchandi.
   ochadi; `workspaces.internal` - master tarifsiz ochadigan ichki (xodimlar)
   Workspace, a'zolari faqat master / student / lawyer, mijoz hech qachon
   a'zo bo'lmaydi, bayroq yaratilgandan keyin o'zgarmaydi.
+- 2026-10-28: #514 merge (Workspace hamma pullik tarifga, ichki Workspace).
+  #515 ochildi: mijoz turi va bir bosishda pilot (migratsiya 026), CustDev
+  3-bosqich - pilot Workspace vazifalari va Telegram fikrlari (027), 4-bosqich -
+  rozilik bilan intervyu yozuvlari (028).

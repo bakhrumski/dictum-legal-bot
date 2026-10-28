@@ -541,11 +541,14 @@
           '<div class="mt-agent-b"><button class="pill sm" data-a="plan" type="button">' + J.icon('spark') + esc(s('plan')) + '</button></div><div class="mt-plan"></div></div>' : '') +
         (w ? cmdBar() : '') +
         (w ? '<div class="mt-noteform"><textarea class="inp" maxlength="8000" placeholder="' + esc(s('notePh')) + '"></textarea><button class="pill sm" data-a="note" type="button">' + J.icon('plus') + esc(s('addNote')) + '</button></div>' : '') +
-        '<div class="mt-items">' + (M.items.length ? M.items.map(itemRow).join('') : '<div class="empty-state">' + esc(s('noItems')) + '</div>') + '</div>';
+        '<div class="mt-items">' + (M.items.length ? M.items.map(itemRow).join('') : '<div class="empty-state">' + esc(s('noItems')) + '</div>') + '</div>' +
+        // CustDev stage 4: interview recordings with consent, staff only (public/app/interviews.js)
+        (own && J.interviewsCard && J.isStaff && J.isStaff() ? '<div class="mt-iv" style="margin-top:16px"></div>' : '');
       $('.mt-head h2', body).textContent = M.title;
       $('.mt-summary', body).textContent = M.summary || '';
       M.items.forEach(function (i) { if (i.kind === 'note') { var p = $('[data-i="' + i.id + '"] .mt-note', body); if (p) p.textContent = i.note; } });
       setCurrent(M.status === 'open' && w ? M.id : '');
+      if ($('.mt-iv', body)) J.interviewsCard($('.mt-iv', body), M);
 
       var chatGo = $('[data-go=chat]', body);
       if (chatGo) chatGo.onclick = function (e) { e.preventDefault(); J.newChat(); };
