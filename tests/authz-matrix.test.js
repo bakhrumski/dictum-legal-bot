@@ -59,6 +59,7 @@ const CASES = [
   ['POST', '/api/matters/00000000-0000-0000-0000-000000000000/items', REJECTED, 'link to a matter'],
   ['DELETE', '/api/matters/00000000-0000-0000-0000-000000000000', REJECTED, 'delete a matter'],
   ['GET', '/api/agent/runs', REJECTED, 'agent runs list'],
+  ['GET', '/api/matters/00000000-0000-0000-0000-000000000000/export?format=pptx', REJECTED, 'matter as a deck'],
   ['GET', '/api/agent/runs/00000000-0000-0000-0000-000000000000', REJECTED, 'agent run detail'],
   ['GET', '/api/agent/runs/00000000-0000-0000-0000-000000000000/events', REJECTED, 'agent run events'],
   ['POST', '/api/agent/runs/00000000-0000-0000-0000-000000000000/cancel', REJECTED, 'cancel an agent run'],

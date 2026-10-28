@@ -8,6 +8,7 @@
  *   GET    /api/matters                       own matters and those of the caller's Workspaces
  *   POST   /api/matters                       { title, summary?, workspaceId? }
  *   GET    /api/matters/:id                   the matter and its items (sources checked)
+ *   GET    /api/matters/:id/export?format=    pptx | xlsx: a short deck or a workbook (no AI)
  *   PATCH  /api/matters/:id                   { title?, summary?, status? }
  *   DELETE /api/matters/:id                   owner only, soft
  *   POST   /api/matters/:id/items             { kind: chat|scan|note, ref?, title?, note? }
@@ -49,6 +50,22 @@ function mountMatterRoutes(app, { requireAuth, requireSameOrigin, pool, resolveE
     const m = await store.get(req.params.id, me(req));
     if (!m) return notFound(res);
     res.set('Cache-Control', 'no-store').json(m);
+  }));
+  // the matter as a short deck or a workbook (src/matters/export.js): no AI, no unit
+  app.get('/api/matters/:id/export', requireAuth, guard(async (req, res) => {
+    const format = String((req.query && req.query.format) || 'pptx').toLowerCase();
+    if (format !== 'pptx' && format !== 'xlsx') return res.status(400).json({ error: 'format', message: 'format: pptx yoki xlsx' });
+    const m = await store.get(req.params.id, me(req));
+    if (!m) return notFound(res);
+    const results = (await store.results(req.params.id, me(req))) || {};
+    const exp = require('./export');
+    const buf = format === 'pptx' ? await exp.matterPptx(m, results) : exp.matterXlsx(m, results);
+    const name = `ish-${new Date().toISOString().slice(0, 10)}.${format}`;
+    res.set({
+      'Content-Type': format === 'pptx' ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${name}"`, 'Cache-Control': 'no-store',
+    });
+    res.send(buf);
   }));
   app.patch('/api/matters/:id', requireSameOrigin, requireAuth, guard(async (req, res) => {
     const b = req.body || {};

@@ -709,6 +709,13 @@ Known state of the suites (Sept 2026):
   in bot.js. App: `POST /api/matters/command` and the command bar with 🎙
   (dictation) on the Ishlar pages. No AI, no unit; `MATTERS=off` stops it.
   `tests/matter-commands.test.js` scans every string in tests/ for false hits.
+  Export (2026-10-28, roadmap stage 2): `GET /api/matters/:id/export?format=
+  pptx|xlsx` (`src/matters/export.js`, deck written by `src/exports/pptx.js`
+  with jszip - pptxgenjs was not added, it depends on the npm package
+  "https"): built only from what the matter holds (summary, notes, chats,
+  the linked agent results via `store.results`, read with the matter's own
+  access), no AI, no unit; the deck ends with "AI material, not a final
+  opinion"; xlsx cells are text, never formulas.
   Spoken commands are checked (2026-10-28, owner: "Pudratchi" was heard as
   "Qudratxo'ja" and a matter opened under that name): the app's 🎙 puts the
   text in the box and never runs it; in Telegram a spoken "yangi ish" /
