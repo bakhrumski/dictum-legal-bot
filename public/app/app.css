@@ -606,3 +606,12 @@ textarea.inp{height:auto;min-height:96px;padding:10px 13px;resize:vertical;line-
 .mt-ask b{font-weight:500}
 .mt-ask-q{margin:6px 0 10px;font-size:15px;white-space:pre-wrap}
 .mt-ask textarea.inp{min-height:70px;background:var(--surface)}
+
+/* mikrofon yozmoqda (J.micMeter): qizil nuqta, ovoz balandligi ustunlari, vaqt */
+.mic-meter{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-variant-numeric:tabular-nums;color:var(--fg)}
+.mic-dot{width:8px;height:8px;border-radius:50%;background:#E5484D;flex:none;animation:agPulse 1.2s ease-in-out infinite}
+.mic-bars{display:inline-flex;align-items:center;gap:2px;height:16px}
+.mic-bars b{width:3px;height:16px;border-radius:2px;background:var(--cta);transform-origin:center;transform:scaleY(.18);transition:transform 80ms linear}
+.mic-lab{color:var(--muted)}
+.cmp-mic .mic-meter{margin-left:2px}
+@media (prefers-reduced-motion:reduce){.mic-dot{animation:none}.mic-bars b{transition:none}}

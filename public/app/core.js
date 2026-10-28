@@ -355,6 +355,37 @@
     }
     return { html: out.join(''), sources: sources };
   };
+  /** Mikrofon yozayotganini ko'rsatadi (2026-10-28, egasi): qizil nuqta, ovoz balandligi
+      bo'yicha 5 ta ustun va vaqt. host ichiga chiziladi; stop() hammasini to'xtatadi. */
+  J.micMeter = function (stream, host, opts) {
+    opts = opts || {};
+    var el = J.h('<span class="mic-meter" role="status" aria-live="polite"><i class="mic-dot"></i><span class="mic-bars"><b></b><b></b><b></b><b></b><b></b></span><span class="mic-time">0:00</span>' + (opts.label ? '<span class="mic-lab"></span>' : '') + '</span>');
+    if (opts.label) J.$('.mic-lab', el).textContent = opts.label;
+    host.appendChild(el);
+    var bars = J.$$('.mic-bars b', el), time = J.$('.mic-time', el), started = Date.now(), raf = 0, actx = null, an = null, data = null, level = 0;
+    try {
+      actx = new (G.AudioContext || G.webkitAudioContext)();
+      an = actx.createAnalyser(); an.fftSize = 512; data = new Uint8Array(an.fftSize);
+      actx.createMediaStreamSource(stream).connect(an);
+      // made after an await (getUserMedia), the context may start suspended
+      if (actx.state === 'suspended' && actx.resume) actx.resume().catch(function () {});
+    } catch (e) { an = null; }
+    var weights = [0.55, 0.8, 1, 0.8, 0.55];
+    function frame() {
+      if (an) {
+        an.getByteTimeDomainData(data);
+        var sum = 0; for (var i = 0; i < data.length; i++) { var v = (data[i] - 128) / 128; sum += v * v; }
+        var rms = Math.sqrt(sum / data.length);
+        // a little smoothing so the bars move with the voice, not with every sample
+        level = Math.max(rms * 3.2, level * 0.82); if (level > 1) level = 1;
+      }
+      bars.forEach(function (b, i) { b.style.transform = 'scaleY(' + Math.max(0.18, Math.min(1, level * weights[i] * (0.85 + Math.random() * 0.3))).toFixed(2) + ')'; });
+      var s = Math.floor((Date.now() - started) / 1000); time.textContent = Math.floor(s / 60) + ':' + ('0' + s % 60).slice(-2);
+      raf = G.requestAnimationFrame(frame);
+    }
+    frame();
+    return { el: el, level: function () { return level; }, stop: function () { G.cancelAnimationFrame(raf); if (actx) actx.close().catch(function () {}); el.remove(); } };
+  };
   /** Matndagi barcha lex.uz havolalari (oqim paytida ham) */
   J.plain = function (html) { var d = document.createElement('div'); d.innerHTML = html; return d.innerText; };
 
