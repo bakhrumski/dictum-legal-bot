@@ -68,6 +68,28 @@ const A = 910000000 + Math.floor(Math.random() * 1e6), B = A + 1, C = A + 2;
     assert.strictEqual((await store.get(A)).profile, null);
   });
 
+  await test('A2: the person sets, hides, pauses and clears - only their own; what they set is checked field by field', async () => {
+    const D = A + 3, E = A + 4;
+    await store.record(D, answerSignals({ question: Q, answer: ANS + ' [Mehnat kodeksi](https://lex.uz/docs/-9990002) [Mehnat kodeksi](https://lex.uz/docs/-9990002)', topic: 'mehnat' }));
+    await store.record(D, answerSignals({ question: Q, answer: '[Mehnat kodeksi](https://lex.uz/docs/-9990002)', topic: 'mehnat' }));
+    await store.recompute(D);
+    const set = await store.setManual(D, { answerLength: 'qisqa', hidden: { areas: ['mehnat'], acts: [] }, partyRoles: [{ area: 'ijara', role: 'ijarachi' }], role: 'master', evil: '<script>' });
+    assert.deepStrictEqual(Object.keys(set.manual).sort(), ['answerLength', 'hidden', 'partyRoles']);
+    assert.ok(!set.effective.areas.some(a => a.code === 'mehnat'), 'a hidden area is not used');
+    assert.deepStrictEqual(set.effective.partyRoles, [{ area: 'ijara', role: 'ijarachi' }]);
+    assert.strictEqual(set.effective.answerLength, 'qisqa');
+    const mine = await store.signals(D, { limit: 5 });
+    assert.ok(mine.total >= 8 && mine.rows.length === 5 && mine.keepDays === 180);
+    assert.strictEqual((await store.signals(E)).total, 0, "another account's signals are not shown");
+    const paused = await store.setPaused(D, true);
+    assert.strictEqual(paused.effective, null);
+    assert.strictEqual(await store.record(D, [{ kind: 'area', value: 'soliq' }]), 0, 'paused right away (no minute of cache)');
+    await store.setPaused(D, false);
+    const cleared = await store.clear(D);
+    assert.deepStrictEqual([cleared.signals, cleared.manual, (await store.signals(D)).total], [0, {}, 0]);
+    await deleteAccountProfile(pool, D);
+  });
+
   for (const id of [A, B, C]) await deleteAccountProfile(pool, id).catch(() => {});
   console.log(`\n${passed} passed, ${failed} failed`);
   await pool.end().catch(() => {});

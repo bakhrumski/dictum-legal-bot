@@ -112,6 +112,50 @@ function computeProfile(signals = [], { now = Date.now() } = {}) {
   };
 }
 
+const LENGTHS = Object.freeze(['qisqa', 'orta', 'batafsil']);
+const ROLES = Object.freeze(['xaridor', 'sotuvchi', 'ijarachi', 'ijaraga_beruvchi', 'ish_beruvchi', 'xodim', 'pudratchi', 'buyurtmachi',
+  'qarz_beruvchi', 'qarz_oluvchi', 'tadbirkor', 'jismoniy_shaxs', 'boshqa']);
+
+/**
+ * manual (what the person set on the page):
+ *   answerLength  qisqa | orta | batafsil
+ *   script        latn | cyrl
+ *   hidden        { areas: [code], acts: [docId] }   items the person removed
+ *   partyRoles    [{ area, role }]                    their side, by area - only ever set here
+ */
+function cleanManual(m = {}) {
+  const out = {};
+  if (!m || typeof m !== 'object') return out;
+  if (LENGTHS.includes(m.answerLength)) out.answerLength = m.answerLength;
+  if (['latn', 'cyrl'].includes(m.script)) out.script = m.script;
+  const h = m.hidden && typeof m.hidden === 'object' ? m.hidden : {};
+  const areas = [...new Set((Array.isArray(h.areas) ? h.areas : []).filter(a => /^[a-z][a-z-]{1,30}$/u.test(String(a))))].slice(0, 40);
+  const acts = [...new Set((Array.isArray(h.acts) ? h.acts : []).map(String).filter(a => /^\d{3,12}$/u.test(a)))].slice(0, 100);
+  if (areas.length || acts.length) out.hidden = { areas, acts };
+  const roles = (Array.isArray(m.partyRoles) ? m.partyRoles : [])
+    .filter(r => r && /^[a-z][a-z-]{1,30}$/u.test(String(r.area)) && ROLES.includes(r.role))
+    .map(r => ({ area: String(r.area), role: r.role }));
+  const byArea = new Map(roles.map(r => [r.area, r]));
+  if (byArea.size) out.partyRoles = [...byArea.values()].slice(0, 20);
+  return out;
+}
+
+/** The profile later PRs use: hidden items out, what the person set on top. */
+function effectiveOf(profile = {}, manual = {}) {
+  const p = profile || {}, m = manual || {};
+  const hid = m.hidden || {};
+  return {
+    areas: (p.areas || []).filter(a => !(hid.areas || []).includes(a.code)),
+    acts: (p.acts || []).filter(a => !(hid.acts || []).includes(a.docId)),
+    script: m.script || p.script || null,
+    lang: p.lang || null,
+    services: p.services || [],
+    playbook: p.playbook || null,
+    answerLength: m.answerLength || null,
+    partyRoles: m.partyRoles || [],
+  };
+}
+
 function createProfileStore({ db }) {
   const pausedCache = new Map(); // adminId -> { at, paused }
   const timers = new Map();      // adminId -> pending recompute
@@ -168,7 +212,37 @@ function createProfileStore({ db }) {
     const row = r.rows[0];
     if (!row) return { profile: null, manual: {}, paused: false, signals: 0, computedAt: null, effective: null };
     return { profile: row.profile, manual: row.manual || {}, paused: row.paused, signals: row.signals, computedAt: row.computed_at,
-      effective: row.paused ? null : { ...row.profile, ...(row.manual || {}) } };
+      effective: row.paused ? null : effectiveOf(row.profile, row.manual) };
+  }
+
+  /** What the person set (A2 page): checked field by field; anything else is dropped. */
+  async function setManual(adminId, manual) {
+    const m = cleanManual(manual);
+    await db.query(`INSERT INTO user_profile (admin_id, manual, updated_at) VALUES ($1, $2::jsonb, now())
+      ON CONFLICT (admin_id) DO UPDATE SET manual = EXCLUDED.manual, updated_at = now()`, [adminId, JSON.stringify(m)]);
+    return get(adminId);
+  }
+
+  async function setPaused(adminId, paused) {
+    await db.query(`INSERT INTO user_profile (admin_id, paused, updated_at) VALUES ($1, $2, now())
+      ON CONFLICT (admin_id) DO UPDATE SET paused = EXCLUDED.paused, updated_at = now()`, [adminId, !!paused]);
+    pausedCache.set(adminId, { at: Date.now(), paused: !!paused });
+    return get(adminId);
+  }
+
+  /** "Hammasini tozalash": every signal, the computed profile and what the person set go; pause stays as it was. */
+  async function clear(adminId) {
+    await db.query('DELETE FROM user_signals WHERE admin_id = $1', [adminId]);
+    await db.query(`UPDATE user_profile SET profile = '{}'::jsonb, manual = '{}'::jsonb, signals = 0, computed_at = now(), updated_at = now() WHERE admin_id = $1`, [adminId]);
+    return get(adminId);
+  }
+
+  /** The person's own recent signals, as stored (codes), newest first. */
+  async function signals(adminId, { limit = 50 } = {}) {
+    const r = await db.query('SELECT kind, value, label, channel, created_at FROM user_signals WHERE admin_id = $1 ORDER BY created_at DESC LIMIT $2',
+      [adminId, Math.max(1, Math.min(200, Number(limit) || 50))]);
+    const n = await db.query('SELECT count(*)::int AS n FROM user_signals WHERE admin_id = $1', [adminId]);
+    return { rows: r.rows, total: n.rows[0].n, keepDays: keepDays() };
   }
 
   /** Daily: signals past their days go; profiles of people with signals in the last day are recomputed. */
@@ -179,7 +253,7 @@ function createProfileStore({ db }) {
     return { removed: gone.rowCount, recomputed: recent.rows.length };
   }
 
-  return { record, recompute, get, sweep, isPaused };
+  return { record, recompute, get, setManual, setPaused, clear, signals, sweep, isPaused };
 }
 
 /** Account deletion: the person's signals and profile go. */
@@ -225,4 +299,4 @@ function profileStore() {
   return shared;
 }
 
-module.exports = { createProfileStore, profileStore, answerRecorder, deleteAccountProfile, computeProfile, cleanSignal, actsOf, scriptOf, answerSignals, KINDS, SERVICES };
+module.exports = { createProfileStore, profileStore, answerRecorder, cleanManual, effectiveOf, LENGTHS, ROLES, deleteAccountProfile, computeProfile, cleanSignal, actsOf, scriptOf, answerSignals, KINDS, SERVICES };
