@@ -948,7 +948,9 @@ async function handleCallbackQuery(callbackQuery) {
             ? 'demand'
             : action.serviceSlug === 'complaint'
               ? 'complaint'
-              : 'application';
+              : action.serviceSlug === 'legal-document'
+                ? 'other'
+                : 'application';
         const intake = resolveIntakeCallback(`doc_${typeCode}`, current.context || {});
         if (!intake) throw new Error('document action is not configured');
         const caseSummary = String((current.context || {}).nextActionQuestion || '').trim();
@@ -964,7 +966,7 @@ async function handleCallbackQuery(callbackQuery) {
         });
         await bot.answerCallbackQuery(callbackQuery.id, { text: 'Hujjat turi tanlandi' });
         await bot.sendMessage(chatId, [
-          `Tanlangan hujjat: *${intake.context.documentTypeLabel}*`,
+          `Tanlangan hujjat: *${typeCode === 'other' && action.documentType ? action.documentType : intake.context.documentTypeLabel}*`,
           `Ikki yo'l bor: 🤖 AI loyiha — darhol, Word faylda (tarifdagi 1 birlik yoki bir martalik ${require('../rag/one-time-products').formatUzs(require('../rag/one-time-products').PRODUCTS.draft.priceUzs)}); 👨‍⚖️ yurist tayyorlaydi yoki tekshiradi — narxni yurist belgilaydi, rozilik berguningizcha to'lov yo'q.`,
           caseSummary ? "Huquqiy vaziyatingiz va xulosa oldingi savol-javobdan olindi. Faqat yetishmayotgan ma'lumotlarni yozing." : '',
           '',

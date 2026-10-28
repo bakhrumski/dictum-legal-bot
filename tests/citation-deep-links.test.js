@@ -735,3 +735,37 @@ test('a title written before its own link is said once; the model\'s disclaimer 
 });
 
 console.log(`\n${passed} citation deep-link tests passed.\n`);
+
+test('an LLC question gets company documents, never a complaint against a fine (2026-10-28)', () => {
+  const question = 'MChJga yangi ishtirokchi qabul qilish uchun qanday hujjatlar kerak?';
+  const answer = "Asosiy hujjatlar — umumiy yig'ilish bayonnomasi, yangilangan ustav va ta'sis shartnomasi. Ro'yxatga olish tartibini Vazirlar Mahkamasi qarori bilan tekshiring.";
+  const actions = buildLegalNextActions({ question, answer, topic: '' });
+  const labels = actions.map(a => a.label).join(' | ');
+  assert.match(labels, /Umumiy yig'ilish qarori/u);
+  assert.match(labels, /ishtirokchining jamiyatga kirish/u);
+  assert.doesNotMatch(labels, /jarima|shikoyat|da'vo/iu);
+  assert.strictEqual(actions[0].inputSchema, 'corporate-decision');
+  assert.strictEqual(actions[0].serviceSlug, 'legal-document');
+  assert.strictEqual(actions[actions.length - 1].kind, 'attorney');
+});
+
+test('a meeting "bayonnoma" in the answer does not decide the branch; an offence still does', () => {
+  const fine = buildLegalNextActions({ question: 'YPX inspektori jarima soldi, nima qilay?', answer: '', topic: '' });
+  assert.match(fine[0].label, /jarima ustidan shikoyat/u);
+  const minutes = buildLegalNextActions({ question: "Umumiy yig'ilish bayonnomasini kim imzolaydi?", answer: '', topic: '' });
+  assert.doesNotMatch(minutes.map(a => a.label).join(' '), /jarima/u);
+});
+
+test('an informational question is not offered a claim or a complaint', () => {
+  const labels = buildLegalNextActions({ question: 'Pasport qanday olinadi?', answer: '', topic: '' }).map(a => a.label).join(' | ');
+  assert.doesNotMatch(labels, /da'vo|shikoyat|talabnoma/iu);
+  const tax = buildLegalNextActions({ question: "Mol-mulk solig'i imtiyozi kimga beriladi?", answer: '', topic: 'soliq' }).map(a => a.label).join(' | ');
+  assert.doesNotMatch(tax, /shikoyat/iu);
+  const debt = buildLegalNextActions({ question: 'Qarz berdim, qaytarmayapti', answer: '', topic: 'fuqarolik' }).map(a => a.label).join(' | ');
+  assert.match(debt, /da'vo arizasi/iu);
+});
+
+test('the bot opens a company document as "other" with its own name', () => {
+  const bot = fs.readFileSync(path.join(__dirname, '../src/bot/bot.js'), 'utf8');
+  assert.match(bot, /action\.serviceSlug === 'legal-document'\s*\?\s*'other'/u);
+});
