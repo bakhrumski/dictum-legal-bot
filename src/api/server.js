@@ -747,6 +747,8 @@ app.post('/api/voice/transcribe', require('../auth/same-origin').requireSameOrig
 // not metered (one short STT call, in the usage ledger). VOICE_DICTATION=off
 // turns it off.
 const VOICE_DICTATE_MAX_SEC = 120;
+// each account's own speech glossary (src/voice/user-glossary.js, migration 021)
+const userGlossary = require('../voice/user-glossary').mountGlossaryRoutes(app, { db: pool, requireAuth, requireSameOrigin: require('../auth/same-origin').requireSameOrigin });
 function dictationOn() {
   try { return String(process.env.VOICE_DICTATION || 'on').toLowerCase() !== 'off' && require('../ai/stt').sttEnabled(); } catch (_) { return false; }
 }
@@ -766,9 +768,9 @@ app.post('/api/voice/dictate', require('../auth/same-origin').requireSameOrigin,
     });
     const text = String(r.text || (r.segments || []).map(g => g.text).join(' ') || '').replace(/\s+/gu, ' ').trim();
     if (!text) return res.status(422).json({ error: 'no_speech', message: "Gap eshitilmadi. Qayta urinib ko'ring." });
-    // words that look like a mis-heard legal term, offered - never replaced (src/voice/glossary.js)
+    // words that look like a mis-heard legal term, offered - never replaced; the person's own glossary first
     let suggestions = [];
-    try { suggestions = require('../voice/glossary').suggest(text.slice(0, 4000)); } catch (_) { suggestions = []; }
+    try { suggestions = await userGlossary.suggest(req.session.adminId, text.slice(0, 4000)); } catch (_) { suggestions = []; }
     res.json({ text: text.slice(0, 4000), provider: r.provider, suggestions });
   } catch (e) {
     console.error('[VOICE] dictate:', e.message);

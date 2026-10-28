@@ -67,7 +67,7 @@ function stubStore(seed = []) {
     const seen = new Set();
     for (const f of fs.readdirSync(__dirname)) {
       // the files that hold commands on purpose
-      if (!f.endsWith('.js') || f === path.basename(__filename) || f === 'matters.db.test.js') continue;
+      if (!f.endsWith('.js') || f === path.basename(__filename) || f === 'matters.db.test.js' || f === 'voice-glossary.db.test.js') continue;
       for (const m of fs.readFileSync(path.join(__dirname, f), 'utf8').matchAll(/["'`]([^"'`\n]{12,300})["'`]/gu)) if (/\s/u.test(m[1])) seen.add(m[1]);
     }
     const hits = [...seen].filter(q => c.parseCommand(q));
@@ -202,7 +202,7 @@ function stubStore(seed = []) {
     const onstop = page.slice(page.indexOf('rec.onstop'), page.indexOf('rec.start()'));
     assert.ok(/heardCheck\(/u.test(onstop) && !/run\(input\.value\)/u.test(onstop), 'the dictated text waits in the box');
     const server = fs.readFileSync(path.join(__dirname, '../src/api/server.js'), 'utf8');
-    assert.match(server, /require\('\.\.\/voice\/glossary'\)\.suggest\(text/u);
+    assert.match(server, /userGlossary\.suggest\(req\.session\.adminId, text/u, "the caller's own glossary");
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

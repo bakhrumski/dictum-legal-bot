@@ -36,7 +36,7 @@
       running: 'Bajarilmoqda…', answer: 'Javob', vf: { verified: 'Manbalar bilan tekshirildi', partial: 'Ayrim da’volar manbada tasdiqlanmadi va olib tashlandi', unverified: 'Tekshiruvchi ishlamadi — javobni manba bilan qo‘lda tekshiring', no_claims: 'Raqam yoki muddat da’volari yo‘q; iqtiboslar manbada tekshirildi' },
       sources: 'Manbalar',
       askH: 'Agent savol beryapti', askPh: 'Javobingiz', askSend: 'Javob berish va davom etish', askNote: 'Javobdan keyin narx qayta band qilinadi va ish davom etadi.',
-      cmdPh: 'Buyruq: «ishlarim», «yangi ish och: …», «… ishiga yozuv: …»', cmdRun: 'Bajarish', cmdMic: 'Ovozli buyruq', cmdListen: 'Gapiring… (to‘xtatish uchun bosing)', cmdBusy: 'Matnga aylantirilmoqda…', heardCheck: 'Matnni tekshiring, kerak bo‘lsa tuzating va «Bajarish»ni bosing.',
+      cmdPh: 'Buyruq: «ishlarim», «yangi ish och: …», «… ishiga yozuv: …»', cmdRun: 'Bajarish', cmdMic: 'Ovozli buyruq', cmdListen: 'Gapiring… (to‘xtatish uchun bosing)', cmdBusy: 'Matnga aylantirilmoqda…', gloss: 'Lug‘atim', glossAdd: 'Qo‘shish', glossLead: 'Ovozdan matnga aylantirishda sizning so‘zlaringiz: noto‘g‘ri eshitilgan so‘z va uning to‘g‘risi, yoki o‘z so‘zingiz (mijoz ismi, atama). Faqat taklif uchun ishlatiladi, so‘z o‘zi almashtirilmaydi. Tuzatishlaringizdan o‘zi ham o‘rganadi.', glossHeard: 'Eshitilgan (ixtiyoriy): Qudratxo‘ja', glossTerm: 'To‘g‘risi: Pudratchi', glossLearned: 'o‘rganilgan', glossManual: 'qo‘lda', glossEmpty: 'Hali so‘z yo‘q.', heardCheck: 'Matnni tekshiring, kerak bo‘lsa tuzating va «Bajarish»ni bosing.',
       cmdHelp: 'Ovoz yoki matn bilan: «ishlarim» · «yangi ish och: Pudratchi bilan nizo» · «pudrat ishiga yozuv: sud 12-noyabr» · «pudrat ishini ko‘rsat» · «pudrat ishini yop». Xuddi shu buyruqlar Telegram botida ham ishlaydi (akkaunt ulangan bo‘lsa).',
       yes: 'Ha', micDenied: 'Mikrofonga ruxsat berilmadi.',
     },
@@ -68,7 +68,7 @@
       running: 'Выполняется…', answer: 'Ответ', vf: { verified: 'Проверено по источникам', partial: 'Часть утверждений не подтвердилась и удалена', unverified: 'Проверка не сработала — сверьте ответ с источником вручную', no_claims: 'Утверждений с цифрами и сроками нет; цитаты сверены с источником' },
       sources: 'Источники',
       askH: 'Агент задаёт вопрос', askPh: 'Ваш ответ', askSend: 'Ответить и продолжить', askNote: 'После ответа цена резервируется снова и работа продолжается.',
-      cmdPh: 'Команда: «мои дела», «новое дело: …», «заметка в дело …: …»', cmdRun: 'Выполнить', cmdMic: 'Голосовая команда', cmdListen: 'Говорите… (нажмите, чтобы остановить)', cmdBusy: 'Распознаём…', heardCheck: 'Проверьте текст, исправьте при необходимости и нажмите «Выполнить».',
+      cmdPh: 'Команда: «мои дела», «новое дело: …», «заметка в дело …: …»', cmdRun: 'Выполнить', cmdMic: 'Голосовая команда', cmdListen: 'Говорите… (нажмите, чтобы остановить)', cmdBusy: 'Распознаём…', gloss: 'Мой словарь', glossAdd: 'Добавить', glossLead: 'Ваши слова для распознавания речи: неверно услышанное слово и правильное, или своё слово (имя клиента, термин). Используется только для подсказок, слово само не заменяется. Словарь учится на ваших исправлениях.', glossHeard: 'Услышано (необязательно)', glossTerm: 'Правильно', glossLearned: 'выучено', glossManual: 'вручную', glossEmpty: 'Пока слов нет.', heardCheck: 'Проверьте текст, исправьте при необходимости и нажмите «Выполнить».',
       cmdHelp: 'Голосом или текстом: «мои дела» · «новое дело: Спор с подрядчиком» · «заметка в дело подряд: суд 12 ноября» · «покажи дело подряд» · «закрой дело подряд». Те же команды работают в Telegram-боте (если аккаунт привязан).',
       yes: 'Да', micDenied: 'Нет доступа к микрофону.',
     },
@@ -100,7 +100,7 @@
       running: 'Running…', answer: 'Answer', vf: { verified: 'Checked against the sources', partial: 'Some claims were not confirmed by the sources and were removed', unverified: 'The checker did not run — check the answer against the source by hand', no_claims: 'No figure or deadline claims; quotes checked in the source' },
       sources: 'Sources',
       askH: 'The agent asks', askPh: 'Your answer', askSend: 'Answer and continue', askNote: 'After the answer the price is reserved again and the work continues.',
-      cmdPh: 'Command (Uzbek or Russian): «ishlarim», «yangi ish och: …»', cmdRun: 'Run', cmdMic: 'Voice command', cmdListen: 'Speak… (press to stop)', cmdBusy: 'Transcribing…', heardCheck: 'Check the text, fix it if needed and press «Run».',
+      cmdPh: 'Command (Uzbek or Russian): «ishlarim», «yangi ish och: …»', cmdRun: 'Run', cmdMic: 'Voice command', cmdListen: 'Speak… (press to stop)', cmdBusy: 'Transcribing…', gloss: 'My glossary', glossAdd: 'Add', glossLead: 'Your words for speech recognition: a mis-heard word and the right one, or a word of your own (a client\'s name, a term). Used for suggestions only; nothing is replaced by itself. It learns from your corrections.', glossHeard: 'Heard (optional)', glossTerm: 'Correct', glossLearned: 'learned', glossManual: 'added', glossEmpty: 'No words yet.', heardCheck: 'Check the text, fix it if needed and press «Run».',
       cmdHelp: 'By voice or text, in Uzbek or Russian: «ishlarim» / «мои дела» · «yangi ish och: …» / «новое дело: …» · «… ishiga yozuv: …» · «… ishini yop». The same commands work in the Telegram bot (with a linked account).',
       yes: 'Yes', micDenied: 'Microphone access was refused.',
     },
@@ -227,14 +227,17 @@
     return '<div class="mt-cmd"><div class="mt-cmd-row"><input class="inp mt-cmd-in" maxlength="300" placeholder="' + esc(s('cmdPh')) + '">' +
       '<button class="ib mt-mic" type="button" title="' + esc(s('cmdMic')) + '" hidden>' + J.icon('mic') + '</button>' +
       '<button class="pill sm" data-a="cmd" type="button">' + esc(s('cmdRun')) + '</button></div>' +
-      '<p class="mt-cmd-st muted"></p><p class="mt-cmd-help muted">' + esc(s('cmdHelp')) + '</p></div>';
+      '<p class="mt-cmd-st muted"></p><p class="mt-cmd-help muted">' + esc(s('cmdHelp')) + ' <button type="button" class="link mt-gloss">' + esc(s('gloss')) + '</button></p></div>';
   }
   /** Wires a command bar; `matterId` is the matter on screen (the default for "yozuv qo'sh: …"). */
   function wireCmd(root, matterId, after) {
     var input = $('.mt-cmd-in', root), st = $('.mt-cmd-st', root), mic = $('.mt-mic', root), go = $('[data-a=cmd]', root);
-    var awaitingTitle = false;
+    var awaitingTitle = false, dictated = null;
+    $('.mt-gloss', root).onclick = glossaryModal;
     async function run(text, extra) {
       if (!extra && !String(text || '').trim()) { input.focus(); return; }
+      // the person's own glossary learns from what they changed in the heard text (src/voice/user-glossary.js)
+      if (!extra && dictated) { J.api('/api/voice/glossary/learn', { method: 'POST', body: { heard: dictated.heard, final: String(text), suggested: dictated.suggested } }); dictated = null; }
       // "yangi ish och" came with no name: the next words are the name (unless they are a command)
       if (!extra && awaitingTitle && !/^(?:yangi ish|ish och|ishlar|новое дело|мои дела)/i.test(String(text).trim())) text = (J.lang === 'ru' ? 'новое дело: ' : 'yangi ish och: ') + String(text).trim();
       awaitingTitle = false;
@@ -301,6 +304,7 @@
         if (!r.ok) { st.textContent = J.errMsg(r.data); return; }
         // the heard text is checked before it runs (2026-10-28: "Pudratchi" was heard as "Qudratxo'ja")
         input.value = r.data.text || '';
+        dictated = { heard: input.value, suggested: r.data.suggestions || [] };
         heardCheck(r.data.suggestions || []);
       };
       rec.start();
@@ -308,6 +312,33 @@
       meter = J.micMeter(stream, st, { label: s('cmdListen') });
       stopAt = setTimeout(function () { if (rec && rec.state === 'recording') rec.stop(); }, 30000);
     };
+  }
+
+  /* ---------- Lug'atim: the person's own speech glossary (GET/POST/DELETE /api/voice/glossary) ---------- */
+  async function glossaryModal() {
+    var m = J.modal({ cls: 'sm', html: '<h2>' + esc(s('gloss')) + '</h2><p class="muted" style="font-size:13.5px;margin:6px 0 14px">' + esc(s('glossLead')) + '</p>' +
+      '<div class="mt-gl-add"><input class="inp mt-gl-heard" maxlength="80" placeholder="' + esc(s('glossHeard')) + '"><input class="inp mt-gl-term" maxlength="80" placeholder="' + esc(s('glossTerm')) + '"><button type="button" class="pill sm" data-a="add">' + esc(s('glossAdd')) + '</button></div>' +
+      '<ul class="mt-gl-list"><li class="muted">…</li></ul>' });
+    var list = $('.mt-gl-list', m.body);
+    async function load() {
+      var r = await J.api('/api/voice/glossary');
+      if (!r.ok) { list.innerHTML = '<li class="err">' + esc(J.errMsg(r.data)) + '</li>'; return; }
+      var rows = r.data.rows || [];
+      list.innerHTML = rows.length ? rows.map(function (x) {
+        return '<li><span class="mt-gl-w">' + (x.kind === 'fix' ? '<s>' + esc(x.heard) + '</s> → <b>' + esc(x.term) + '</b>' : '<b>' + esc(x.term) + '</b>') + '</span>' +
+          '<small class="muted">' + esc(x.source === 'learned' ? s('glossLearned') : s('glossManual')) + '</small><button type="button" class="ib" data-del="' + esc(x.id) + '" aria-label="x">' + J.icon('x') + '</button></li>';
+      }).join('') : '<li class="muted">' + esc(s('glossEmpty')) + '</li>';
+      $$('[data-del]', list).forEach(function (b) { b.onclick = async function () { b.disabled = true; await J.api('/api/voice/glossary/' + encodeURIComponent(b.dataset.del), { method: 'DELETE' }); load(); }; });
+    }
+    $('[data-a=add]', m.body).onclick = async function () {
+      var term = $('.mt-gl-term', m.body).value.trim(), heard = $('.mt-gl-heard', m.body).value.trim();
+      if (term.length < 2) { $('.mt-gl-term', m.body).focus(); return; }
+      var r = await J.api('/api/voice/glossary', { method: 'POST', body: { term: term, heard: heard } });
+      if (!r.ok) { J.toast(J.errMsg(r.data), 5000); return; }
+      $('.mt-gl-term', m.body).value = ''; $('.mt-gl-heard', m.body).value = '';
+      load();
+    };
+    load();
   }
 
   J.viewMatters = function () {

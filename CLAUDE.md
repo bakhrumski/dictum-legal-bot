@@ -720,6 +720,15 @@ Known state of the suites (Sept 2026):
   suffixed form of one) but shares most of a term's stem is suggested -
   never replaced (a real name stays as said); `/api/voice/dictate` returns
   `suggestions`, the chat names them in a toast.
+  Per account (2026-10-28, owner; migration 021 `voice_glossary`,
+  `src/voice/user-glossary.js`): a `fix` (heard -> term) is learned when the
+  person picks a suggestion, corrects the heard words before running (same
+  word count, <= 3 words) or types a correction in the bot; a `word` when they
+  keep a heard word against a suggestion, or add a name by hand; their own
+  fix is suggested first, their own words are never flagged. "Lug'atim" on the
+  Ishlar command bar lists, adds and deletes (`/api/voice/glossary`); 500
+  rows an account (a learned row makes room, hand-made rows stay); account
+  deletion removes it. Still suggestions only - never a replacement.
 - `src/workspace/` — Platinum Workspace: routes, authz, Supabase
   realtime/storage, Workspace AI.
 - `public/` — static pages: `index.html` (landing), `login.html`,
