@@ -944,6 +944,8 @@ async function handleCallbackQuery(callbackQuery) {
       }
       const store = require('../matters/store').createMatterStore({ db: pool, resolveEntitlement: require('../rag/tariff-ledger').resolveEntitlement });
       const out = await commands.confirmCommand(token, { adminId: account.id, store, lang: ru ? 'ru' : 'uz', alt: data.startsWith('mtc_a_') });
+      // the person's own speech glossary learns from the choice (src/voice/user-glossary.js)
+      if (out.learn) await require('../voice/user-glossary').createUserGlossary({ db: pool }).learn(account.id, out.learn).catch(() => {});
       await bot.answerCallbackQuery(callbackQuery.id).catch(() => {});
       await bot.sendMessage(chatId, out.reply).catch(() => {});
     } catch (error) {

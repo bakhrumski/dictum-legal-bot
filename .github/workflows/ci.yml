@@ -103,6 +103,8 @@ jobs:
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/matters.db.test.js
       - name: Agent runs (queue, lease takeover, checkpoints, cancel, settle) on real Postgres
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/agent-runs.db.test.js
+      - name: Speech glossary per account (learn, isolation, cap) on real Postgres
+        run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/voice-glossary.db.test.js
       - name: Planner agent (master gate, approval, price, worker) on real Postgres
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/agent-planner.db.test.js
 

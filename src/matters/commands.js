@@ -142,7 +142,9 @@ const names = list => list.slice(0, 5).map(m => `«${m.title}»`).join(', ') || 
  * Run a parsed command as `adminId` through the matter store.
  * Returns { reply, action, matterId?, matters?, confirm?: { token, action, title, alt? } }.
  * `voice`: a spoken create / note waits for a confirmation; `suggest(text)`
- * gives the glossary's [{ from, to }] for it (src/voice/glossary.js).
+ * (may be async) gives the glossary's [{ from, to }] for it
+ * (src/voice/user-glossary.js). A confirmation or a correction returns
+ * `learn: { pairs, keep }` for the person's glossary.
  */
 async function runCommand(cmd, { adminId, store, lang = 'uz', lastId = null, now = Date.now(), voice = false, suggest = null } = {}) {
   const t = T(lang);
@@ -156,7 +158,7 @@ async function runCommand(cmd, { adminId, store, lang = 'uz', lastId = null, now
     }
     case 'create': {
       if (!cmd.title) return { action: 'matter_needs_title', needsTitle: true, reply: t.askTitle };
-      if (voice) return heard({ adminId, action: 'create', title: cmd.title, now, t, suggest });
+      if (voice) return heard({ adminId, action: 'create', title: cmd.title, now, t, suggest: suggest ? await suggest(cmd.title) : [] });
       const m = await store.create(adminId, { title: cmd.title });
       return { action: 'matter_created', matterId: m.id, reply: fill(t.created, { t: m.title }) };
     }
@@ -164,7 +166,7 @@ async function runCommand(cmd, { adminId, store, lang = 'uz', lastId = null, now
       const r = resolveMatter(cmd.matter, all, { lastId });
       if (r.none) return { action: 'matter_not_found', reply: cmd.matter ? fill(t.notFound, { n: cmd.matter, l: names(all.filter(m => m.status === 'open')) }) : t.noMatter };
       if (r.many) return { action: 'matter_ambiguous', reply: fill(t.many, { n: cmd.matter, l: names(r.many) }), matters: r.many.map(m => ({ id: m.id, title: m.title })) };
-      if (voice) return heard({ adminId, action: 'note', matterId: r.matter.id, title: r.matter.title, text: cmd.text, now, t, suggest });
+      if (voice) return heard({ adminId, action: 'note', matterId: r.matter.id, title: r.matter.title, text: cmd.text, now, t, suggest: suggest ? await suggest(cmd.text) : [] });
       const item = await store.addItem(r.matter.id, adminId, { kind: 'note', note: cmd.text });
       if (!item) return { action: 'matter_not_found', reply: fill(t.notFound, { n: r.matter.title, l: names(all) }) };
       return { action: 'matter_noted', matterId: r.matter.id, reply: fill(t.noted, { t: r.matter.title }) };
@@ -194,14 +196,14 @@ async function runCommand(cmd, { adminId, store, lang = 'uz', lastId = null, now
 }
 
 /** A spoken create / note, held for the person to confirm (as heard, or with the glossary's suggestion). */
-function heard({ adminId, action, matterId = null, title, text = null, now, t, suggest }) {
+function heard({ adminId, action, matterId = null, title, text = null, now, t, suggest = [] }) {
   sweep(now);
   const said = action === 'create' ? title : text;
-  const sugg = typeof suggest === 'function' ? (suggest(said) || []) : [];
+  const sugg = Array.isArray(suggest) ? suggest : [];
   let alt = null;
   for (const x of sugg) alt = (alt || said).split(x.from).join(x.to);
   const token = require('crypto').randomBytes(9).toString('base64url');
-  pending.set(token, { adminId: Number(adminId), action, matterId, title, text, alt: alt && alt !== said ? alt : null, at: now });
+  pending.set(token, { adminId: Number(adminId), action, matterId, title, text, alt: alt && alt !== said ? alt : null, sugg, at: now });
   const reply = (action === 'create' ? fill(t.heardCreate, { t: title }) : fill(t.heardNote, { t: title, n: text }))
     + (alt && alt !== said ? `\n${fill(t.maybe, { l: sugg.map(x => `«${x.to}» (${x.from})`).join(', ') })}` : '');
   return { action: 'matter_confirm', matterId, confirm: { token, action, title, alt: alt && alt !== said ? alt : null }, reply };
@@ -227,7 +229,8 @@ async function correctPending(token, value, { adminId, store, lang = 'uz', now =
   const v = tidy(value);
   if (v.length < 2 || v.length > (p.action === 'create' ? 160 : MAX_LEN)) return null;
   pending.delete(String(token));
-  return doWrite(p, v, { adminId, store, t });
+  const out = await doWrite(p, v, { adminId, store, t });
+  return { ...out, learn: { pairs: require('../voice/glossary').learnPairs(p.action === 'create' ? p.title : p.text, v), keep: [] } };
 }
 
 function sweep(now = Date.now()) {
@@ -243,7 +246,10 @@ async function confirmCommand(token, { adminId, store, lang = 'uz', now = Date.n
   pending.delete(String(token));
   if (p.action === 'create' || p.action === 'note') {
     const heardValue = p.action === 'create' ? p.title : p.text;
-    return doWrite(p, alt && p.alt ? p.alt : heardValue, { adminId, store, t });
+    const out = await doWrite(p, alt && p.alt ? p.alt : heardValue, { adminId, store, t });
+    // picked the suggestion: learn it; kept the heard words: do not suggest them again
+    const sugg = p.sugg || [];
+    return { ...out, learn: alt && p.alt ? { pairs: sugg.map(x => ({ from: x.from, to: x.to })), keep: [] } : { pairs: [], keep: sugg.map(x => x.from) } };
   }
   const m = await store.update(p.matterId, adminId, { status: p.action === 'close' ? 'closed' : 'open' });
   if (!m) return { action: 'matter_not_found', reply: t.expired };

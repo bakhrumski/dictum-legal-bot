@@ -38,6 +38,11 @@ const pendingMatterTitle = new Map(); // chatId -> when "yangi ish och" came wit
 // chatId -> { token, at }: a spoken "yangi ish" / "yozuv" waiting for its confirmation; the next typed
 // message (a short one, not a question or a command) is taken as the corrected name or note
 const pendingVoiceWrite = new Map();
+let userGlossaryInstance = null;
+function userGlossary() {
+  if (!userGlossaryInstance) userGlossaryInstance = require('../voice/user-glossary').createUserGlossary({ db: pool });
+  return userGlossaryInstance;
+}
 const {
   extractAnalysisSection,
   selectRelevantSourceRefs,
@@ -1273,11 +1278,13 @@ Agar texnik uzilish yuz bersa, limitingiz avtomatik tiklanadi.`,
         return complete({ handled: true, reply, action: 'matter_no_link', escalate: false, meta: { intent: intent.intent } });
       }
       const store = matterStore();
+      const ug = userGlossary();
       const out = intent.command.action === 'correct'
         ? (await commands.correctPending(intent.command.token, question, { adminId: account.id, store, lang: cmdLang })) || { action: 'matter_confirm_expired', reply: commands.texts(cmdLang).expired }
-        // a spoken create / note is shown as heard and confirmed first, with the glossary's suggestion
+        // a spoken create / note is shown as heard and confirmed first, with the person's own glossary's suggestion
         : await commands.runCommand(intent.command, { adminId: account.id, store, lang: cmdLang, lastId: lastMatterByChat.get(String(chatId)) || null,
-          voice: !!voice, suggest: (t) => require('../voice/glossary').suggest(t) });
+          voice: !!voice, suggest: (t) => ug.suggest(account.id, t) });
+      if (out.learn) await ug.learn(account.id, out.learn).catch(() => {});
       if (out.matterId) lastMatterByChat.set(String(chatId), out.matterId);
       if (out.needsTitle) pendingMatterTitle.set(String(chatId), Date.now());
       if (out.confirm && voice && (out.confirm.action === 'create' || out.confirm.action === 'note')) pendingVoiceWrite.set(String(chatId), { token: out.confirm.token, at: Date.now() });
