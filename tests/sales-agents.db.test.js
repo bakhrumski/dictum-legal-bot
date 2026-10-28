@@ -109,7 +109,7 @@ async function makeUser(role = 'user', extra = {}) {
     assert.ok(a.clients.some(c => c.id === c1) && !a.clients.some(c => c.id === c2), "agent B's client is not on agent A's list");
     const row = a.clients.find(c => c.id === c1);
     assert.deepStrictEqual([row.pilot_status, row.units_used], ['approved', 2]);
-    assert.deepStrictEqual(Object.keys(row).sort(), ['decided_at', 'full_name', 'id', 'paid', 'pilot_ends_at', 'pilot_status', 'referral_channel', 'registered_at', 'units_used']);
+    assert.deepStrictEqual(Object.keys(row).sort(), ['client_type', 'client_type_by', 'decided_at', 'full_name', 'id', 'paid', 'pilot_auto', 'pilot_ends_at', 'pilot_status', 'referral_channel', 'registered_at', 'units_used']);
     assert.deepStrictEqual(a.links, { web: `https://juristai.uz/?ref=${codeA}`, telegram: `https://t.me/testbot?start=ref_${codeA}` });
     assert.strictEqual(await sales.agentPage(pool, { agentId: c1, botUsername: 'x', appUrl: 'y' }), null, 'a client has no agent page');
   });

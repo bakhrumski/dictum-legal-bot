@@ -17,7 +17,7 @@
 // a.role IN ('master', 'lawyer', 'student')).
 const STAFF_ROLES = Object.freeze(['master', 'lawyer', 'student']);
 
-const ROLE_LABELS = Object.freeze({ master: 'Admin', lawyer: 'Yurist', student: 'Student', user: 'Foydalanuvchi' });
+const ROLE_LABELS = Object.freeze({ master: 'Admin', lawyer: 'Ekspert', student: 'Student', user: 'Foydalanuvchi' });
 
 function normalizeRole(role) {
   return typeof role === 'string' ? role.trim().toLowerCase() : '';

@@ -947,6 +947,24 @@ async function handleCallbackQuery(callbackQuery) {
     return;
   }
 
+  // the one-tap pilot join (src/bot/pilot-join.js): the account is made from this Telegram
+  if (data.startsWith(require('./pilot-join').PREFIX)) {
+    const join = require('./pilot-join');
+    const type = join.typeFromData(data);
+    const appUrl = String(process.env.APP_URL || 'https://juristai.uz').replace(/\/+$/, '');
+    try {
+      if (!type || !callbackQuery.message || callbackQuery.message.chat.type !== 'private') throw new Error('private chat only');
+      await bot.answerCallbackQuery(callbackQuery.id).catch(() => {});
+      const out = await require('../sales/agents').joinFromTelegram(pool, { from: callbackQuery.from, chatId, type, ledger: require('../rag/tariff-ledger') });
+      await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: callbackQuery.message.message_id }).catch(() => {});
+      await bot.sendMessage(chatId, join.joinReply(out, appUrl), { disable_web_page_preview: true }).catch(() => {});
+    } catch (error) {
+      console.warn('[BOT] pilot join failed:', error.message);
+      await bot.answerCallbackQuery(callbackQuery.id, { text: "Bajarib bo'lmadi", show_alert: true }).catch(() => {});
+    }
+    return;
+  }
+
   if (data.startsWith('mtc_y_') || data.startsWith('mtc_n_') || data.startsWith('mtc_a_')) {
     const commands = require('../matters/commands');
     const token = data.slice(6);
@@ -1207,13 +1225,21 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
     const code = param.slice(4);
     param = '';
     try {
-      const r = await require('../sales/agents').rememberTelegramRef(pool, { telegramUserId: msg.from.id, code });
+      const sales = require('../sales/agents');
+      const join = require('./pilot-join');
+      const r = await sales.rememberTelegramRef(pool, { telegramUserId: msg.from.id, code });
       if (r.known && msg.chat.type === 'private') {
         const appUrl = String(process.env.APP_URL || 'https://juristai.uz').replace(/\/+$/, '');
-        await bot.sendMessage(chatId, r.hasAccount
-          ? "Taklif havolasi qabul qilindi. 14 kunlik pilot so'rovingiz JuristAI jamoasiga yuborildi — tasdiqlanganda shu yerda xabar olasiz."
-          : `Taklif havolasi qabul qilindi. 14 kunlik pilotda qatnashish uchun saytda Telegram orqali ro'yxatdan o'ting: ${appUrl}/app/kirish.html\n\nSavollaringizni shu botga hozir ham yozishingiz mumkin.`).catch(() => {});
-        return;
+        // one tap (src/bot/pilot-join.js): an account that already says what it does goes straight on
+        const acc = (await pool.query(`SELECT id, role, to_jsonb(admins.*)->>'client_type' AS client_type FROM admins WHERE telegram_user_id::text = $1 ORDER BY id LIMIT 1`, [String(msg.from.id)])).rows[0];
+        if (acc && acc.role === 'user' && acc.client_type) {
+          const a = await sales.maybeAutoApprove(pool, { adminId: acc.id, ledger: require('../rag/tariff-ledger') });
+          const pilot = a.approved ? 'approved' : (sales.PRO_TYPES.includes(acc.client_type) ? 'pending' : 'not_professional');
+          await bot.sendMessage(chatId, join.joinReply({ ok: true, pilot }, appUrl)).catch(() => {});
+        } else if (!acc || acc.role === 'user') {
+          await bot.sendMessage(chatId, join.askText(appUrl), { reply_markup: join.typeKeyboard(), disable_web_page_preview: true }).catch(() => {});
+        }
+        if (!acc || acc.role === 'user') return;
       }
     } catch (e) {
       console.warn('[BOT] ref link not recorded:', e.message);

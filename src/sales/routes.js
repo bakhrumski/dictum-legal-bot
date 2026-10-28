@@ -11,8 +11,12 @@
  *   GET  /api/admin/sales/pilot-requests?status=       pending / approved / declined
  *   POST /api/admin/sales/pilot-requests/:id/approve   the 14-day pilot entitlement (docs/tariffs-v2.md §10)
  *   POST /api/admin/sales/pilot-requests/:id/decline   { note }
+ *   POST /api/admin/sales/clients/:id/type  { type }   correct a client's type (then the standing rule is tried)
  * Agent (a staff account with a code):
  *   GET  /api/sales/me                                 own code, links, demo, own clients (no question or answer text)
+ *   POST /api/sales/clients/:id/type        { type }   correct the type of a client who came through this agent
+ * Anyone signed in (an ordinary account):
+ *   PUT  /api/client-type                   { type }   what I do: lawyer / accountant / hr / business / user
  *
  * Also: a GET with ?ref=<code> keeps the code in the jai_ref cookie (30 days,
  * httpOnly) for the registration to read; its validity is checked only then.
@@ -21,6 +25,7 @@
 const sales = require('./agents');
 
 const REF_COOKIE = 'jai_ref';
+const PILOT_OPEN = "✅ 14 kunlik JuristAI pilotingiz boshlandi. Savollaringizni shu botga yoki saytga yozing; limitingizni «limitim qancha?» deb bilasiz.";
 
 function refFromCookie(req) {
   const m = String((req.headers && req.headers.cookie) || '').match(/(?:^|;\s*)jai_ref=([a-z0-9]{10,16})(?:;|$)/u);
@@ -71,7 +76,7 @@ function mountSalesRoutes(app, { pool, requireAuth, requireMasterAdmin, requireS
     const out = await sales.approve(pool, { masterId: me(req), requestId: id(req.params.id), ledger });
     if (out.ok) {
       logAudit(req, 'sales.pilot_approve', 'admin', out.request.admin_id);
-      if (notify) notify(out.request.admin_id, "✅ 14 kunlik JuristAI pilotingiz boshlandi. Savollaringizni shu botga yoki saytga yozing; limitingizni «limitim qancha?» deb bilasiz.").catch(() => {});
+      if (notify) notify(out.request.admin_id, PILOT_OPEN).catch(() => {});
     }
     reply(res, out);
   }));
@@ -80,6 +85,30 @@ function mountSalesRoutes(app, { pool, requireAuth, requireMasterAdmin, requireS
     if (out.ok) logAudit(req, 'sales.pilot_decline', 'admin', out.request.admin_id);
     reply(res, out);
   }));
+  // a type change may open the pilot under the standing rule (src/sales/agents.js)
+  const afterType = async (adminId) => {
+    const r = await sales.maybeAutoApprove(pool, { adminId, ledger });
+    if (r.approved && r.reason === 'auto' && notify) notify(adminId, PILOT_OPEN).catch(() => {});
+    return r;
+  };
+  app.post('/api/admin/sales/clients/:id/type', requireSameOrigin, requireMasterAdmin, safe(async (req, res) => {
+    const out = await sales.setClientType(pool, { adminId: id(req.params.id), type: req.body && req.body.type, by: 'master', actorId: me(req) });
+    if (!out.ok) return reply(res, out);
+    logAudit(req, 'sales.client_type', 'admin', id(req.params.id));
+    res.json({ ...out, pilot: await afterType(id(req.params.id)) });
+  }));
+  app.post('/api/sales/clients/:id/type', requireSameOrigin, requireAuth, safe(async (req, res) => {
+    const out = await sales.setClientType(pool, { adminId: id(req.params.id), type: req.body && req.body.type, by: 'agent', actorId: me(req) });
+    if (!out.ok) return reply(res, out);
+    logAudit(req, 'sales.client_type', 'admin', id(req.params.id));
+    res.json({ ...out, pilot: await afterType(id(req.params.id)) });
+  }));
+  app.put('/api/client-type', requireSameOrigin, requireAuth, safe(async (req, res) => {
+    const out = await sales.setClientType(pool, { adminId: me(req), type: req.body && req.body.type, by: 'self', actorId: me(req) });
+    if (!out.ok) return reply(res, out);
+    const pilot = await afterType(me(req));
+    res.json({ ...out, pilot: { approved: !!pilot.approved } });
+  }));
   app.get('/api/sales/me', requireAuth, safe(async (req, res) => {
     const page = await sales.agentPage(pool, { agentId: me(req), botUsername, appUrl });
     if (!page) return res.status(404).json({ error: 'not_an_agent' });
@@ -87,4 +116,4 @@ function mountSalesRoutes(app, { pool, requireAuth, requireMasterAdmin, requireS
   }));
 }
 
-module.exports = { mountSalesRoutes, refCookieMiddleware, refFromCookie, REF_COOKIE };
+module.exports = { mountSalesRoutes, refCookieMiddleware, refFromCookie, REF_COOKIE, PILOT_OPEN };

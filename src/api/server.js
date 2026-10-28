@@ -1278,7 +1278,8 @@ app.get('/api/admin/audit-log', requireMasterAdmin, async (req, res) => {
 app.get('/api/user-info', requireAuth, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT tariff_plan, tariff_expires_at FROM admins WHERE id = $1 LIMIT 1`,
+      // client_type (migration 026) read so it is null, not an error, before the migration
+      `SELECT tariff_plan, tariff_expires_at, to_jsonb(admins.*)->>'client_type' AS client_type FROM admins WHERE id = $1 LIMIT 1`,
       [req.session.adminId]
     );
     const account = result.rows[0] || {};
@@ -1288,7 +1289,8 @@ app.get('/api/user-info', requireAuth, async (req, res) => {
       role: req.session.role,
       fullName: req.session.fullName,
       tariffPlan: account.tariff_plan || null,
-      tariffExpiresAt: account.tariff_expires_at || null
+      tariffExpiresAt: account.tariff_expires_at || null,
+      clientType: account.client_type || null
     });
   } catch (error) {
     console.error('[user-info]', error.message);

@@ -9,7 +9,7 @@ uz: {
   'hello.m':'Xayrli tong','hello.d':'Xayrli kun','hello.e':'Xayrli kech','hello.sub':'Savol bering, hujjat yuklang yoki ko‘nikmani tanlang.',
   'cmp.ph':'Huquqiy savolingizni yozing… @ — hujjat, / — ko‘nikma','cmp.ph2':'Davom eting…','cmp.attach':'Hujjat','cmp.skills':'Ko‘nikma','cmp.src':'Manba: lex.uz','cmp.hint':'JuristAI xato qilishi mumkin. Muhim qarordan oldin manbani tekshiring.',
   'cmp.reading':'o‘qilmoqda…','cmp.ready':'tayyor','cmp.wait':'Fayl hali o‘qilmoqda — bir lahza kuting.',
-  'roles.label':'Sohangiz','role.citizen':'Fuqaro','role.biz':'Tadbirkor','role.lawyer':'Yurist','role.hr':'HR va buxgalteriya','role.firm':'Advokatlik firmasi',
+  'roles.label':'Sohangiz','role.citizen':'Fuqaro','role.biz':'Tadbirkor','role.lawyer':'Yurist','role.hr':'HR / kadrlar','role.acct':'Buxgalter','role.firm':'Advokatlik firmasi',
   'recent':'So‘nggi suhbatlar',
   'steps.0':'Savol tahlil qilinmoqda','steps.1':'lex.uz bazasidan moddalar qidirilmoqda','steps.2':'Javob yozilmoqda','steps.3':'Har bir da’vo manba bilan tekshirilmoqda','steps.done':'{n} bosqich bajarildi',
   'src.title':'Manbalar','src.open':'lex.uz’da ochish','src.n':'{n} manba','src.none':'Bu javobda havola qilingan manba yo‘q.',
@@ -59,6 +59,7 @@ uz: {
   'tasks.biz':[['risk','Shartnomani imzolashdan oldin tekshirish','Kontragent shartnomasidagi xavfli bandlar.'],['chat','Soliq va litsenziya savollari','Faoliyatingizga qanday talablar bor.','Oilaviy korxona uchun litsenziya kerakmi?'],['draft','Shartnoma tayyorlash','Yetkazib berish, ijara, xizmat ko‘rsatish.'],['claim','Talabnoma yozish','To‘lanmagan qarz bo‘yicha talabnoma.']],
   'tasks.lawyer':[['opinion','Yuridik xulosa','Hujjat bo‘yicha rasmiy uslubdagi xulosa.'],['risk','Shartnoma xavf tahlili','Band, muammo va tavsiya jadvali.'],['deadline','Muddatlarni aniqlash','Qonunda belgilangan muddatlar va ularning boshlanishi.'],['draft','Da’vo arizasi loyihasi','Sud uchun ariza loyihasi.']],
   'tasks.hr':[['chat','Mehnat qonunchiligi savoli','Ta’til, ish vaqti, bo‘shatish.','Yillik ta’til necha kun bo‘lishi kerak?'],['draft','Buyruq tayyorlash','Ishga qabul, ta’til, intizomiy jazo buyruqlari.'],['risk','Mehnat shartnomasini tekshirish','Qonunga zid shartlar.'],['deadline','Hisobot va to‘lov muddatlari','Soliq va mehnat bo‘yicha muddatlar.']],
+  'tasks.acct':[['chat','Soliq savoli','QQS, foyda solig‘i, imtiyozlar — modda bilan.','QQS to‘lovchisi bo‘lish chegarasi qancha?'],['risk','Shartnomani tekshirish','Summa, to‘lov tartibi, jarimalar.'],['deadline','Hisobot va to‘lov muddatlari','Soliq va statistika hisobotlari.'],['opinion','Yuridik xulosa','Soliq yoki moliyaviy masala bo‘yicha.']],
   'tasks.firm':[['team','Jamoa ish maydoni','Vazifalar, muddatlar, hujjatlar va umumiy AI.'],['opinion','Yuridik xulosa','Mijoz hujjati bo‘yicha xulosa.'],['risk','Shartnomalarni tekshirish','Xavfli bandlar jadvali.'],['skills','Firma ko‘nikmalari','O‘z uslubingizdagi tayyor usullar.']]
 },
 ru: {
@@ -70,7 +71,7 @@ ru: {
   'hello.m':'Доброе утро','hello.d':'Добрый день','hello.e':'Добрый вечер','hello.sub':'Задайте вопрос, загрузите документ или выберите навык.',
   'cmp.ph':'Напишите правовой вопрос… @ — документ, / — навык','cmp.ph2':'Продолжите…','cmp.attach':'Документ','cmp.skills':'Навык','cmp.src':'Источник: lex.uz','cmp.hint':'JuristAI может ошибаться. Перед важным решением проверьте источник.',
   'cmp.reading':'читается…','cmp.ready':'готово','cmp.wait':'Файл ещё читается — подождите секунду.',
-  'roles.label':'Ваша сфера','role.citizen':'Гражданин','role.biz':'Предприниматель','role.lawyer':'Юрист','role.hr':'HR и бухгалтерия','role.firm':'Адвокатская фирма',
+  'roles.label':'Ваша сфера','role.citizen':'Гражданин','role.biz':'Предприниматель','role.lawyer':'Юрист','role.hr':'HR / кадры','role.acct':'Бухгалтер','role.firm':'Адвокатская фирма',
   'recent':'Последние диалоги',
   'steps.0':'Разбираем вопрос','steps.1':'Ищем статьи в базе lex.uz','steps.2':'Пишем ответ','steps.3':'Проверяем каждое утверждение по источнику','steps.done':'Выполнено этапов: {n}',
   'src.title':'Источники','src.open':'Открыть на lex.uz','src.n':'Источников: {n}','src.none':'В этом ответе нет ссылок на источники.',
@@ -120,6 +121,7 @@ ru: {
   'tasks.biz':[['risk','Проверить договор до подписания','Опасные пункты в договоре контрагента.'],['chat','Вопросы о налогах и лицензиях','Какие требования к вашей деятельности.','Нужна ли лицензия для семейного предприятия?'],['draft','Подготовить договор','Поставка, аренда, услуги.'],['claim','Написать претензию','Претензия по неоплаченному долгу.']],
   'tasks.lawyer':[['opinion','Юридическое заключение','Заключение по документу в официальном стиле.'],['risk','Анализ рисков договора','Таблица: пункт, проблема, рекомендация.'],['deadline','Определить сроки','Сроки по закону и момент их начала.'],['draft','Проект искового заявления','Заявление для суда.']],
   'tasks.hr':[['chat','Вопрос по трудовому праву','Отпуск, рабочее время, увольнение.','Сколько дней должен длиться ежегодный отпуск?'],['draft','Подготовить приказ','Приём, отпуск, дисциплинарное взыскание.'],['risk','Проверить трудовой договор','Условия, противоречащие закону.'],['deadline','Сроки отчётов и платежей','Сроки по налогам и труду.']],
+  'tasks.acct':[['chat','Налоговый вопрос','НДС, налог на прибыль, льготы — со статьёй.','Каков порог для плательщика НДС?'],['risk','Проверить договор','Сумма, порядок оплаты, штрафы.'],['deadline','Сроки отчётов и платежей','Налоговая и статистическая отчётность.'],['opinion','Юридическое заключение','По налоговому или финансовому вопросу.']],
   'tasks.firm':[['team','Рабочее пространство команды','Задачи, сроки, документы и общий AI.'],['opinion','Юридическое заключение','Заключение по документу клиента.'],['risk','Проверка договоров','Таблица опасных пунктов.'],['skills','Навыки фирмы','Готовые способы в вашем стиле.']]
 },
 en: {
@@ -131,7 +133,7 @@ en: {
   'hello.m':'Good morning','hello.d':'Good afternoon','hello.e':'Good evening','hello.sub':'Ask a question, upload a document or pick a skill.',
   'cmp.ph':'Ask a legal question… @ for documents, / for skills','cmp.ph2':'Continue…','cmp.attach':'Document','cmp.skills':'Skill','cmp.src':'Source: lex.uz','cmp.hint':'JuristAI can make mistakes. Check the source before an important decision.',
   'cmp.reading':'reading…','cmp.ready':'ready','cmp.wait':'The file is still being read — one moment.',
-  'roles.label':'Your field','role.citizen':'Citizen','role.biz':'Entrepreneur','role.lawyer':'Lawyer','role.hr':'HR & accounting','role.firm':'Law firm',
+  'roles.label':'Your field','role.citizen':'Citizen','role.biz':'Entrepreneur','role.lawyer':'Lawyer','role.hr':'HR','role.acct':'Accountant','role.firm':'Law firm',
   'recent':'Recent chats',
   'steps.0':'Analysing the question','steps.1':'Searching lex.uz for articles','steps.2':'Writing the answer','steps.3':'Checking every claim against its source','steps.done':'{n} steps completed',
   'src.title':'Sources','src.open':'Open on lex.uz','src.n':'{n} sources','src.none':'This answer cites no sources.',
@@ -181,5 +183,6 @@ en: {
   'tasks.biz':[['risk','Check a contract before signing','Risky clauses in a counterparty’s contract.'],['chat','Tax and licensing questions','What your business needs to comply with.','Does a family business need a licence?'],['draft','Draft a contract','Supply, lease, services.'],['claim','Write a demand letter','A demand for an unpaid debt.']],
   'tasks.lawyer':[['opinion','Legal opinion','A formal opinion on a document.'],['risk','Contract risk review','Table of clause, issue and recommendation.'],['deadline','Find the deadlines','Statutory deadlines and when they start.'],['draft','Draft statement of claim','An application for court.']],
   'tasks.hr':[['chat','Employment law question','Leave, working hours, dismissal.','How many days of annual leave are required?'],['draft','Prepare an order','Hiring, leave, disciplinary orders.'],['risk','Check an employment contract','Terms that contradict the law.'],['deadline','Reporting and payment deadlines','Tax and employment deadlines.']],
+  'tasks.acct':[['chat','Tax question','VAT, profit tax, exemptions — with the article.','What is the VAT registration threshold?'],['risk','Check a contract','Amount, payment terms, penalties.'],['deadline','Reporting and payment deadlines','Tax and statistics reports.'],['opinion','Legal opinion','On a tax or financial matter.']],
   'tasks.firm':[['team','Team workspace','Tasks, deadlines, documents and a shared AI.'],['opinion','Legal opinion','An opinion on a client document.'],['risk','Contract review','Table of risky clauses.'],['skills','Firm skills','Ready-made methods in your own style.']]
 }};

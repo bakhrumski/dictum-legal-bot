@@ -23,10 +23,28 @@
  */
 
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 
 // the 14-day CustDev pilot (docs/tariffs-v2.md §10); used only when a master approves
 const PILOT_GRANT = Object.freeze({ hours: 336, plan: 'silver', quotas: { chat: 120, analysis: 8, opinion: 4, draft: 6, ocr: 20 }, budgetUsd: 10 });
 const STAFF = Object.freeze(['student', 'lawyer']);
+
+// What the client does (migration 026). It adapts the platform and grants
+// nothing; the access role stays 'user'. A pilot opens by itself only for a
+// professional type (owner, 2026-10-28: "user"s are offered one-time services).
+const CLIENT_TYPES = Object.freeze(['lawyer', 'accountant', 'hr', 'business', 'user']);
+const PRO_TYPES = Object.freeze(['lawyer', 'accountant', 'hr', 'business']);
+const CLIENT_TYPE_LABELS = Object.freeze({ lawyer: 'Yurist / advokat', accountant: 'Buxgalter', hr: 'HR / kadrlar', business: 'Tadbirkor', user: 'Boshqa' });
+const cleanType = t => (CLIENT_TYPES.includes(String(t || '').toLowerCase()) ? String(t).toLowerCase() : null);
+
+// The owner's standing rule (2026-10-28, "b"): an agent's client of a
+// professional type gets the pilot with no master's click, while fewer than
+// PILOT_AUTO_TOTAL pilots (20) are open in all and PILOT_AUTO_PER_AGENT (4)
+// for that agent; past that the request waits for a master. PILOT_AUTO=off stops it.
+function autoLimits(env = process.env) {
+  const n = (v, d) => (Number.isInteger(Number(v)) && Number(v) >= 0 ? Number(v) : d);
+  return { on: String(env.PILOT_AUTO || 'on').toLowerCase() !== 'off', total: n(env.PILOT_AUTO_TOTAL, 20), perAgent: n(env.PILOT_AUTO_PER_AGENT, 4) };
+}
 const CODE_RE = /^[a-z0-9]{10,16}$/;
 
 function newCode() {
@@ -116,12 +134,110 @@ async function claimAtRegistration(db, { adminId, refCode = null, telegramUserId
   return false;
 }
 
+/**
+ * Set what the client does. 'self' - the person's own account; 'agent' - only
+ * the agent the client came through; 'master' - checked in the database.
+ * Only an ordinary account (role 'user') has a client type.
+ */
+async function setClientType(db, { adminId, type, by = 'self', actorId = null }) {
+  const t = cleanType(type);
+  if (!t) return { ok: false, status: 400, error: 'invalid_type' };
+  const c = (await db.query('SELECT id, role, referred_by_agent_id FROM admins WHERE id = $1', [adminId])).rows[0];
+  if (!c || c.role !== 'user') return { ok: false, status: 404, error: 'not_found' };
+  if (by === 'agent') {
+    const a = (await db.query('SELECT role FROM admins WHERE id = $1', [actorId])).rows[0];
+    if (!a || !STAFF.includes(a.role) || Number(c.referred_by_agent_id) !== Number(actorId)) return { ok: false, status: 404, error: 'not_found' };
+  } else if (by === 'master') {
+    if (!(await isMaster(db, actorId))) return { ok: false, status: 403, error: 'master_only' };
+  } else if (by !== 'self' || Number(actorId) !== Number(adminId)) {
+    return { ok: false, status: 403, error: 'forbidden' };
+  }
+  await db.query('UPDATE admins SET client_type = $2, client_type_by = $3, client_type_at = now() WHERE id = $1', [adminId, t, by]);
+  return { ok: true, type: t };
+}
+
+/**
+ * The standing rule: approve this client's pending request when the client is
+ * of a professional type and the caps allow it. One at a time (an advisory
+ * lock), so parallel joins cannot pass a cap. Returns { approved, reason }.
+ */
+async function maybeAutoApprove(pool, { adminId, ledger, env = process.env }) {
+  const lim = autoLimits(env);
+  if (!lim.on) return { approved: false, reason: 'off' };
+  const client = await pool.connect();
+  try {
+    await client.query("SELECT pg_advisory_lock(hashtext('custdev_pilot_auto'))");
+    const q = (await client.query(
+      `SELECT q.id, q.agent_id, q.status, c.client_type, g.full_name AS agent_name
+         FROM pilot_requests q JOIN admins c ON c.id = q.admin_id LEFT JOIN admins g ON g.id = q.agent_id
+        WHERE q.admin_id = $1`, [adminId])).rows[0];
+    if (!q) return { approved: false, reason: 'no_request' };
+    if (q.status !== 'pending') return { approved: q.status === 'approved', reason: q.status };
+    if (!PRO_TYPES.includes(q.client_type)) return { approved: false, reason: q.client_type ? 'not_professional' : 'no_type' };
+    const cnt = (await client.query(
+      `SELECT count(*)::int AS total, count(*) FILTER (WHERE agent_id = $1)::int AS mine FROM pilot_requests WHERE status = 'approved'`, [q.agent_id])).rows[0];
+    if (cnt.total >= lim.total) return { approved: false, reason: 'total_cap' };
+    if (cnt.mine >= lim.perAgent) return { approved: false, reason: 'agent_cap' };
+    const g = await ledger.grantTestEntitlement({ adminId, grantedBy: null, policy: 'custdev_pilot_auto',
+      reason: `CustDev pilot, auto (agent #${q.agent_id}${q.agent_name ? ` ${q.agent_name}` : ''})`, ...PILOT_GRANT });
+    if (!g.ok) return { approved: false, reason: g.reason };
+    await client.query(`UPDATE pilot_requests SET status = 'approved', auto = true, decided_at = now(), period_id = $2 WHERE id = $1 AND status = 'pending'`, [q.id, g.period.id]);
+    return { approved: true, reason: 'auto', period: g.period };
+  } finally {
+    await client.query("SELECT pg_advisory_unlock(hashtext('custdev_pilot_auto'))").catch(() => {});
+    client.release();
+  }
+}
+
+/**
+ * The bot's one-tap join: the Telegram user opened an agent's link and chose
+ * what they do. The account is made from the Telegram identity (as the site's
+ * Telegram registration does, a random password nobody knows), the type is
+ * set, the referral claimed and the standing rule tried. A staff account is
+ * never touched.
+ */
+async function joinFromTelegram(pool, { from, chatId, type, ledger, env = process.env }) {
+  const t = cleanType(type);
+  if (!t || !from || !from.id) return { ok: false, error: 'invalid' };
+  const tgId = String(from.id);
+  let acc = (await pool.query('SELECT id, role FROM admins WHERE telegram_user_id::text = $1 ORDER BY id LIMIT 1', [tgId])).rows[0];
+  if (acc && acc.role !== 'user') return { ok: false, error: 'staff' };
+  let created = false;
+  if (!acc) {
+    const base = String(from.username || `tg${tgId}`).replace(/[^a-z0-9._-]/gi, '').toLowerCase() || `tg${tgId}`;
+    let username = base;
+    for (let i = 1; i <= 200; i++) {
+      if (!(await pool.query('SELECT 1 FROM admins WHERE LOWER(username) = $1', [username])).rows[0]) break;
+      username = `${base}${i}`;
+    }
+    const fullName = `${from.first_name || ''} ${from.last_name || ''}`.trim() || base;
+    const pwd = await bcrypt.hash(crypto.randomBytes(16).toString('hex'), 10);
+    try {
+      acc = (await pool.query(
+        `INSERT INTO admins (username, password, full_name, role, telegram_username, telegram_chat_id, telegram_user_id)
+         VALUES ($1, $2, $3, 'user', $4, $5, $6) RETURNING id, role`,
+        [username, pwd, fullName, from.username || null, chatId != null ? Number(chatId) : null, BigInt(tgId)])).rows[0];
+      created = true;
+    } catch (e) {
+      if (e.code !== '23505') throw e; // a parallel tap made it
+      acc = (await pool.query('SELECT id, role FROM admins WHERE telegram_user_id::text = $1 ORDER BY id LIMIT 1', [tgId])).rows[0];
+      if (!acc || acc.role !== 'user') return { ok: false, error: 'staff' };
+    }
+  }
+  await setClientType(pool, { adminId: acc.id, type: t, by: 'self', actorId: acc.id });
+  await claimAtRegistration(pool, { adminId: acc.id, telegramUserId: tgId });
+  const q = (await pool.query('SELECT status FROM pilot_requests WHERE admin_id = $1', [acc.id])).rows[0];
+  if (!q) return { ok: true, adminId: acc.id, created, type: t, pilot: 'none' };
+  const r = await maybeAutoApprove(pool, { adminId: acc.id, ledger, env });
+  return { ok: true, adminId: acc.id, created, type: t, pilot: r.approved ? 'approved' : (PRO_TYPES.includes(t) ? 'pending' : 'not_professional'), reason: r.reason, period: r.period || null };
+}
+
 /** Pilot requests for the master: pending first. */
 async function listRequests(db, { status = 'pending' } = {}) {
   const st = ['pending', 'approved', 'declined'].includes(status) ? status : 'pending';
   const r = await db.query(
     `SELECT q.id, q.admin_id, q.agent_id, q.status, q.created_at, q.decided_at, q.period_id,
-            c.full_name, c.username, c.created_at AS registered_at, c.referral_channel,
+            c.full_name, c.username, c.created_at AS registered_at, c.referral_channel, c.client_type, q.auto,
             g.full_name AS agent_name, g.username AS agent_username
        FROM pilot_requests q JOIN admins c ON c.id = q.admin_id LEFT JOIN admins g ON g.id = q.agent_id
       WHERE q.status = $1 ORDER BY q.created_at DESC LIMIT 200`, [st]);
@@ -167,8 +283,8 @@ const PAID = `EXISTS (SELECT 1 FROM tariff_periods p WHERE p.admin_id = c.id AND
 /** The agent's own clients: name, registered, pilot status, units used - no question or answer text. */
 async function clientsOf(db, agentId) {
   const r = await db.query(
-    `SELECT c.id, c.full_name, c.created_at AS registered_at, c.referral_channel,
-            q.status AS pilot_status, q.decided_at,
+    `SELECT c.id, c.full_name, c.created_at AS registered_at, c.referral_channel, c.client_type, c.client_type_by,
+            q.status AS pilot_status, q.decided_at, q.auto AS pilot_auto,
             (SELECT p.ends_at FROM tariff_periods p WHERE p.id = q.period_id) AS pilot_ends_at,
             ${USED} AS units_used, ${PAID} AS paid
        FROM admins c LEFT JOIN pilot_requests q ON q.admin_id = c.id
@@ -202,5 +318,5 @@ async function agentsOverview(db) {
   return r.rows;
 }
 
-module.exports = { PILOT_GRANT, STAFF, newCode, cleanCode, assignCode, revokeCode, agentByCode, attachReferral, rememberTelegramRef,
+module.exports = { PILOT_GRANT, STAFF, CLIENT_TYPES, PRO_TYPES, CLIENT_TYPE_LABELS, cleanType, autoLimits, setClientType, maybeAutoApprove, joinFromTelegram, newCode, cleanCode, assignCode, revokeCode, agentByCode, attachReferral, rememberTelegramRef,
   claimAtRegistration, listRequests, approve, decline, linkDemo, clientsOf, agentPage, agentsOverview };

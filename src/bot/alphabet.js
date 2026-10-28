@@ -65,8 +65,10 @@ function markup(opts, conv) {
  * when the message has no buttons of its own).
  */
 function wrapBot(bot, prefs) {
+  // a test double may lack one of them: only what exists is wrapped
+  if (typeof bot.sendMessage !== 'function') return bot;
   const send = bot.sendMessage.bind(bot);
-  const edit = bot.editMessageText.bind(bot);
+  const edit = typeof bot.editMessageText === 'function' ? bot.editMessageText.bind(bot) : null;
   bot.sendMessage = async (chatId, text, opts) => {
     let v = null;
     try { v = await prefs.get(chatId); } catch (_) { v = null; }
@@ -79,7 +81,7 @@ function wrapBot(bot, prefs) {
     }
     return send(chatId, A.toNew(text), o);
   };
-  bot.editMessageText = async (text, opts) => {
+  if (edit) bot.editMessageText = async (text, opts) => {
     let v = null;
     try { v = opts && opts.chat_id != null ? await prefs.get(opts.chat_id) : null; } catch (_) { v = null; }
     if (v === 'old' || typeof text !== 'string') return edit(text, opts);

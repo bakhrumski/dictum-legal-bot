@@ -925,8 +925,13 @@ function testQuotas(input) {
  * Refused while the account has a running paid period. Returns
  * { ok, period, duplicate } or { ok: false, reason }.
  */
+// Standing rules the owner decided, under which the server grants with no
+// master's click (grantedBy null). Only server code passes one; no route does.
+const TEST_GRANT_POLICIES = Object.freeze(['custdev_pilot_auto']);
+
 async function grantTestEntitlement({ adminId, grantedBy, reason = '', hours = 48, plan = 'silver', quotas = null,
-  budgetUsd = 5, unknownCallUsd = 0.05, perRequestUsd = null, budgetMode = 'strict', unboundedCallUsd = null, riskBasis = '', now = new Date() }) {
+  budgetUsd = 5, unknownCallUsd = 0.05, perRequestUsd = null, budgetMode = 'strict', unboundedCallUsd = null, riskBasis = '', policy = null, now = new Date() }) {
+  if (policy != null && (!TEST_GRANT_POLICIES.includes(policy) || grantedBy != null)) return { ok: false, reason: 'invalid_policy' };
   const why = String(reason || '').trim();
   if (why.length < 3 || why.length > 500) return { ok: false, reason: 'reason_required' };
   const h = Number(hours);
@@ -949,8 +954,10 @@ async function grantTestEntitlement({ adminId, grantedBy, reason = '', hours = 4
     return { ok: false, reason: 'estimated_mode_needs_estimate_and_basis' };
   }
   return withLock({ adminId }, async (db) => {
-    const m = await db.query('SELECT role FROM admins WHERE id = $1', [grantedBy]);
-    if (!m.rows[0] || m.rows[0].role !== 'master') return { ok: false, reason: 'master_only' };
+    if (!policy) {
+      const m = await db.query('SELECT role FROM admins WHERE id = $1', [grantedBy]);
+      if (!m.rows[0] || m.rows[0].role !== 'master') return { ok: false, reason: 'master_only' };
+    }
     const account = await accountRow(db, adminId);
     if (!account) return { ok: false, reason: 'unknown_user' };
     if (account.role !== 'user') return { ok: false, reason: 'not_an_ordinary_user' };
@@ -965,13 +972,13 @@ async function grantTestEntitlement({ adminId, grantedBy, reason = '', hours = 4
       [`a:${adminId}`, now]);
     if (paid.rows[0]) return { ok: false, reason: 'account_has_paid_period' };
     const ends = new Date(now.getTime() + Math.round(h * 3600e3));
-    const meta = { kind: 'test', reason: why, grantedBy: Number(grantedBy), grantedAt: now.toISOString(),
+    const meta = { kind: 'test', reason: why, grantedBy: policy ? null : Number(grantedBy), policy: policy || undefined, grantedAt: now.toISOString(),
       budgetUsd: budget, unknownCallUsd: unknown, perRequestUsd: perReq,
       budgetMode, unboundedCallUsd: budgetMode === 'estimated' ? unbounded : null, riskBasis: budgetMode === 'estimated' ? String(riskBasis).trim().slice(0, 500) : null };
     const ins = await db.query(
       `INSERT INTO tariff_periods (subject, admin_id, plan, rules, source, starts_at, ends_at, limits, economics, created_by)
        VALUES ($1, $2, $3, 'v2', 'test', $4, $5, $6, $7, $8) RETURNING *`,
-      [`a:${adminId}`, adminId, plan, now, ends, JSON.stringify(q), JSON.stringify(meta), grantedBy]);
+      [`a:${adminId}`, adminId, plan, now, ends, JSON.stringify(q), JSON.stringify(meta), policy ? null : grantedBy]);
     return { ok: true, period: ins.rows[0], duplicate: false };
   });
 }

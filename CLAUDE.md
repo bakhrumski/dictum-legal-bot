@@ -796,6 +796,22 @@ clients - name, registered, pilot status, units used, paid - never a
 question or answer (`GET /api/sales/me`, page `#/mijozlarim`, a nav item for
 an agent only). Master: Boshqaruv -> "CustDev pilot" (`/api/admin/sales/*`):
 pending requests, agents, codes, links, demo, registered / piloted / paid.
+Client type and the one-tap join (2026-10-28, owner; migration 026):
+`admins.client_type` lawyer / accountant / hr / business / user is what the
+client does - it adapts the platform (the home "Sohangiz" chips save it,
+`PUT /api/client-type`; `/api/user-info` returns `clientType`) and grants
+nothing: every client stays role `user` (a client lawyer is NOT role
+`lawyer`, which is staff and shown as "Ekspert"). Set by the person, their
+agent (`POST /api/sales/clients/:id/type`) or a master. The bot's ref_ link
+asks "kasbingiz?" (`src/bot/pilot-join.js`, buttons `pj_<type>`) and one tap
+makes the account from the Telegram identity (`joinFromTelegram`, no site, no
+code). Standing rule (owner's "b"): a professional type gets the pilot with
+no master's click (`maybeAutoApprove`, one at a time under an advisory lock;
+`grantTestEntitlement` `policy: 'custdev_pilot_auto'`, grantedBy null,
+`pilot_requests.auto`) while fewer than `PILOT_AUTO_TOTAL` (20) are approved
+in all and `PILOT_AUTO_PER_AGENT` (4) for that agent; "user" and anything
+past a cap waits for a master; `PILOT_AUTO=off` stops it.
+`tests/pilot-join.db.test.js`.
 Stages 3-4 (pilot Workspace, feedback, interview recordings): the pilot
 runs in an internal Workspace (migration 025, the owner's option 1).
 
