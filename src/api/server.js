@@ -391,6 +391,8 @@ app.use(['/api/legal-chat', '/api/analyze', '/api/draft', '/api/ai-chat', '/api/
 // for /videos/<file> is redirected there; a file kept in public/videos is
 // still served first, so nothing changes until the variable is set.
 const LANDING_VIDEO_BASE = String(process.env.LANDING_VIDEO_BASE_URL || '').trim().replace(/\/+$/, '');
+// an offer link's ?ref=<code> is kept for the registration (src/sales/routes.js), before the landing page is served
+app.use(require('../sales/routes').refCookieMiddleware);
 app.use(express.static('public'));
 if (/^https:\/\//.test(LANDING_VIDEO_BASE)) {
   app.get(/^\/videos\/([A-Za-z0-9._-]+\.(?:mp4|webm|webp|jpg|png))$/, (req, res) => {
@@ -10022,6 +10024,16 @@ app.post('/api/register', regUpload.single('document'), async (req, res) => {
 // The auth bot sends a 6-digit code to the Telegram chat that opens the link;
 // the person types it into the browser that started it. Opening the link
 // never signs anyone in, and no API returns the code (src/auth/telegram-confirm.js).
+// CustDev pilot agents (src/sales/): the master / agent routes (the ?ref= cookie is set before the static pages)
+require('../sales/routes').mountSalesRoutes(app, { pool, requireAuth, requireMasterAdmin, requireSameOrigin: require('../auth/same-origin').requireSameOrigin,
+  ledger: require('../rag/tariff-ledger'), logAudit, botUsername: LEGAL_BOT_USERNAME,
+  // an approved pilot is told in the bot when the client's Telegram is linked
+  notify: async (adminId, text) => {
+    const a = (await pool.query('SELECT telegram_chat_id FROM admins WHERE id = $1', [adminId])).rows[0];
+    if (a && a.telegram_chat_id) await bot.sendMessage(a.telegram_chat_id, text, { disable_web_page_preview: true });
+  },
+  appUrl: String(process.env.APP_URL || 'https://juristai.uz').replace(/\/+$/u, '') });
+
 require('../auth/telegram-auth-routes').mountTelegramAuthRoutes(app, {
   pool, loginSessions, regSessions, logAudit, authBotUsername: AUTH_BOT_USERNAME,
 });
@@ -10595,7 +10607,7 @@ app.post('/api/admin/tariff/grant', requireMasterAdmin, async (req, res) => {
 const TEST_ENT_REASONS = {
   master_only: 'Faqat Master Admin test huquqini bera oladi.',
   reason_required: 'Sababini yozing (3–500 belgi).',
-  invalid_hours: "Muddat 1 soatdan 168 soatgacha (7 kun).",
+  invalid_hours: "Muddat 1 soatdan 336 soatgacha (14 kun).",
   invalid_plan: "Hujjat hajmi qoidasi uchun Silver, Gold yoki Platinum tanlang.",
   invalid_quotas: 'Kvotalar 0–1000 oralig\'idagi butun son bo\'lsin.',
   invalid_budget: 'Budjet $0 dan katta va $50 dan oshmasin.',

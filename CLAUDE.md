@@ -583,7 +583,10 @@ Known state of the suites (Sept 2026):
   apart; legacy revenue and refunds are unknown, never 0. Rollback is code,
   not data: `docs/tariffs-v2-rollback.md`; the 013 down file is for an empty
   test database only. The pilot runs on a master-only test entitlement
-  (`grantTestEntitlement`, `tariff_periods.source = 'test'`: no price, no
+  (`grantTestEntitlement`, 1-336 h = up to 14 days since 2026-10-28, 48 h
+  default; quotas and budget cover the whole period; the 14-day CustDev
+  pilot's suggested grant is in `docs/tariffs-v2.md` §10;
+  `tariff_periods.source = 'test'`: no price, no
   paymentRef, no revenue, admins.tariff_* untouched, spend reported apart)
   with a total AI budget (`src/ai/test-budget.js`): each request holds its
   per-request limit before its first AI call, and inside it every provider
@@ -763,6 +766,33 @@ Known state of the suites (Sept 2026):
 - `public/` — static pages: `index.html` (landing), `login.html`,
   `dashboard.html` (the app), `ai-dashboard.html` (the design reference the
   dashboard follows), plus tariff, attorneys, templates, legal pages.
+
+## CustDev pilot (2026-10-28, owner)
+
+14 days, 5 student lawyers ("agents"), 20 clients. Stage 1: test
+entitlements up to 336 h. Stage 2 (migration 024, `src/sales/`): a staff
+account (student / lawyer, no new role) gets a random `admins.sales_agent_code`
+only from a master (route `requireMasterAdmin` + the role read again in the
+database); offer links `/?ref=<code>` (the `jai_ref` httpOnly cookie, set
+before the static pages, the first link kept) and
+`t.me/<legal bot>?start=ref_<code>` (`referral_pending` until the account
+exists; `ref_` is its own prefix and never triggers the bare-start sign-in
+fallback); the FIRST agent is written once at registration
+(`telegram-auth-routes`, `telegram-login` -> `claimAtRegistration`), an
+unknown code is ignored; a referred client gets a pending `pilot_requests`
+row; a master approves it with one button (`PILOT_GRANT`: 336 h, silver,
+chat 120 / analysis 8 / opinion 4 / draft 6 / ocr 20, $10) or declines; the
+client hears it in the bot when linked. Demo: a master-made test account
+linked to an agent (`demo_for_agent_id`) with the same entitlement; its
+units are reported apart. An agent grants nothing and sees only their own
+clients - name, registered, pilot status, units used, paid - never a
+question or answer (`GET /api/sales/me`, page `#/mijozlarim`, a nav item for
+an agent only). Master: Boshqaruv -> "CustDev pilot" (`/api/admin/sales/*`):
+pending requests, agents, codes, links, demo, registered / piloted / paid.
+Stages 3-4 (pilot Workspace, feedback, interview recordings) wait for the
+owner: a master cannot own an active Workspace (the database's
+`has_workspace_entitlement` needs role 'user' + Platinum; members need
+Silver unless master).
 
 ## The 2026 Latin alphabet (OʻRQ-1184 of 21.10.2026)
 

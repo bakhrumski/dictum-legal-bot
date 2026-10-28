@@ -17,13 +17,14 @@
   ];
   function drawNav() {
     // Boshqaruv faqat bazada master bo'lgan hisobga (admin.js; server har so'rovni o'zi tekshiradi)
-    var items = NAV.concat(J.isMaster && J.isMaster() ? [['#/boshqaruv', 'shield', 'nav.admin']] : []);
+    var items = NAV.concat(J.salesAgent ? [['#/mijozlarim', 'user', 'nav.myClients']] : [], J.isMaster && J.isMaster() ? [['#/boshqaruv', 'shield', 'nav.admin']] : []);
     $('#nav').innerHTML = items.map(function (n) {
       var lock = (n[0] === '#/tayyorlash' && !J.hasService('draft') && !J.needsPlan()) || (n[0] === '#/jamoa' && !J.isStaff() && /^(sinov|none)$/.test(J.planKey()));
       return '<a href="' + n[0] + '" data-r="' + n[0] + '" title="' + esc(t(n[2])) + '">' + J.icon(n[1]) + '<span>' + esc(t(n[2])) + '</span>' + (lock ? '<span class="lock">' + J.icon('lock') + '</span>' : '') + '</a>';
     }).join('');
     markNav();
   }
+  J.redrawNav = function () { drawNav(); };
   function markNav() {
     var h = location.hash || '#/';
     $$('#nav a').forEach(function (a) { var r = a.dataset.r; a.classList.toggle('on', r === '#/' ? (h === '#/' || h === '' || h === '#') : h.indexOf(r) === 0); });

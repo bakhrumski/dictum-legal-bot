@@ -660,4 +660,12 @@ textarea.inp{height:auto;min-height:96px;padding:10px 13px;resize:vertical;line-
 .ad-tbl th,.ad-tbl td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line-2);vertical-align:top}
 .ad-tbl th{color:var(--muted);font-weight:500}
 @media (max-width:520px){.ad-grid,.ad-add{grid-template-columns:minmax(0,1fr)}.ad-state{flex-direction:column;align-items:flex-start}}
+/* Mijozlarim (sales.js) */
+.sl-link{display:grid;grid-template-columns:110px minmax(0,1fr) auto;gap:10px;align-items:center;margin-top:10px}
+.sl-link code{font-size:13px;overflow-wrap:anywhere;background:var(--accent-soft);border-radius:8px;padding:6px 8px}
+.sl-tbl{overflow:auto;margin-top:14px}
+.sl-tbl table{width:100%;border-collapse:collapse;font-size:14px}
+.sl-tbl th,.sl-tbl td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line-2)}
+.sl-tbl th{color:var(--muted);font-weight:500;font-size:13px}
+@media (max-width:520px){.sl-link{grid-template-columns:minmax(0,1fr)}}
 
