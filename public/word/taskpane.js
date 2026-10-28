@@ -1,6 +1,8 @@
 /* JuristAI — Word task pane (va Google Docs yon paneli: window.JAI_HOST + window.JAI_BASE, public/gdocs/).
    Kirish: qurilmani ulash (POST /api/addin/pair → brauzerda /word/ulash.html → token).
-   Server: POST /api/legal-chat (SSE), GET /api/user-info, POST /api/addin/logout — hammasi "Authorization: Bearer". */
+   Server: POST /api/legal-chat (SSE), GET /api/user-info, POST /api/addin/logout, playbook (GET /api/playbooks,
+   POST /api/agent/playbook-review, GET /api/agent/runs/:id) va ishlar (GET/POST /api/matters, POST /api/matters/:id/items)
+   — hammasi "Authorization: Bearer". */
 (function () {
   'use strict';
   var TOKEN_KEY = (window.JAIShared && window.JAIShared.TOKEN_KEY) || 'juristai-word-token';
@@ -166,6 +168,7 @@
       return jsonOf(res).then(function (d) {
         $('#whoName').textContent = (d.fullName || d.username || '') + (d.tariffPlan ? ' · ' + d.tariffPlan : '');
         show('main');
+        loadPlaybooks();
       });
     }).catch(function () { show('main'); toast("Server bilan aloqa yo'q. Internetni tekshiring."); });
   }
@@ -269,7 +272,7 @@
   // Word 2016/2019 (EdgeHTML) has no TextDecoder / streamed body: the answer then comes whole, as JSON
   var CAN_STREAM = !!(window.TextDecoder && window.ReadableStream && window.Response && Response.prototype && 'body' in Response.prototype);
   var busy = false, ctrl = null;
-  function setBusy(v) { busy = v; $$('.act, #selGo, #chatGo').forEach(function (b) { b.disabled = v; }); }
+  function setBusy(v) { busy = v; $$('.act, #selGo, #chatGo, #pbGo').forEach(function (b) { b.disabled = v; }); }
   function card(title, where) {
     var el = h('<div class="res"><div class="res-h"><span class="kicker"></span><button type="button" class="x" title="Yopish" aria-label="Yopish">×</button></div><div class="steps"><span class="spin"></span><span class="st">Qonunlar qidirilmoqda…</span></div><div class="live" hidden></div><div class="body"></div></div>');
     $('.kicker', el).textContent = title;
@@ -378,10 +381,11 @@
   /* ---------------- 1. Hujjat: hujjatning o'zida ko'rib chiqish ---------------- */
   function setupReview() {
     var cp = host.caps();
-    if (!host.review) { $('#review').hidden = true; return; }
+    if (!host.review) { $('#review').hidden = true; $('#pb').hidden = true; return; }
     $('#revSub').textContent = cp.reviewSub || '';
     if (cp.reviewEdits) $('#revEditsL').textContent = cp.reviewEdits; else $('#revEditsRow').hidden = true;
     $('#revClear').hidden = !cp.reviewClear;
+    if (cp.reviewEdits) $('#pbEditsL').textContent = cp.reviewEdits.replace(/^Tuzatishlarni/, 'Takliflarni'); else $('#pbEditsRow').hidden = true;
   }
   $('#revGo').onclick = function () {
     if (busy) return;
@@ -429,6 +433,119 @@
       .catch(function (e) { toast(e.message || "O'chirib bo'lmadi"); });
   }
   $('#revClear').onclick = clearReview;
+
+  /* ---------------- 1. Hujjat: playbook bilan solishtirish (2026-10-28) ----------------
+     POST /api/agent/playbook-review (saytdagi bilan bir xil xizmat: tahlil birligi shartnoma hajmiga qarab,
+     natija chiqsa yechiladi). Farq va yetishmayotgan bandlar hujjatga izoh bo'ladi; taklif - Track Changes. */
+  var pbList = { builtin: [], mine: [] };
+  function loadPlaybooks() {
+    var sel = $('#pbPick'); if (!sel) return;
+    api('/api/playbooks').then(function (res) { return jsonOf(res).then(function (d) { if (!res.ok) throw new Error(); return d; }); }).then(function (d) {
+      pbList = { builtin: d.builtin || [], mine: d.mine || [] };
+      var opt = function (v, t) { return '<option value="' + esc(v) + '">' + esc(t) + '</option>'; };
+      sel.innerHTML = (pbList.mine.length ? '<optgroup label="Mening playbooklarim">' + pbList.mine.map(function (p) { return opt('id:' + p.id, p.name); }).join('') + '</optgroup>' : '') +
+        '<optgroup label="Tayyor">' + pbList.builtin.map(function (p) { return opt('b:' + p.key, p.name); }).join('') + '</optgroup>';
+      pbDesc();
+    }).catch(function () { sel.innerHTML = '<option value="">Playbooklarni yuklab bo\'lmadi</option>'; });
+  }
+  function pbChosen() {
+    var v = $('#pbPick').value || '';
+    if (v.indexOf('id:') === 0) { var id = v.slice(3); return { body: { playbookId: Number(id) }, p: pbList.mine.filter(function (x) { return String(x.id) === id; })[0] }; }
+    if (v.indexOf('b:') === 0) { var k = v.slice(2); return { body: { builtin: k }, p: pbList.builtin.filter(function (x) { return x.key === k; })[0] }; }
+    return null;
+  }
+  function pbDesc() { var c = pbChosen(); $('#pbDesc').textContent = c && c.p ? (c.p.description || '') + (c.p.rules ? ' · ' + c.p.rules.length + ' ta qoida' : '') : ''; }
+  $('#pbPick').onchange = pbDesc;
+
+  /** a queued review answers 202 { runId }: follow it to its end */
+  function followRun(runId, el) {
+    var until = Date.now() + 20 * 60 * 1000;
+    return new Promise(function (resolve) {
+      (function tick() {
+        if (Date.now() > until) { resolve({ ok: false, data: { message: "Tekshiruv hali tugamadi. Natija saytda, Ishlar bo'limida ko'rinadi." } }); return; }
+        setTimeout(function () {
+          api('/api/agent/runs/' + encodeURIComponent(runId)).then(function (res) { return jsonOf(res).then(function (d) { return { res: res, d: d }; }); }).then(function (x) {
+            if (x.res.status === 404) { resolve({ ok: false, data: { message: "Tekshiruv topilmadi." } }); return; }
+            var st = $('.st', el), run = x.d || {};
+            if (st && run.steps && run.steps.length) st.textContent = run.steps[run.steps.length - 1].label + '…';
+            if (['done', 'failed', 'cancelled', 'budget', 'needs_input'].indexOf(run.status) > -1 && run.result) {
+              var body = run.result.body || {}; body.runId = runId;
+              resolve({ ok: (run.result.httpStatus || 200) < 300, data: body }); return;
+            }
+            tick();
+          }).catch(function () { tick(); });
+        }, 2500);
+      })();
+    });
+  }
+
+  $('#pbGo').onclick = function () {
+    if (busy) return;
+    var chosen = pbChosen();
+    if (!chosen) { toast('Playbookni tanlang.'); return; }
+    var S = window.JAIShared, edits = !$('#pbEditsRow').hidden && $('#pbEdits').checked;
+    host.bodyText().then(function (text) {
+      if (!text.trim()) { toast("Hujjat bo'sh."); return; }
+      var el = card('Playbook: ' + ((chosen.p && chosen.p.name) || ''), $('#outDoc'));
+      $('.st', el).textContent = 'Bandlar qoidalar bilan solishtirilmoqda…';
+      try { el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) {}
+      setBusy(true);
+      return api('/api/agent/playbook-review', { body: Object.assign({ text: text, name: 'Word hujjati' }, chosen.body) })
+        .then(function (res) { return jsonOf(res).then(function (d) { return { ok: res.ok, status: res.status, data: d }; }); })
+        .then(function (r) { return r.status === 202 && r.data && r.data.runId ? followRun(r.data.runId, el) : r; })
+        .then(function (r) {
+          if (!r.ok) { setBusy(false); limitOrFail(el, r.data); return; }
+          var d = r.data, items = S.playbookItems(d.results);
+          if (!items.length) { setBusy(false); pbDone(el, d, []); return; }
+          var st = $('.st', el); if (st) st.textContent = "Hujjatga izohlar qo'yilmoqda…";
+          return host.review(items, { edits: edits }).then(function (res) { setBusy(false); pbDone(el, d, res); })
+            .catch(function (e) { setBusy(false); pbDone(el, d, null); toast((e && e.message) || "Izohlarni qo'yib bo'lmadi"); });
+        });
+    }).catch(function (e) { setBusy(false); toast((e && e.message) || "Server bilan aloqa yo'q. Internetni tekshiring."); });
+  };
+  function pbDone(el, d, res) {
+    var s = $('.steps', el); if (s) s.remove();
+    var c = d.counts || {}, body = $('.body', el);
+    var ed = (res || []).filter(function (x) { return x.edited; }).length, miss = (res || []).filter(function (x) { return x.where === 'missing'; }).length;
+    var lab = window.JAIShared.PB_STATUS;
+    body.innerHTML = '<div class="counts">' + ['farq', 'yoq', 'noaniq', 'mos'].map(function (k) { return '<span>' + esc(lab[k]) + ': <b>' + (c[k] || 0) + '</b></span>'; }).join('') + '</div>' +
+      (res ? '<p class="done"><b>' + res.length + ' ta izoh</b> hujjatga qo\'yildi' + (ed ? ', <b>' + ed + ' tasi</b> taklif bilan (Track Changes)' : '') + '.</p>'
+        : (d.results && d.results.length && (c.mos || 0) < d.results.length ? '<p class="note">Izohlar hujjatga qo\'yilmadi.</p>' : '<p class="done">Hamma qoida bajarilgan.</p>')) +
+      (miss ? '<p class="note">' + miss + ' ta band matni hujjatda aniq topilmadi — izohi hujjat boshida.</p>' : '') +
+      (d.downgraded ? '<p class="note">' + d.downgraded + ' ta "mos" javobning iqtibosi shartnomada topilmadi, ular "noaniq" deb belgilandi.</p>' : '') +
+      '<p class="note">Playbook — firmangiz qoidalari, qonun emas. Iqtibos shartnomada borligi tekshiriladi, xulosaning to\'g\'riligi emas.</p>';
+    var b = h('<div class="btns"></div>');
+    if (d.runId) { var sv = h('<button type="button" class="pill sm">Ishga saqlash</button>'); sv.onclick = function () { saveToMatter(el, d.runId, sv); }; b.appendChild(sv); }
+    if (host.caps().reviewClear) { var cl = h('<button type="button" class="pill sm ghost">Izohlarni o\'chirish</button>'); cl.onclick = clearReview; b.appendChild(cl); }
+    body.appendChild(b);
+  }
+  /** "Ishga saqlash": natija (agent run) tanlangan ishga bog'lanadi; yangi ish ham shu yerda ochiladi */
+  function saveToMatter(el, runId, btn) {
+    btn.disabled = true;
+    api('/api/matters').then(function (res) { return jsonOf(res).then(function (d) { if (!res.ok) throw new Error(d.message || "Ishlarni yuklab bo'lmadi"); return d; }); }).then(function (d) {
+      var list = (d.matters || []).filter(function (m) { return m.status === 'open' && m.access === 'write'; });
+      var box = h('<div class="save"><select class="inp" aria-label="Ish"></select><input class="inp" maxlength="160" placeholder="Yangi ish nomi" hidden><div class="btns"><button type="button" class="pill sm" data-a="ok">Saqlash</button><button type="button" class="pill sm ghost" data-a="no">Bekor</button></div></div>');
+      var sel = $('select', box), name = $('input', box);
+      sel.innerHTML = list.map(function (m) { return '<option value="' + esc(m.id) + '">' + esc(m.title) + '</option>'; }).join('') + '<option value="__new">+ Yangi ish</option>';
+      var upd = function () { name.hidden = sel.value !== '__new'; };
+      sel.onchange = upd; upd();
+      $('.body', el).appendChild(box);
+      $('[data-a=no]', box).onclick = function () { box.remove(); btn.disabled = false; };
+      $('[data-a=ok]', box).onclick = function () {
+        var ok = this; ok.disabled = true;
+        var mid = sel.value;
+        var made = mid !== '__new' ? Promise.resolve(mid) : api('/api/matters', { body: { title: name.value.trim() } }).then(function (res) {
+          return jsonOf(res).then(function (x) { if (!res.ok) throw new Error(x.message || "Ishni ochib bo'lmadi"); return x.id; });
+        });
+        made.then(function (id) {
+          return api('/api/matters/' + encodeURIComponent(id) + '/items', { body: { kind: 'agent_run', ref: runId, title: 'Playbook tekshiruvi (Word)' } }).then(function (res) {
+            if (!res.ok && res.status !== 409) return jsonOf(res).then(function (x) { throw new Error(x.message || "Saqlab bo'lmadi"); });
+            box.remove(); btn.textContent = 'Ishga saqlandi'; toast(res.status === 409 ? 'Bu natija shu ishda bor' : 'Ishga saqlandi');
+          });
+        }).catch(function (e) { ok.disabled = false; toast(e.message || "Saqlab bo'lmadi"); });
+      };
+    }).catch(function (e) { btn.disabled = false; toast(e.message || "Ishlarni yuklab bo'lmadi"); });
+  }
 
   /* ---------------- 1. Hujjat: panelda javob ---------------- */
   var DOC_PROMPTS = {

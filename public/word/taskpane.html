@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex">
 <title>JuristAI — Word</title>
 <link rel="stylesheet" href="/app/fonts.css">
-<link rel="stylesheet" href="/word/taskpane.css?v=4">
+<link rel="stylesheet" href="/word/taskpane.css?v=5">
 <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
 </head>
 <body>
@@ -47,6 +47,14 @@
       <button type="button" class="act primary" id="revGo"><b>Hujjatda ko'rib chiqish</b><small id="revSub">Har bir xavfli band hoshiyada izoh bilan belgilanadi</small></button>
       <label class="chk" id="revEditsRow"><input type="checkbox" id="revEdits"> <span id="revEditsL">Tuzatishlarni Track Changes bilan kiritish</span></label>
       <button type="button" class="link" id="revClear">JuristAI izohlarini o'chirish</button>
+    </div>
+    <p class="kicker sect">Playbook</p>
+    <div class="pb" id="pb">
+      <p class="muted sm">Shartnomani firmangizning o'z qoidalari bilan solishtiring. Farqlar va yetishmayotgan bandlar hoshiyada izoh bilan belgilanadi. Playbook qonun emas, bir tarafning muzokara afzalliklari.</p>
+      <select id="pbPick" class="inp" aria-label="Playbook"><option value="">Yuklanmoqda…</option></select>
+      <p class="muted xs" id="pbDesc"></p>
+      <label class="chk" id="pbEditsRow"><input type="checkbox" id="pbEdits"> <span id="pbEditsL">Takliflarni Track Changes bilan kiritish</span></label>
+      <button type="button" class="act primary" id="pbGo"><b>Playbook bilan tekshirish</b><small>Narxi shartnoma hajmiga qarab tahlil birligida</small></button>
     </div>
     <p class="kicker sect">Javob panelda</p>
     <div class="acts">
@@ -91,6 +99,6 @@
 
 <div id="toast" class="toast" hidden></div>
 <script src="/word/shared.js?v=1"></script>
-<script src="/word/taskpane.js?v=5"></script>
+<script src="/word/taskpane.js?v=6"></script>
 </body>
 </html>

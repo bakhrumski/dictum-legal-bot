@@ -45,9 +45,9 @@ function browser() {
 /** the task pane: no cookies, only its token */
 function pane() {
   let token = '';
-  const call = async (path, { method = 'GET', body = null } = {}) => {
+  const call = async (path, { method = 'GET', body = null, headers = {} } = {}) => {
     const r = await fetch(`${BASE}${path}`, { method, body: body ? JSON.stringify(body) : undefined,
-      headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}) } });
+      headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}), ...headers } });
     return { status: r.status, headers: r.headers, body: await r.json().catch(() => ({})) };
   };
   return { call, setToken: (t) => { token = t; }, get token() { return token; } };
@@ -117,6 +117,20 @@ function pane() {
       // past requireAuth: an empty message is the handler's own 400, not a 401
       const chat = await P.call('/api/legal-chat', { method: 'POST', body: { message: '' } });
       assert.notStrictEqual(chat.status, 401);
+    });
+
+    await test('playbook from the pane: the playbooks, the review past its origin check, the matters (no AI: a too-short contract is 422)', async () => {
+      const pbs = await P.call('/api/playbooks');
+      assert.strictEqual(pbs.status, 200);
+      assert.ok(pbs.body.builtin.length >= 1);
+      // a Google Docs sidebar sends a googleusercontent origin; the token, not a cookie, carries the request
+      const rev = await P.call('/api/agent/playbook-review', { method: 'POST', body: { text: 'qisqa', builtin: pbs.body.builtin[0].key }, headers: { origin: 'https://n-abc-script.googleusercontent.com' } });
+      assert.strictEqual(rev.status, 422, JSON.stringify(rev.body));
+      const ms = await P.call('/api/matters');
+      assert.ok(ms.status === 200 || ms.status === 503, 'matters: ' + ms.status);
+      for (const p of ['/api/agent/runs', '/api/agent/runs/00000000-0000-0000-0000-000000000000/cancel']) {
+        const st = (await P.call(p, p.endsWith('cancel') ? { method: 'POST', body: {} } : {})).status; assert.ok(st === 401 || st === 403, p + ' -> ' + st);
+      }
     });
 
     await test('the token opens nothing else', async () => {

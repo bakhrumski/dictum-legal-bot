@@ -67,6 +67,33 @@
   S.commentText = function (it) {
     return S.plainOf('JuristAI: ' + it.problem + (it.basis ? '\nAsos: ' + it.basis : '') + (it.advice ? '\nTavsiya: ' + it.advice : '')).slice(0, 2000);
   };
+  /* ---------- playbook (2026-10-28): firmaning o'z qoidalari bilan solishtirish natijasi hujjatga ---------- */
+  S.PB_STATUS = { mos: 'Mos', farq: 'Farq qiladi', yoq: "Band yo'q", noaniq: 'Noaniq' };
+  /**
+   * POST /api/agent/playbook-review natijasini (results) review() izohlariga aylantiradi.
+   * "Mos" qoidalar izoh bo'lmaydi (faqat sanaladi). Word va Google Docs izohni bir xil
+   * maydonlardan tuzadi (problem / advice). Tuzatish (newText) faqat "farq"
+   * bandi uchun, iqtibosi server tomonidan shartnomada topilgan bo'lsa va taklif bo'lsa:
+   * u Track Changes bilan kiradi va odam qabul yoki rad etadi.
+   */
+  S.playbookItems = function (results) {
+    var order = { yoq: 0, farq: 1, noaniq: 2 };
+    return (results || []).filter(function (x) { return x && x.status !== 'mos'; })
+      .sort(function (a, b) { return (order[a.status] || 0) - (order[b.status] || 0); })
+      .map(function (x) {
+        var rule = x.rule || {};
+        // the clause's own words (a quote the server did not find is still searched, and named if missing)
+        var quote = x.status === 'yoq' ? '' : String(x.quote || '');
+        return {
+          quote: quote,
+          // the rule is the firm's, not the law: it goes in the text, never as "Asos"
+          problem: 'Playbook — ' + (rule.title || 'qoida') + ': ' + (S.PB_STATUS[x.status] || x.status) + '.' + (x.note ? ' ' + x.note : '') + (rule.requirement ? ' (Qoida: ' + rule.requirement + ')' : ''),
+          basis: '',
+          advice: x.suggestion || '',
+          newText: x.status === 'farq' && x.verified && quote && x.suggestion ? x.suggestion : ''
+        };
+      });
+  };
   /** iqtibosni hujjatdan topish uchun qidiruv satrlari: avval to'liq, keyin qisqaroq boshi */
   S.needles = function (quote) {
     var q = String(quote || '').replace(/\s+/g, ' ').trim();
