@@ -277,6 +277,7 @@
       text = text.slice(0, foot.index);
     }
     var lines = J.esc(text).split('\n'), out = [], i = 0;
+    function unesc(x) { return x.replace(/&(amp|lt|gt|quot|#39);/g, function (m, e) { return { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'" }[e]; }); }
     // a link's own text: inline marks kept inside it, a stray "**" dropped; the
     // source list and the cite title get plain text (2026-10-27: "<b>Mehnat
     // kodeksi..." and "</b>...1-qism**" showed in the source chips)
@@ -285,7 +286,9 @@
         var url = u.replace(/&amp;/g, '&');
         var shown = inline(t).replace(/\*\*/g, '');
         var plain = shown.replace(/<[^>]*>/g, '').trim();
-        if (/lex\.uz/i.test(url)) { var n = addSrc(plain, url); return '<a href="' + J.esc(url) + '" target="_blank" rel="noopener">' + shown + '</a><a class="cite" href="#" data-src="' + n + '" title="' + plain + '">' + n + '</a>'; }
+        // the line was escaped before parsing: the list gets the act's own letters
+        // (2026-10-28: "Mas&#39;uliyati" showed in the sources list), esc() on display
+        if (/lex\.uz/i.test(url)) { var n = addSrc(unesc(plain), url); return '<a href="' + J.esc(url) + '" target="_blank" rel="noopener">' + shown + '</a><a class="cite" href="#" data-src="' + n + '" title="' + plain + '">' + n + '</a>'; }
         return '<a href="' + J.esc(url) + '" target="_blank" rel="noopener">' + shown + '</a>';
       });
     }
