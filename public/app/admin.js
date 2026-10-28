@@ -37,7 +37,7 @@
       'adm.pl.approved': 'Pilot berildi: 14 kun, chat 120 · tahlil 8 · xulosa 4 · loyiha 6 · OCR 20, AI budjeti $10', 'adm.pl.agents': 'Agentlar', 'adm.pl.code': 'Kod', 'adm.pl.links': 'Offer link',
       'adm.pl.give': 'Kod berish', 'adm.pl.renew': 'Yangilash', 'adm.pl.revoke': 'Olib qo\'yish', 'adm.pl.reg': 'Ro\'yxatdan o\'tgan', 'adm.pl.piloted': 'Pilotda', 'adm.pl.paid': 'Pullik',
       'adm.pl.demo': 'Demo akkaunt', 'adm.pl.demoUnits': 'Demo sarfi (birlik)', 'adm.pl.demoLink': 'Demo ulash', 'adm.pl.demoQ': 'Master yaratgan test akkauntning ID raqami (Boshqaruv → test akkaunt). Unga 14 kunlik pilot huquqi beriladi.',
-      'adm.pl.note': 'Agent huquq, tarif yoki chegirma bera olmaydi: kod, pilot va demo faqat shu yerda, master tomonidan. Agent faqat o\'z mijozlari ro\'yxatini ko\'radi (savol-javob matnisiz).', 'adm.pl.copied': 'Nusxa olindi',
+      'adm.pl.note': 'Agent huquq, tarif yoki chegirma bera olmaydi: kod, pilot va demo faqat shu yerda, master tomonidan. Agent faqat o\'z mijozlari ro\'yxatini ko\'radi (savol-javob matnisiz). Yurist, buxgalter, HR yoki tadbirkor mijozga pilot avtomatik ochiladi (jami 20, har agentga 4; PILOT_AUTO=off to\'xtatadi), qolgani shu yerda kutadi.', 'adm.pl.copied': 'Nusxa olindi',
       'adm.today': 'Bugun', 'adm.t.reg': 'Kutilayotgan arizalar', 'adm.t.orders': 'Yurist narxini kutayotgan buyurtmalar', 'adm.t.del': "O'chirish so'rovlari", 'adm.t.fb': 'Yangi xato xabarlari', 'adm.t.ai': 'Bugungi AI xarajati', 'adm.t.buy': 'Bugungi xaridlar', 'adm.buy': 'Bir martalik xaridlar', 'adm.buy.d': 'Telegram Stars orqali sotilgan xizmatlar', 'adm.buy.count': 'Xaridlar', 'adm.buy.uzs': "Katalog narxi, so'm", 'adm.buy.today': 'Bugun', 'adm.buy.product': 'Xizmat', 'adm.buy.units': 'Birlik', 'adm.buy.list': "So'nggi xaridlar", 'adm.buy.left': 'Qolgan', 'adm.buy.refunded': 'Qaytarilgan', 'adm.buy.ok': "To'langan", 'adm.buy.none': "Hali xarid yo'q (jadval migratsiyasi ishlamagan bo'lishi mumkin).", 'adm.buy.note': "So'mdagi summa — sotuv paytidagi katalog narxi. Stars'dan haqiqatda tushgan pul bu yerda ko'rinmaydi; qaytarilganlar hisoblanmaydi.", 'adm.p.chat5': '5 ta savol', 'adm.p.draft': 'AI hujjat loyihasi', 'adm.p.analysis': 'AI tahlil', 'adm.p.opinion': 'AI xulosa', 'adm.t.unknown': "ta narxi noma'lum",
       'adm.g.daily': 'Kundalik ishlar', 'adm.g.money': 'Tarif va xarajat', 'adm.g.catalog': 'Advokatlar va manbalar', 'adm.g.tech': 'Texnik',
       'adm.day': 'Kunlik', 'adm.month': 'Oylik', 'adm.days': 'kun', 'adm.calls': 'chaqiruv', 'adm.requests': "so'rov",
@@ -689,12 +689,24 @@
   /* ---------- CustDev pilot: agentlar, offer link, pilot so'rovlari (src/sales/) ---------- */
   function viewPilot() {
     shell('pilot', function (body, again) {
-      body.innerHTML = '<p class="muted" style="font-size:13px;margin-bottom:14px">' + esc(t('adm.pl.note')) + '</p><h3 style="font-size:16px;margin:0 0 10px">' + esc(t('adm.pl.req')) + '</h3><div class="pl-q">' + skel() + '</div>' +
-        '<h3 style="font-size:16px;margin:22px 0 10px">' + esc(t('adm.pl.agents')) + '</h3><div class="pl-a">' + skel() + '</div>';
+      body.innerHTML = '<p class="muted" style="font-size:13px;margin-bottom:14px">' + esc(t('adm.pl.note')) + '</p><div class="pl-ws"></div><h3 style="font-size:16px;margin:0 0 10px">' + esc(t('adm.pl.req')) + '</h3><div class="pl-q">' + skel() + '</div>' +
+        '<h3 style="font-size:16px;margin:22px 0 10px">' + esc(t('adm.pl.agents')) + '</h3><div class="pl-a">' + skel() + '</div><div class="pl-fb"></div>';
+      // stage 3: the pilot's internal Workspace (migration 025/027) - opened once by a master; agents join it with their code
+      J.api('/api/admin/sales/workspace').then(function (r) {
+        var box = $('.pl-ws', body); if (!r.ok) return;
+        box.innerHTML = r.data.workspace
+          ? '<p style="font-size:13.5px;margin:0 0 16px">Pilot Workspace ochiq: har bir pilot mijozga vazifa, mijoz fikrlari uning kichik vazifalari. <a href="#/jamoa">Workspace’ni ochish →</a></p>'
+          : '<div class="card" style="margin-bottom:16px"><p style="font-size:13.5px;margin:0 0 10px">Pilot uchun ichki (xodimlar) Workspace hali ochilmagan. Ochilganda kodli agentlar a’zo bo‘ladi, har bir pilot mijozga vazifa ochiladi. Mijoz a’zo bo‘lmaydi.</p><button class="pill sm" type="button" data-ws>Pilot Workspace ochish</button></div>';
+        var b = $('[data-ws]', box);
+        if (b) b.onclick = async function () { busy(b, true); var x = await J.api('/api/admin/sales/workspace', { method: 'POST', body: { name: 'CustDev pilot' } }); busy(b, false); if (!x.ok) return J.toast(J.errMsg(x.data), 6000); again(); };
+      });
+      if (J.pilotFeedback) J.pilotFeedback($('.pl-fb', body));
       J.api('/api/admin/sales/pilot-requests?status=pending').then(function (r) {
         var box = $('.pl-q', body); if (!r.ok) { box.innerHTML = errBox(r); return; }
-        box.innerHTML = table([t('adm.time'), t('adm.pl.client'), t('adm.pl.agent'), t('adm.pl.via'), ''], (r.data.requests || []).map(function (q) {
-          return '<tr>' + td(dt(q.created_at)) + td((q.full_name || '') + ' @' + (q.username || '') + ' · #' + q.admin_id) + td((q.agent_name || '') + ' · #' + q.agent_id) + td(q.referral_channel || '') +
+        // what the client does (migration 026): a pending professional one waits only because a cap was reached
+        var TY = { lawyer: 'Yurist / advokat', accountant: 'Buxgalter', hr: 'HR / kadrlar', business: 'Tadbirkor', user: 'Boshqa' };
+        box.innerHTML = table([t('adm.time'), t('adm.pl.client'), t('adm.pl.agent'), t('adm.pl.via'), 'Kim', ''], (r.data.requests || []).map(function (q) {
+          return '<tr>' + td(dt(q.created_at)) + td((q.full_name || '') + ' @' + (q.username || '') + ' · #' + q.admin_id) + td((q.agent_name || '') + ' · #' + q.agent_id) + td(q.referral_channel || '') + td(TY[q.client_type] || '—') +
             '<td style="white-space:nowrap"><button class="pill sm" data-ok="' + q.id + '" type="button">' + esc(t('adm.pl.approve')) + '</button> <button class="pill ghost sm" data-no="' + q.id + '" type="button">' + esc(t('adm.pl.decline')) + '</button></td></tr>';
         }));
         $$('[data-ok]', box).forEach(function (b) { b.onclick = async function () { busy(b, true); var x = await J.api('/api/admin/sales/pilot-requests/' + b.dataset.ok + '/approve', { method: 'POST', body: {} }); busy(b, false); if (!x.ok) return J.toast(J.errMsg(x.data), 6000); J.toast(t('adm.pl.approved'), 6000); again(); }; });

@@ -813,6 +813,27 @@ bot.onText(/\/cancel/, (msg) => {
 });
 
 // /me - Check link status
+// ── CustDev pilot feedback (src/bot/pilot-feedback.js, src/sales/pilot-workspace.js):
+// /fikr or the "💬 Fikr bildirish" button puts the chat in feedback mode; only
+// the next message is feedback. An active pilot client's own private chat only.
+async function startPilotFeedback(chatId, fromUserId, chatType) {
+  const fb = require('./pilot-feedback');
+  if (chatType !== 'private') return;
+  const account = await require('./telegram-roles').getLinkedAccount(pool, chatId, fromUserId).catch(() => null);
+  if (!account || account.role !== 'user') { await bot.sendMessage(chatId, fb.TEXTS.notLinked).catch(() => {}); return; }
+  if (!(await require('../sales/pilot-workspace').activePilot(pool, account.id).catch(() => false))) {
+    await bot.sendMessage(chatId, fb.TEXTS.notPilot).catch(() => {});
+    return;
+  }
+  await require('../agents/telegram-agent').setConversationState(chatId, fb.STATE, { since: Date.now(), adminId: account.id });
+  await bot.sendMessage(chatId, fb.TEXTS.start).catch(() => {});
+}
+
+bot.onText(/^\/fikr(?:@\w+)?\s*$/u, async (msg) => {
+  try { await startPilotFeedback(msg.chat.id, msg.from && msg.from.id, msg.chat.type); }
+  catch (e) { console.warn('[BOT] /fikr failed:', e.message); }
+});
+
 bot.onText(/\/me/, async (msg) => {
   const chatId = msg.chat.id;
 
@@ -943,6 +964,39 @@ async function handleCallbackQuery(callbackQuery) {
     } catch (error) {
       console.warn('[BOT] agent plan button failed:', error.message);
       await bot.answerCallbackQuery(callbackQuery.id, { text: ru ? 'Не удалось' : "Bajarib bo'lmadi", show_alert: true }).catch(() => {});
+    }
+    return;
+  }
+
+  if (data === 'pfb_start' || data === 'pfo_off') {
+    const fb = require('./pilot-feedback');
+    await bot.answerCallbackQuery(callbackQuery.id).catch(() => {});
+    try {
+      const chatType = callbackQuery.message && callbackQuery.message.chat.type;
+      if (data === 'pfb_start') { await startPilotFeedback(chatId, callbackQuery.from.id, chatType); return; }
+      const account = chatType === 'private' ? await require('./telegram-roles').getLinkedAccount(pool, chatId, callbackQuery.from.id) : null;
+      if (!account || account.role !== 'user') return;
+      await require('../sales/pilot-workspace').setRepliesOff(pool, { adminId: account.id, off: true });
+      await bot.sendMessage(chatId, fb.TEXTS.repliesOff).catch(() => {});
+    } catch (e) { console.warn('[BOT] pilot feedback button failed:', e.message); }
+    return;
+  }
+
+  // the one-tap pilot join (src/bot/pilot-join.js): the account is made from this Telegram
+  if (data.startsWith(require('./pilot-join').PREFIX)) {
+    const join = require('./pilot-join');
+    const type = join.typeFromData(data);
+    const appUrl = String(process.env.APP_URL || 'https://juristai.uz').replace(/\/+$/, '');
+    try {
+      if (!type || !callbackQuery.message || callbackQuery.message.chat.type !== 'private') throw new Error('private chat only');
+      await bot.answerCallbackQuery(callbackQuery.id).catch(() => {});
+      const out = await require('../sales/agents').joinFromTelegram(pool, { from: callbackQuery.from, chatId, type, ledger: require('../rag/tariff-ledger') });
+      await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: callbackQuery.message.message_id }).catch(() => {});
+      await bot.sendMessage(chatId, join.joinReply(out, appUrl), { disable_web_page_preview: true,
+        ...(out.ok && out.pilot === 'approved' ? { reply_markup: require('./pilot-feedback').feedbackButton() } : {}) }).catch(() => {});
+    } catch (error) {
+      console.warn('[BOT] pilot join failed:', error.message);
+      await bot.answerCallbackQuery(callbackQuery.id, { text: "Bajarib bo'lmadi", show_alert: true }).catch(() => {});
     }
     return;
   }
@@ -1207,13 +1261,22 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
     const code = param.slice(4);
     param = '';
     try {
-      const r = await require('../sales/agents').rememberTelegramRef(pool, { telegramUserId: msg.from.id, code });
+      const sales = require('../sales/agents');
+      const join = require('./pilot-join');
+      const r = await sales.rememberTelegramRef(pool, { telegramUserId: msg.from.id, code });
       if (r.known && msg.chat.type === 'private') {
         const appUrl = String(process.env.APP_URL || 'https://juristai.uz').replace(/\/+$/, '');
-        await bot.sendMessage(chatId, r.hasAccount
-          ? "Taklif havolasi qabul qilindi. 14 kunlik pilot so'rovingiz JuristAI jamoasiga yuborildi — tasdiqlanganda shu yerda xabar olasiz."
-          : `Taklif havolasi qabul qilindi. 14 kunlik pilotda qatnashish uchun saytda Telegram orqali ro'yxatdan o'ting: ${appUrl}/app/kirish.html\n\nSavollaringizni shu botga hozir ham yozishingiz mumkin.`).catch(() => {});
-        return;
+        // one tap (src/bot/pilot-join.js): an account that already says what it does goes straight on
+        const acc = (await pool.query(`SELECT id, role, to_jsonb(admins.*)->>'client_type' AS client_type FROM admins WHERE telegram_user_id::text = $1 ORDER BY id LIMIT 1`, [String(msg.from.id)])).rows[0];
+        if (acc && acc.role === 'user' && acc.client_type) {
+          const a = await sales.maybeAutoApprove(pool, { adminId: acc.id, ledger: require('../rag/tariff-ledger') });
+          const pilot = a.approved ? 'approved' : (sales.PRO_TYPES.includes(acc.client_type) ? 'pending' : 'not_professional');
+          await bot.sendMessage(chatId, join.joinReply({ ok: true, pilot }, appUrl),
+            pilot === 'approved' ? { reply_markup: require('./pilot-feedback').feedbackButton() } : undefined).catch(() => {});
+        } else if (!acc || acc.role === 'user') {
+          await bot.sendMessage(chatId, join.askText(appUrl), { reply_markup: join.typeKeyboard(), disable_web_page_preview: true }).catch(() => {});
+        }
+        if (!acc || acc.role === 'user') return;
       }
     } catch (e) {
       console.warn('[BOT] ref link not recorded:', e.message);
@@ -2072,6 +2135,31 @@ async function handleTelegramMessage(msg) {
     // Unsupported message type
     bot.sendMessage(chatId, 'Iltimos, matn, ovozli xabar, video yoki fayl yuboring.');
     return;
+  }
+
+  // ── Pilot feedback mode (src/bot/pilot-feedback.js): only the message right
+  // after /fikr or "💬 Fikr bildirish" is feedback; it becomes a sub-task in the
+  // pilot Workspace and never a question, a request or an AI call.
+  if ((requestData.request_type === 'text' || requestData.voiceTranscribed) && msg.chat.type === 'private') {
+    const fb = require('./pilot-feedback');
+    const telegramAgent = require('../agents/telegram-agent');
+    const conv = await telegramAgent.loadConversation(chatId).catch(() => null);
+    if (conv && conv.state === fb.STATE) {
+      await telegramAgent.setConversationState(chatId, 'idle', {}).catch(() => {});
+      if (fb.waiting(conv)) {
+        const text = String(requestData.request_text || '').trim();
+        if (fb.CANCEL_RE.test(text)) { await bot.sendMessage(chatId, fb.TEXTS.cancelled).catch(() => {}); return; }
+        try {
+          const out = await require('../sales/pilot-workspace').recordFeedback(pool, {
+            adminId: conv.context.adminId, chatId, messageId: msg.message_id, text, source: requestData.voiceTranscribed ? 'voice' : 'text' });
+          await bot.sendMessage(chatId, out.ok ? (out.duplicate ? fb.TEXTS.duplicate : fb.TEXTS.accepted) : (out.error === 'not_in_pilot' ? fb.TEXTS.notPilot : fb.TEXTS.failed)).catch(() => {});
+        } catch (e) {
+          console.warn('[BOT] pilot feedback not recorded:', e.message);
+          await bot.sendMessage(chatId, fb.TEXTS.failed).catch(() => {});
+        }
+        return;
+      }
+    }
   }
 
   // ── Autonomous agent: converse and answer without a human ────────────────

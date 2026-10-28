@@ -87,7 +87,17 @@
   /* ---------- holat ---------- */
   J.S = { user: null, tariff: null, plans: null, sessions: [], persona: null, skillsMine: [] };
   try { J.S.persona = localStorage.getItem('jai-persona') || null; } catch (e) {}
-  J.setPersona = function (p) { J.S.persona = p; try { localStorage.setItem('jai-persona', p); } catch (e) {} };
+  // the home "Sohangiz" chip and the account's client type (migration 026) are one choice:
+  // the chip a person picks is saved as their type; it adapts the page and grants nothing
+  J.PERSONA_TYPE = { citizen: 'user', biz: 'business', lawyer: 'lawyer', firm: 'lawyer', acct: 'accountant', hr: 'hr' };
+  J.TYPE_PERSONA = { user: 'citizen', business: 'biz', lawyer: 'lawyer', accountant: 'acct', hr: 'hr' };
+  J.setPersona = function (p, save) {
+    J.S.persona = p; try { localStorage.setItem('jai-persona', p); } catch (e) {}
+    var u = J.S.user, ty = J.PERSONA_TYPE[p];
+    if (save && ty && u && u.role === 'user' && u.clientType !== ty && !(p === 'firm' && u.clientType === 'lawyer')) {
+      u.clientType = ty; J.api('/api/client-type', { method: 'PUT', body: { type: ty } });
+    }
+  };
 
   J.isStaff = function () { var u = J.S.user; return !!(u && u.role && u.role !== 'user'); };
   J.balance = function () { return (J.S.tariff && J.S.tariff.balance) || {}; };
@@ -110,6 +120,8 @@
   J.loadMe = async function () {
     var r = await J.api('/api/user-info'); if (!r.ok) return false;
     J.S.user = r.data;
+    // a type the account already has wins over this browser's last chip
+    if (r.data && r.data.clientType && J.TYPE_PERSONA[r.data.clientType] && J.PERSONA_TYPE[J.S.persona] !== r.data.clientType) J.setPersona(J.TYPE_PERSONA[r.data.clientType]);
     var t = await J.api('/api/tariff/me'); J.S.tariff = t.ok ? t.data : null;
     var p = await J.api('/api/tariff/plans', { allow401: true }); if (p.ok) { J.S.plans = p.data.plans || null; J.S.paymentsEnabled = !!p.data.paymentsEnabled; }
     return true;

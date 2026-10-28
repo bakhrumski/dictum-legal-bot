@@ -1278,7 +1278,8 @@ app.get('/api/admin/audit-log', requireMasterAdmin, async (req, res) => {
 app.get('/api/user-info', requireAuth, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT tariff_plan, tariff_expires_at FROM admins WHERE id = $1 LIMIT 1`,
+      // client_type (migration 026) read so it is null, not an error, before the migration
+      `SELECT tariff_plan, tariff_expires_at, to_jsonb(admins.*)->>'client_type' AS client_type FROM admins WHERE id = $1 LIMIT 1`,
       [req.session.adminId]
     );
     const account = result.rows[0] || {};
@@ -1288,7 +1289,8 @@ app.get('/api/user-info', requireAuth, async (req, res) => {
       role: req.session.role,
       fullName: req.session.fullName,
       tariffPlan: account.tariff_plan || null,
-      tariffExpiresAt: account.tariff_expires_at || null
+      tariffExpiresAt: account.tariff_expires_at || null,
+      clientType: account.client_type || null
     });
   } catch (error) {
     console.error('[user-info]', error.message);
@@ -10028,11 +10030,19 @@ app.post('/api/register', regUpload.single('document'), async (req, res) => {
 require('../sales/routes').mountSalesRoutes(app, { pool, requireAuth, requireMasterAdmin, requireSameOrigin: require('../auth/same-origin').requireSameOrigin,
   ledger: require('../rag/tariff-ledger'), logAudit, botUsername: LEGAL_BOT_USERNAME,
   // an approved pilot is told in the bot when the client's Telegram is linked
+  // (an opened pilot carries the "💬 Fikr bildirish" button: src/bot/pilot-feedback.js)
   notify: async (adminId, text) => {
     const a = (await pool.query('SELECT telegram_chat_id FROM admins WHERE id = $1', [adminId])).rows[0];
-    if (a && a.telegram_chat_id) await bot.sendMessage(a.telegram_chat_id, text, { disable_web_page_preview: true });
+    if (a && a.telegram_chat_id) await bot.sendMessage(a.telegram_chat_id, text, { disable_web_page_preview: true, reply_markup: require('../bot/pilot-feedback').feedbackButton() });
   },
+  // the agent's confirmed reply to a feedback, with the client's way to turn these off
+  sendReply: (chatId, text) => bot.sendMessage(chatId, require('../bot/pilot-feedback').replyText(text), { disable_web_page_preview: true, reply_markup: require('../bot/pilot-feedback').replyOffButton() }),
   appUrl: String(process.env.APP_URL || 'https://juristai.uz').replace(/\/+$/u, '') });
+
+// CustDev stage 4: interview recordings on a Matter, with consent (src/interviews/)
+require('../interviews/routes').mountInterviewRoutes(app, { pool, requireAuth, requireSameOrigin: require('../auth/same-origin').requireSameOrigin,
+  ai: (messages, options) => callCheapAI(messages, options), logAudit });
+require('../interviews/routes').startInterviewSweep(pool);
 
 require('../auth/telegram-auth-routes').mountTelegramAuthRoutes(app, {
   pool, loginSessions, regSessions, logAudit, authBotUsername: AUTH_BOT_USERNAME,

@@ -3,7 +3,7 @@
   'use strict';
   var J = G.JAI, t = J.t, esc = J.esc, $ = J.$, $$ = J.$$;
   function L(o) { return o && typeof o === 'object' ? (o[J.lang] || o.uz || o.ru || '') : (o || ''); }
-  var ROLES = ['citizen', 'biz', 'lawyer', 'hr', 'firm'];
+  var ROLES = ['citizen', 'biz', 'lawyer', 'acct', 'hr', 'firm'];
   var TASK_IC = { chat: 'chat', explain: 'doc', claim: 'flag', lawyer: 'scale', risk: 'scan', draft: 'pen', opinion: 'book', deadline: 'cal', team: 'team', skills: 'spark' };
 
   /** Tarifda yo'q imkoniyat */
@@ -49,7 +49,7 @@
       });
     }
     $$('[data-r]', v).forEach(function (b) {
-      b.onclick = function () { J.setPersona(b.dataset.r); $$('[data-r]', v).forEach(function (x) { x.classList.toggle('on', x === b); }); drawTasks(); };
+      b.onclick = function () { J.setPersona(b.dataset.r, true); $$('[data-r]', v).forEach(function (x) { x.classList.toggle('on', x === b); }); drawTasks(); };
     });
     function drawRecent() {
       var rows = (J.S.sessions || []).slice(0, 5);

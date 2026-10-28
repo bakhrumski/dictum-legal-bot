@@ -54,7 +54,8 @@
     var u = J.S.user || {};
     $('#me .av').textContent = J.initials(u.fullName || u.username);
     $('#me b').textContent = u.fullName || u.username || '';
-    $('#me small').textContent = J.isStaff() ? u.role : (u.username ? '@' + u.username : '');
+    // a staff lawyer works for the platform: shown as "Ekspert" (a client lawyer is role user with client type lawyer)
+    $('#me small').textContent = J.isStaff() ? (u.role === 'lawyer' ? 'Ekspert' : u.role) : (u.username ? '@' + u.username : '');
   }
   function meMenu() {
     var old = $('#mePop'); if (old) { old.remove(); return; }

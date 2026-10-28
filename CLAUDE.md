@@ -796,8 +796,62 @@ clients - name, registered, pilot status, units used, paid - never a
 question or answer (`GET /api/sales/me`, page `#/mijozlarim`, a nav item for
 an agent only). Master: Boshqaruv -> "CustDev pilot" (`/api/admin/sales/*`):
 pending requests, agents, codes, links, demo, registered / piloted / paid.
-Stages 3-4 (pilot Workspace, feedback, interview recordings): the pilot
-runs in an internal Workspace (migration 025, the owner's option 1).
+Client type and the one-tap join (2026-10-28, owner; migration 026):
+`admins.client_type` lawyer / accountant / hr / business / user is what the
+client does - it adapts the platform (the home "Sohangiz" chips save it,
+`PUT /api/client-type`; `/api/user-info` returns `clientType`) and grants
+nothing: every client stays role `user` (a client lawyer is NOT role
+`lawyer`, which is staff and shown as "Ekspert"). Set by the person, their
+agent (`POST /api/sales/clients/:id/type`) or a master. The bot's ref_ link
+asks "kasbingiz?" (`src/bot/pilot-join.js`, buttons `pj_<type>`) and one tap
+makes the account from the Telegram identity (`joinFromTelegram`, no site, no
+code). Standing rule (owner's "b"): a professional type gets the pilot with
+no master's click (`maybeAutoApprove`, one at a time under an advisory lock;
+`grantTestEntitlement` `policy: 'custdev_pilot_auto'`, grantedBy null,
+`pilot_requests.auto`) while fewer than `PILOT_AUTO_TOTAL` (20) are approved
+in all and `PILOT_AUTO_PER_AGENT` (4) for that agent; "user" and anything
+past a cap waits for a master; `PILOT_AUTO=off` stops it.
+`tests/pilot-join.db.test.js`.
+Stage 3 (migration 027, `src/sales/pilot-workspace.js`, no AI): a master
+opens the pilot's internal Workspace once (Boshqaruv → CustDev pilot,
+`pilot_workspace`); agents with a code are members (also when a code is
+given later); a client is never a member. An approved pilot (button or
+standing rule) gets one task "Mijoz: <ism> — <tur>" with the sections
+Muammo / Hozirgi yechim / Demo / 7-kun / 14-kun / Narx javoblari, due at
+the pilot's end, assigned to the agent (`pilot_client_tasks`; the agent or a
+master can open it by hand). Feedback: the bot's "💬 Fikr bildirish" (on the
+pilot-open message) or `/fikr` puts an active pilot client's private chat in
+feedback mode (`src/bot/pilot-feedback.js`, 15 min) - only the NEXT text or
+voice note (after STT) is feedback, intercepted before the agent and the
+request queue; it becomes one sub-task (`workspace_task_links` subtask) per
+Telegram message (`pilot_feedback` unique chat + message). The agent tags it
+(xato / chalkash / yangi_imkoniyat / narx) and, once the sub-task is done,
+writes a short reply and confirms it - the bot sends it once (a failed
+delivery may be resent) with "🔕" to turn replies off
+(`admins.pilot_replies_off`). Tag and reply are also task comments. Weekly
+view by tag with distinct clients (`/api/sales/feedback/weekly`). Every
+Workspace write runs in the Workspace transaction as the acting staff
+account, so the triggers log it. Pages: "Mijozlarim" (feedback, tags,
+replies, open task) and Boshqaruv → CustDev pilot. `tests/pilot-feedback.db.test.js`.
+Stage 4 (migration 028, `src/interviews/`, page: the "Intervyu yozuvlari"
+card on a matter, `public/app/interviews.js`, staff only): an interview
+recording is stored only with its consent - who, when, how (said at the
+start of the recording / written) and the uploader's tick that the person
+was told it is transcribed and sent to AI providers (VoiceLab, DeepSeek) and
+the audio is deleted after `INTERVIEW_AUDIO_DAYS` (30); without it 422 and
+nothing stored. Only the uploader and a master see a recording (not other
+members of a Workspace the matter is attached to). STT (`src/ai/stt.js`, its
+ledger rows) runs in the background as its own usage request, in chunks of
+`INTERVIEW_CHUNK_SEC` (600, ffmpeg to Opus) up to `INTERVIEW_MAX_SEC` (2 h) /
+`INTERVIEW_MAX_MB` (50); the transcript is versioned
+(`interview_transcripts`: 1 = STT, then edits) and stays when the audio goes
+(the hourly retention sweep or by hand; `interview_events` logs every step).
+The optional AI summary (`callCheapAI`, ledger + bound) gives quotes,
+problem, current solution and price, confusing, missing, signal, price
+answers; a quote not in the transcript word for word is removed and counted;
+labelled "AI xulosasi, transkript bilan tekshiring". A client's account
+deletion removes the recordings made with them. `INTERVIEWS=off` stops it.
+`tests/interviews.db.test.js`.
 
 ## The 2026 Latin alphabet (OʻRQ-1184 of 21.10.2026)
 

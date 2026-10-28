@@ -345,6 +345,9 @@ function transactionalPool(handler) {
       '20261028_023_tg_alphabet.sql',
       '20261028_024_sales_agents.sql',
       '20261028_025_workspace_all_paid_plans.sql',
+      '20261028_026_client_type.sql',
+      '20261028_027_pilot_feedback.sql',
+      '20261028_028_interview_recordings.sql',
     ]);
     assert.strictEqual(stripOuterTransaction('BEGIN;\nSELECT 1;\nCOMMIT;'), 'SELECT 1;');
   });
