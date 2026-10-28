@@ -35,6 +35,9 @@
       price: 'Narx: {p}', free: 'bepul', chatU: '{n} ta savol birligi', approve: 'Tasdiqlash va boshlash', fallback: 'Model rejasi qabul qilinmadi — standart reja taklif qilindi.',
       running: 'Bajarilmoqda…', answer: 'Javob', vf: { verified: 'Manbalar bilan tekshirildi', partial: 'Ayrim da’volar manbada tasdiqlanmadi va olib tashlandi', unverified: 'Tekshiruvchi ishlamadi — javobni manba bilan qo‘lda tekshiring', no_claims: 'Raqam yoki muddat da’volari yo‘q; iqtiboslar manbada tekshirildi' },
       sources: 'Manbalar',
+      cmdPh: 'Buyruq: «ishlarim», «yangi ish och: …», «… ishiga yozuv: …»', cmdRun: 'Bajarish', cmdMic: 'Ovozli buyruq', cmdListen: 'Gapiring… (to‘xtatish uchun bosing)', cmdBusy: 'Matnga aylantirilmoqda…',
+      cmdHelp: 'Ovoz yoki matn bilan: «ishlarim» · «yangi ish och: Pudratchi bilan nizo» · «pudrat ishiga yozuv: sud 12-noyabr» · «pudrat ishini ko‘rsat» · «pudrat ishini yop». Xuddi shu buyruqlar Telegram botida ham ishlaydi (akkaunt ulangan bo‘lsa).',
+      yes: 'Ha', micDenied: 'Mikrofonga ruxsat berilmadi.',
     },
     ru: {
       title: 'Дела', lead: 'Чаты, документы, результаты агентов и заметки по одному делу в одном месте.',
@@ -63,6 +66,9 @@
       price: 'Цена: {p}', free: 'бесплатно', chatU: 'вопросов: {n}', approve: 'Подтвердить и начать', fallback: 'План модели не принят — предложен стандартный план.',
       running: 'Выполняется…', answer: 'Ответ', vf: { verified: 'Проверено по источникам', partial: 'Часть утверждений не подтвердилась и удалена', unverified: 'Проверка не сработала — сверьте ответ с источником вручную', no_claims: 'Утверждений с цифрами и сроками нет; цитаты сверены с источником' },
       sources: 'Источники',
+      cmdPh: 'Команда: «мои дела», «новое дело: …», «заметка в дело …: …»', cmdRun: 'Выполнить', cmdMic: 'Голосовая команда', cmdListen: 'Говорите… (нажмите, чтобы остановить)', cmdBusy: 'Распознаём…',
+      cmdHelp: 'Голосом или текстом: «мои дела» · «новое дело: Спор с подрядчиком» · «заметка в дело подряд: суд 12 ноября» · «покажи дело подряд» · «закрой дело подряд». Те же команды работают в Telegram-боте (если аккаунт привязан).',
+      yes: 'Да', micDenied: 'Нет доступа к микрофону.',
     },
     en: {
       title: 'Matters', lead: 'Chats, documents, agent results and notes for one legal matter in one place.',
@@ -91,6 +97,9 @@
       price: 'Price: {p}', free: 'free', chatU: '{n} question units', approve: 'Approve and start', fallback: 'The model’s plan was not accepted — a standard plan is offered.',
       running: 'Running…', answer: 'Answer', vf: { verified: 'Checked against the sources', partial: 'Some claims were not confirmed by the sources and were removed', unverified: 'The checker did not run — check the answer against the source by hand', no_claims: 'No figure or deadline claims; quotes checked in the source' },
       sources: 'Sources',
+      cmdPh: 'Command (Uzbek or Russian): «ishlarim», «yangi ish och: …»', cmdRun: 'Run', cmdMic: 'Voice command', cmdListen: 'Speak… (press to stop)', cmdBusy: 'Transcribing…',
+      cmdHelp: 'By voice or text, in Uzbek or Russian: «ishlarim» / «мои дела» · «yangi ish och: …» / «новое дело: …» · «… ishiga yozuv: …» · «… ishini yop». The same commands work in the Telegram bot (with a linked account).',
+      yes: 'Yes', micDenied: 'Microphone access was refused.',
     },
   };
   function s(k, vars) {
@@ -210,10 +219,76 @@
     };
   }
 
+  /* ---------- ovozli yoki matnli buyruq (src/matters/commands.js, POST /api/matters/command) ---------- */
+  function cmdBar() {
+    return '<div class="mt-cmd"><div class="mt-cmd-row"><input class="inp mt-cmd-in" maxlength="300" placeholder="' + esc(s('cmdPh')) + '">' +
+      '<button class="ib mt-mic" type="button" title="' + esc(s('cmdMic')) + '" hidden>' + J.icon('mic') + '</button>' +
+      '<button class="pill sm" data-a="cmd" type="button">' + esc(s('cmdRun')) + '</button></div>' +
+      '<p class="mt-cmd-st muted"></p><p class="mt-cmd-help muted">' + esc(s('cmdHelp')) + '</p></div>';
+  }
+  /** Wires a command bar; `matterId` is the matter on screen (the default for "yozuv qo'sh: …"). */
+  function wireCmd(root, matterId, after) {
+    var input = $('.mt-cmd-in', root), st = $('.mt-cmd-st', root), mic = $('.mt-mic', root), go = $('[data-a=cmd]', root);
+    async function run(text, extra) {
+      if (!extra && !String(text || '').trim()) { input.focus(); return; }
+      go.disabled = true; st.textContent = '';
+      var r = await J.api('/api/matters/command', { method: 'POST', body: extra || { text: text, lastMatterId: matterId || current() || null, lang: J.lang === 'ru' ? 'ru' : 'uz' } });
+      go.disabled = false;
+      if (!r.ok) { st.textContent = J.errMsg(r.data); return; }
+      var d = r.data;
+      if (d.confirm) {
+        st.innerHTML = '';
+        var box = J.h('<span class="mt-cmd-confirm"><span></span> <button class="pill sm" type="button" data-c="y">' + esc(s('yes')) + '</button> <button class="pill sm ghost" type="button" data-c="n">' + esc(s('cancel')) + '</button></span>');
+        $('span', box).textContent = d.reply;
+        st.appendChild(box);
+        $('[data-c=y]', box).onclick = function () { run(null, { confirm: d.confirm.token, lang: J.lang === 'ru' ? 'ru' : 'uz' }); };
+        $('[data-c=n]', box).onclick = function () { J.api('/api/matters/command', { method: 'POST', body: { cancel: d.confirm.token } }); st.textContent = ''; };
+        return;
+      }
+      input.value = '';
+      if (d.matterId) setCurrent(d.matterId);
+      // a command that redraws the page says what it did in a toast (the bar is drawn again)
+      if ((d.action === 'matter_created' || d.action === 'matter_shown') && d.matterId) { J.toast(d.reply, 5000); J.go('#/ishlar/' + d.matterId); return; }
+      if (after && /^matter_(noted|closed|reopened)$/.test(d.action)) { J.toast(d.reply, 5000); after(d); return; }
+      st.textContent = d.reply || '';
+    }
+    go.onclick = function () { run(input.value); };
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); run(input.value); } });
+    // the microphone: the same dictation as the chat (POST /api/voice/dictate), then the command runs
+    if (!G.MediaRecorder || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+    if (J.dictationOk === undefined) J.dictationOk = J.api('/api/voice/balance').then(function (x) { return !!(x.ok && x.data && x.data.dictation); });
+    J.dictationOk.then(function (ok) { mic.hidden = !ok; });
+    var rec = null, stopAt = null;
+    mic.onclick = async function () {
+      if (rec && rec.state === 'recording') { rec.stop(); return; }
+      var stream;
+      try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch (e) { J.toast(s('micDenied')); return; }
+      var chunks = [];
+      rec = new MediaRecorder(stream);
+      rec.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
+      rec.onstop = async function () {
+        clearTimeout(stopAt); stream.getTracks().forEach(function (tr) { tr.stop(); });
+        mic.classList.remove('on'); mic.disabled = true; st.textContent = s('cmdBusy');
+        var blob = new Blob(chunks, { type: rec.mimeType || 'audio/webm' }), fd = new FormData();
+        fd.append('file', blob, 'command.' + (/ogg/.test(blob.type) ? 'ogg' : /mp4|aac/.test(blob.type) ? 'm4a' : 'webm'));
+        fd.append('lang', J.lang === 'ru' ? 'ru' : 'uz');
+        var r = await J.api('/api/voice/dictate', { method: 'POST', body: fd });
+        mic.disabled = false;
+        if (!r.ok) { st.textContent = J.errMsg(r.data); return; }
+        input.value = r.data.text || '';
+        run(input.value);
+      };
+      rec.start();
+      mic.classList.add('on'); st.textContent = s('cmdListen');
+      stopAt = setTimeout(function () { if (rec && rec.state === 'recording') rec.stop(); }, 30000);
+    };
+  }
+
   J.viewMatters = function () {
     J.setTitle(s('title'));
     var filter = 'open';
     var v = J.mount('<div class="wrap narrow"><div class="vh"><div><h2>' + esc(s('title')) + '</h2><p>' + esc(s('lead')) + '</p></div><button class="pill" data-a="new" type="button">' + J.icon('plus') + esc(s('new')) + '</button></div>' +
+      cmdBar() +
       '<div class="mt-bar"><div class="search">' + J.icon('search') + '<input class="inp" placeholder="' + esc(s('search')) + '"></div>' +
       '<div class="seg">' + ['open', 'closed', 'all'].map(function (f) { return '<button type="button" data-f="' + f + '" class="' + (f === filter ? 'on' : '') + '">' + esc(s(f)) + '</button>'; }).join('') + '</div></div>' +
       '<div class="rows mt-list"><div class="skel" style="width:70%;margin:14px 0"></div><div class="skel" style="width:50%"></div></div></div>');
@@ -236,6 +311,7 @@
     }
     $('input', v).oninput = draw;
     $$('[data-f]', v).forEach(function (b) { b.onclick = function () { filter = b.dataset.f; $$('[data-f]', v).forEach(function (x) { x.classList.toggle('on', x === b); }); draw(); }; });
+    wireCmd(v, null, function () { load(); });
     $('[data-a=new]', v).onclick = function () { newMatterModal(function (m) { setCurrent(m.id); J.go('#/ishlar/' + m.id); }); };
     load();
   };
@@ -367,6 +443,7 @@
         (w && M.status === 'open' && J.isMaster && J.isMaster() ? '<div class="card mt-agent"><h4>' + esc(s('agent')) + ' <span class="mt-tag">' + esc(s('agentBeta')) + '</span></h4>' +
           '<textarea class="inp mt-task" maxlength="2000" placeholder="' + esc(s('agentPh')) + '"></textarea>' +
           '<div class="mt-agent-b"><button class="pill sm" data-a="plan" type="button">' + J.icon('spark') + esc(s('plan')) + '</button></div><div class="mt-plan"></div></div>' : '') +
+        (w ? cmdBar() : '') +
         (w ? '<div class="mt-noteform"><textarea class="inp" maxlength="8000" placeholder="' + esc(s('notePh')) + '"></textarea><button class="pill sm" data-a="note" type="button">' + J.icon('plus') + esc(s('addNote')) + '</button></div>' : '') +
         '<div class="mt-items">' + (M.items.length ? M.items.map(itemRow).join('') : '<div class="empty-state">' + esc(s('noItems')) + '</div>') + '</div>';
       $('.mt-head h2', body).textContent = M.title;
@@ -402,6 +479,7 @@
         if (!r.ok) { J.toast(J.errMsg(r.data)); return; }
         load();
       };
+      if ($('.mt-cmd', body)) wireCmd(body, M.id, function (d) { if (d.matterId === M.id) load(); });
       var pb = $('[data-a=plan]', body);
       if (pb) pb.onclick = function () { agentPlan(pb); };
       var eb = $('[data-a=edit]', body);

@@ -12,6 +12,8 @@
  *   DELETE /api/matters/:id                   owner only, soft
  *   POST   /api/matters/:id/items             { kind: chat|scan|note, ref?, title?, note? }
  *   DELETE /api/matters/:id/items/:itemId     the link only
+ *   POST   /api/matters/command               { text, lastMatterId } | { confirm } | { cancel }:
+ *                                             a typed or dictated command (src/matters/commands.js)
  *
  * `MATTERS=off` answers 503 on all of them.
  */
@@ -67,6 +69,19 @@ function mountMatterRoutes(app, { requireAuth, requireSameOrigin, pool, resolveE
   app.delete('/api/matters/:id/items/:itemId', requireSameOrigin, requireAuth, guard(async (req, res) => {
     if (!(await store.removeItem(req.params.id, req.params.itemId, me(req)))) return notFound(res);
     res.status(204).end();
+  }));
+
+  // a typed or dictated command (src/matters/commands.js): { text, lastMatterId } or { confirm } / { cancel }
+  app.post('/api/matters/command', requireSameOrigin, requireAuth, guard(async (req, res) => {
+    const commands = require('./commands');
+    const b = req.body || {};
+    const lang = b.lang === 'ru' || /[\u0400-\u04ff]/u.test(String(b.text || '')) ? 'ru' : 'uz';
+    if (b.cancel) { commands.cancelConfirm(b.cancel, me(req)); return res.json({ action: 'matter_confirm_cancelled' }); }
+    if (b.confirm) return res.json(await commands.confirmCommand(b.confirm, { adminId: me(req), store, lang }));
+    const cmd = commands.parseCommand(b.text);
+    if (!cmd) return res.status(422).json({ error: 'not_a_command', message: lang === 'ru' ? 'Команда не распознана. Примеры: «мои дела», «новое дело: …», «заметка в дело …: …».' : "Buyruq tushunilmadi. Masalan: «ishlarim», «yangi ish och: …», «… ishiga yozuv: …»." });
+    const out = await commands.runCommand(cmd, { adminId: me(req), store, lang, lastId: b.lastMatterId || null });
+    res.json({ command: cmd.action, ...out });
   }));
 
   return store;

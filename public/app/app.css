@@ -593,3 +593,12 @@ textarea.inp{height:auto;min-height:96px;padding:10px 13px;resize:vertical;line-
 .mt-plan-b{margin-top:14px;border-top:1px solid var(--line);padding-top:14px}
 .mt-plan-b>b{display:block;margin-bottom:10px;font-weight:500}
 .mt-vf{margin-top:12px;font-size:13px;color:var(--muted)}
+.mt-cmd{margin-bottom:18px}
+.mt-cmd-row{display:flex;gap:8px;align-items:center}
+.mt-cmd-row .inp{flex:1;min-width:0}
+.mt-mic{flex:none;width:42px;height:42px;border:1px solid var(--line);border-radius:12px}
+.mt-mic.on{background:var(--accent-soft);color:var(--cta);border-color:var(--cta)}
+.mt-cmd-st{font-size:13.5px;margin-top:8px;color:var(--fg);white-space:pre-line}
+.mt-cmd-st:empty{display:none}
+.mt-cmd-confirm{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mt-cmd-help{font-size:12.5px;margin-top:6px}
