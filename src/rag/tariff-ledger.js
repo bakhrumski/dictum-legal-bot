@@ -9,7 +9,8 @@
  *             1 opinion unit, 0 drafts
  *   Silver    199 000 so'm / 30 days: 150 chat, 8 + 8 units, 10 drafts
  *   Gold      599 000 so'm / 30 days: 3 x Silver
- *   Platinum  999 000 so'm / 30 days: 5 x Silver, can create a Workspace
+ *   Platinum  999 000 so'm / 30 days: 5 x Silver
+ *   Every paid plan (Silver, Gold, Platinum) can create a Workspace (2026-10-28)
  *
  * It extends what existed, it is not a second system: usage rows are the
  * same tariff_usage table (now with service, units, status, period, job key,
@@ -59,13 +60,13 @@ const PLAN_CATALOG = Object.freeze({
   silver: Object.freeze({
     label: 'Silver', priceUzs: 199000, periodDays: 30, oneTime: false,
     quotas: paidQuotas('silver'),
-    workspace: Object.freeze({ create: false, join: true }),
+    workspace: Object.freeze({ create: true, join: true }),
     job: Object.freeze({ maxUnits: 3, maxPages: 30, maxChars: 120000 }),
   }),
   gold: Object.freeze({
     label: 'Gold', priceUzs: 599000, periodDays: 30, oneTime: false,
     quotas: paidQuotas('gold'),
-    workspace: Object.freeze({ create: false, join: true }),
+    workspace: Object.freeze({ create: true, join: true }),
     job: Object.freeze({ maxUnits: 3, maxPages: 30, maxChars: 120000 }),
   }),
   platinum: Object.freeze({

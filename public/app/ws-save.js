@@ -7,9 +7,9 @@
 
   var S = {
     uz: { btn: 'Workspace’ga saqlash', pick: 'Qaysi Workspace’ga saqlaymiz?', title: 'Hujjat nomi', save: 'Saqlash', cancel: 'Bekor qilish',
-      none: 'Faol Workspace yo‘q: Workspace Platinum tarifida yoki taklif orqali ochiladi.', done: 'Workspace’ga saqlandi', open: 'Ochish' },
+      none: 'Faol Workspace yo‘q: Workspace har qanday pullik tarifda yoki taklif orqali ochiladi.', done: 'Workspace’ga saqlandi', open: 'Ochish' },
     ru: { btn: 'Сохранить в Workspace', pick: 'В какой Workspace сохранить?', title: 'Название документа', save: 'Сохранить', cancel: 'Отмена',
-      none: 'Нет активного Workspace: он доступен на тарифе Platinum или по приглашению.', done: 'Сохранено в Workspace', open: 'Открыть' },
+      none: 'Нет активного Workspace: он доступен на любом платном тарифе или по приглашению.', done: 'Сохранено в Workspace', open: 'Открыть' },
   };
   function s(k) { var d = S[J.lang] || S.uz; return d[k] !== undefined ? d[k] : S.uz[k]; }
   J.wsSaveText = s;

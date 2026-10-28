@@ -10,6 +10,9 @@ const {
   canCreateWorkspace,
   isActivePaidPlan,
   isActivePlatinum,
+  isWorkspaceOwnerActive,
+  isMemberActive,
+  STAFF_ROLES,
   requireTask,
   requireWorkspaceAccess,
   withWorkspaceTransaction,
@@ -292,8 +295,8 @@ function mountWorkspaceRoutes(app, options) {
     const rawToken = requiredString(req.params.token, 'token', { min: 20, max: 200 });
     const invitation = (await pool.query(
       `SELECT i.workspace_id,i.role,i.expires_at,i.accepted_at,i.revoked_at,
-              w.name AS workspace_name,
-              juristai_private.has_workspace_entitlement(w.owner_id) AS workspace_active
+              w.name AS workspace_name, w.internal,
+              juristai_private.workspace_owner_active(w.id) AS workspace_active
          FROM workspace_invitations i
          JOIN workspaces w ON w.id=i.workspace_id AND w.deleted_at IS NULL
         WHERE i.token_hash=$1`,
@@ -382,13 +385,13 @@ function mountWorkspaceRoutes(app, options) {
 
   router.get('/workspaces', asyncRoute(async (req, res) => {
     const result = await pool.query(
-      `SELECT w.id, w.name, w.slug, w.default_language, w.owner_id,
+      `SELECT w.id, w.name, w.slug, w.default_language, w.owner_id, w.internal,
               w.created_at, w.updated_at, wm.role,
-              owner.tariff_plan, owner.tariff_expires_at,
+              owner.role AS owner_role, owner.tariff_plan, owner.tariff_expires_at,
               member_account.tariff_plan AS member_tariff_plan,
               member_account.tariff_expires_at AS member_tariff_expires_at,
               member_account.role AS member_role,
-              juristai_private.has_workspace_entitlement(w.owner_id) AS is_active,
+              juristai_private.workspace_owner_active(w.id) AS is_active,
               (SELECT count(*)::int FROM workspace_members m WHERE m.workspace_id=w.id) AS member_count,
               (SELECT count(*)::int FROM workspace_tasks t WHERE t.workspace_id=w.id AND t.deleted_at IS NULL) AS task_count
          FROM workspace_members wm
@@ -401,14 +404,12 @@ function mountWorkspaceRoutes(app, options) {
     );
     res.json({ workspaces: result.rows.map((workspace) => ({
       ...workspace,
-      ownerActive: isActivePlatinum(workspace),
-      memberActive: workspace.role === 'owner' || isActivePaidPlan(workspace, 'silver'),
-      is_active: isActivePlatinum(workspace)
-        && (workspace.role === 'owner' || isActivePaidPlan(workspace, 'silver')),
-      unavailableReason: !isActivePlatinum(workspace)
+      ownerActive: isWorkspaceOwnerActive(workspace),
+      memberActive: isMemberActive(workspace),
+      is_active: isWorkspaceOwnerActive(workspace) && isMemberActive(workspace),
+      unavailableReason: !isWorkspaceOwnerActive(workspace)
         ? 'owner_subscription_expired'
-        : (workspace.role !== 'owner' && !isActivePaidPlan(workspace, 'silver')
-          ? 'member_subscription_expired' : null),
+        : (!isMemberActive(workspace) ? 'member_subscription_expired' : null),
     })) });
   }));
 
@@ -422,13 +423,18 @@ function mountWorkspaceRoutes(app, options) {
         'SELECT role, tariff_plan, tariff_expires_at FROM admins WHERE id=$1 FOR UPDATE',
         [userId]
       )).rows[0];
-      if (!canCreateWorkspace(account)) {
-        throw new WorkspaceError(402, 'workspace_platinum_required', 'Workspace yaratish faqat faol Platinum tarifi bilan mavjud');
+      // an internal (staff) Workspace: a master only, read from the database (migration 025)
+      const internal = req.body.internal === true;
+      if (internal && !canCreateWorkspace(account, { internal: true })) {
+        throw new WorkspaceError(403, 'workspace_internal_master_only', 'Ichki (xodimlar) Workspace’ni faqat master ochadi');
+      }
+      if (!internal && !canCreateWorkspace(account)) {
+        throw new WorkspaceError(402, 'workspace_platinum_required', 'Workspace yaratish uchun faol pullik tarif (Silver, Gold yoki Platinum) kerak');
       }
       return (await db.query(
-        `INSERT INTO workspaces (name, slug, owner_id, default_language, created_by)
-         VALUES ($1,$2,$3,$4,$3) RETURNING *`,
-        [name, workspaceSlug, userId, language]
+        `INSERT INTO workspaces (name, slug, owner_id, default_language, created_by, internal)
+         VALUES ($1,$2,$3,$4,$3,$5) RETURNING *`,
+        [name, workspaceSlug, userId, language, internal]
       )).rows[0];
     });
     res.status(201).json({ workspace, role: 'owner', isActive: true });
@@ -493,7 +499,8 @@ function mountWorkspaceRoutes(app, options) {
     const result = await pool.query(
       `SELECT wm.user_id AS id, wm.role, wm.joined_at, a.username, a.full_name, a.email,
               a.last_active_at, a.tariff_plan, a.tariff_expires_at,
-              CASE WHEN wm.role='owner' THEN juristai_private.has_workspace_entitlement(a.id)
+              CASE WHEN wm.role='owner' THEN juristai_private.workspace_owner_active(wm.workspace_id)
+                   WHEN (SELECT w.internal FROM workspaces w WHERE w.id=wm.workspace_id) AND a.role IN ('master','student','lawyer') THEN true
                    ELSE juristai_private.has_active_paid_entitlement(a.id, 'silver') END AS subscription_active
          FROM workspace_members wm JOIN admins a ON a.id=wm.user_id
         WHERE wm.workspace_id=$1
@@ -608,8 +615,8 @@ function mountWorkspaceRoutes(app, options) {
     const accepted = await withWorkspaceTransaction(pool, userId, async (db) => {
       const invite = (await db.query(
         `SELECT i.id,i.workspace_id,i.role,i.expires_at,i.accepted_at,i.revoked_at,
-                w.name AS workspace_name,
-                juristai_private.has_workspace_entitlement(w.owner_id) AS workspace_active
+                w.name AS workspace_name, w.internal,
+                juristai_private.workspace_owner_active(w.id) AS workspace_active
            FROM workspace_invitations i
            JOIN workspaces w ON w.id=i.workspace_id AND w.deleted_at IS NULL
           WHERE i.token_hash=$1 FOR UPDATE OF i`,
@@ -620,7 +627,14 @@ function mountWorkspaceRoutes(app, options) {
         throw new WorkspaceError(410, 'invitation_unavailable', 'Taklif muddati tugagan yoki undan foydalanilgan');
       }
       if (!invite.workspace_active) {
-        throw new WorkspaceError(402, 'workspace_platinum_required', 'Taklifni qabul qilish uchun Workspace Platinum tarifi faol bo‘lishi kerak');
+        throw new WorkspaceError(402, 'workspace_platinum_required', 'Taklifni qabul qilish uchun Workspace egasining pullik tarifi faol bo‘lishi kerak');
+      }
+      // an internal (staff) Workspace takes staff only - a client never joins one
+      if (invite.internal) {
+        const who = (await db.query('SELECT role FROM admins WHERE id=$1', [userId])).rows[0];
+        if (!who || !STAFF_ROLES.has(String(who.role || '').toLowerCase())) {
+          throw new WorkspaceError(403, 'workspace_internal_staff_only', 'Bu ichki Workspace faqat JuristAI xodimlari uchun');
+        }
       }
       const existingMembership = (await db.query(
         `SELECT role
