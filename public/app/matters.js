@@ -266,7 +266,7 @@
     if (!G.MediaRecorder || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
     if (J.dictationOk === undefined) J.dictationOk = J.api('/api/voice/balance').then(function (x) { return !!(x.ok && x.data && x.data.dictation); });
     J.dictationOk.then(function (ok) { mic.hidden = !ok; });
-    var rec = null, stopAt = null;
+    var rec = null, stopAt = null, meter = null;
     mic.onclick = async function () {
       if (rec && rec.state === 'recording') { rec.stop(); return; }
       var stream;
@@ -276,6 +276,7 @@
       rec.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
       rec.onstop = async function () {
         clearTimeout(stopAt); stream.getTracks().forEach(function (tr) { tr.stop(); });
+        if (meter) { meter.stop(); meter = null; }
         mic.classList.remove('on'); mic.disabled = true; st.textContent = s('cmdBusy');
         var blob = new Blob(chunks, { type: rec.mimeType || 'audio/webm' }), fd = new FormData();
         fd.append('file', blob, 'command.' + (/ogg/.test(blob.type) ? 'ogg' : /mp4|aac/.test(blob.type) ? 'm4a' : 'webm'));
@@ -287,7 +288,8 @@
         run(input.value);
       };
       rec.start();
-      mic.classList.add('on'); st.textContent = s('cmdListen');
+      mic.classList.add('on'); st.textContent = '';
+      meter = J.micMeter(stream, st, { label: s('cmdListen') });
       stopAt = setTimeout(function () { if (rec && rec.state === 'recording') rec.stop(); }, 30000);
     };
   }

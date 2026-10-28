@@ -157,7 +157,8 @@
       if (!G.MediaRecorder || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
       if (J.dictationOk === undefined) J.dictationOk = J.api('/api/voice/balance').then(function (r) { return !!(r.ok && r.data && r.data.dictation); });
       J.dictationOk.then(function (ok) { mic.hidden = !ok; });
-      function reset() { clearInterval(timer); timer = null; secs = 0; lab.textContent = ''; mic.classList.remove('on'); mic.disabled = false; }
+      var meter = null;
+      function reset() { clearInterval(timer); timer = null; secs = 0; lab.textContent = ''; mic.classList.remove('on'); mic.disabled = false; if (meter) { meter.stop(); meter = null; } }
       async function stop() { if (rec && rec.state !== 'inactive') rec.stop(); }
       mic.onclick = async function () {
         if (rec && rec.state === 'recording') return stop();
@@ -168,6 +169,7 @@
         rec.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
         rec.onstop = async function () {
           stream.getTracks().forEach(function (tr) { tr.stop(); });
+          if (meter) { meter.stop(); meter = null; }
           clearInterval(timer); mic.classList.remove('on'); mic.disabled = true; lab.textContent = t('cmp.mic.busy');
           var blob = new Blob(chunks, { type: rec.mimeType || 'audio/webm' }), fd = new FormData();
           fd.append('file', blob, 'dictation.' + (/ogg/.test(blob.type) ? 'ogg' : /mp4|aac/.test(blob.type) ? 'm4a' : 'webm'));
@@ -178,8 +180,10 @@
           ta.value = (ta.value.trim() ? ta.value.trim() + ' ' : '') + r.data.text; grow(); sync(); ta.focus();
         };
         rec.start();
-        mic.classList.add('on'); secs = 0; lab.textContent = '0:00';
-        timer = setInterval(function () { secs++; lab.textContent = Math.floor(secs / 60) + ':' + ('0' + secs % 60).slice(-2); if (secs >= MAX) stop(); }, 1000);
+        // the level and the time are shown by the meter; the label stays for "transcribing…"
+        mic.classList.add('on'); secs = 0; lab.textContent = '';
+        meter = J.micMeter(stream, mic);
+        timer = setInterval(function () { secs++; if (secs >= MAX) stop(); }, 1000);
       };
     })();
 
