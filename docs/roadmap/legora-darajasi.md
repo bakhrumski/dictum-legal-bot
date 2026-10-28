@@ -65,9 +65,9 @@ Tartib va PR bo'linishi dizayn hujjatining 9-bo'limida.
   Keyingi qadam: ovoz bilan agent topshirig'i (reja → tasdiq) - PR-F bilan.
 - [x] PR-E (#499): Parallel qadamlar, `needs_input`
   dan keyin davom ettirish.
-- [~] PR-F: Telegram: ish holati bitta xabarda yangilanadi, tasdiq tugmalari.
+- [x] PR-F (#501): Telegram: ish holati bitta xabarda yangilanadi, tasdiq tugmalari.
   Botdagi da'vo agenti hali run emas (keyingi qadam).
-- [ ] PR-G: Agent baholash to'plami (`docs/quality/agent-eval.md`): har bir
+- [~] PR-G: Agent baholash to'plami (`docs/quality/agent-eval.md`): har bir
   workflow uchun yurist ko'rib chiqqan 20–30 holat; har PR'da stub bilan.
 
 ## 2-bosqich. Mavjudini Legora tajribasiga yaqinlashtirish
@@ -148,3 +148,10 @@ nima o'lchandi.
   javob, faqat "bekor" to'xtatadi). Planner servisga ajratildi (web va bot
   bir xil). Chat va xabar run qatorida, deploy'dan keyin ham shu chatga
   yoziladi. Haqiqiy Telegram bilan sinalmagan.
+- 2026-10-28: #500 (nomsiz "yangi ish och") va #501 (PR-F) merge; #502
+  (frontend): mikrofon yozayotganda qizil nuqta, ovoz balandligi ustunlari
+  va vaqt (chat va Ishlar buyruq satri), soxta mikrofon bilan tekshirildi.
+- 2026-10-28: PR-G ochildi: 24 ta sintetik holat (hammasi
+  `reviewed: false`), AI'siz baholovchi, runner (dry standart; jonli -
+  server API orqali master sessiyasi, run sha tasdig'i bilan). Yurist
+  ko'rib chiqmaguncha sifat haqida xulosa yo'q.
