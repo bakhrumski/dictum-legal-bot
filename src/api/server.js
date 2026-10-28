@@ -10595,7 +10595,7 @@ app.post('/api/admin/tariff/grant', requireMasterAdmin, async (req, res) => {
 const TEST_ENT_REASONS = {
   master_only: 'Faqat Master Admin test huquqini bera oladi.',
   reason_required: 'Sababini yozing (3–500 belgi).',
-  invalid_hours: "Muddat 1 soatdan 168 soatgacha (7 kun).",
+  invalid_hours: "Muddat 1 soatdan 336 soatgacha (14 kun).",
   invalid_plan: "Hujjat hajmi qoidasi uchun Silver, Gold yoki Platinum tanlang.",
   invalid_quotas: 'Kvotalar 0–1000 oralig\'idagi butun son bo\'lsin.',
   invalid_budget: 'Budjet $0 dan katta va $50 dan oshmasin.',

@@ -583,7 +583,10 @@ Known state of the suites (Sept 2026):
   apart; legacy revenue and refunds are unknown, never 0. Rollback is code,
   not data: `docs/tariffs-v2-rollback.md`; the 013 down file is for an empty
   test database only. The pilot runs on a master-only test entitlement
-  (`grantTestEntitlement`, `tariff_periods.source = 'test'`: no price, no
+  (`grantTestEntitlement`, 1-336 h = up to 14 days since 2026-10-28, 48 h
+  default; quotas and budget cover the whole period; the 14-day CustDev
+  pilot's suggested grant is in `docs/tariffs-v2.md` §10;
+  `tariff_periods.source = 'test'`: no price, no
   paymentRef, no revenue, admins.tariff_* untouched, spend reported apart)
   with a total AI budget (`src/ai/test-budget.js`): each request holds its
   per-request limit before its first AI call, and inside it every provider

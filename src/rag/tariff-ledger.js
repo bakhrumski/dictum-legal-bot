@@ -904,7 +904,8 @@ async function grantPaidPeriodLocked({ adminId, plan, paymentRef, provider = 'ma
 // measuredServiceCost); its total AI budget is enforced by
 // src/ai/test-budget.js.
 const TEST_DEFAULT_QUOTAS = Object.freeze({ chat: 12, analysis: 8, opinion: 6, draft: 3, ocr: 10 });
-const TEST_MAX_HOURS = 168;
+// up to 14 days (2026-10-28, owner: the 14-day CustDev pilot); 48 h stays the default
+const TEST_MAX_HOURS = 336;
 
 function testQuotas(input) {
   const out = {};
@@ -1084,6 +1085,7 @@ async function measuredServiceCost({ days = 30, db = pool, test = false } = {}) 
 }
 
 module.exports = {
+  TEST_MAX_HOURS,
   measuredServiceCost,
   SERVICES, PLAN_CATALOG, PAID_PLAN_ORDER, MULTIPLIER, SILVER_QUOTAS, OCR_PAGES_PER_ANALYSIS_UNIT,
   DOC_UNIT, DRAFT_UNIT, STANDARD_PAGE_CHARS, PLANNING, RESERVATION_TTL_MIN,

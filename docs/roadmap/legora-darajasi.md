@@ -97,7 +97,7 @@ Tartib va PR bo'linishi dizayn hujjatining 9-bo'limida.
 - [~] Adaptiv akkaunt va platformaning o'zini yaxshilashi (egasi, 2026-10-28):
   dizayn `docs/design/adaptiv-akkaunt.md` (#509, qabul qilingan), PR A1-A8.
   Birinchi qismi: shaxsiy ovoz glossariysi (#507). A1 (signallar va profil)
-  #510; A2 ("Moslashish" sahifasi) PR ochildi.
+  #510; A2 ("Moslashish" sahifasi) #511.
 
 ## 4-bosqich. Korporativ daraja
 
@@ -234,3 +234,6 @@ nima o'lchandi.
     tanlaydi);
   - oxirgi 30 signal jadvali, to'xtatish va hammasini tozalash.
   - Brauzerda 1280 va 390 px'da tekshirildi.
+- 2026-10-28: #511 (A2, "Moslashish" sahifasi) va #512 (yangi lotin alifbosi,
+  OʻRQ-1184: standart yangi, eski tanlov bilan; Golos Text'dagi Ğ breve
+  xatosi tuzatildi) merge. #512 #511 ustidan rebase qilindi.

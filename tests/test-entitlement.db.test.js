@@ -100,6 +100,19 @@ async function aiCall({ inTokens = 0, unknown = false } = {}) {
     assert.strictEqual((await ledger.balance({ adminId: u })).services.analysis.used, 3);
   });
 
+  await test('up to 14 days: 336 hours accepted, 337 refused; 48 hours stays the default', async () => {
+    assert.strictEqual(ledger.TEST_MAX_HOURS, 336);
+    const u = await makeUser();
+    assert.strictEqual((await ledger.grantTestEntitlement({ adminId: u, grantedBy: master, reason: 'pilot 15 kun', hours: 337 })).reason, 'invalid_hours');
+    const now = new Date();
+    const g = await ledger.grantTestEntitlement({ adminId: u, grantedBy: master, reason: 'CustDev pilot 14 kun', hours: 336, now });
+    assert.ok(g.ok);
+    assert.strictEqual(new Date(g.period.ends_at).getTime() - new Date(g.period.starts_at).getTime(), 336 * 3600e3);
+    const d = await makeUser();
+    const def = await ledger.grantTestEntitlement({ adminId: d, grantedBy: master, reason: 'standart muddat', now });
+    assert.strictEqual(new Date(def.period.ends_at).getTime() - new Date(def.period.starts_at).getTime(), 48 * 3600e3);
+  });
+
   await test('a repeated or parallel grant never adds quota: one live test entitlement per account', async () => {
     const u = await makeUser();
     const results = await Promise.all(Array.from({ length: 6 }, () => ledger.grantTestEntitlement({ adminId: u, grantedBy: master, reason: 'parallel', quotas: { chat: 5 } })));
