@@ -107,6 +107,8 @@ jobs:
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/adaptive-profile.db.test.js
       - name: CustDev pilot agents (codes, referrals, pilot approval, isolation) on real Postgres
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/sales-agents.db.test.js
+      - name: Workspace for every paid plan + internal workspace (db)
+        run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/workspace-entitlement.db.test.js
       - name: Speech glossary per account (learn, isolation, cap) on real Postgres
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/voice-glossary.db.test.js
       - name: Planner agent (master gate, approval, price, worker) on real Postgres

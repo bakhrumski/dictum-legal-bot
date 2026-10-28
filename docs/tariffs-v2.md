@@ -18,8 +18,13 @@ almashtiriladi. Narx va limitlarning yagona manbasi —
 | AI yuridik xulosa (birlik) | 1 | 8 | 24 | 40 |
 | Draft yaratish | 0 | 10 | 30 | 50 |
 | Rasm/skan o'qish (sahifa) | 10 | 80 | 240 | 400 |
-| Workspace yaratish | Yo'q | Yo'q | Yo'q | Ha |
+| Workspace yaratish | Yo'q | Ha | Ha | Ha |
 | Workspace'ga qo'shilish | Yo'q | Ha | Ha | Ha |
+
+2026-10-28 dan (egasi, migratsiya 025) Workspace'ni har qanday faol pullik
+tarif egasi ochadi; a'zo bo'lish uchun ham o'z faol pullik tarifi kerak.
+Istisno - master ochgan ichki (xodimlar) Workspace: tarifsiz, a'zolari faqat
+xodimlar (CustDev pilot).
 
 Gold = 3 × Silver, Platinum = 5 × Silver: kodda Silver limitlaridan
 ko'paytuvchi bilan chiqariladi va test bilan tekshiriladi.

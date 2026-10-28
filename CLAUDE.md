@@ -761,8 +761,15 @@ Known state of the suites (Sept 2026):
   Ishlar command bar lists, adds and deletes (`/api/voice/glossary`); 500
   rows an account (a learned row makes room, hand-made rows stay); account
   deletion removes it. Still suggestions only - never a replacement.
-- `src/workspace/` — Platinum Workspace: routes, authz, Supabase
-  realtime/storage, Workspace AI.
+- `src/workspace/` — Workspace: routes, authz, Supabase
+  realtime/storage, Workspace AI. Since 2026-10-28 (owner, migration 025)
+  any active paid plan (Silver, Gold, Platinum) owns one (`PLAN_CATALOG`
+  `workspace.create`; `has_workspace_entitlement`); a member still needs
+  their own paid plan. `workspaces.internal`: a staff Workspace only a master
+  opens (`POST /workspaces` `internal: true`), active with no plan while the
+  owner is a master, members staff only (master / student / lawyer, enforced
+  by triggers and the invitation check), the flag never changes;
+  `tests/workspace-entitlement.db.test.js`.
 - `public/` — static pages: `index.html` (landing), `login.html`,
   `dashboard.html` (the app), `ai-dashboard.html` (the design reference the
   dashboard follows), plus tariff, attorneys, templates, legal pages.
@@ -789,10 +796,8 @@ clients - name, registered, pilot status, units used, paid - never a
 question or answer (`GET /api/sales/me`, page `#/mijozlarim`, a nav item for
 an agent only). Master: Boshqaruv -> "CustDev pilot" (`/api/admin/sales/*`):
 pending requests, agents, codes, links, demo, registered / piloted / paid.
-Stages 3-4 (pilot Workspace, feedback, interview recordings) wait for the
-owner: a master cannot own an active Workspace (the database's
-`has_workspace_entitlement` needs role 'user' + Platinum; members need
-Silver unless master).
+Stages 3-4 (pilot Workspace, feedback, interview recordings): the pilot
+runs in an internal Workspace (migration 025, the owner's option 1).
 
 ## The 2026 Latin alphabet (OʻRQ-1184 of 21.10.2026)
 

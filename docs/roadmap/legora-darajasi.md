@@ -237,3 +237,10 @@ nima o'lchandi.
 - 2026-10-28: #511 (A2, "Moslashish" sahifasi) va #512 (yangi lotin alifbosi,
   OʻRQ-1184: standart yangi, eski tanlov bilan; Golos Text'dagi Ğ breve
   xatosi tuzatildi) merge. #512 #511 ustidan rebase qilindi.
+- 2026-10-28: #507-#513 merge (glossariy, ish eksporti, adaptiv A1/A2,
+  2026 alifbosi, CustDev pilot 1-2-bosqich). Egasi: "Workspace ni barcha
+  tarif uchun och" va pilot uchun 1-variant. Yangi PR: migratsiya 025 -
+  Workspace'ni har qanday faol pullik tarif (Silver, Gold, Platinum) egasi
+  ochadi; `workspaces.internal` - master tarifsiz ochadigan ichki (xodimlar)
+  Workspace, a'zolari faqat master / student / lawyer, mijoz hech qachon
+  a'zo bo'lmaydi, bayroq yaratilgandan keyin o'zgarmaydi.

@@ -64,7 +64,11 @@ function transactionalPool(handler) {
   await test('only active Platinum accounts qualify', () => {
     assert.strictEqual(isActivePlatinum({ tariff_plan: 'platinum', tariff_expires_at: null }), true);
     assert.strictEqual(isActivePlatinum({ tariff_plan: 'PlAtInUm', tariff_expires_at: new Date(Date.now() + 60000) }), true);
-    assert.strictEqual(isActivePlatinum({ tariff_plan: 'gold', tariff_expires_at: null }), false);
+    // Since migration 025 every paid plan owns a Workspace (the name stays).
+    assert.strictEqual(isActivePlatinum({ tariff_plan: 'gold', tariff_expires_at: null }), true);
+    assert.strictEqual(isActivePlatinum({ tariff_plan: 'silver', tariff_expires_at: null }), true);
+    assert.strictEqual(isActivePlatinum({ tariff_plan: 'sinov', tariff_expires_at: null }), false);
+    assert.strictEqual(isActivePlatinum({ tariff_plan: '', tariff_expires_at: null }), false);
     assert.strictEqual(isActivePlatinum({ tariff_plan: 'platinum', tariff_expires_at: new Date(Date.now() - 1) }), false);
   });
 
@@ -74,7 +78,13 @@ function transactionalPool(handler) {
     assert.strictEqual(canCreateWorkspace({ ...activePlan, role: 'master' }), true);
     assert.strictEqual(canCreateWorkspace({ ...activePlan, role: 'lawyer' }), false);
     assert.strictEqual(canCreateWorkspace({ ...activePlan, role: 'student' }), false);
-    assert.strictEqual(canCreateWorkspace({ role: 'master', tariff_plan: 'gold', tariff_expires_at: null }), false);
+    assert.strictEqual(canCreateWorkspace({ role: 'master', tariff_plan: 'gold', tariff_expires_at: null }), true);
+    assert.strictEqual(canCreateWorkspace({ role: 'user', tariff_plan: 'silver', tariff_expires_at: null }), true);
+    assert.strictEqual(canCreateWorkspace({ role: 'user', tariff_plan: 'sinov', tariff_expires_at: null }), false);
+    // An internal workspace: master only, no plan needed.
+    assert.strictEqual(canCreateWorkspace({ role: 'master', tariff_plan: null }, { internal: true }), true);
+    assert.strictEqual(canCreateWorkspace({ role: 'user', tariff_plan: 'platinum', tariff_expires_at: null }, { internal: true }), false);
+    assert.strictEqual(canCreateWorkspace({ role: 'student', tariff_plan: null }, { internal: true }), false);
   });
 
   await test('invitation tokens are stored as one-way hashes', () => {
@@ -334,6 +344,7 @@ function transactionalPool(handler) {
       '20261028_022_user_profile.sql',
       '20261028_023_tg_alphabet.sql',
       '20261028_024_sales_agents.sql',
+      '20261028_025_workspace_all_paid_plans.sql',
     ]);
     assert.strictEqual(stripOuterTransaction('BEGIN;\nSELECT 1;\nCOMMIT;'), 'SELECT 1;');
   });
