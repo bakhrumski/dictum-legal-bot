@@ -627,6 +627,21 @@ Known state of the suites (Sept 2026):
   viewers read. Paid plans keep 200 open matters, Sinov 1. A scan held by an
   open matter does not expire; 30 days after the last one closes. Account
   deletion removes matters and scans. No AI, no unit; `MATTERS=off`.
+- `src/agents/runs/` (2026-10-28, PR-B) — agent runs (migration 020): the
+  claim draft, tabular and playbook routes are a service each (`prepare` no
+  AI + reservation held with `meta.holdUntil` 45 min, `run` the harness,
+  `settle` commit / release and the reply). The route queues an
+  `agent_runs` row and waits for it (same reply + `runId`; 202 on
+  `async: true` or a long queue); `worker.js` in this process takes runs
+  under a 90 s lease (`FOR UPDATE SKIP LOCKED`, `AGENT_RUN_CONCURRENCY` 2,
+  one per person), checkpoints each step (`agent_run_steps`), resumes a run
+  whose worker died without re-running finished steps, fails and releases
+  after 3 attempts; each run is its own usage request (60 calls, 15 min,
+  $1, `AGENT_RUN_MAX_*`) and gets the pilot test budget. Input and step
+  outputs are emptied when the run ends; results kept 90 days or while a
+  matter links them. `/api/agent/runs[/:id[/events|/cancel]]` (own only,
+  404 otherwise). `AGENT_RUNS=off` runs in the request as before; the
+  Telegram claim agent is not a run yet (PR-F).
 - `src/workspace/` — Platinum Workspace: routes, authz, Supabase
   realtime/storage, Workspace AI.
 - `public/` — static pages: `index.html` (landing), `login.html`,

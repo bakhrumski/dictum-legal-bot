@@ -58,6 +58,12 @@ const CASES = [
   ['GET', '/api/matters/00000000-0000-0000-0000-000000000000', REJECTED, 'matter detail'],
   ['POST', '/api/matters/00000000-0000-0000-0000-000000000000/items', REJECTED, 'link to a matter'],
   ['DELETE', '/api/matters/00000000-0000-0000-0000-000000000000', REJECTED, 'delete a matter'],
+  ['GET', '/api/agent/runs', REJECTED, 'agent runs list'],
+  ['GET', '/api/agent/runs/00000000-0000-0000-0000-000000000000', REJECTED, 'agent run detail'],
+  ['GET', '/api/agent/runs/00000000-0000-0000-0000-000000000000/events', REJECTED, 'agent run events'],
+  ['POST', '/api/agent/runs/00000000-0000-0000-0000-000000000000/cancel', REJECTED, 'cancel an agent run'],
+  ['POST', '/api/agent/claim-draft', REJECTED, 'agent: claim draft'],
+  ['POST', '/api/agent/tabular-review', REJECTED, 'agent: tabular review'],
 
   // ── staff-only ──
   ['GET', '/api/files/AgACAgTEST/download', REJECTED, 'client file download'],

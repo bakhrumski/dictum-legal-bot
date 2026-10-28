@@ -101,6 +101,8 @@ jobs:
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/telegram-test-account.test.js
       - name: Matters (ownership, Workspace roles, held scans) on real Postgres
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/matters.db.test.js
+      - name: Agent runs (queue, lease takeover, checkpoints, cancel, settle) on real Postgres
+        run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/agent-runs.db.test.js
 
   audit:
     name: npm audit (report only)

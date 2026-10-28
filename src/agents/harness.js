@@ -23,6 +23,16 @@
  * budget (AI_REQUEST_*) applies to them unchanged.
  */
 
+/*
+ * Checkpoints (2026-10-28, agent runs - src/agents/runs/): `resume` gives the
+ * outputs of steps a previous attempt finished; they are put back into
+ * state.steps and not run again (trace status 'ok', resumed: true).
+ * `onCheckpoint(entry, output)` is awaited after every step that ran, before
+ * the next starts, so what is written there is what a resumed run gets back.
+ * `shouldStop()` is asked before every step; a reason stops the run as
+ * 'cancelled'. Without these options the harness works as before.
+ */
+
 const DEFAULT_BUDGET = Object.freeze({ maxSteps: 12, maxMs: 150000 });
 
 function withTimeout(promise, ms, label) {
@@ -44,16 +54,32 @@ function safeError(e) {
  * optional?, timeoutMs?, note?(out) }] }. Returns
  * { status: 'done' | 'needs_input' | 'failed' | 'budget', state, trace, ms, stoppedAt?, reason? }.
  */
-async function runWorkflow(workflow, input, { deps = {}, budget = {}, onEvent = null, clock = Date.now } = {}) {
+async function runWorkflow(workflow, input, { deps = {}, budget = {}, onEvent = null, clock = Date.now, resume = null, onCheckpoint = null, shouldStop = null } = {}) {
   const limits = { ...DEFAULT_BUDGET, ...budget };
   const started = clock();
   const state = { input, steps: {} };
+  const done = resume && typeof resume === 'object' ? resume : {};
+  // a checkpoint that cannot be written stops the run (it is not the step's failure)
+  const checkpoint = async (entry, out) => {
+    if (!onCheckpoint) return;
+    try { await onCheckpoint(entry, out); } catch (e) { throw Object.assign(e instanceof Error ? e : new Error(String(e)), { checkpointFailed: true }); }
+  };
   const trace = [];
   const emit = (e) => { if (onEvent) { try { onEvent(e); } catch (_) { /* a listener never stops the run */ } } };
   const finish = (status, extra = {}) => ({ status, state, trace, ms: clock() - started, workflow: workflow.id, ...extra });
 
   let ran = 0;
   for (const step of workflow.steps) {
+    if (Object.prototype.hasOwnProperty.call(done, step.id)) {
+      state.steps[step.id] = done[step.id];
+      trace.push({ id: step.id, label: step.label, status: 'ok', resumed: true });
+      if (done[step.id] && done[step.id].halt) return finish(done[step.id].halt, { stoppedAt: step.id });
+      continue;
+    }
+    if (shouldStop) {
+      const reason = await shouldStop();
+      if (reason) return finish('cancelled', { stoppedAt: step.id, reason: String(reason).slice(0, 60) });
+    }
     if (step.when && !step.when(state)) {
       trace.push({ id: step.id, label: step.label, status: 'skipped' });
       continue;
@@ -71,11 +97,14 @@ async function runWorkflow(workflow, input, { deps = {}, budget = {}, onEvent = 
       if (step.note) { try { entry.note = String(step.note(out) || '').slice(0, 200) || undefined; } catch (_) { /* no note */ } }
       trace.push(entry);
       emit({ type: 'step', ...entry });
+      await checkpoint(entry, out);
       if (out && out.halt) return finish(out.halt, { stoppedAt: step.id });
     } catch (e) {
+      if (e && e.checkpointFailed) throw e;
       const entry = { id: step.id, label: step.label, status: step.optional ? 'skipped_error' : 'failed', ms: clock() - t0, error: safeError(e) };
       trace.push(entry);
       emit({ type: 'step', ...entry });
+      await checkpoint(entry, null);
       if (!step.optional) return finish('failed', { stoppedAt: step.id });
     }
   }

@@ -51,8 +51,8 @@ O'zgarmas tamoyillar:
 
 Tartib va PR bo'linishi dizayn hujjatining 9-bo'limida.
 
-- [~] PR-A: `matters`, `matter_items` (migratsiya 019) va API. UI hali yo'q.
-- [ ] PR-B: `agent_runs` va `agent_run_steps` (migratsiya 020), DB'dagi
+- [x] PR-A: `matters`, `matter_items` (migratsiya 019) va API (#494, 2026-10-28). UI hali yo'q.
+- [~] PR-B: `agent_runs` va `agent_run_steps` (migratsiya 020), DB'dagi
   navbat va worker. Mavjud 3 ta workflow run sifatida ishlaydi, eski route'lar
   javob shaklini saqlaydi.
 - [ ] PR-C: Matter UI (`/app/#/ishlar`): ro'yxat, ish sahifasi, "ishga
@@ -99,6 +99,14 @@ Har bir merge shu yerga bir qator bo'lib yoziladi: sana, PR, nima qilindi,
 nima o'lchandi.
 
 - 2026-10-28: #491 merge: yo'l xaritasi va dizayn hujjati.
-- 2026-10-28: PR-A ochildi: migratsiya 019, `/api/matters`. Lokal Postgres'da
-  `tests/matters.db.test.js` (7 ta) va boot smoke (anonim so'rov 401/403)
-  o'tdi.
+- 2026-10-28: #494 merge (PR-A): migratsiya 019, `/api/matters`. Lokal
+  Postgres'da `tests/matters.db.test.js` (7 ta) va boot smoke (anonim so'rov
+  401/403) o'tdi. Shu kuni #493 merge: keyingi qadam tugmalari (MChJ
+  savoliga jarima shikoyati chiqqan edi).
+- 2026-10-28: PR-B ochildi: migratsiya 020, run store, worker, checkpoint'lar.
+  3 ta workflow run orqali ishlaydi. Lokal Postgres'da
+  `tests/agent-runs.db.test.js` 9 ta testdan o'tdi (3 marta ketma-ket).
+  Testlar: deploy simulyatsiyasi (o'lgan worker, lease, davom ettirish,
+  tugagan qadam qayta ishlamadi), 3 urinishdan keyin birliklar qaytishi,
+  bekor qilish, bir kishiga bittadan ish, eski javob shakli. Boot smoke ham
+  o'tdi: worker ishga tushdi va SIGTERM'da toza to'xtadi.
