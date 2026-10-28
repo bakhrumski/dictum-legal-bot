@@ -41,6 +41,8 @@ const NAME = "([^:]{2,120}?)";
 const PATTERNS = [
   { action: 'list', re: /^(?:mening\s+)?(?:barcha\s+|ochiq\s+)?ishlar(?:im)?(?:ni)?(?:\s+(?:ro'yxati|ro'yxatini|ko'rsat|ko'rsating|qani|qanday))?$|^ishlar\s+ro'yxati$|^(?:мои|все|открытые)\s+дела$|^список\s+дел$|^покажи\s+(?:мои\s+)?дела$/u },
   { action: 'create', re: /^(?:yangi\s+ish(?:ni)?\s+(?:och|oching|ochish|yarat|yarating|boshla)|ish\s+(?:och|oching|yarat|yarating))\s*[:,—–-]?\s*(.{2,160})$/u, map: m => ({ title: m[1] }) },
+  // the name not said yet (2026-10-28, owner: "Yangi ish och." by voice): it is asked for
+  { action: 'create', re: /^(?:yangi\s+ish(?:ni)?\s+(?:och|oching|ochish|yarat|yarating|boshla)|yangi\s+ish|новое\s+дело|создай\s+дело|заведи\s+дело)$/u, map: () => ({ title: null }) },
   { action: 'create', re: /^(?:новое\s+дело|создай\s+дело|открой\s+новое\s+дело|заведи\s+дело)\s*[:,—–-]?\s*(.{2,160})$/u, map: m => ({ title: m[1] }) },
   { action: 'note', re: new RegExp(`^${NAME}\\s+ishiga\\s+(?:yozuv|eslatma|izoh)(?:\\s+(?:qo'sh|qo'shing|yoz|yozing))?\\s*[:,—–-]\\s*(.{2,})$`, 'u'), map: m => ({ matter: m[1], text: m[2] }) },
   { action: 'note', re: /^(?:yozuv|eslatma)\s+(?:qo'sh|qo'shing|yoz|yozing)\s*[:,—–-]\s*(.{2,})$/u, map: m => ({ matter: null, text: m[1] }) },
@@ -118,6 +120,7 @@ function T(lang) {
     items: ru ? 'элементов' : 'ta element',
     status: { open: ru ? 'открыто' : 'ochiq', closed: ru ? 'закрыто' : 'yopilgan' },
     notes: ru ? 'Последние заметки:' : 'Oxirgi yozuvlar:',
+    askTitle: ru ? 'Как назвать дело? Скажите или напишите название (например: «Спор с подрядчиком»).' : "Ish nomi nima bo'lsin? Nomini ayting yoki yozing (masalan: «Pudratchi bilan nizo»).",
     noLink: ru ? 'Чтобы управлять делами отсюда, привяжите аккаунт JuristAI: напишите «привязать аккаунт».' : "Ishlarni shu yerdan boshqarish uchun JuristAI akkauntini ulang: «akkauntni ulash» deb yozing.",
   };
 }
@@ -139,6 +142,7 @@ async function runCommand(cmd, { adminId, store, lang = 'uz', lastId = null, now
         reply: [t.list, ...open.slice(0, 10).map((m, i) => `${i + 1}. ${m.title} — ${m.items || 0} ${t.items}`)].join('\n') };
     }
     case 'create': {
+      if (!cmd.title) return { action: 'matter_needs_title', needsTitle: true, reply: t.askTitle };
       const m = await store.create(adminId, { title: cmd.title });
       return { action: 'matter_created', matterId: m.id, reply: fill(t.created, { t: m.title }) };
     }
