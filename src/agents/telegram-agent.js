@@ -388,6 +388,11 @@ function classifyDeterministicIntent(text) {
   if (HELP_RE.test(t))     return { intent: 'noaniq', missing: ['Qanday huquqiy muammo yoki vaziyat bo\'yicha yordam kerak?'] };
   if (DOCUMENT_RE.test(t)) return { intent: 'hujjat_tayyorlash', missing: [] };
   if (ATTORNEY_RE.test(t)) return { intent: 'advokat_kerak', missing: [] };
+  // an agent task, typed or spoken: "agent: <topshiriq>" (src/bot/agent-runs.js, PR-F)
+  if (String(process.env.AGENT_PLANNER || 'master').toLowerCase() !== 'off') {
+    const task = require('../bot/agent-runs').parseAgentTask(t);
+    if (task) return { intent: 'agent_task', task, missing: [] };
+  }
   // a matter command, typed or spoken (src/matters/commands.js): anchored phrases, no AI
   if (String(process.env.MATTERS || '').toLowerCase() !== 'off') {
     const command = require('../matters/commands').parseCommand(t);
@@ -888,7 +893,10 @@ Agar texnik uzilish yuz bersa, limitingiz avtomatik tiklanadi.`,
     state = 'idle';
     context = {};
   }
-  if (state === 'awaiting_attorney_choice' || state === 'attorney_problem') {
+  if (state === 'agent_answer' && context && context.runId) {
+    // the agent asked a question (ask_user): this message is the answer
+    intent = { intent: 'agent_answer', runId: String(context.runId), missing: [] };
+  } else if (state === 'awaiting_attorney_choice' || state === 'attorney_problem') {
     intent = {
       intent: 'advokat_kerak',
       missing: [],
@@ -1005,7 +1013,8 @@ Agar texnik uzilish yuz bersa, limitingiz avtomatik tiklanadi.`,
     );
   };
 
-  if (state !== 'idle' && state !== 'awaiting_attorney_choice' && CANCEL_RE.test(question)) {
+  // an agent's question: "yo'q" / "нет" is an answer there, not a cancel (its own branch stops on "bekor")
+  if (state !== 'idle' && state !== 'awaiting_attorney_choice' && state !== 'agent_answer' && CANCEL_RE.test(question)) {
     const reply = "Amal bekor qilindi. Kerakli xizmatni bosh menyudan qayta tanlashingiz mumkin.";
     await resetConversation(chatId);
     await remember(reply, 0);
@@ -1201,6 +1210,41 @@ Agar texnik uzilish yuz bersa, limitingiz avtomatik tiklanadi.`,
   // ── Matters by voice or text (src/matters/commands.js): the linked account's
   // own matters through the matter store; closing or reopening is confirmed
   // with a button (src/bot/bot.js mtc_). No AI call, no quota.
+  // ── Agent tasks in the bot (src/bot/agent-runs.js): the planner service as the linked account
+  if (intent.intent === 'agent_task' || intent.intent === 'agent_answer') {
+    const agentRuns = require('../bot/agent-runs');
+    const lang = /[\u0400-\u04ff]/u.test(question) ? 'ru' : 'uz';
+    const R = lang === 'ru';
+    const account = await require('../bot/telegram-roles').getLinkedAccount(pool, chatId, who && who.telegramUserId != null && Number(chatId) > 0 ? who.telegramUserId : null).catch(() => null);
+    const service = require('./planner-routes').plannerService();
+    if (intent.intent === 'agent_answer') await setConversationState(chatId, 'idle', {});
+    if (!account || !service) {
+      const reply = !account ? require('../matters/commands').texts(lang).noLink : (R ? 'Агент сейчас недоступен.' : "Agent hozir mavjud emas.");
+      await remember(reply, 0);
+      return complete({ handled: true, reply, action: 'agent_unavailable', escalate: false, meta: { intent: intent.intent } });
+    }
+    try {
+      if (intent.intent === 'agent_answer') {
+        if (/^(?:bekor|bekor qil|to'xtat|отмена|стоп)[.!]?$/iu.test(question.trim())) {
+          await service.cancel(intent.runId, account.id);
+          const reply = R ? 'Задача остановлена.' : "Topshiriq to'xtatildi.";
+          return complete({ handled: true, reply, action: 'agent_cancelled', escalate: false, meta: { intent: intent.intent } });
+        }
+        await service.answer(intent.runId, account.id, question);
+        const reply = R ? 'Ответ принят, агент продолжает. Результат придёт сюда.' : 'Javob qabul qilindi, agent davom etmoqda. Natija shu yerga keladi.';
+        return complete({ handled: true, reply, action: 'agent_answered', escalate: false, meta: { intent: intent.intent } });
+      }
+      const out = await service.plan({ adminId: account.id, task: intent.task, matterId: lastMatterByChat.get(String(chatId)) || null, channel: 'telegram', telegram: { chatId } });
+      const reply = agentRuns.planText(out, lang);
+      await remember(reply, 0);
+      return complete({ handled: true, reply, action: 'tool_agent_plan', escalate: false, meta: { intent: intent.intent, runId: out.runId, lang } });
+    } catch (e) {
+      const reply = e && e.status && e.message ? e.message : (R ? 'Не удалось. Попробуйте позже.' : "Bajarib bo'lmadi. Birozdan keyin urinib ko'ring.");
+      if (!(e && e.status)) console.warn('[TG-AGENT] agent task failed:', e && e.message);
+      return complete({ handled: true, reply, action: 'agent_failed', escalate: false, meta: { intent: intent.intent } });
+    }
+  }
+
   if (intent.intent === 'ish_amal' && intent.command) {
     const commands = require('../matters/commands');
     const cmdLang = /[\u0400-\u04ff]/u.test(question) ? 'ru' : 'uz';

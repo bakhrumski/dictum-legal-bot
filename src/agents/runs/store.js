@@ -161,6 +161,15 @@ function createRunStore({ db, maxActivePerUser = Number(process.env.AGENT_RUNS_A
     return r.rows[0] || null;
   }
 
+  /** The chat and status message a Telegram run reports to (src/agents/runs/notify.js). */
+  async function setTelegram(id, adminId, telegram) {
+    if (!isUuid(id)) return false;
+    const r = await db.query(
+      `UPDATE agent_runs SET input = jsonb_set(COALESCE(input, '{}'::jsonb), '{telegram}', $3::jsonb)
+        WHERE id = $1 AND admin_id = $2 AND input IS NOT NULL RETURNING id`, [id, adminId, JSON.stringify(telegram)]);
+    return r.rowCount > 0;
+  }
+
   /** The person's own run row, plan and price included (never to the page as is). */
   async function row(id, adminId) {
     if (!isUuid(id)) return null;
@@ -223,7 +232,7 @@ function createRunStore({ db, maxActivePerUser = Number(process.env.AGENT_RUNS_A
     return r.rowCount;
   }
 
-  return { create, claim, heartbeat, saveStep, checkpoints, finish, resume, requestCancel, approve, row, isCancelled, cancelledQueued, get, list, sweep };
+  return { create, claim, heartbeat, saveStep, checkpoints, finish, resume, requestCancel, approve, row, setTelegram, isCancelled, cancelledQueued, get, list, sweep };
 }
 
 /** Account deletion: the person's runs and their steps go. */

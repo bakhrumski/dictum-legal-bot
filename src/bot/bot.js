@@ -181,6 +181,14 @@ const INSTAGRAM_URL = normalizeInstagramUrl(
 
 // NEVER start polling in constructor — polling is started explicitly when needed
 const bot = new TelegramBot(token, { polling: false });
+
+// agent tasks given in the bot report their steps and end here (src/bot/agent-runs.js, PR-F)
+require('../agents/runs/notify').setTelegramNotifier(require('./agent-runs').createTelegramRunNotifier({
+  bot, pool,
+  setConversationState: (...a) => require('../agents/telegram-agent').setConversationState(...a),
+  splitForTelegram: (text) => require('../agents/telegram-agent').splitForTelegram(text),
+  registry: { get: (id) => { const s = require('../agents/planner-routes').plannerService(); return s ? s.registry.get(id) : null; } },
+}));
 bot.getMe().then((info) => {
   if (!info || String(info.username).toLowerCase() !== LEGAL_BOT_USERNAME.toLowerCase()) {
     console.error(`[BOT] TELEGRAM_BOT_TOKEN must belong to @${LEGAL_BOT_USERNAME}; received @${info && info.username ? info.username : 'unknown'}`);
@@ -585,6 +593,14 @@ function agentActionKeyboard(agentResult) {
       { text: ru ? 'Отмена' : 'Bekor qilish', callback_data: 'acc_del_no' },
     ]] };
   }
+  // an agent plan made in the bot is approved or dropped with a button (src/bot/agent-runs.js)
+  if (agentResult.action === 'tool_agent_plan' && agentResult.meta && agentResult.meta.runId) {
+    const ru = agentResult.meta.lang === 'ru';
+    return { inline_keyboard: [[
+      { text: ru ? '✅ Подтвердить' : '✅ Tasdiqlash', callback_data: `agp_y_${agentResult.meta.runId}` },
+      { text: ru ? 'Отмена' : 'Bekor qilish', callback_data: `agp_n_${agentResult.meta.runId}` },
+    ]] };
+  }
   // a matter closed or reopened by voice or text is confirmed first (src/matters/commands.js)
   if (agentResult.action === 'tool_matter_confirm' && agentResult.meta && agentResult.meta.token) {
     const ru = agentResult.meta.lang === 'ru';
@@ -879,6 +895,34 @@ async function handleCallbackQuery(callbackQuery) {
   }
 
   // account deletion: the confirmation of a request asked in the chat
+  if (data.startsWith('agp_y_') || data.startsWith('agp_n_')) {
+    const runId = data.slice(6);
+    const ru = /[\u0400-\u04ff]/u.test(String(callbackQuery.message && callbackQuery.message.text || ''));
+    try {
+      const account = await require('./telegram-roles').getLinkedAccount(pool, chatId, require('./telegram-roles').privateSenderId(callbackQuery));
+      const service = require('../agents/planner-routes').plannerService();
+      if (!account || !service) throw new Error('not available');
+      await bot.answerCallbackQuery(callbackQuery.id).catch(() => {});
+      if (data.startsWith('agp_n_')) {
+        await service.cancel(runId, account.id);
+        await bot.sendMessage(chatId, ru ? 'План отменён, ничего не списано.' : "Reja bekor qilindi, hech narsa yechilmadi.").catch(() => {});
+        return;
+      }
+      // the status message first: the worker edits it as the steps finish
+      const status = await bot.sendMessage(chatId, ru ? '⏳ Агент начинает…' : '⏳ Agent boshlamoqda…');
+      await service.attachTelegram(runId, account.id, { chatId, messageId: status.message_id });
+      try {
+        await service.approve(runId, account.id);
+      } catch (e) {
+        await bot.editMessageText(`⚠️ ${e.message}`, { chat_id: chatId, message_id: status.message_id }).catch(() => {});
+      }
+    } catch (error) {
+      console.warn('[BOT] agent plan button failed:', error.message);
+      await bot.answerCallbackQuery(callbackQuery.id, { text: ru ? 'Не удалось' : "Bajarib bo'lmadi", show_alert: true }).catch(() => {});
+    }
+    return;
+  }
+
   if (data.startsWith('mtc_y_') || data.startsWith('mtc_n_')) {
     const commands = require('../matters/commands');
     const token = data.slice(6);

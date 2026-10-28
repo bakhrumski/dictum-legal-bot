@@ -30,6 +30,7 @@
 
 const crypto = require('crypto');
 const usageLedger = require('../../ai/usage-ledger');
+const notify = require('./notify');
 
 const n = (v, d) => { const x = Number(v); return Number.isFinite(x) && x > 0 ? x : d; };
 
@@ -59,7 +60,8 @@ function createRunWorker({
     if (ex && typeof ex.abort === 'function') {
       try { reply = await ex.abort(run, reason); } catch (e) { log.warn('[AGENT-RUN] abort settle failed:', e.message); }
     }
-    await store.finish(run.id, { status, result: { httpStatus: reply.httpStatus, body: reply.body }, error: reason, force: true });
+    const result = { httpStatus: reply.httpStatus, body: reply.body };
+    if (await store.finish(run.id, { status, result, error: reason, force: true })) await notify.done(run, status, result);
   }
 
   async function execute(run) {
@@ -87,7 +89,7 @@ function createRunWorker({
           const resume = await store.checkpoints(run.id);
           out = await ex.execute(run, {
             resume,
-            onCheckpoint: (entry, output) => store.saveStep(run.id, entry, output),
+            onCheckpoint: async (entry, output) => { await store.saveStep(run.id, entry, output); await notify.progress(run); },
             shouldStop: async () => (await store.isCancelled(run.id) ? 'cancelled' : null),
           });
         } catch (e) {
@@ -99,7 +101,9 @@ function createRunWorker({
         const sh = scope.shared;
         const spent = { calls: sh.calls, costUsd: Number(sh.knownCostUsd.toFixed(6)), unknownCostCalls: sh.unknownCostCalls };
         const status = ['done', 'failed', 'cancelled', 'budget', 'needs_input'].includes(out.status) ? out.status : 'failed';
-        const ok = await store.finish(run.id, { workerId, status, result: { httpStatus: out.httpStatus, body: out.body }, error: out.error || null, spent });
+        const result = { httpStatus: out.httpStatus, body: out.body };
+        const ok = await store.finish(run.id, { workerId, status, result, error: out.error || null, spent });
+        if (ok) await notify.done(run, status, result);
         if (!ok) log.warn(`[AGENT-RUN] ${run.id}: not finished by this worker (taken over or already ended)`);
         await usageLedger.finishRequest(scope, { outcome: `agent_${status}` }).catch(() => {});
       });

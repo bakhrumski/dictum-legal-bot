@@ -63,9 +63,10 @@ Tartib va PR bo'linishi dizayn hujjatining 9-bo'limida.
 - [x] PR-V (#498): Ishlarni ovoz bilan boshqarish: Telegram'da ulangan akkaunt
   orqali va ilova ichida (egasi, 2026-10-28). `src/matters/commands.js`.
   Keyingi qadam: ovoz bilan agent topshirig'i (reja → tasdiq) - PR-F bilan.
-- [~] PR-E: Parallel qadamlar, `needs_input`
+- [x] PR-E (#499): Parallel qadamlar, `needs_input`
   dan keyin davom ettirish.
-- [ ] PR-F: Telegram: ish holati bitta xabarda yangilanadi, tasdiq tugmalari.
+- [~] PR-F: Telegram: ish holati bitta xabarda yangilanadi, tasdiq tugmalari.
+  Botdagi da'vo agenti hali run emas (keyingi qadam).
 - [ ] PR-G: Agent baholash to'plami (`docs/quality/agent-eval.md`): har bir
   workflow uchun yurist ko'rib chiqqan 20–30 holat; har PR'da stub bilan.
 
@@ -139,3 +140,11 @@ nima o'lchandi.
   (birlik qaytariladi, javob bilan qayta band qilinadi). Test ikki qadam
   bir vaqtda tugaganda natija yo'qolish xatosini topdi (tuzatildi).
   `agent-planner.test.js` 12, `agent-planner.db.test.js` 6 ta test.
+- 2026-10-28: #499 (PR-E) merge. Egasining skrinshoti: ovozli "Yangi ish
+  och." nomsiz edi - #500 nomni so'raydigan qildi.
+- 2026-10-28: PR-F ochildi: botda "agent: <topshiriq>" (matn yoki ovoz) ->
+  reja va narx tugmalari -> bitta status xabari qadamlar bilan yangilanadi
+  -> javob; agent savoli chatga keladi, keyingi xabar javob ("yo'q" ham
+  javob, faqat "bekor" to'xtatadi). Planner servisga ajratildi (web va bot
+  bir xil). Chat va xabar run qatorida, deploy'dan keyin ham shu chatga
+  yoziladi. Haqiqiy Telegram bilan sinalmagan.
