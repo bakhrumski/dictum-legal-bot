@@ -136,6 +136,77 @@ const errs = (plan, ctx) => validatePlan(plan, reg, ctx || {}).errors.join(' | '
     assert.deepStrictEqual(l.log, [['release', 'j1', 'planned_cancelled']]);
   });
 
+  const { runWorkflow } = require('../src/agents/harness');
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  await test('graph: independent steps run together up to the limit; a step waits for its after', async () => {
+    let now = 0, peak = 0;
+    const order = [];
+    const step = (id, after, ms = 30) => ({ id, label: id, after, run: async (state) => { now++; peak = Math.max(peak, now); order.push(`start ${id}`); await sleep(ms); now--; order.push(`end ${id}`); return { id, saw: Object.keys(state.steps).sort() }; } });
+    const wf = { id: 'g', parallel: 2, steps: [step('a', []), step('b', []), step('c', []), step('d', ['a', 'b', 'c'], 5)] };
+    const out = await runWorkflow(wf, null, {});
+    assert.strictEqual(out.status, 'done');
+    assert.strictEqual(peak, 2, 'never more than the limit at once');
+    assert.deepStrictEqual(out.state.steps.d.saw, ['a', 'b', 'c'], 'd ran after a, b and c');
+    assert.ok(order.indexOf('start d') > order.indexOf('end c'));
+  });
+
+  await test('graph: a failed required step starts nothing new; the steps already running finish and are recorded', async () => {
+    const saved = [];
+    const wf = { id: 'g', parallel: 3, steps: [
+      { id: 'a', label: 'a', after: [], run: async () => { await sleep(5); throw new Error('a buzildi'); } },
+      { id: 'b', label: 'b', after: [], run: async () => { await sleep(30); return { ok: 1 }; } },
+      { id: 'c', label: 'c', after: ['a'], run: async () => ({ never: 1 }) },
+    ] };
+    const out = await runWorkflow(wf, null, { onCheckpoint: async (e) => saved.push(`${e.id}:${e.status}`) });
+    assert.deepStrictEqual([out.status, out.stoppedAt], ['failed', 'a']);
+    assert.deepStrictEqual(saved.sort(), ['a:failed', 'b:ok']);
+    assert.strictEqual(out.state.steps.c, undefined);
+  });
+
+  await test('plans: the answer waits for every step before it, verify for everything; ask_user at most once and before the answer', () => {
+    const p = validatePlan({ nodes: [
+      { id: 'n1', tool: 'lex_search', args: { query: 'pudrat avans qaytarish' }, after: [] },
+      { id: 'n2', tool: 'lex_search', args: { query: 'shartnomadan voz kechish' }, after: [] },
+      { id: 'n3', tool: 'answer', args: { question: 'Avansni qaytarish mumkinmi?' }, after: ['n1'] },
+      { id: 'n4', tool: 'verify', args: {}, after: [] },
+    ] }, reg, {});
+    assert.ok(p.ok, p.errors.join('; '));
+    assert.deepStrictEqual(p.plan.nodes[2].after, ['n1', 'n2']);
+    assert.deepStrictEqual(p.plan.nodes[3].after, ['n1', 'n2', 'n3']);
+    const ask = { id: 'n9', tool: 'ask_user', args: { question: 'Shartnoma qachon tuzilgan?' }, after: [] };
+    assert.match(errs({ nodes: [good.nodes[0], good.nodes[1], { ...ask, id: 'n3' }, { ...good.nodes[2], id: 'n4' }] }), /ask_user answer'dan oldin/u);
+    assert.match(errs({ nodes: [{ ...ask, id: 'n1' }, { ...ask, id: 'n2' }, ...good.nodes.map((n, i) => ({ ...n, id: `n${i + 3}` }))] }), /ask_user ko'pi bilan bir marta/u);
+  });
+
+  await test('ask_user: the run stops for the answer (units released, the question in the reply); with the answer it resumes without searching again', async () => {
+    const plan = validatePlan({ nodes: [
+      { id: 'n1', tool: 'lex_search', args: { query: 'pudrat shartnomasi avans qaytarish' }, after: [] },
+      { id: 'n2', tool: 'ask_user', args: { question: 'Avans qachon va qancha to\'langan?' }, after: [] },
+      { id: 'n3', tool: 'answer', args: { question: 'Avansni qaytarish mumkinmi?' }, after: [] },
+      { id: 'n4', tool: 'verify', args: {}, after: [] },
+    ] }, reg, {}).plan;
+    const d = deps(ANSWER), l = ledgerStub();
+    const ex = plannedExecutor({ registry: reg, deps: d.deps, ledger: l });
+    const saved = {};
+    const first = await ex.execute({ ...run(plan) }, { onCheckpoint: async (e, o) => { if (e.status === 'ok' && o) saved[e.id] = o; } });
+    assert.deepStrictEqual([first.status, first.httpStatus, first.body.stoppedAt], ['needs_input', 202, 'n2']);
+    assert.match(first.body.question, /Avans qachon/u);
+    assert.deepStrictEqual(l.log, [['release', 'j1', 'planned_needs_input']]);
+    assert.strictEqual(d.calls.ai, 0, 'no answer written before the person answers');
+    assert.ok(saved.n1 && !saved.n2, 'the search is a checkpoint, the question is not');
+
+    const l2 = ledgerStub();
+    const ex2 = plannedExecutor({ registry: reg, deps: d.deps, ledger: l2 });
+    let userText = '';
+    d.deps.callAI = async (m) => { userText = m[1].text; return { text: ANSWER }; };
+    const again = await ex2.execute({ ...run(plan), input: { task: 'Avans', answers: { n2: '2026-yil mart, 12 mln so\'m' } }, jobs: [{ jobKey: 'j2', service: 'chat' }] }, { resume: saved });
+    assert.strictEqual(again.status, 'done');
+    assert.strictEqual(d.calls.retrieve, 1, 'the search came from its checkpoint');
+    assert.match(userText, /Foydalanuvchi javobi: 2026-yil mart, 12 mln so'm/u, 'the answer reaches the answer step');
+    assert.deepStrictEqual(l2.log, [['commit', 'j2']]);
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed) process.exit(1);
 })();

@@ -111,6 +111,19 @@ function createToolRegistry() {
   });
 
   add({
+    id: 'ask_user', label: "Foydalanuvchidan aniqlashtirish",
+    describe: "javob uchun zarur fakt yo'q bo'lsa foydalanuvchidan bitta savol; args { question }; ko'pi bilan bir marta, answer'dan oldin",
+    cost: null,
+    validate: (args) => (clean(args && args.question, 300).length >= 8 ? null : 'ask_user: question kerak'),
+    // the run stops (needs_input) until the person answers; on resume the answer is here
+    async run(args, ctx) {
+      const answer = ctx.answers && ctx.answers[ctx.nodeId];
+      if (!answer) return { halt: 'needs_input', question: clean(args.question, 300) };
+      return { text: `Savol: ${clean(args.question, 300)}\nFoydalanuvchi javobi: ${clean(answer, 2000)}`, note: 'javob olindi' };
+    },
+  });
+
+  add({
     id: 'answer', label: 'Javob yozish (Tahlil va Xulosa)',
     describe: "topilgan manbalar va ish ma'lumotlari asosida javob; args { question }; undan keyin albatta verify",
     cost: { service: 'chat', units: 1 },

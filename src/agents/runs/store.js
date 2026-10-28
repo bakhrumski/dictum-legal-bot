@@ -103,13 +103,31 @@ function createRunStore({ db, maxActivePerUser = Number(process.env.AGENT_RUNS_A
     if (!TERMINAL.includes(status)) throw new Error(`not a final status: ${status}`);
     const r = await db.query(
       `UPDATE agent_runs SET status = $3, result = $4::jsonb, error = $5, spent = COALESCE($6::jsonb, spent),
-              input = NULL, lease_owner = NULL, lease_until = NULL, finished_at = now()
+              input = CASE WHEN $3 = 'needs_input' THEN input ELSE NULL END,
+              lease_owner = NULL, lease_until = NULL, finished_at = now()
         WHERE id = $1 AND status NOT IN ('done', 'failed', 'cancelled', 'budget', 'needs_input')
           AND ($7 OR lease_owner = $2)
         RETURNING id`,
       [id, workerId, status, result == null ? null : JSON.stringify(result), short(error, 300), spent ? JSON.stringify(spent) : null, !!force]);
-    if (r.rowCount) await db.query('UPDATE agent_run_steps SET output = NULL WHERE run_id = $1', [id]);
+    // a run waiting for the person's answer keeps its input and checkpoints (it resumes)
+    if (r.rowCount && status !== 'needs_input') await db.query('UPDATE agent_run_steps SET output = NULL WHERE run_id = $1', [id]);
     return r.rowCount > 0;
+  }
+
+  /**
+   * The person answered the question a run stopped on (needs_input): the
+   * answer goes into the run's input, the reservations made again are
+   * recorded, the step that asked runs again, and the run is queued. Null if
+   * the run was not waiting.
+   */
+  async function resume(id, adminId, { answers = {}, jobs = [] } = {}) {
+    if (!isUuid(id)) return null;
+    const r = await db.query(
+      `UPDATE agent_runs SET status = 'queued', jobs = $4::jsonb, result = NULL, error = NULL, finished_at = NULL, attempts = 0,
+              input = jsonb_set(COALESCE(input, '{}'::jsonb), '{answers}', COALESCE(input->'answers', '{}'::jsonb) || $3::jsonb)
+        WHERE id = $1 AND admin_id = $2 AND status = 'needs_input' AND NOT cancel_requested RETURNING *`,
+      [id, adminId, JSON.stringify(answers || {}), JSON.stringify(jobs || [])]);
+    return r.rows[0] || null;
   }
 
   /**
@@ -119,6 +137,11 @@ function createRunStore({ db, maxActivePerUser = Number(process.env.AGENT_RUNS_A
    */
   async function requestCancel(id, adminId) {
     if (!isUuid(id)) return null;
+    // a run waiting for an answer holds nothing reserved: it ends now
+    const q = await db.query(
+      `UPDATE agent_runs SET status = 'cancelled', cancel_requested = true, input = NULL
+        WHERE id = $1 AND admin_id = $2 AND status = 'needs_input' RETURNING id, status`, [id, adminId]);
+    if (q.rows[0]) { await db.query('UPDATE agent_run_steps SET output = NULL WHERE run_id = $1', [id]); return q.rows[0]; }
     const w = await db.query(
       `UPDATE agent_runs SET status = 'cancelled', cancel_requested = true, input = NULL, finished_at = now()
         WHERE id = $1 AND admin_id = $2 AND status = 'awaiting_approval' RETURNING id, status`, [id, adminId]);
@@ -188,6 +211,10 @@ function createRunStore({ db, maxActivePerUser = Number(process.env.AGENT_RUNS_A
     // a plan nobody approved in a day ends (nothing was reserved for it)
     await db.query(`UPDATE agent_runs SET status = 'cancelled', input = NULL, finished_at = now(), error = 'approval_expired'
                      WHERE status = 'awaiting_approval' AND created_at < now() - interval '24 hours'`);
+    // a question nobody answered in 7 days ends, and the documents it held go
+    const gone = await db.query(`UPDATE agent_runs SET status = 'cancelled', input = NULL, error = 'answer_expired'
+                     WHERE status = 'needs_input' AND finished_at < now() - interval '7 days' RETURNING id`);
+    if (gone.rows.length) await db.query('UPDATE agent_run_steps SET output = NULL WHERE run_id = ANY($1)', [gone.rows.map(x => x.id)]);
     const r = await db.query(
       `UPDATE agent_runs r SET result = NULL
         WHERE r.result IS NOT NULL AND r.expires_at < now()
@@ -196,7 +223,7 @@ function createRunStore({ db, maxActivePerUser = Number(process.env.AGENT_RUNS_A
     return r.rowCount;
   }
 
-  return { create, claim, heartbeat, saveStep, checkpoints, finish, requestCancel, approve, row, isCancelled, cancelledQueued, get, list, sweep };
+  return { create, claim, heartbeat, saveStep, checkpoints, finish, resume, requestCancel, approve, row, isCancelled, cancelledQueued, get, list, sweep };
 }
 
 /** Account deletion: the person's runs and their steps go. */

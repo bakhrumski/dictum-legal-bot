@@ -35,6 +35,7 @@
       price: 'Narx: {p}', free: 'bepul', chatU: '{n} ta savol birligi', approve: 'Tasdiqlash va boshlash', fallback: 'Model rejasi qabul qilinmadi — standart reja taklif qilindi.',
       running: 'Bajarilmoqda…', answer: 'Javob', vf: { verified: 'Manbalar bilan tekshirildi', partial: 'Ayrim da’volar manbada tasdiqlanmadi va olib tashlandi', unverified: 'Tekshiruvchi ishlamadi — javobni manba bilan qo‘lda tekshiring', no_claims: 'Raqam yoki muddat da’volari yo‘q; iqtiboslar manbada tekshirildi' },
       sources: 'Manbalar',
+      askH: 'Agent savol beryapti', askPh: 'Javobingiz', askSend: 'Javob berish va davom etish', askNote: 'Javobdan keyin narx qayta band qilinadi va ish davom etadi.',
       cmdPh: 'Buyruq: «ishlarim», «yangi ish och: …», «… ishiga yozuv: …»', cmdRun: 'Bajarish', cmdMic: 'Ovozli buyruq', cmdListen: 'Gapiring… (to‘xtatish uchun bosing)', cmdBusy: 'Matnga aylantirilmoqda…',
       cmdHelp: 'Ovoz yoki matn bilan: «ishlarim» · «yangi ish och: Pudratchi bilan nizo» · «pudrat ishiga yozuv: sud 12-noyabr» · «pudrat ishini ko‘rsat» · «pudrat ishini yop». Xuddi shu buyruqlar Telegram botida ham ishlaydi (akkaunt ulangan bo‘lsa).',
       yes: 'Ha', micDenied: 'Mikrofonga ruxsat berilmadi.',
@@ -66,6 +67,7 @@
       price: 'Цена: {p}', free: 'бесплатно', chatU: 'вопросов: {n}', approve: 'Подтвердить и начать', fallback: 'План модели не принят — предложен стандартный план.',
       running: 'Выполняется…', answer: 'Ответ', vf: { verified: 'Проверено по источникам', partial: 'Часть утверждений не подтвердилась и удалена', unverified: 'Проверка не сработала — сверьте ответ с источником вручную', no_claims: 'Утверждений с цифрами и сроками нет; цитаты сверены с источником' },
       sources: 'Источники',
+      askH: 'Агент задаёт вопрос', askPh: 'Ваш ответ', askSend: 'Ответить и продолжить', askNote: 'После ответа цена резервируется снова и работа продолжается.',
       cmdPh: 'Команда: «мои дела», «новое дело: …», «заметка в дело …: …»', cmdRun: 'Выполнить', cmdMic: 'Голосовая команда', cmdListen: 'Говорите… (нажмите, чтобы остановить)', cmdBusy: 'Распознаём…',
       cmdHelp: 'Голосом или текстом: «мои дела» · «новое дело: Спор с подрядчиком» · «заметка в дело подряд: суд 12 ноября» · «покажи дело подряд» · «закрой дело подряд». Те же команды работают в Telegram-боте (если аккаунт привязан).',
       yes: 'Да', micDenied: 'Нет доступа к микрофону.',
@@ -97,6 +99,7 @@
       price: 'Price: {p}', free: 'free', chatU: '{n} question units', approve: 'Approve and start', fallback: 'The model’s plan was not accepted — a standard plan is offered.',
       running: 'Running…', answer: 'Answer', vf: { verified: 'Checked against the sources', partial: 'Some claims were not confirmed by the sources and were removed', unverified: 'The checker did not run — check the answer against the source by hand', no_claims: 'No figure or deadline claims; quotes checked in the source' },
       sources: 'Sources',
+      askH: 'The agent asks', askPh: 'Your answer', askSend: 'Answer and continue', askNote: 'After the answer the price is reserved again and the work continues.',
       cmdPh: 'Command (Uzbek or Russian): «ishlarim», «yangi ish och: …»', cmdRun: 'Run', cmdMic: 'Voice command', cmdListen: 'Speak… (press to stop)', cmdBusy: 'Transcribing…',
       cmdHelp: 'By voice or text, in Uzbek or Russian: «ishlarim» / «мои дела» · «yangi ish och: …» / «новое дело: …» · «… ishiga yozuv: …» · «… ishini yop». The same commands work in the Telegram bot (with a linked account).',
       yes: 'Yes', micDenied: 'Microphone access was refused.',
@@ -342,14 +345,46 @@
     }
     return '<p class="muted">' + esc(res.message || s('noResult')) + '</p>';
   }
-  async function openRun(item) {
+  async function openRun(item, onChange) {
     var r = await J.api('/api/agent/runs/' + encodeURIComponent(item.ref));
     if (!r.ok) { J.toast(r.status === 404 ? s('runGone') : J.errMsg(r.data), 5000); return; }
     var run = r.data;
+    var asking = run.status === 'needs_input' && run.result && run.result.body && run.result.body.question;
     var m = J.modal({ html: '<div class="kicker">' + esc(s('wf')[run.workflow] || run.workflow) + ' · ' + esc(J.fmtDate(run.finishedAt || run.createdAt)) + '</div><h2 style="margin:6px 0 14px">' + esc(item.title) + '</h2>' +
-      '<div class="mt-run">' + runSummary(run) + '</div>' });
+      '<div class="mt-run">' + (asking ? askHtml(run.result.body.question) : runSummary(run)) + '</div>' });
     var doc = $('.mt-doc', m.body);
     if (doc) doc.innerHTML = run.result.body.draftHtml; // sanitized on the server (src/rag/safe-html.js)
+    if (asking) wireAsk(m.body, run.id, onChange);
+  }
+  function askHtml(q) {
+    return '<div class="mt-ask"><b>' + esc(s('askH')) + '</b><p class="mt-ask-q"></p><textarea class="inp mt-ask-a" maxlength="2000" placeholder="' + esc(s('askPh')) + '"></textarea>' +
+      '<p class="muted" style="font-size:12.5px;margin-top:6px">' + esc(s('askNote')) + '</p><div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="pill sm" type="button" data-a="ask">' + esc(s('askSend')) + '</button></div></div>';
+  }
+  /** The run asked (ask_user): the answer is sent, the run followed in the same window to its result. */
+  function wireAsk(root, runId, onChange) {
+    var run0 = null;
+    J.api('/api/agent/runs/' + encodeURIComponent(runId)).then(function (r) { run0 = r.ok ? r.data : null; if (run0 && run0.result) $('.mt-ask-q', root).textContent = run0.result.body.question || ''; });
+    $('[data-a=ask]', root).onclick = async function () {
+      var btn = this, ta = $('.mt-ask-a', root), text = ta.value.trim();
+      if (!text) { ta.focus(); return; }
+      btn.disabled = true;
+      var r = await J.api('/api/agent/runs/' + encodeURIComponent(runId) + '/input', { method: 'POST', body: { answer: text } });
+      if (!r.ok) { btn.disabled = false; J.toast(J.errMsg(r.data), 6000); return; }
+      var box = $('.mt-run', root);
+      box.innerHTML = '<div style="display:flex;gap:10px;align-items:center"><span class="spin"></span>' + esc(s('running')) + '</div>';
+      for (var i = 0; i < 800; i++) {
+        await J.sleep(1500);
+        if (!document.body.contains(box)) return;
+        var x = await J.api('/api/agent/runs/' + encodeURIComponent(runId));
+        if (!x.ok) return;
+        if (['done', 'failed', 'cancelled', 'budget', 'needs_input'].indexOf(x.data.status) > -1) {
+          box.innerHTML = x.data.status === 'needs_input' && x.data.result && x.data.result.body.question ? askHtml(x.data.result.body.question) : runSummary(x.data);
+          if (x.data.status === 'needs_input') wireAsk(root, runId, onChange);
+          if (onChange) onChange();
+          return;
+        }
+      }
+    };
   }
 
   J.viewMatter = function (id) {
@@ -419,7 +454,7 @@
         if (FINALS.indexOf(r.data.status) > -1) {
           await load();
           var it = (M.items || []).filter(function (x) { return x.ref === runId; })[0];
-          openRun(it || { ref: runId, title: s('agent') });
+          openRun(it || { ref: runId, title: s('agent') }, load);
           return;
         }
       }
@@ -458,7 +493,7 @@
           if (e.target.closest('[data-rm]')) return;
           var it = M.items.filter(function (x) { return x.id === row.dataset.i; })[0];
           if (it.kind === 'chat') J.go('#/c/' + it.ref);
-          else if (it.kind === 'agent_run') openRun(it);
+          else if (it.kind === 'agent_run') openRun(it, load);
         };
       });
       $$('[data-rm]', body).forEach(function (b) {
