@@ -95,3 +95,14 @@ textarea:focus{outline:none;border-color:var(--cta)}
 .review .link{align-self:flex-start;font-size:12.5px}
 .sect{margin:16px 0 8px}
 .done{font-size:13.5px;margin-bottom:8px}
+.pb{display:flex;flex-direction:column;gap:6px;margin-bottom:6px}
+.pb .muted.sm{margin:0 0 4px}
+.inp{width:100%;height:36px;border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:0 10px;font-size:13px}
+.inp:focus{outline:none;border-color:var(--cta)}
+#pbDesc{margin:0}
+#pbDesc:empty{display:none}
+.counts{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+.counts span{font-size:12.5px;padding:3px 9px;border-radius:99px;border:1px solid var(--line)}
+.counts b{font-weight:600}
+.save{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+

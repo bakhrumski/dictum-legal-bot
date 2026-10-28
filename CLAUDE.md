@@ -631,7 +631,15 @@ Known state of the suites (Sept 2026):
   result; a scanned contract comes as `scanId` from the OCR step for
   `analysis`, and the analysis units that step held are adopted
   (`heldScanJob`) - never charged twice. Page `/app/#/playbook`
-  (`public/app/playbook.js`, editor, Word report).
+  (`public/app/playbook.js`, editor, Word report). In the Word / Google
+  Docs pane (2026-10-28, `public/word/taskpane.js`, `shared.js`
+  `playbookItems`): the same review; farq / yoq / noaniq become comments
+  ("mos" only counted), a found "farq" clause's proposal goes in with Track
+  Changes, the rule is written "Qoida:", never "Asos:"; "Ishga saqlash"
+  links the run to a matter. The pane token opens `GET /api/playbooks`,
+  `POST /api/agent/playbook-review`, `GET /api/agent/runs/:id`,
+  `GET/POST /api/matters`, `POST /api/matters/:id/items` (`bearerAllowed`)
+  and passes `requireSameOrigin` (a browser never sends it by itself).
 - `src/matters/` (2026-10-28, PR-A of the roadmap) — Matters: one legal
   matter and the links to its chats, scans and notes (migration 019,
   `/api/matters`). A link is checked to be the caller's own; another

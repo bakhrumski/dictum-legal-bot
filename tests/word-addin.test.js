@@ -21,6 +21,24 @@ function res() {
 (async () => {
   console.log('\nword-addin\n');
 
+  await test('the token opens the playbook, its run and matter links only - not other runs or matter routes', () => {
+    const id = '0b6f6a1e-1c2d-4e5f-8a9b-0c1d2e3f4a5b';
+    for (const [m, p] of [['GET', '/api/playbooks'], ['POST', '/api/agent/playbook-review'], ['GET', `/api/agent/runs/${id}`], ['GET', '/api/matters'], ['POST', '/api/matters'], ['POST', `/api/matters/${id}/items`]]) assert.ok(w.bearerAllowed(m, p), `${m} ${p}`);
+    for (const [m, p] of [['POST', `/api/agent/runs/${id}/cancel`], ['PUT', `/api/agent/runs/${id}/tags`], ['GET', `/api/agent/runs/${id}/events`], ['DELETE', `/api/matters/${id}`], ['POST', '/api/agent/tabular-review'], ['POST', '/api/agent/claim-draft'],
+      ['POST', `/api/matters/${id}/items/x`], ['GET', '/api/agent/runs/abc'], ['POST', '/api/playbooks'], ['POST', `/api/matters/${id}/close`]]) assert.ok(!w.bearerAllowed(m, p), `${m} ${p} stays closed`);
+  });
+
+  await test('a task-pane token passes the same-origin check (a browser never sends it by itself); a cookie request does not', () => {
+    const { requireSameOrigin } = require('../src/auth/same-origin');
+    const mkReq = (extra) => ({ method: 'POST', get: (k) => ({ host: 'juristai.uz', origin: 'https://n-abc-script.googleusercontent.com' }[k]), ...extra });
+    let passed = false;
+    requireSameOrigin(mkReq({ addinTokenId: 3 }), res(), () => { passed = true; });
+    assert.ok(passed);
+    const r = res(); passed = false;
+    requireSameOrigin(mkReq({}), r, () => { passed = true; });
+    assert.deepStrictEqual([passed, r.statusCode], [false, 403]);
+  });
+
   await test('codes use 6 unambiguous characters', () => {
     for (let i = 0; i < 200; i++) assert.match(w.newCode(), /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/);
     assert.strictEqual(w.normCode(' ab-c 12x '), 'ABC12X');
@@ -145,6 +163,10 @@ function res() {
     assert.ok(w.addinCorsAllowed(mk('GET', '/api/user-info')));
     assert.ok(!w.addinCorsAllowed(mk('GET', '/api/requests')));
     assert.ok(!w.addinCorsAllowed(mk('POST', '/api/addin/pair/approve')), 'approval stays on the site');
+    // playbook in the pane: the review, following its run, saving it to a matter
+    assert.ok(w.addinCorsAllowed(mk('POST', '/api/agent/playbook-review')));
+    assert.ok(w.addinCorsAllowed(mk('GET', '/api/agent/runs/0b6f6a1e-1c2d-4e5f-8a9b-0c1d2e3f4a5b')));
+    assert.ok(w.addinCorsAllowed(mk('POST', '/api/matters/0b6f6a1e-1c2d-4e5f-8a9b-0c1d2e3f4a5b/items')));
     assert.ok(!w.addinCorsAllowed(mk('POST', '/api/admin/landing-config')));
     assert.ok(!w.addinCorsAllowed({ method: 'POST', path: '/api/legal-chat', headers: { origin: 'https://evil.googleusercontent.com.attacker.io' } }));
     assert.ok(!w.addinCorsAllowed({ method: 'POST', path: '/api/legal-chat', headers: { origin: 'http://n-abc-script.googleusercontent.com' } }));

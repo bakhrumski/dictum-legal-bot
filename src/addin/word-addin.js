@@ -16,7 +16,7 @@
  *   3. task pane  GET  /api/addin/pair/:pairId    -> { status:'approved', token }
  *
  * The token ("jai_…", 90 days, stored as a SHA-256 hash in addin_tokens) is
- * sent as "Authorization: Bearer". It opens only BEARER_PATHS, as the account
+ * sent as "Authorization: Bearer". It opens only BEARER_PATHS (and BEARER_PATTERNS), as the account
  * that approved it, with that account's role and tariff limits; every other
  * route ignores it. Pairings live in memory for 10 minutes (a restart only
  * asks the person to connect again).
@@ -37,7 +37,23 @@ const BEARER_PATHS = new Set([
   'POST /api/legal-chat',
   'GET /api/addin/me',
   'POST /api/addin/logout',
+  // playbook in Word (2026-10-28, roadmap stage 2): the playbooks, the review,
+  // and saving its result to a matter
+  'GET /api/playbooks',
+  'POST /api/agent/playbook-review',
+  'GET /api/matters',
+  'POST /api/matters',
 ]);
+// the same with an id in the path: following a queued review, linking it to a matter
+const UUID_RE = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+const BEARER_PATTERNS = Object.freeze([
+  ['GET', new RegExp(`^/api/agent/runs/${UUID_RE}$`, 'i')],
+  ['POST', new RegExp(`^/api/matters/${UUID_RE}/items$`, 'i')],
+]);
+/** May a task-pane token call this route? */
+function bearerAllowed(method, path) {
+  return BEARER_PATHS.has(method + ' ' + path) || BEARER_PATTERNS.some(([m, re]) => m === method && re.test(path));
+}
 
 function sha256(s) { return crypto.createHash('sha256').update(String(s)).digest('hex'); }
 
@@ -160,7 +176,7 @@ function createBearerAuth(pool, { cacheMs = 60 * 1000 } = {}) {
   const bearerAuth = async function (req, res, next) {
     const h = req.headers && req.headers.authorization;
     if (!h || !/^Bearer jai_[A-Za-z0-9_-]{20,}$/.test(h)) return next();
-    if (!BEARER_PATHS.has(req.method + ' ' + req.path)) return next();
+    if (!bearerAllowed(req.method, req.path)) return next();
     const hash = sha256(h.slice(7));
     try {
       let hit = cache.get(hash);
@@ -209,7 +225,7 @@ function addinCorsAllowed(req) {
   if (!origin || !GOOGLE_SANDBOX_ORIGIN.test(origin)) return false;
   const method = req.method === 'OPTIONS' ? String(req.headers['access-control-request-method'] || '').toUpperCase() : req.method;
   const path = req.path;
-  if (BEARER_PATHS.has(method + ' ' + path)) return true;
+  if (bearerAllowed(method, path)) return true;
   if (method === 'POST' && path === '/api/addin/pair') return true;
   if (method === 'GET' && /^\/api\/addin\/pair\/[a-f0-9]{64}$/.test(path)) return true;
   return false;
@@ -511,7 +527,7 @@ function mountRoutes(app, { pool, requireAuth, requireSameOrigin, logAudit = () 
 }
 
 module.exports = {
-  BEARER_PATHS, PAIR_TTL_MS, TOKEN_TTL_DAYS, CODE_LEN,
+  BEARER_PATHS, BEARER_PATTERNS, bearerAllowed, PAIR_TTL_MS, TOKEN_TTL_DAYS, CODE_LEN,
   sha256, newCode, normCode, newToken, ensureTables, createPairings, issueToken, loadAccount, forgetAdmin, revokeAllForAdmin,
   createBearerAuth, wordFrameHeaders, manifestXml, guidFor, mountManifest, mountRoutes,
   addinCorsAllowed, ADDIN_CORS, GOOGLE_SANDBOX_ORIGIN, panelScript,

@@ -74,11 +74,11 @@ Tartib va PR bo'linishi dizayn hujjatining 9-bo'limida.
 
 - [~] Tabular Review: 100+ hujjat run sifatida (fon navbati); ustun turlari
   (ha/yo'q, sana, summa, tanlov); teglar; Excel eksport; natija ishda saqlanadi.
-  PR ochildi (2026-10-28): 100 hujjat (`TABULAR_MAX_DOCS`, <= 200), tanlov
+  #504 merge (2026-10-28): 100 hujjat (`TABULAR_MAX_DOCS`, <= 200), tanlov
   ustuni, qator teglari, Excel, fonda ishlash va bosqichlar. Jonli AI bilan
   100 hujjatda sinalmagan.
-- [ ] Word: playbook tahlili Word ichida (izoh va Track Changes bilan), "ishga
-  saqlash".
+- [~] Word: playbook tahlili Word ichida (izoh va Track Changes bilan), "ishga
+  saqlash". PR ochildi (2026-10-28); haqiqiy Word'da sinalmagan.
 - [ ] Natijalar: Excel (jadval), PowerPoint (ish bo'yicha qisqa taqdimot).
 
 ## 3-bosqich. Raqobat ustunligi
@@ -174,3 +174,19 @@ nima o'lchandi.
   - Brauzerda 1280 va 390 px'da tekshirildi, AI javobi bazaga tayyor
     yozilgan. Haqiqiy AI bilan 100 hujjat sinalmagan: vaqt va narx
     o'lchanmagan.
+- 2026-10-28: #504 (jadval) merge. Word playbook PR ochildi:
+  - Word va Google Docs panelida "Playbook" bloki: tayyor yoki o'z playbook
+    tanlanadi, shartnoma saytdagi xizmatga yuboriladi (tahlil birligi
+    shartnoma hajmiga qarab).
+  - Farq, yo'q va noaniq qoidalar hoshiyada izoh bo'ladi. Iqtibosi server
+    topgan "farq" bandi uchun taklif Track Changes bilan kiritiladi.
+  - Qoida izohda "Qoida:" deb yoziladi, hech qachon "Asos:" emas: playbook
+    qonun emas.
+  - "Ishga saqlash": mavjud ishga yoki yangi ishga.
+  - Panel tokeni ochadigan yangi yo'llar: `GET /api/playbooks`,
+    `POST /api/agent/playbook-review`, `GET /api/agent/runs/:id`,
+    `GET/POST /api/matters`, `POST /api/matters/:id/items`.
+  - Token so'rovi same-origin tekshiruvidan o'tadi: brauzer tokenni o'zi
+    yubormaydi, shuning uchun uni boshqa saytdan soxtalashtirib bo'lmaydi.
+  - Brauzerda 320 va 450 px'da soxta hujjat muhiti bilan tekshirildi.
+    Haqiqiy Word va Google Docs'da sinalmagan.

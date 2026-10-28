@@ -62,5 +62,22 @@ test('edit proposal markers are split out and stripped from plain text', () => {
   assert.strictEqual(p.text, 'Yangi band.');
   assert.strictEqual(S.plainOf('a\n<<<YANGI_MATN\nb\nYANGI_MATN>>>'), 'a\n\nb');
 });
+test('playbook results become comments: "mos" is not one; missing clauses first; a proposal only for a found "farq" clause; the rule is never "Asos"', () => {
+  const items = S.playbookItems([
+    { status: 'mos', quote: 'Tovar 30 kunda yetkaziladi.', verified: true, rule: { title: 'Muddat' } },
+    { status: 'farq', quote: "Narx bir tomonlama o'zgartirilishi mumkin.", verified: true, note: 'Narx qat’iy emas.', suggestion: "Narx o'zgarmaydi.", rule: { title: 'Narx', requirement: 'Narx qat’iy' } },
+    { status: 'farq', quote: 'Topilmagan band matni shu yerda.', verified: false, suggestion: 'Taklif', rule: { title: 'Javobgarlik' } },
+    { status: 'yoq', quote: 'xato iqtibos', note: "Maxfiylik bandi yo'q.", suggestion: "Maxfiylik bandini qo'shing.", rule: { title: 'Maxfiylik' } },
+  ]);
+  assert.strictEqual(items.length, 3);
+  assert.deepStrictEqual(items.map(i => i.problem.split(':')[0]), ['Playbook — Maxfiylik', 'Playbook — Narx', 'Playbook — Javobgarlik']);
+  assert.deepStrictEqual([items[0].quote, items[0].newText], ['', ''], 'a missing clause has no place in the text');
+  assert.strictEqual(items[1].newText, "Narx o'zgarmaydi.", 'Track Changes proposal for a found clause');
+  assert.strictEqual(items[2].newText, '', 'no replacement where the server did not find the clause');
+  assert.ok(items.every(i => i.basis === ''));
+  const t = S.commentText(items[1]);
+  assert.match(t, /^JuristAI: Playbook — Narx: Farq qiladi\. Narx qat’iy emas\. \(Qoida: Narx qat’iy\)\nTavsiya: Narx o'zgarmaydi\.$/);
+  assert.ok(!/Asos/.test(t));
+});
 console.log(failed ? `\n${failed} failed` : '\nall passed');
 process.exit(failed ? 1 : 0);
