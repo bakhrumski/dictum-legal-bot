@@ -68,7 +68,8 @@
       // the server runs the steps in one request; the list advances as a guide, the real trace replaces it
       var i = 0, lis = $$('.ag-steps li', body);
       var tick = setInterval(function () { if (i < lis.length - 1) { lis[i].className = 'done'; i++; lis[i].className = 'cur'; } }, 9000);
-      var r = await J.api('/api/agent/claim-draft', { method: 'POST', body: payload });
+      // a long queue answers 202 { runId }: J.agentApi follows the run to its end (matters.js)
+      var r = await (J.agentApi || J.api)('/api/agent/claim-draft', { method: 'POST', body: payload });
       clearInterval(tick);
       if (r.status === 422 && r.data && r.data.missing) {
         form();
@@ -103,7 +104,7 @@
       var warn = (d.warnings || []).length ? '<div class="note-blue" style="margin-bottom:18px"><b>' + esc(s('warn')) + '</b><ul>' + d.warnings.map(function (w) { return '<li>' + esc(w.text) + '</li>'; }).join('') + '</ul></div>' : '';
       body.innerHTML = html + warn +
         '<div class="card" style="margin-bottom:18px"><h4>' + esc(s('basis')) + '</h4>' + basis + '</div>' +
-        '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px"><h4 style="margin:0">' + esc(s('draft')) + '</h4><div style="display:flex;gap:8px"><button class="pill sm" data-a="word">' + J.icon('word') + esc(s('word')) + '</button>' + (J.wsSaveButton ? J.wsSaveButton() : '') + '<button class="pill sm ghost" data-a="back">' + esc(s('again')) + '</button></div></div>' +
+        '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px"><h4 style="margin:0">' + esc(s('draft')) + '</h4><div style="display:flex;gap:8px"><button class="pill sm" data-a="word">' + J.icon('word') + esc(s('word')) + '</button>' + (J.wsSaveButton ? J.wsSaveButton() : '') + (d.runId && J.matterButton ? J.matterButton() : '') + '<button class="pill sm ghost" data-a="back">' + esc(s('again')) + '</button></div></div>' +
         '<div class="ag-doc doc-prev"></div><p class="muted" style="font-size:12.5px;margin-top:12px">' + esc(s('note')) + '</p></div>';
       $('.ag-doc', body).innerHTML = d.draftHtml; // sanitized on the server (src/rag/safe-html.js)
       $('[data-a=word]', body).onclick = function () { J.exportWord(s('title'), d.draftHtml); };
@@ -114,6 +115,7 @@
         J.saveToWorkspace({ title: s('title') + (last.df ? ' — ' + last.df : ''), text: plain + (basisText ? '\n\n' + s('basis') + ':\n' + basisText : '') + '\n\n' + s('note'),
           json: { type: 'claim_draft', draftHtml: d.draftHtml, basis: d.basis || [], warnings: d.warnings || [] } });
       };
+      if (J.wireMatterButton) J.wireMatterButton(body, function () { return { kind: 'agent_run', ref: d.runId, title: s('title') + (last.df ? ' — ' + last.df : '') }; });
       $('[data-a=back]', body).onclick = function () { last = {}; form(); };
       if (J.refreshTariff) J.refreshTariff();
     }

@@ -137,7 +137,7 @@
       var payload = doc.scanId ? { scanId: doc.scanId, name: doc.name } : { text: doc.text, name: doc.name };
       if (chosen.kind === 'b') payload.builtin = chosen.id; else payload.playbookId = Number(chosen.id);
       body.innerHTML = '<div class="card" style="display:flex;gap:12px;align-items:center"><span class="spin"></span>' + esc(s('working')) + '</div>';
-      var r = await J.api('/api/agent/playbook-review', { method: 'POST', body: payload });
+      var r = await (J.agentApi || J.api)('/api/agent/playbook-review', { method: 'POST', body: payload });
       if (r.status === 402) { body.innerHTML = '<div class="card"><p>' + esc((r.data && r.data.message) || s('nounit')) + '</p><a class="pill" href="/tariff.html">' + esc(s('plans')) + '<i>→</i></a> <button class="pill ghost" data-a="back" type="button">' + esc(s('again')) + '</button></div>'; $('[data-a=back]', body).onclick = setup; return; }
       if (!r.ok) { body.innerHTML = '<div class="card"><p class="err">' + esc(J.errMsg(r.data)) + '</p><button class="pill ghost" data-a="back" type="button">' + esc(s('again')) + '</button></div>'; $('[data-a=back]', body).onclick = setup; return; }
       result(r.data);
@@ -158,7 +158,7 @@
       body.innerHTML = '<div class="note-blue" style="margin-bottom:14px">' + esc(s('note')) + (d.excerpt ? ' ' + esc(s('part')) : '') + '</div>' +
         '<div class="card" style="margin-bottom:14px"><div class="kv">' + ['yoq', 'farq', 'noaniq', 'mos'].map(function (k) { return '<div><small>' + esc(s('st')[k]) + '</small><b class="num pb-st st-' + k + '">' + (c[k] || 0) + '</b></div>'; }).join('') + '</div></div>' +
         items.map(itemHtml).join('') +
-        '<div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap"><button class="pill sm" data-a="word" type="button">' + J.icon('word') + esc(s('word')) + '</button>' + (J.wsSaveButton ? J.wsSaveButton() : '') + '<button class="pill sm ghost" data-a="back" type="button">' + esc(s('again')) + '</button></div>';
+        '<div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap"><button class="pill sm" data-a="word" type="button">' + J.icon('word') + esc(s('word')) + '</button>' + (J.wsSaveButton ? J.wsSaveButton() : '') + (d.runId && J.matterButton ? J.matterButton() : '') + '<button class="pill sm ghost" data-a="back" type="button">' + esc(s('again')) + '</button></div>';
       $$('.pb-cp', body).forEach(function (b) { b.onclick = function () { navigator.clipboard.writeText(b.parentNode.querySelector('p').textContent).then(function () { J.toast(J.t('act.copied')); }); }; });
       $('[data-a=word]', body).onclick = function () {
         var html = '<p><i>' + esc(s('note')) + '</i></p>' + items.map(function (x) {
@@ -177,6 +177,7 @@
         }).join('\n\n');
         J.saveToWorkspace({ title: s('title') + (chosen ? ' — ' + chosen.name : '') + (doc ? ' — ' + doc.name : ''), text: s('note') + '\n\n' + text, json: { type: 'playbook_review', playbook: chosen ? chosen.name : null, document: doc ? doc.name : null, counts: c, results: items } });
       };
+      if (J.wireMatterButton) J.wireMatterButton(body, function () { return { kind: 'agent_run', ref: d.runId, title: s('title') + (chosen ? ' — ' + chosen.name : '') + (doc ? ' — ' + doc.name : '') }; });
       $('[data-a=back]', body).onclick = function () { doc = null; setup(); };
       if (J.refreshTariff) J.refreshTariff();
     }

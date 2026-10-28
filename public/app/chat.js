@@ -287,7 +287,8 @@
       }
       if (data.nextActions && data.nextActions.length) html += '<div class="next">' + data.nextActions.slice(0, 3).map(function (x, i) { return '<button class="chip" data-nx="' + i + '">' + J.icon('arrow') + esc(x.label || t('next.title')) + '</button>'; }).join('') + '</div>';
       html += '<div class="acts"><button class="ib" data-a="copy" title="' + esc(t('act.copy')) + '">' + J.icon('copy') + '</button><button class="ib" data-a="word" title="' + esc(t('act.word')) + '">' + J.icon('word') + '</button>' +
-        (r.sources.length ? '<button class="ib" data-a="src" title="' + esc(t('act.sources')) + '">' + J.icon('book') + '</button>' : '') + '</div>';
+        (r.sources.length ? '<button class="ib" data-a="src" title="' + esc(t('act.sources')) + '">' + J.icon('book') + '</button>' : '') +
+        (J.addToMatter ? '<button class="ib" data-a="matter" title="' + esc(J.matterText('add')) + '">' + J.icon('folder') + '</button>' : '') + '</div>';
       var body = J.h('<div>' + html + '</div>');
       var note = $('.note', body); if (note) note.textContent = data.documentScope.note;
       a.appendChild(body);
@@ -302,6 +303,13 @@
       $('[data-a=copy]', body).onclick = function () { navigator.clipboard.writeText(J.plain(r.html)).then(function () { J.toast(t('act.copied')); }); };
       $('[data-a=word]', body).onclick = function () { J.exportWord((question || 'JuristAI').slice(0, 60), '<h2>' + esc(question || '') + '</h2>' + r.html); };
       $$('[data-a=src]', body).forEach(function (sb) { sb.onclick = function () { openSources(r.sources); }; });
+      // the whole chat goes into a matter (the session is saved after the answer)
+      var mb = $('[data-a=matter]', body);
+      if (mb) mb.onclick = async function () {
+        if (!C.id) await save();
+        if (!C.id) { J.toast(J.matterText('waitChat')); return; }
+        J.addToMatter({ kind: 'chat', ref: Number(C.id) || C.id, title: C.title || (question || '').slice(0, 80) });
+      };
     }
 
     // ---- javob bosqichlari (6 qatlamning foydalanuvchiga ko'rinadigan qismi) ----

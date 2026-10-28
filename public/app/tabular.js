@@ -99,7 +99,7 @@
       var ready = docs.filter(function (d) { return d.status === 'ok'; });
       if (!ready.length || !cols.length) { $('.tb-miss', body).innerHTML = '<div class="note-blue" style="margin-top:14px">' + esc(s('need')) + '</div>'; return; }
       body.innerHTML = '<div class="card" style="display:flex;gap:12px;align-items:center"><span class="spin"></span>' + esc(s('working')) + '</div>';
-      var r = await J.api('/api/agent/tabular-review', { method: 'POST', body: { documents: ready.map(function (d) { return d.scanId ? { name: d.name, scanId: d.scanId } : { name: d.name, text: d.text }; }), columns: cols } });
+      var r = await (J.agentApi || J.api)('/api/agent/tabular-review', { method: 'POST', body: { documents: ready.map(function (d) { return d.scanId ? { name: d.name, scanId: d.scanId } : { name: d.name, text: d.text }; }), columns: cols } });
       if (r.status === 402) { body.innerHTML = '<div class="card"><p>' + esc((r.data && r.data.message) || s('nounit')) + '</p><a class="pill" href="/tariff.html">' + esc(s('plans')) + '<i>→</i></a> <button class="pill ghost" data-a="back" type="button">' + esc(s('again')) + '</button></div>'; $('[data-a=back]', body).onclick = setup; return; }
       if (!r.ok) { body.innerHTML = '<div class="card"><p class="err">' + esc(J.errMsg(r.data)) + '</p><button class="pill ghost" data-a="back" type="button">' + esc(s('again')) + '</button></div>'; $('[data-a=back]', body).onclick = setup; return; }
       result(r.data);
@@ -120,7 +120,7 @@
       }).join('');
       body.innerHTML = '<div class="note-blue" style="margin-bottom:14px">' + esc(s('note')) + '</div>' +
         '<div class="tb-wrap"><table class="tb-grid"><thead>' + head + '</thead><tbody>' + trs + '</tbody></table></div>' +
-        '<div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap"><button class="pill sm" data-a="csv" type="button">' + esc(s('csv')) + '</button>' + (J.wsSaveButton ? J.wsSaveButton() : '') + '<button class="pill sm ghost" data-a="back" type="button">' + esc(s('again')) + '</button></div>';
+        '<div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap"><button class="pill sm" data-a="csv" type="button">' + esc(s('csv')) + '</button>' + (J.wsSaveButton ? J.wsSaveButton() : '') + (d.runId && J.matterButton ? J.matterButton() : '') + '<button class="pill sm ghost" data-a="back" type="button">' + esc(s('again')) + '</button></div>';
       $$('td[data-r]', body).forEach(function (td) {
         td.onclick = function () {
           var r = rows[+td.dataset.r], c = r.cells[td.dataset.c], col = columns.filter(function (x) { return x.id === td.dataset.c; })[0];
@@ -141,6 +141,7 @@
         var blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
         var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'jadvalli-tahlil.csv'; a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
       };
+      if (J.wireMatterButton) J.wireMatterButton(body, function () { return { kind: 'agent_run', ref: d.runId, title: s('title') + ' — ' + rows.length + ' ' + s('doc').toLowerCase() }; });
       $('[data-a=back]', body).onclick = function () { setup(); };
       // the table as text (Workspace AI reads it) and as data
       var ws = $('[data-a=wssave]', body);
