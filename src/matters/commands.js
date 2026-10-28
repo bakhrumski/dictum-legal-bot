@@ -24,11 +24,19 @@
  * 10 minutes, for that account only, used once (one Node process: kept in
  * memory). Everything runs through the matter store as that account, so its
  * rules (ownership, Workspace roles, limits) hold. No AI, no tariff unit.
+ *
+ * Spoken commands that write (2026-10-28, owner: "Pudratchi" was heard as
+ * "Qudratxo'ja" and the matter was opened under that name): with `voice`,
+ * "create" and "note" are shown as heard and wait for a confirmation too,
+ * with the glossary's suggestion (src/voice/glossary.js) as a second choice
+ * (`confirmCommand(token, { alt: true })`); a typed correction replaces the
+ * heard name or note (`correctPending`). The app's 🎙 never runs a command by
+ * itself: the text lands in the box to be checked.
  */
 
 const MAX_LEN = 300;
 const CONFIRM_TTL_MS = 10 * 60 * 1000;
-const pending = new Map(); // token -> { adminId, action, matterId, title, at }
+const pending = new Map(); // token -> { adminId, action, matterId, title, text?, alt?, at }
 
 const norm = s => String(s || '').toLocaleLowerCase('uz')
   .replace(/[ʻʼ‘’`´]/gu, "'")
@@ -117,6 +125,9 @@ function T(lang) {
     closed: ru ? '✅ Дело «{t}» закрыто.' : '✅ «{t}» ishi yopildi.',
     reopened: ru ? '✅ Дело «{t}» снова открыто.' : '✅ «{t}» ishi qayta ochildi.',
     expired: ru ? 'Подтверждение устарело. Повторите команду.' : 'Tasdiq muddati o\'tdi. Buyruqni qayta ayting.',
+    heardCreate: ru ? '🎙 Я услышал: новое дело «{t}». Верно? Если нет — напишите правильное название.' : "🎙 Shunday eshitdim: yangi ish «{t}». To'g'rimi? Noto'g'ri bo'lsa, to'g'ri nomini yozib yuboring.",
+    heardNote: ru ? '🎙 Я услышал заметку для дела «{t}»: «{n}». Верно? Если нет — напишите правильный текст.' : "🎙 «{t}» ishiga yozuv shunday eshitildi: «{n}». To'g'rimi? Noto'g'ri bo'lsa, to'g'ri matnni yozib yuboring.",
+    maybe: ru ? 'Возможно, вы сказали: {l}.' : 'Balki shunday demoqchi edingiz: {l}.',
     items: ru ? 'элементов' : 'ta element',
     status: { open: ru ? 'открыто' : 'ochiq', closed: ru ? 'закрыто' : 'yopilgan' },
     notes: ru ? 'Последние заметки:' : 'Oxirgi yozuvlar:',
@@ -129,9 +140,11 @@ const names = list => list.slice(0, 5).map(m => `«${m.title}»`).join(', ') || 
 
 /**
  * Run a parsed command as `adminId` through the matter store.
- * Returns { reply, action, matterId?, matters?, confirm?: { token, action, title } }.
+ * Returns { reply, action, matterId?, matters?, confirm?: { token, action, title, alt? } }.
+ * `voice`: a spoken create / note waits for a confirmation; `suggest(text)`
+ * gives the glossary's [{ from, to }] for it (src/voice/glossary.js).
  */
-async function runCommand(cmd, { adminId, store, lang = 'uz', lastId = null, now = Date.now() } = {}) {
+async function runCommand(cmd, { adminId, store, lang = 'uz', lastId = null, now = Date.now(), voice = false, suggest = null } = {}) {
   const t = T(lang);
   const all = await store.list(adminId);
   switch (cmd.action) {
@@ -143,6 +156,7 @@ async function runCommand(cmd, { adminId, store, lang = 'uz', lastId = null, now
     }
     case 'create': {
       if (!cmd.title) return { action: 'matter_needs_title', needsTitle: true, reply: t.askTitle };
+      if (voice) return heard({ adminId, action: 'create', title: cmd.title, now, t, suggest });
       const m = await store.create(adminId, { title: cmd.title });
       return { action: 'matter_created', matterId: m.id, reply: fill(t.created, { t: m.title }) };
     }
@@ -150,6 +164,7 @@ async function runCommand(cmd, { adminId, store, lang = 'uz', lastId = null, now
       const r = resolveMatter(cmd.matter, all, { lastId });
       if (r.none) return { action: 'matter_not_found', reply: cmd.matter ? fill(t.notFound, { n: cmd.matter, l: names(all.filter(m => m.status === 'open')) }) : t.noMatter };
       if (r.many) return { action: 'matter_ambiguous', reply: fill(t.many, { n: cmd.matter, l: names(r.many) }), matters: r.many.map(m => ({ id: m.id, title: m.title })) };
+      if (voice) return heard({ adminId, action: 'note', matterId: r.matter.id, title: r.matter.title, text: cmd.text, now, t, suggest });
       const item = await store.addItem(r.matter.id, adminId, { kind: 'note', note: cmd.text });
       if (!item) return { action: 'matter_not_found', reply: fill(t.notFound, { n: r.matter.title, l: names(all) }) };
       return { action: 'matter_noted', matterId: r.matter.id, reply: fill(t.noted, { t: r.matter.title }) };
@@ -178,17 +193,58 @@ async function runCommand(cmd, { adminId, store, lang = 'uz', lastId = null, now
   }
 }
 
+/** A spoken create / note, held for the person to confirm (as heard, or with the glossary's suggestion). */
+function heard({ adminId, action, matterId = null, title, text = null, now, t, suggest }) {
+  sweep(now);
+  const said = action === 'create' ? title : text;
+  const sugg = typeof suggest === 'function' ? (suggest(said) || []) : [];
+  let alt = null;
+  for (const x of sugg) alt = (alt || said).split(x.from).join(x.to);
+  const token = require('crypto').randomBytes(9).toString('base64url');
+  pending.set(token, { adminId: Number(adminId), action, matterId, title, text, alt: alt && alt !== said ? alt : null, at: now });
+  const reply = (action === 'create' ? fill(t.heardCreate, { t: title }) : fill(t.heardNote, { t: title, n: text }))
+    + (alt && alt !== said ? `\n${fill(t.maybe, { l: sugg.map(x => `«${x.to}» (${x.from})`).join(', ') })}` : '');
+  return { action: 'matter_confirm', matterId, confirm: { token, action, title, alt: alt && alt !== said ? alt : null }, reply };
+}
+
+/** Carry out a held create / note with this name or text. */
+async function doWrite(p, value, { adminId, store, t }) {
+  if (p.action === 'create') {
+    const m = await store.create(adminId, { title: value });
+    return { action: 'matter_created', matterId: m.id, reply: fill(t.created, { t: m.title }) };
+  }
+  const item = await store.addItem(p.matterId, adminId, { kind: 'note', note: value });
+  if (!item) return { action: 'matter_not_found', reply: t.expired };
+  return { action: 'matter_noted', matterId: p.matterId, reply: fill(t.noted, { t: p.title }) };
+}
+
+/** A typed correction of a held spoken create / note: the typed words are used as written. */
+async function correctPending(token, value, { adminId, store, lang = 'uz', now = Date.now() } = {}) {
+  const t = T(lang);
+  sweep(now);
+  const p = pending.get(String(token || ''));
+  if (!p || p.adminId !== Number(adminId) || !['create', 'note'].includes(p.action)) return null;
+  const v = tidy(value);
+  if (v.length < 2 || v.length > (p.action === 'create' ? 160 : MAX_LEN)) return null;
+  pending.delete(String(token));
+  return doWrite(p, v, { adminId, store, t });
+}
+
 function sweep(now = Date.now()) {
   for (const [k, v] of pending) if (now - v.at > CONFIRM_TTL_MS) pending.delete(k);
 }
 
-/** A confirmation: the pending close / reopen of this account, once. */
-async function confirmCommand(token, { adminId, store, lang = 'uz', now = Date.now() } = {}) {
+/** A confirmation: the pending close / reopen (or spoken create / note) of this account, once; `alt` takes the glossary's suggestion. */
+async function confirmCommand(token, { adminId, store, lang = 'uz', now = Date.now(), alt = false } = {}) {
   const t = T(lang);
   sweep(now);
   const p = pending.get(String(token || ''));
   if (!p || p.adminId !== Number(adminId)) return { action: 'matter_confirm_expired', reply: t.expired };
   pending.delete(String(token));
+  if (p.action === 'create' || p.action === 'note') {
+    const heardValue = p.action === 'create' ? p.title : p.text;
+    return doWrite(p, alt && p.alt ? p.alt : heardValue, { adminId, store, t });
+  }
   const m = await store.update(p.matterId, adminId, { status: p.action === 'close' ? 'closed' : 'open' });
   if (!m) return { action: 'matter_not_found', reply: t.expired };
   return { action: p.action === 'close' ? 'matter_closed' : 'matter_reopened', matterId: m.id, reply: fill(p.action === 'close' ? t.closed : t.reopened, { t: m.title }) };
@@ -200,4 +256,11 @@ function cancelConfirm(token, adminId) {
   if (p && p.adminId === Number(adminId)) pending.delete(String(token));
 }
 
-module.exports = { parseCommand, resolveMatter, runCommand, confirmCommand, cancelConfirm, texts: T, MAX_LEN, CONFIRM_TTL_MS };
+/** Is this token a held spoken create / note of this account (a typed message may correct it)? */
+function pendingWrite(token, adminId, now = Date.now()) {
+  sweep(now);
+  const p = pending.get(String(token || ''));
+  return !!(p && p.adminId === Number(adminId) && (p.action === 'create' || p.action === 'note'));
+}
+
+module.exports = { parseCommand, resolveMatter, runCommand, confirmCommand, correctPending, pendingWrite, cancelConfirm, texts: T, MAX_LEN, CONFIRM_TTL_MS };

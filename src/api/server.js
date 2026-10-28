@@ -766,7 +766,10 @@ app.post('/api/voice/dictate', require('../auth/same-origin').requireSameOrigin,
     });
     const text = String(r.text || (r.segments || []).map(g => g.text).join(' ') || '').replace(/\s+/gu, ' ').trim();
     if (!text) return res.status(422).json({ error: 'no_speech', message: "Gap eshitilmadi. Qayta urinib ko'ring." });
-    res.json({ text: text.slice(0, 4000), provider: r.provider });
+    // words that look like a mis-heard legal term, offered - never replaced (src/voice/glossary.js)
+    let suggestions = [];
+    try { suggestions = require('../voice/glossary').suggest(text.slice(0, 4000)); } catch (_) { suggestions = []; }
+    res.json({ text: text.slice(0, 4000), provider: r.provider, suggestions });
   } catch (e) {
     console.error('[VOICE] dictate:', e.message);
     res.status(502).json({ error: 'stt_failed', message: "Ovozni matnga aylantirib bo'lmadi." });

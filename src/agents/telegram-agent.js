@@ -35,6 +35,9 @@ function matterStore() {
 }
 const lastMatterByChat = new Map();
 const pendingMatterTitle = new Map(); // chatId -> when "yangi ish och" came with no name
+// chatId -> { token, at }: a spoken "yangi ish" / "yozuv" waiting for its confirmation; the next typed
+// message (a short one, not a question or a command) is taken as the corrected name or note
+const pendingVoiceWrite = new Map();
 const {
   extractAnalysisSection,
   selectRelevantSourceRefs,
@@ -811,7 +814,7 @@ TELEGRAM FORMATI (majburiy):
  *   meta: object
  * }>}
  */
-async function handleUserMessage({ chatId, text, firstName = '', testAccount = null, identity = null }) {
+async function handleUserMessage({ chatId, text, firstName = '', testAccount = null, identity = null, voice = false }) {
   const skip = (reason) => ({ handled: false, reply: null, action: 'skip', escalate: true, meta: { reason } });
 
   if (!AUTO_ANSWER) return skip('auto-answer disabled');
@@ -913,12 +916,19 @@ Agar texnik uzilish yuz bersa, limitingiz avtomatik tiklanadi.`,
     intent = { intent: 'noaniq', missing: [] };
   } else {
     // the matter's name, asked for after "yangi ish och" with no name (5 minutes; not a command itself)
+    // a typed correction of a spoken name or note (2026-10-28, owner: "Pudratchi" heard as "Qudratxo'ja")
+    const voiceFix = pendingVoiceWrite.get(String(chatId));
+    pendingVoiceWrite.delete(String(chatId));
+    const q = String(question).trim();
+    const correction = voiceFix && !voice && Date.now() - voiceFix.at < 10 * 60 * 1000
+      && !require('../matters/commands').parseCommand(q) && !/\?/u.test(q) && q.length >= 2 && q.length <= 300 && q.split(/\s+/u).length <= 40
+      ? { intent: 'ish_amal', command: { action: 'correct', token: voiceFix.token }, missing: [] } : null;
     const waitingTitle = pendingMatterTitle.get(String(chatId));
     pendingMatterTitle.delete(String(chatId));
     const titleReply = waitingTitle && Date.now() - waitingTitle < 5 * 60 * 1000
       && !require('../matters/commands').parseCommand(question) && String(question).trim().length >= 2 && String(question).trim().length <= 160
       ? { intent: 'ish_amal', command: { action: 'create', title: String(question).replace(/\s+/gu, ' ').trim().replace(/[.!?]+$/u, '') }, missing: [] } : null;
-    const deterministicIntent = titleReply || classifyDeterministicIntent(question);
+    const deterministicIntent = correction || titleReply || classifyDeterministicIntent(question);
     if (deterministicIntent) {
       intent = deterministicIntent;
     } else {
@@ -1263,12 +1273,17 @@ Agar texnik uzilish yuz bersa, limitingiz avtomatik tiklanadi.`,
         return complete({ handled: true, reply, action: 'matter_no_link', escalate: false, meta: { intent: intent.intent } });
       }
       const store = matterStore();
-      const out = await commands.runCommand(intent.command, { adminId: account.id, store, lang: cmdLang, lastId: lastMatterByChat.get(String(chatId)) || null });
+      const out = intent.command.action === 'correct'
+        ? (await commands.correctPending(intent.command.token, question, { adminId: account.id, store, lang: cmdLang })) || { action: 'matter_confirm_expired', reply: commands.texts(cmdLang).expired }
+        // a spoken create / note is shown as heard and confirmed first, with the glossary's suggestion
+        : await commands.runCommand(intent.command, { adminId: account.id, store, lang: cmdLang, lastId: lastMatterByChat.get(String(chatId)) || null,
+          voice: !!voice, suggest: (t) => require('../voice/glossary').suggest(t) });
       if (out.matterId) lastMatterByChat.set(String(chatId), out.matterId);
       if (out.needsTitle) pendingMatterTitle.set(String(chatId), Date.now());
+      if (out.confirm && voice && (out.confirm.action === 'create' || out.confirm.action === 'note')) pendingVoiceWrite.set(String(chatId), { token: out.confirm.token, at: Date.now() });
       await remember(out.reply, 0);
       return complete({ handled: true, reply: out.reply, action: out.confirm ? 'tool_matter_confirm' : out.action, escalate: false,
-        meta: { intent: intent.intent, command: intent.command.action, lang: cmdLang, token: out.confirm ? out.confirm.token : undefined } });
+        meta: { intent: intent.intent, command: intent.command.action, lang: cmdLang, token: out.confirm ? out.confirm.token : undefined, alt: out.confirm && out.confirm.alt ? out.confirm.alt : undefined } });
     } catch (e) {
       console.warn('[TG-AGENT] matter command failed:', intent.command.action, e.message);
       const reply = e && e.status && e.message ? e.message : (cmdLang === 'ru' ? 'Не удалось выполнить команду. Попробуйте ещё раз.' : "Buyruqni bajarib bo'lmadi. Qayta urinib ko'ring.");

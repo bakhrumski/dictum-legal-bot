@@ -36,7 +36,7 @@
       running: 'Bajarilmoqda…', answer: 'Javob', vf: { verified: 'Manbalar bilan tekshirildi', partial: 'Ayrim da’volar manbada tasdiqlanmadi va olib tashlandi', unverified: 'Tekshiruvchi ishlamadi — javobni manba bilan qo‘lda tekshiring', no_claims: 'Raqam yoki muddat da’volari yo‘q; iqtiboslar manbada tekshirildi' },
       sources: 'Manbalar',
       askH: 'Agent savol beryapti', askPh: 'Javobingiz', askSend: 'Javob berish va davom etish', askNote: 'Javobdan keyin narx qayta band qilinadi va ish davom etadi.',
-      cmdPh: 'Buyruq: «ishlarim», «yangi ish och: …», «… ishiga yozuv: …»', cmdRun: 'Bajarish', cmdMic: 'Ovozli buyruq', cmdListen: 'Gapiring… (to‘xtatish uchun bosing)', cmdBusy: 'Matnga aylantirilmoqda…',
+      cmdPh: 'Buyruq: «ishlarim», «yangi ish och: …», «… ishiga yozuv: …»', cmdRun: 'Bajarish', cmdMic: 'Ovozli buyruq', cmdListen: 'Gapiring… (to‘xtatish uchun bosing)', cmdBusy: 'Matnga aylantirilmoqda…', heardCheck: 'Matnni tekshiring, kerak bo‘lsa tuzating va «Bajarish»ni bosing.',
       cmdHelp: 'Ovoz yoki matn bilan: «ishlarim» · «yangi ish och: Pudratchi bilan nizo» · «pudrat ishiga yozuv: sud 12-noyabr» · «pudrat ishini ko‘rsat» · «pudrat ishini yop». Xuddi shu buyruqlar Telegram botida ham ishlaydi (akkaunt ulangan bo‘lsa).',
       yes: 'Ha', micDenied: 'Mikrofonga ruxsat berilmadi.',
     },
@@ -68,7 +68,7 @@
       running: 'Выполняется…', answer: 'Ответ', vf: { verified: 'Проверено по источникам', partial: 'Часть утверждений не подтвердилась и удалена', unverified: 'Проверка не сработала — сверьте ответ с источником вручную', no_claims: 'Утверждений с цифрами и сроками нет; цитаты сверены с источником' },
       sources: 'Источники',
       askH: 'Агент задаёт вопрос', askPh: 'Ваш ответ', askSend: 'Ответить и продолжить', askNote: 'После ответа цена резервируется снова и работа продолжается.',
-      cmdPh: 'Команда: «мои дела», «новое дело: …», «заметка в дело …: …»', cmdRun: 'Выполнить', cmdMic: 'Голосовая команда', cmdListen: 'Говорите… (нажмите, чтобы остановить)', cmdBusy: 'Распознаём…',
+      cmdPh: 'Команда: «мои дела», «новое дело: …», «заметка в дело …: …»', cmdRun: 'Выполнить', cmdMic: 'Голосовая команда', cmdListen: 'Говорите… (нажмите, чтобы остановить)', cmdBusy: 'Распознаём…', heardCheck: 'Проверьте текст, исправьте при необходимости и нажмите «Выполнить».',
       cmdHelp: 'Голосом или текстом: «мои дела» · «новое дело: Спор с подрядчиком» · «заметка в дело подряд: суд 12 ноября» · «покажи дело подряд» · «закрой дело подряд». Те же команды работают в Telegram-боте (если аккаунт привязан).',
       yes: 'Да', micDenied: 'Нет доступа к микрофону.',
     },
@@ -100,7 +100,7 @@
       running: 'Running…', answer: 'Answer', vf: { verified: 'Checked against the sources', partial: 'Some claims were not confirmed by the sources and were removed', unverified: 'The checker did not run — check the answer against the source by hand', no_claims: 'No figure or deadline claims; quotes checked in the source' },
       sources: 'Sources',
       askH: 'The agent asks', askPh: 'Your answer', askSend: 'Answer and continue', askNote: 'After the answer the price is reserved again and the work continues.',
-      cmdPh: 'Command (Uzbek or Russian): «ishlarim», «yangi ish och: …»', cmdRun: 'Run', cmdMic: 'Voice command', cmdListen: 'Speak… (press to stop)', cmdBusy: 'Transcribing…',
+      cmdPh: 'Command (Uzbek or Russian): «ishlarim», «yangi ish och: …»', cmdRun: 'Run', cmdMic: 'Voice command', cmdListen: 'Speak… (press to stop)', cmdBusy: 'Transcribing…', heardCheck: 'Check the text, fix it if needed and press «Run».',
       cmdHelp: 'By voice or text, in Uzbek or Russian: «ishlarim» / «мои дела» · «yangi ish och: …» / «новое дело: …» · «… ishiga yozuv: …» · «… ishini yop». The same commands work in the Telegram bot (with a linked account).',
       yes: 'Yes', micDenied: 'Microphone access was refused.',
     },
@@ -260,9 +260,24 @@
       if (after && /^matter_(noted|closed|reopened)$/.test(d.action)) { J.toast(d.reply, 5000); after(d); return; }
       st.textContent = d.reply || '';
     }
+    /** the dictated text waits in the box; a glossary suggestion is one click away */
+    function heardCheck(sugg) {
+      st.innerHTML = '';
+      var box = J.h('<span class="mt-heard"><span class="mt-heard-t"></span></span>');
+      $('.mt-heard-t', box).textContent = s('heardCheck');
+      sugg.forEach(function (x) {
+        var b = J.h('<button type="button" class="chip mt-sugg"></button>');
+        b.textContent = x.from + ' → ' + x.to;
+        b.onclick = function () { input.value = input.value.split(x.from).join(x.to); b.remove(); input.focus(); };
+        box.appendChild(b);
+      });
+      st.appendChild(box);
+      input.focus();
+      try { input.setSelectionRange(input.value.length, input.value.length); } catch (e) { /* eski brauzer */ }
+    }
     go.onclick = function () { run(input.value); };
     input.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); run(input.value); } });
-    // the microphone: the same dictation as the chat (POST /api/voice/dictate), then the command runs
+    // the microphone: the same dictation as the chat (POST /api/voice/dictate); the text waits in the box to be checked
     if (!G.MediaRecorder || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
     if (J.dictationOk === undefined) J.dictationOk = J.api('/api/voice/balance').then(function (x) { return !!(x.ok && x.data && x.data.dictation); });
     J.dictationOk.then(function (ok) { mic.hidden = !ok; });
@@ -284,8 +299,9 @@
         var r = await J.api('/api/voice/dictate', { method: 'POST', body: fd });
         mic.disabled = false;
         if (!r.ok) { st.textContent = J.errMsg(r.data); return; }
+        // the heard text is checked before it runs (2026-10-28: "Pudratchi" was heard as "Qudratxo'ja")
         input.value = r.data.text || '';
-        run(input.value);
+        heardCheck(r.data.suggestions || []);
       };
       rec.start();
       mic.classList.add('on'); st.textContent = '';

@@ -148,6 +148,63 @@ function stubStore(seed = []) {
     assert.match(bot, /data\.startsWith\('mtc_y_'\)[\s\S]{0,900}confirmCommand\(token, \{ adminId: account\.id/u);
   });
 
+  await test('glossary: a mis-heard legal term is suggested, a known term or its suffixed form is not, a plain name is left alone', () => {
+    const g = require('../src/voice/glossary');
+    assert.deepStrictEqual(g.suggest("Yangi ish och: Qudratxo'ja bilan nizo"), [{ from: "Qudratxo'ja", to: 'Pudratchi' }]);
+    assert.deepStrictEqual(g.suggest('Ijarachiga talabnama yuborildi'), [{ from: 'talabnama', to: 'talabnoma' }]);
+    for (const t of ['Pudratchi bilan nizo', 'Pudratchidan avans qaytarilmadi', 'Karimov Aziz bilan mehnat shartnomasi', 'Abdullayev bilan uchrashuv', 'Shartnomani bekor qildik']) assert.deepStrictEqual(g.suggest(t), [], t);
+    assert.strictEqual(g.apply("Qudratxo'ja bilan nizo", g.suggest("Qudratxo'ja bilan nizo")), 'Pudratchi bilan nizo');
+  });
+
+  await test('a spoken create is shown as heard and waits: as heard, as the glossary suggests, or as typed - once, by the same account', async () => {
+    const g = require('../src/voice/glossary');
+    const store = stubStore([]);
+    const held = await c.runCommand({ action: 'create', title: "Qudratxo'ja bilan nizo" }, { adminId: 7, store, voice: true, suggest: t => g.suggest(t) });
+    assert.strictEqual(held.action, 'matter_confirm');
+    assert.strictEqual(store.calls.length, 0, 'nothing opened yet');
+    assert.strictEqual(held.confirm.alt, 'Pudratchi bilan nizo');
+    assert.match(held.reply, /Shunday eshitdim: yangi ish «Qudratxo'ja bilan nizo»[\s\S]*«Pudratchi» \(Qudratxo'ja\)/u);
+    assert.strictEqual((await c.confirmCommand(held.confirm.token, { adminId: 8, store, alt: true })).action, 'matter_confirm_expired');
+    const ok = await c.confirmCommand(held.confirm.token, { adminId: 7, store, alt: true });
+    assert.deepStrictEqual([ok.action, store.calls.pop()], ['matter_created', ['create', 7, 'Pudratchi bilan nizo']]);
+    const asHeard = await c.runCommand({ action: 'create', title: "Qudratxo'ja bilan nizo" }, { adminId: 7, store, voice: true, suggest: t => g.suggest(t) });
+    await c.confirmCommand(asHeard.confirm.token, { adminId: 7, store });
+    assert.deepStrictEqual(store.calls.pop(), ['create', 7, "Qudratxo'ja bilan nizo"], 'a real name stays as said when the person says so');
+    const typed = await c.runCommand({ action: 'create', title: 'Pudrachi bilan nizo' }, { adminId: 7, store, voice: true, suggest: t => g.suggest(t) });
+    assert.ok(c.pendingWrite(typed.confirm.token, 7));
+    assert.strictEqual(await c.correctPending(typed.confirm.token, 'Alfa Qurilish bilan nizo', { adminId: 8, store }), null, "another account's correction does nothing");
+    const fixed = await c.correctPending(typed.confirm.token, ' Alfa Qurilish bilan nizo. ', { adminId: 7, store });
+    assert.deepStrictEqual([fixed.action, store.calls.pop()], ['matter_created', ['create', 7, 'Alfa Qurilish bilan nizo']]);
+    assert.strictEqual(await c.correctPending(typed.confirm.token, 'x y', { adminId: 7, store }), null, 'used once');
+    const typedCmd = await c.runCommand({ action: 'create', title: 'Soliq tekshiruvi' }, { adminId: 7, store });
+    assert.strictEqual(typedCmd.action, 'matter_created', 'a typed command runs at once, as before');
+  });
+
+  await test('a spoken note waits too; confirmed it lands in that matter', async () => {
+    const store = stubStore([{ title: 'Pudratchi bilan nizo' }]);
+    const held = await c.runCommand({ action: 'note', matter: 'pudratchi', text: 'Sud majlisi 12-noyabr' }, { adminId: 7, store, voice: true });
+    assert.deepStrictEqual([held.action, held.confirm.alt, store.calls.length], ['matter_confirm', null, 0]);
+    assert.match(held.reply, /«Pudratchi bilan nizo» ishiga yozuv shunday eshitildi: «Sud majlisi 12-noyabr»/u);
+    const ok = await c.confirmCommand(held.confirm.token, { adminId: 7, store });
+    assert.deepStrictEqual([ok.action, store.calls.pop()], ['matter_noted', ['note', 'm1', 'Sud majlisi 12-noyabr']]);
+  });
+
+  await test('voice wiring: the bot passes the voice flag and offers "as suggested"; the app never runs a dictated command by itself; dictation returns suggestions', () => {
+    const agent = fs.readFileSync(path.join(__dirname, '../src/agents/telegram-agent.js'), 'utf8');
+    assert.match(agent, /voice: !!voice, suggest:/u);
+    assert.match(agent, /pendingVoiceWrite\.set\(String\(chatId\)/u);
+    assert.match(agent, /!\/\\\?\/u\.test\(q\)/u, 'a question is never taken for a correction');
+    const bot = fs.readFileSync(path.join(__dirname, '../src/bot/bot.js'), 'utf8');
+    assert.match(bot, /voice: !!requestData\.voiceTranscribed/u);
+    assert.match(bot, /callback_data: `mtc_a_\$\{agentResult\.meta\.token\}`/u);
+    assert.match(bot, /alt: data\.startsWith\('mtc_a_'\)/u);
+    const page = fs.readFileSync(path.join(__dirname, '../public/app/matters.js'), 'utf8');
+    const onstop = page.slice(page.indexOf('rec.onstop'), page.indexOf('rec.start()'));
+    assert.ok(/heardCheck\(/u.test(onstop) && !/run\(input\.value\)/u.test(onstop), 'the dictated text waits in the box');
+    const server = fs.readFileSync(path.join(__dirname, '../src/api/server.js'), 'utf8');
+    assert.match(server, /require\('\.\.\/voice\/glossary'\)\.suggest\(text/u);
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed) process.exit(1);
 })();
