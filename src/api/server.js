@@ -11607,6 +11607,15 @@ async function runMigrations() {
       });
     } catch (e) { console.log('[AGENT] Mount skipped:', e.message); }
 
+    // Matters: one legal matter and the links to its chats, scans and notes
+    // (docs/design/matter-va-agent-runs.md); no AI, no tariff unit
+    try {
+      require('../matters/routes').mountMatterRoutes(app, {
+        requireAuth, requireSameOrigin: require('../auth/same-origin').requireSameOrigin, pool,
+        resolveEntitlement: require('../rag/tariff-ledger').resolveEntitlement,
+      });
+    } catch (e) { console.log('[MATTERS] Mount skipped:', e.message); }
+
     // Mount OCR & AI Document Analyzer routes
     try {
       const { mountAnalyzerRoutes } = require('../ocr/routes');

@@ -41,7 +41,9 @@ async function saveScan(db, { adminId, fileHash: hash, kind, pages, bytes, text,
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now() + ($10 || ' days')::interval)
      ON CONFLICT (admin_id, file_hash) DO UPDATE
         SET text = EXCLUDED.text, chars = EXCLUDED.chars, pages = EXCLUDED.pages, provider = EXCLUDED.provider,
-            request_id = EXCLUDED.request_id, expires_at = EXCLUDED.expires_at
+            request_id = EXCLUDED.request_id,
+            -- a scan a matter holds keeps its longer life (src/matters/store.js)
+            expires_at = GREATEST(document_scans.expires_at, EXCLUDED.expires_at)
      RETURNING *`,
     [adminId, hash, kind, pages, bytes, text, text.length, provider || null, requestId, String(RETENTION_DAYS)]);
   return r.rows[0];

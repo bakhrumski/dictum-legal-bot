@@ -1,7 +1,7 @@
 # Dizayn: Matter (ish), uzoq ishlar (agent_runs) va reja tuzuvchi agent
 
-Holat: **qoralama**, 2026-10-27. Egasi 8-bo'limdagi savollarga javob bermaguncha
-kod yozilmaydi. Yo'l xaritasi: `docs/roadmap/legora-darajasi.md`, 1-bosqich.
+Holat: **qabul qilingan**, 2026-10-28. Egasi 8-bo'limdagi tavsiyalarni qabul qildi;
+PR-A (Matter) yozildi. Yo'l xaritasi: `docs/roadmap/legora-darajasi.md`, 1-bosqich.
 
 Bu hujjat uch narsani belgilaydi:
 1. **Matter** - bitta huquqiy ish atrofida hamma natijani yig'adigan obyekt.
@@ -104,13 +104,21 @@ ALTER TABLE public.matters ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.matter_items ENABLE ROW LEVEL SECURITY;
 ```
 
+PR-A'da amalga oshirilgani (`migrations/20261028_019_matters.sql`) yuqoridagidan
+farq qiladi:
+- `kind`: `chat`, `scan`, `agent_run`, `note`. `file` olib tashlandi, chunki
+  hozir fayl jadvali yo'q.
+- `agent_run` havolasi PR-B'gacha qabul qilinmaydi (400).
+- `ref_*` maydonlari turiga qarab qat'iy tekshiriladi.
+- `admins` havolalari `ON DELETE CASCADE`.
+
 Qoidalar:
 - **Polimorf havola (`ref_int` / `ref_uuid`)** tanlangan, chunki manba
   jadvallarining kalit turlari har xil. Har bir o'qishda server havolaning
   egasini tekshiradi: chat, skan va run shu hisobniki bo'lishi kerak. Begona
   yoki o'chgan havola "mavjud emas" deb ko'rsatiladi, xato bermaydi.
 - **Skan 7 kunda o'chadi** (`document_scans.expires_at`). Ishga qo'shilgan skan
-  uchun ikki variant bor:
+  uchun ikki variant bor edi (egasi (a) ni tanladi, 8-bo'lim):
   - (a) ishga qo'shilganda `expires_at` uzaytiriladi;
   - (b) matn `matter_files`ga ko'chiriladi.
 
@@ -437,20 +445,21 @@ qat'iy workflow taklif qilinadi.
 | F | Telegram xabari yangilanishi, tugmalar | `/testmode`da master sinovi |
 | G | `docs/quality/agent-eval.md`, stub bilan CI'da | Yurist ko'rib chiqqan holatlar to'plami |
 
-## 8. Egasiga savollar (kod boshlanishidan oldin)
+## 8. Egasining qarorlari (2026-10-28: "takliflaringni qabul qildim")
 
-1. **Kim uchun?** Tavsiya: Matter hamma pullik tarifda (Silver+), Sinov'da
-   bitta ish; agent rejasi avval faqat master, keyin Gold+.
-2. **Run byudjeti.** Bitta agent ishi uchun AI chegarasi $1,00 va 15 daqiqa
-   bo'lsinmi? Tarif birligi rejadagi vositalar yig'indisi bo'ladi. Reja
-   tuzish chaqiruvining o'zi bepulmi yoki 1 savol birligimi?
-   Tavsiya: bepul (arzon lane).
-3. **Skan saqlanishi.** Ishga qo'shilgan skan ish yopilguncha va 30 kun
-   saqlansinmi (7 kun o'rniga)?
-4. **Natija saqlanish muddati.** Agent natijalari 90 kun yoki ish
-   o'chguncha bo'lsinmi?
-5. **Workspace.** Platinum'da ish Workspace'ga biriktirilsa, viewer ish
-   natijalarini ko'rsinmi? Tavsiya: ha, faqat o'qish.
+1. **Kim uchun.** Matter hamma pullik tarifda (Silver va undan yuqori, test
+   entitlement, xodimlar) - 200 ta ochiq ish (`MATTER_MAX_OPEN`); Sinov va
+   tarifsiz hisob - 1 ta ochiq ish. Agent rejasi avval faqat master uchun,
+   keyin Gold va undan yuqori.
+2. **Run byudjeti.** Bitta agent ishi: AI chegarasi $1,00 va 15 daqiqa.
+   Reja tuzish chaqiruvi bepul (arzon lane); tarif birligi rejadagi
+   vositalar yig'indisi.
+3. **Skan.** Ishga qo'shilgan skan ochiq ish uni ushlab turganicha
+   saqlanadi; oxirgi shunday ish yopilsa yoki o'chirilsa, yoki element olib
+   tashlansa, yana 30 kun saqlanadi. OCR keshi bir xil faylni qayta
+   o'qisa, muddat qisqarmaydi (`GREATEST`).
+4. **Agent natijalari.** 90 kun; ishga bog'langan bo'lsa, ish o'chguncha.
+5. **Workspace.** Viewer ishni faqat o'qiydi; owner va member yozadi.
 
 ## 9. PR tartibi
 
