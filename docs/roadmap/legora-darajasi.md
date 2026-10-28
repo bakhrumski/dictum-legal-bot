@@ -43,15 +43,15 @@ O'zgarmas tamoyillar:
 
 ## 0-bosqich. Dizayn
 
-- [~] Matter va agent_runs + reja tuzuvchi agent dizayni:
-  `docs/design/matter-va-agent-runs.md` (2026-10-27). Egasi ochiq savollarga
-  javob beradi, keyin 1-bosqich boshlanadi.
+- [x] Matter va agent_runs + reja tuzuvchi agent dizayni:
+  `docs/design/matter-va-agent-runs.md` (#491, 2026-10-28). Egasi
+  tavsiyalarni qabul qildi (8-bo'lim).
 
 ## 1-bosqich. Asos (Matter, uzoq ishlar, reja tuzuvchi)
 
 Tartib va PR bo'linishi dizayn hujjatining 9-bo'limida.
 
-- [ ] PR-A: `matters`, `matter_items` (migratsiya 019) va API. UI hali yo'q.
+- [~] PR-A: `matters`, `matter_items` (migratsiya 019) va API. UI hali yo'q.
 - [ ] PR-B: `agent_runs` va `agent_run_steps` (migratsiya 020), DB'dagi
   navbat va worker. Mavjud 3 ta workflow run sifatida ishlaydi, eski route'lar
   javob shaklini saqlaydi.
@@ -98,4 +98,7 @@ Tartib va PR bo'linishi dizayn hujjatining 9-bo'limida.
 Har bir merge shu yerga bir qator bo'lib yoziladi: sana, PR, nima qilindi,
 nima o'lchandi.
 
-- 2026-10-27: yo'l xaritasi va dizayn hujjati yozildi (PR shu fayl bilan).
+- 2026-10-28: #491 merge: yo'l xaritasi va dizayn hujjati.
+- 2026-10-28: PR-A ochildi: migratsiya 019, `/api/matters`. Lokal Postgres'da
+  `tests/matters.db.test.js` (7 ta) va boot smoke (anonim so'rov 401/403)
+  o'tdi.

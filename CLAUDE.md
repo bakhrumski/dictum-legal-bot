@@ -620,6 +620,13 @@ Known state of the suites (Sept 2026):
   `analysis`, and the analysis units that step held are adopted
   (`heldScanJob`) - never charged twice. Page `/app/#/playbook`
   (`public/app/playbook.js`, editor, Word report).
+- `src/matters/` (2026-10-28, PR-A of the roadmap) — Matters: one legal
+  matter and the links to its chats, scans and notes (migration 019,
+  `/api/matters`). A link is checked to be the caller's own; another
+  account's matter is 404. Attached to a Workspace, its members write and
+  viewers read. Paid plans keep 200 open matters, Sinov 1. A scan held by an
+  open matter does not expire; 30 days after the last one closes. Account
+  deletion removes matters and scans. No AI, no unit; `MATTERS=off`.
 - `src/workspace/` — Platinum Workspace: routes, authz, Supabase
   realtime/storage, Workspace AI.
 - `public/` — static pages: `index.html` (landing), `login.html`,

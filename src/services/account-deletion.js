@@ -15,7 +15,8 @@
  *     phone, Google and Telegram links scrubbed, a random unusable password,
  *     every session and add-in token ended; the row stays so payment and
  *     usage records keep their reference;
- *   - web chats (ai_chat_sessions) deleted;
+ *   - web chats (ai_chat_sessions), matters (matters, matter_items) and
+ *     scanned documents (document_scans) deleted;
  *   - the Telegram profile (users) scrubbed, bot conversation state deleted,
  *     the text of their bot questions and answers replaced;
  *   - tariff periods, usage and payments are kept (accounting), without
@@ -102,6 +103,9 @@ async function complete(db, id, { handledBy, revoke = async () => {} } = {}) {
       if (cols.has('is_active')) set.push('is_active = FALSE');
       await db.query(`UPDATE admins SET ${set.join(', ')} WHERE id = $1 AND role = 'user'`, vals);
       await db.query(`DELETE FROM ai_chat_sessions WHERE admin_id = $1`, [adminId]).catch(() => {});
+      // matters and their links; the scans go too (a matter may hold one for years)
+      await require('../matters/store').deleteAccountMatters(db, adminId).catch(() => {});
+      await db.query(`DELETE FROM document_scans WHERE admin_id = $1`, [adminId]).catch(() => {});
       await revoke(adminId);
     }
   }

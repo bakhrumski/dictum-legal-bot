@@ -53,6 +53,11 @@ const CASES = [
   ['POST', '/api/account/credentials', REJECTED, 'set login and password'],
   ['POST', '/api/admin/test-users', REJECTED, 'master: create a test user'],
   ['POST', '/api/analyze/scans/00000000-0000-0000-0000-000000000000/release', REJECTED, 'scan reservation release'],
+  ['GET', '/api/matters', REJECTED, 'matters list'],
+  ['POST', '/api/matters', REJECTED, 'create a matter'],
+  ['GET', '/api/matters/00000000-0000-0000-0000-000000000000', REJECTED, 'matter detail'],
+  ['POST', '/api/matters/00000000-0000-0000-0000-000000000000/items', REJECTED, 'link to a matter'],
+  ['DELETE', '/api/matters/00000000-0000-0000-0000-000000000000', REJECTED, 'delete a matter'],
 
   // ── staff-only ──
   ['GET', '/api/files/AgACAgTEST/download', REJECTED, 'client file download'],

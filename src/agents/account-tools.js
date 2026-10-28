@@ -123,8 +123,8 @@ async function runAccountTool(name, { chatId, who = {}, lang = 'uz', deps = {} }
       return {
         action: 'tool_delete_account_confirm',
         reply: R
-          ? 'Удалить аккаунт JuristAI? Будут удалены: ваши данные профиля, история чатов на сайте, текст ваших вопросов и ответов в боте. Записи об оплате и использовании тарифа остаются без личных данных (учёт). Неиспользованный лимит не возвращается. Подтвердите кнопкой ниже.'
-          : "JuristAI akkauntini o'chirishni so'raysizmi? O'chiriladi: profil ma'lumotlaringiz, saytdagi suhbatlar tarixi, botdagi savol va javoblaringiz matni. To'lov va tarif sarfi yozuvlari shaxsiy ma'lumotsiz qoladi (hisob-kitob uchun). Ishlatilmagan limit qaytarilmaydi. Quyidagi tugma bilan tasdiqlang.",
+          ? 'Удалить аккаунт JuristAI? Будут удалены: ваши данные профиля, история чатов на сайте, дела и загруженные сканы, текст ваших вопросов и ответов в боте. Записи об оплате и использовании тарифа остаются без личных данных (учёт). Неиспользованный лимит не возвращается. Подтвердите кнопкой ниже.'
+          : "JuristAI akkauntini o'chirishni so'raysizmi? O'chiriladi: profil ma'lumotlaringiz, saytdagi suhbatlar tarixi, ishlar va skanerlangan hujjatlar, botdagi savol va javoblaringiz matni. To'lov va tarif sarfi yozuvlari shaxsiy ma'lumotsiz qoladi (hisob-kitob uchun). Ishlatilmagan limit qaytarilmaydi. Quyidagi tugma bilan tasdiqlang.",
       };
     case 'open_app':
       return { action: 'tool_open_app', reply: R ? `Приложение JuristAI: ${app}\nТарифы: ${baseUrl()}/tariff.html` : `JuristAI ilovasi: ${app}\nTariflar: ${baseUrl()}/tariff.html` };
