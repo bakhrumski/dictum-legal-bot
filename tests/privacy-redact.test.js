@@ -57,6 +57,8 @@ async function test(name, fn) {
     const m = r.createMap();
     assert.strictEqual(r.redact('Aziz Karimov ijarachi', m, { names: ['Aziz Karimov'] }), '[SHAXS_1] ijarachi');
     assert.strictEqual(r.redact('Aziz ijarachi', r.createMap(), { names: ['Aziz'] }), 'Aziz ijarachi');
+    // the 2026 alphabet writes the marker F.I.Ş. (OʻRQ-1184)
+    assert.strictEqual(r.redact('F.I.Ş.: Karimov Aziz Botirovich', r.createMap()), 'F.I.Ş.: [SHAXS_1]');
   });
 
   await test('messages: only the text parts; other parts as they are', () => {

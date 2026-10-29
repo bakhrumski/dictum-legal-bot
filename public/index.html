@@ -28,7 +28,7 @@
 <link rel="icon" href="/favicon.svg?v=2" type="image/svg+xml">
 <link rel="icon" href="/favicon-32.png?v=2" type="image/png" sizes="32x32">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2">
-<link rel="stylesheet" href="css/style.css?v=41">
+<link rel="stylesheet" href="css/style.css?v=42">
 </head>
 <body>
 
@@ -193,6 +193,19 @@
       <div><svg class="sic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6z"/><path d="m9 12 2.2 2.200L15 10.4"/></svg><h3 data-i18n="sec.c2h">Ma’lumotlaringiz sizniki</h3><p data-i18n="sec.c2p">Sotilmaydi va reklamaga ishlatilmaydi. Javob tayyorlash uchun matn AI provayderlariga yuboriladi (asosan DeepSeek — Xitoy; zaxira: OpenAI va Google — AQSh; DeepSeek’ni ilovadagi «Moslashish» sahifasida o‘chirib qo‘yish mumkin). Akkauntni o‘chirishni botda so‘rashingiz mumkin.</p></div>
       <div><svg class="sic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="14" r="4"/><path d="m11 11 8-8M16 6l2.5 2.500M14 8l2 2"/></svg><h3 data-i18n="sec.c3h">Parolsiz kirish</h3><p data-i18n="sec.c3p">Telegram orqali, bir necha soniyada.</p></div>
     </div>
+    <!-- E7: faqat serverda shifrlash va yashirish yoqiq bo'lsa ko'rinadi (GET /api/landing-config → privacy) -->
+    <div class="enc" id="shifrlash" hidden>
+      <h3 class="enc-h" data-i18n="enc.title">Ma’lumotingiz qanday himoyalanadi</h3>
+      <ol class="enc-steps" aria-hidden="true">
+        <li data-s="1"><i class="enc-dot"></i><span data-i18n="enc.s1">Siz yozasiz</span></li><li class="enc-bar"><i></i></li>
+        <li data-s="2"><i class="enc-dot"></i><span data-i18n="enc.s2">Shaxsiy ma’lumot yashiriladi</span></li><li class="enc-bar"><i></i></li>
+        <li data-s="3"><i class="enc-dot"></i><span data-i18n="enc.s3">Bazada shifrlanadi</span></li><li class="enc-bar"><i></i></li>
+        <li data-s="4"><i class="enc-dot"></i><span data-i18n="enc.s4">Faqat sizga ochiladi</span></li>
+      </ol>
+      <div class="enc-card"><i class="mm-beam enc-beam"></i><p class="enc-line" data-noalpha></p><p class="enc-note"></p><span class="stamp enc-stamp"></span></div>
+      <p class="enc-foot"></p>
+      <p class="enc-more"><a href="/app/#/moslashish" data-i18n="enc.link">Ma’lumotlaringiz qayerga boradi →</a></p>
+    </div>
   </section>
 
   <!-- 8a. SAVOLLAR -->
@@ -228,7 +241,7 @@
 </footer>
 
 <script src="/js/uz-alphabet.js?v=1"></script>
-<script src="js/i18n.js?v=42"></script>
-<script src="js/main.js?v=42"></script>
+<script src="js/i18n.js?v=43"></script>
+<script src="js/main.js?v=43"></script>
 </body>
 </html>

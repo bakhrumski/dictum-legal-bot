@@ -428,7 +428,18 @@ Known state of the suites (Sept 2026):
   `shared.accountId` (the ledger's user is unchanged). The landing, the tariff
   FAQ and the Moslashish page name the providers (DeepSeek - China; OpenAI,
   Google - USA; VoiceLab - Uzbekistan) and the switch.
-  `tests/e6b-access-provider.db.test.js`. Next: E7.
+  `tests/e6b-access-provider.db.test.js`.
+  E7 (2026-10-29, design §10): the landing's "Ma'lumotingiz qanday
+  himoyalanadi" (`#shifrlash`, inside `#xavfsizlik`) is hidden until
+  `GET /api/landing-config` says `privacy.encryptionAtRest` (DATA_KEYS) and
+  `privacy.redactAi` are on; its footnote names the services redaction covers
+  (`redactChat` only with `REDACT_LEGAL_CHAT=on`). Four steps in a loop - you
+  write (caret), personal data hidden (beam + `.slot.flip` to `[SHAXS_1]` /
+  `[PASPORT_1]` on light blue), stored encrypted (flip to an `enc:v1:` line +
+  `.stamp`), opened only for you (flip back) - with `mdot` / `barin` on the
+  rail; only the landing's existing keyframes; reduced motion or the footer
+  switch shows the final state still. The redaction rule also takes the 2026
+  alphabet's "F.I.Ş.". `tests/landing-privacy.test.js`.
   `tests/privacy-crypto.test.js`, `tests/document-library.db.test.js`,
   `tests/sealing-e2b.db.test.js`, `tests/privacy-redact.test.js`,
   `tests/redaction-eval.test.js`.

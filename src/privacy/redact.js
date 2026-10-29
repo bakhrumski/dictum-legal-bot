@@ -59,7 +59,7 @@ const RULES = [
   { tag: 'TELEFON', re: /(?<![\d])(?<v>\(\d{2}\)[\s.-]*\d{3}[\s.-]*\d{2}[\s.-]*\d{2})(?![\d])/gu },
   { tag: 'AVTO', re: /(?<![\w])(?<v>\d{2}\s?[A-Z]\s?\d{3}\s?[A-Z]{2}|\d{2}\s?\d{3}\s?[A-Z]{3})(?![\w])/gu },
   // the words right after a full-name marker (2-3 capitalised words)
-  { tag: 'SHAXS', re: /(?:F\.?\s?I\.?\s?Sh\.?|FISh|[Ff]uqaro|Ф\.?\s?И\.?\s?О\.?|гражданин(?:ка)?)[\s:,-]+(?<v>[A-ZА-ЯЎҚҒҲ][\p{Ll}ʻʼ'’-]+(?:\s+[A-ZА-ЯЎҚҒҲ][\p{Ll}ʻʼ'’-]+){1,2})/gu },
+  { tag: 'SHAXS', re: /(?:F\.?\s?I\.?\s?(?:Sh|Ş)\.?|FI(?:Sh|Ş)|[Ff]uqaro|Ф\.?\s?И\.?\s?О\.?|гражданин(?:ка)?)[\s:,-]+(?<v>[A-ZА-ЯЎҚҒҲ][\p{Ll}ʻʼ'’-]+(?:\s+[A-ZА-ЯЎҚҒҲ][\p{Ll}ʻʼ'’-]+){1,2})/gu },
 ];
 
 function createMap() {
