@@ -164,7 +164,7 @@ Ro'yxat sahifalari ochiq `title` bilan ishlaydi (shifr ochilmaydi).
 |---|---|---|
 | E1 ✅ | `src/privacy/crypto.js`, kalit halqasi, `scripts/data-key.js`, `tests/privacy-crypto.test.js`; noto'g'ri `DATA_KEYS` serverni to'xtatadi, yo'q `DATA_KEYS` — ogohlantirish (shifrlash o'chiq) | src |
 | E2a ✅ | "Hujjatlarim" (migratsiya 029: `document_scans` — har bir yuklangan hujjat egasi o'chirmaguncha, egasining tanlovi 2026-10-29) va uning matni; intervyu audio, transkript, rozilik, xulosa; `seal-backfill.js` (quruq odatiy, `--apply` — egasi) | src, scripts, public |
-| E2b | qolgan 3.1 ustunlari: `tg_conversations`, `matters.summary` / `matter_items.note`, `agent_runs` / `agent_run_steps`, keshlar, marketplace, `answer_feedback`, `chat_messages`, `agent_traces` | src |
+| E2b ✅ | `tg_conversations` (turns, context), `matters.summary`, `matter_items.note` (yozuv sarlavhasi endi uning so'zlarini ochmaydi), `agent_runs` (input, plan, result), `agent_run_steps.output`, `service_orders.intake_data`, `attorney_consultation_requests.case_summary`, `answer_feedback`, `chat_messages`, `agent_traces` (migratsiya 030; `seal-backfill.js` ularni ham qamraydi). `answer_cache` / `opinion_cache` `/api/legal-chat` ichida — E4'ga (egasining roziligi bilan) | src, scripts |
 | E3 | `src/privacy/redact.js` + legal-chat'dan tashqari yo'llar; ledgerda sanoq | src |
 | E4 | legal-chat yo'li (`REDACT_LEGAL_CHAT`) — **egasining roziligi bilan** | src (javob zanjiri) |
 | E5 | Workspace realtime → signal; Workspace ustunlari; fayllarni shifrlash | src, public |
