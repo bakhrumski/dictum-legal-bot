@@ -353,6 +353,7 @@ function transactionalPool(handler) {
       '20261029_031_agent_invites.sql',
       '20261029_032_seal_workspace.sql',
       '20261029_033_request_text_index.sql',
+      '20261029_034_data_access_log.sql',
     ]);
     assert.strictEqual(stripOuterTransaction('BEGIN;\nSELECT 1;\nCOMMIT;'), 'SELECT 1;');
   });

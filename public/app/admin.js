@@ -33,6 +33,10 @@
       'adm.svc': 'Pullik xizmatlar', 'adm.svc.d': 'Hujjat buyurtmalari va narxlar',
       'adm.more': "Eski dashboardda qolganlar", 'adm.more.d': "Korpusga yuklash, inson navbati, model testi",
       'adm.pilot': 'CustDev pilot', 'adm.pilot.d': 'Shogird-yurist agentlar, offer link, 14 kunlik pilot so\'rovlari', 'adm.t.pilot': 'Pilot so\'rovlari',
+      'adm.acc': 'Kirish jurnali', 'adm.acc.d': 'Xodim boshqa odamning shifrlangan ma\'lumotini ochganda — kim, kimning, qayerda, qachon (matnsiz)',
+      'adm.acc.note': 'Har bir qator: xodim (master, yurist, shogird) boshqa odamning shifrlangan ma\'lumotini ochgan. Matn yozilmaydi — faqat fakt. O\'z ma\'lumotini ko\'rish yozilmaydi.',
+      'adm.acc.viewer': 'Kim ochdi', 'adm.acc.owner': 'Kimning', 'adm.acc.table': 'Qayerda', 'adm.acc.route': "So'rov", 'adm.acc.rows': 'Qator', 'adm.acc.none': 'Bu davrda yozuv yo\'q.',
+      'adm.acc.kind.account': 'akkaunt', 'adm.acc.kind.telegram_user': 'Telegram mijoz',
       'adm.pl.req': 'Kutilayotgan pilot so\'rovlari', 'adm.pl.client': 'Mijoz', 'adm.pl.agent': 'Agent', 'adm.pl.via': 'Qayerdan', 'adm.pl.approve': '14 kunlik pilotni berish', 'adm.pl.decline': 'Rad etish',
       'adm.pl.approved': 'Pilot berildi: 14 kun, chat 120 · tahlil 8 · xulosa 4 · loyiha 6 · OCR 20, AI budjeti $10', 'adm.pl.agents': 'Agentlar', 'adm.pl.code': 'Kod', 'adm.pl.links': 'Offer link',
       'adm.pl.give': 'Kod berish', 'adm.pl.renew': 'Kodni yangilash', 'adm.pl.revoke': 'Agentlikdan chiqarish',
@@ -165,7 +169,7 @@
     ['sifat', 'flag', 'adm.fb', 'daily'], ['telegram', 'tg', 'adm.tg', 'daily'],
     ['xaridlar', 'tg', 'adm.buy', 'money'], ['chegirmalar', 'spark', 'adm.offers', 'money'], ['ai', 'chat', 'adm.ai', 'money'],
     ['advokatlar', 'scale', 'adm.att', 'catalog'], ['manbalar', 'book', 'adm.src', 'catalog'],
-    ['korpus', 'search', 'adm.cov', 'tech'], ['audit', 'shield', 'adm.audit', 'tech'], ['landing', 'globe', 'adm.landing', 'tech'], ['sinov', 'spark', 'adm.lab', 'tech']
+    ['korpus', 'search', 'adm.cov', 'tech'], ['audit', 'shield', 'adm.audit', 'tech'], ['kirish', 'lock', 'adm.acc', 'tech'], ['landing', 'globe', 'adm.landing', 'tech'], ['sinov', 'spark', 'adm.lab', 'tech']
   ];
   var GROUPS = [['daily', 'adm.g.daily'], ['money', 'adm.g.money'], ['catalog', 'adm.g.catalog'], ['tech', 'adm.g.tech']];
 
@@ -866,7 +870,28 @@
   }
 
   /* ---------- marshrutlar ---------- */
-  var VIEWS = { pilot: viewPilot, sinov: viewLab, ai: viewAi, xaridlar: viewBuy, qabul: viewReg, sifat: viewFb, manbalar: viewSrc, korpus: viewCov, audit: viewAudit, landing: viewLanding, chegirmalar: viewOffers, telegram: viewTg, advokatlar: viewAtt, xizmatlar: viewSvc, ochirish: viewDel };
+  /* ---------- Kirish jurnali (data_access_log, src/privacy/access-log.js) ---------- */
+  var accDays = 7;
+  var ACC_TABLES = { requests: 'Murojaatlar navbati', ai_analyses: 'AI tahlil arxivi', service_orders: 'Pullik buyurtmalar', interview_recordings: 'Intervyu yozuvlari' };
+  function viewAcc() {
+    shell('kirish', function (body, again) {
+      body.innerHTML = '<p class="muted" style="font-size:13px;margin-bottom:14px">' + esc(t('adm.acc.note')) + '</p><div class="filters"><span class="seg">' +
+        [1, 7, 30, 90].map(function (d) { return '<button type="button" data-d="' + d + '" class="' + (d === accDays ? 'on' : '') + '">' + d + ' ' + esc(t('adm.days')) + '</button>'; }).join('') +
+        '</span></div><div class="acc-b">' + skel() + '</div>';
+      $$('[data-d]', body).forEach(function (b) { b.onclick = function () { accDays = +b.dataset.d; again(); }; });
+      J.api('/api/admin/access-log?days=' + accDays).then(function (r) {
+        var box = $('.acc-b', body); if (!r.ok) { box.innerHTML = errBox(r); return; }
+        var list = r.data.items || [];
+        if (!list.length) { box.innerHTML = '<p class="muted">' + esc(t('adm.acc.none')) + '</p>'; return; }
+        box.innerHTML = table([t('adm.time'), t('adm.acc.viewer'), t('adm.acc.owner'), t('adm.acc.table'), t('adm.acc.rows'), t('adm.acc.route')], list.map(function (x) {
+          return '<tr>' + td(dt(x.created_at)) + td((x.viewer_name || '') + ' @' + (x.viewer_username || '') + ' · ' + x.viewer_role) +
+            td((x.owner_name || '—') + ' · ' + t('adm.acc.kind.' + x.owner_kind) + ' #' + x.owner_id) + td(ACC_TABLES[x.table_name] || x.table_name) + td(n0(x.rows_seen)) + td(x.route || '') + '</tr>';
+        }));
+      });
+    });
+  }
+
+  var VIEWS = { kirish: viewAcc, pilot: viewPilot, sinov: viewLab, ai: viewAi, xaridlar: viewBuy, qabul: viewReg, sifat: viewFb, manbalar: viewSrc, korpus: viewCov, audit: viewAudit, landing: viewLanding, chegirmalar: viewOffers, telegram: viewTg, advokatlar: viewAtt, xizmatlar: viewSvc, ochirish: viewDel };
   function guard(fn) { return function () { if (!J.isMaster()) { J.go('#/'); return; } fn.apply(null, arguments); }; }
   J.route(/^\/boshqaruv$/, guard(function () { J.viewAdmin(); }));
   J.route(/^\/boshqaruv\/([a-z]+)$/, guard(function (k) { (VIEWS[k] || J.viewAdmin)(); }));

@@ -274,3 +274,6 @@ nima o'lchandi.
   chatlar, murojaatlar navbati va AI tahlil arxivi shifrlanadi, xodim
   qidiruvi ko'r indeks bilan; o'rganish to'plamlariga shaxsiy ma'lumot
   yashirilib yoziladi.
+- 2026-10-29: E6b PR: kirish jurnali (xodim boshqa odam ma'lumotini ochganda
+  qator, Boshqaruv → "Kirish jurnali") va "DeepSeek'ka yuborilmasin" tanlovi
+  (Moslashish); landingda provayderlar rost yozildi.

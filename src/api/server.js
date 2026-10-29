@@ -612,6 +612,8 @@ function anonLabel(userId, dateStr) {
 // Anonymize applicant personal info for non-master users
 // E6: the question and the answer are sealed at rest (src/privacy/request-text.js)
 const reqSeal = require('../privacy/request-text');
+// E6b: a staff account opening other people's sealed data leaves a row (src/privacy/access-log.js)
+const accessLog = require('../privacy/access-log');
 function anonymizeRequest(row, role) {
   row = reqSeal.openRequest(row);
   if (role === 'master') return row;
@@ -2034,6 +2036,7 @@ app.get('/api/requests', requireStaff, async (req, res) => {
     `, queryParams);
 
     const total = result.rows.length ? Number(result.rows[0].filtered_total) : 0;
+    accessLog.note(pool, req, { table: 'requests', ownerKind: 'telegram_user', owners: result.rows.map(r => r.user_id) });
     const rows = result.rows.map(row => {
       const { filtered_total, ...requestRow } = row;
       return anonymizeRequest(requestRow, req.session.role);
@@ -2375,6 +2378,20 @@ app.put('/api/admin/service-catalog/:id', requireMasterAdmin, async (req, res) =
   }
 });
 
+// the access log (E6b): who of the staff opened whose sealed data - facts only, never the text
+app.get('/api/admin/access-log', requireMasterAdmin, async (req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store');
+    const n = v => (Number.isInteger(Number(v)) && Number(v) > 0 ? Number(v) : null);
+    const kind = ['account', 'telegram_user'].includes(req.query.ownerKind) ? req.query.ownerKind : null;
+    res.json({ items: await accessLog.list(pool, { days: req.query.days, viewerId: n(req.query.viewerId), ownerKind: kind, ownerId: n(req.query.ownerId) }) });
+  } catch (error) {
+    if (/does not exist/u.test(String(error && error.message))) return res.json({ items: [], unavailable: true });
+    console.error('[ACCESS-LOG] list failed:', error.message);
+    res.status(500).json({ error: 'Kirish jurnalini olishda xatolik' });
+  }
+});
+
 app.get('/api/admin/service-orders', requireMasterAdmin, async (req, res) => {
   try {
     const limit = Math.max(10, Math.min(parseInt(req.query.limit, 10) || 50, 100));
@@ -2395,6 +2412,7 @@ app.get('/api/admin/service-orders', requireMasterAdmin, async (req, res) => {
     `, params);
     // the intake is sealed at rest (data protection E2b): opened for the master here
     const { openOrder } = require('../services/legal-marketplace');
+    accessLog.note(pool, req, { table: 'service_orders', ownerKind: 'telegram_user', owners: result.rows.map(r => r.user_id) });
     res.json({ items: result.rows.map(openOrder) });
   } catch (error) {
     res.status(500).json({ error: 'Pullik xizmat buyurtmalarini olishda xatolik' });
@@ -2447,6 +2465,7 @@ app.patch('/api/admin/service-orders/:id', requireMasterAdmin, async (req, res) 
     if (!result.rows.length) return res.status(404).json({ error: 'Buyurtma topilmadi' });
     logAudit(req, 'service_order.update.' + status, 'service_order', id);
     const order = require('../services/legal-marketplace').openOrder(result.rows[0]);
+    accessLog.note(pool, req, { table: 'service_orders', ownerKind: 'telegram_user', owners: [order.user_id] });
     // the customer learns the price once, when it is approved
     if (status === 'approved_awaiting_payment' && before.status !== status && order.telegram_chat_id && bot) {
       bot.sendMessage(order.telegram_chat_id, commission.quoteMessage(order, { formatUzs: require('../rag/one-time-products').formatUzs }))
@@ -2517,6 +2536,7 @@ app.get('/api/requests/:id', requireStaff, async (req, res) => {
       return res.status(404).json({ error: 'Request not found' });
     }
     
+    accessLog.note(pool, req, { table: 'requests', ownerKind: 'telegram_user', owners: [result.rows[0].user_id] });
     res.json(anonymizeRequest(result.rows[0], req.session.role));
   } catch (error) {
     console.error('Error fetching request:', error);
@@ -3518,6 +3538,7 @@ app.get('/api/export-excel', requireMasterAdmin, async (req, res) => {
     `);
     
     // Anonymize for non-master users
+    accessLog.note(pool, req, { table: 'requests', ownerKind: 'telegram_user', owners: result.rows.map(r => r.user_id) });
     const rows = result.rows.map(r => anonymizeRequest(r, req.session.role));
 
     // Format data for Excel
@@ -3933,6 +3954,8 @@ const { usageFromGemini: geminiUsage, usageFromOpenAI: openaiUsage } = usageLedg
 // X-JAI-Redact for one request. The map stays in the request's memory; the
 // ledger request gets the counts only.
 const redaction = require('../privacy/redact');
+const providerChoice = require('../privacy/provider-choice');
+providerChoice.setLoader(providerChoice.dbLoader(pool));
 redaction.setNameLoader(async (uid) => { const r = await pool.query('SELECT full_name FROM admins WHERE id = $1', [uid]); return r.rows[0] ? r.rows[0].full_name : null; });
 const withRedaction = redaction.createWrapper({ current: () => usageLedger.current() });
 
@@ -4334,6 +4357,8 @@ async function tryDeepSeek(messages, options, requestedModel, onToken) {
   const explicit = /^(deepseek|voicelab|openai)\//i.test(String(requestedModel || ''));
   const route = explicit ? requestedModel : (options.lane || requestedModel);
   if (!deepseek.routes(route)) return null;
+  // the person chose "not to DeepSeek" on the Moslashish page (E6b, src/privacy/provider-choice.js)
+  if (!(await providerChoice.deepseekAllowed(usageLedger.current()))) return null;
   if (!(await paidModelsAllowed())) return null;
   // an explicit 'deepseek/deepseek-v4-pro' (or '-flash-thinking') picks that model; anything else is deepseek-flash
   const dsModel = deepseek.modelFor(explicit ? requestedModel : null);
@@ -8250,6 +8275,7 @@ app.post('/api/draft/legal-opinion/rate', requireAuth, async (req, res) => {
 // 2026-10-12; EXPLAIN_PROVIDER=default restores the cheap lane).
 const explainAIRaw = require('../ai/explain-router').createExplainAI({
   usageLedger, modelPricing, deepseek: require('../ai/deepseek'), callOpenAI, testModel: testModel.current,
+  deepseekAllowed: () => providerChoice.deepseekAllowed(usageLedger.current()),
   paidAllowed: async () => paidProviderConfigured() && await paidModelsAllowed(),
   spendAllowed: () => paidModelsAllowed(),
   lastResort: callGeminiLastResort, callDefault: callCheapAI,
@@ -8459,6 +8485,7 @@ app.get('/api/ai-analyses', requireMasterAdmin, async (req, res) => {
     const result = await pool.query(query, params);
 
     // Add anonymous label to each row
+    accessLog.note(pool, req, { table: 'ai_analyses', ownerKind: 'telegram_user', owners: result.rows.map(r => r.user_id) });
     const rows = result.rows.map(row => reqSeal.openAnalysis(row)).map(row => ({
       ...row,
       anon_name: row.user_id ? `Murojaatchi ${anonId(row.user_id, row.created_at, row.user_request_seq)}` : `Murojaatchi #${row.id}`
@@ -8491,6 +8518,7 @@ app.get('/api/ai-analyses/:id', requireMasterAdmin, async (req, res) => {
     }
 
     const row = reqSeal.openAnalysis(result.rows[0]);
+    accessLog.note(pool, req, { table: 'ai_analyses', ownerKind: 'telegram_user', owners: [row.user_id] });
     if (req.session.role !== 'master') {
       row.request_text = `Murojaatchi ${anonId(row.user_id || row.id, row.created_at, row.user_request_seq)}`;
     }

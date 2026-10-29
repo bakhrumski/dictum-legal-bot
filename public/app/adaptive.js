@@ -11,6 +11,8 @@
       on: 'Moslashish yoqiq', off: 'Moslashish to‘xtatilgan', pause: 'To‘xtatish', resume: 'Yoqish', pausedNote: 'To‘xtatilgan: yangi signal yozilmaydi va profil ishlatilmaydi.',
       know: 'JuristAI siz haqingizda nima biladi', areas: 'Ko‘p so‘raydigan sohalaringiz', acts: 'Ko‘p keltirilgan aktlar', none: 'Hali yetarli ma’lumot yo‘q.',
       script: 'Yozuv', latn: 'Lotin', cyrl: 'Kirill', alpha: 'Lotin alifbosi', alphaNew: 'Yangi: Ö ö, Ğ ğ, Ş ş, Ç ç', alphaOld: 'Eski: Oʻ oʻ, Gʻ gʻ, Sh sh, Ch ch', auto: 'Avtomatik', services: 'Ko‘p ishlatadigan xizmatlar', hide: 'Olib tashlash', hidden: 'Olib tashlangan', restore: 'Qaytarish',
+      where: 'Ma’lumotlaringiz qayerga boradi', whereLead: 'Javob tayyorlash uchun savol va hujjat matni AI provayderlariga yuboriladi: asosan DeepSeek (Xitoy), zaxira sifatida OpenAI va Google (AQSh). Ovoz VoiceLab’ga (O‘zbekiston), skan qilingan hujjat (OCR) Google Gemini yoki VoiceLab’ga boradi.',
+      noDs: 'Savollarim va hujjatlarim DeepSeek’ka yuborilmasin', noDsNote: 'Yoqilsa, javobni OpenAI yoki Google tayyorlaydi — sifat va tezlik biroz farq qilishi mumkin. Bu tanlov «Hammasini tozalash»da ham saqlanadi.',
       prefs: 'Sizning sozlamalaringiz', length: 'Javob uzunligi', len: { qisqa: 'Qisqa', orta: 'O‘rtacha', batafsil: 'Batafsil' },
       sides: 'Sizning tarafingiz', sidesLead: 'Faqat siz tanlaysiz — JuristAI tarafni o‘zi taxmin qilmaydi.', area: 'Soha', role: 'Taraf', add: 'Qo‘shish', saved: 'Saqlandi',
       signals: 'Yig‘ilgan signallar', signalsLead: 'Har savol yoki xizmatdan qolgan qisqa kodlar. {d} kundan keyin o‘zi o‘chadi.', total: 'Jami: {n}', when: 'Qachon', kind: 'Turi', value: 'Qiymati', ch: 'Qayerdan',
@@ -24,6 +26,8 @@
       on: 'Адаптация включена', off: 'Адаптация остановлена', pause: 'Остановить', resume: 'Включить', pausedNote: 'Остановлено: новые сигналы не записываются, профиль не используется.',
       know: 'Что JuristAI знает о вас', areas: 'Частые области', acts: 'Часто цитируемые акты', none: 'Пока недостаточно данных.',
       script: 'Письмо', latn: 'Латиница', cyrl: 'Кириллица', alpha: 'Узбекская латиница', alphaNew: 'Новая: Ö ö, Ğ ğ, Ş ş, Ç ç', alphaOld: 'Старая: Oʻ oʻ, Gʻ gʻ, Sh sh, Ch ch', auto: 'Автоматически', services: 'Частые сервисы', hide: 'Убрать', hidden: 'Убрано', restore: 'Вернуть',
+      where: 'Куда уходят ваши данные', whereLead: 'Для ответа текст вопроса и документа отправляется AI-провайдерам: в основном DeepSeek (Китай), запасные — OpenAI и Google (США). Голос — в VoiceLab (Узбекистан), скан документа (OCR) — в Google Gemini или VoiceLab.',
+      noDs: 'Не отправлять мои вопросы и документы в DeepSeek', noDsNote: 'Если включено, ответ готовят OpenAI или Google — качество и скорость могут немного отличаться. Выбор сохраняется и при «Очистить всё».',
       prefs: 'Ваши настройки', length: 'Длина ответа', len: { qisqa: 'Коротко', orta: 'Средне', batafsil: 'Подробно' },
       sides: 'Ваша сторона', sidesLead: 'Выбираете только вы — JuristAI не угадывает сторону.', area: 'Область', role: 'Сторона', add: 'Добавить', saved: 'Сохранено',
       signals: 'Собранные сигналы', signalsLead: 'Короткие коды от каждого вопроса или сервиса. Удаляются сами через {d} дней.', total: 'Всего: {n}', when: 'Когда', kind: 'Тип', value: 'Значение', ch: 'Откуда',
@@ -103,6 +107,9 @@
           '<div class="ad-add"><select class="inp ad-area"><option value="">' + esc(s('area')) + '</option>' + Object.keys(labels.areas || {}).map(function (k) { return '<option value="' + esc(k) + '">' + esc(labels.areas[k]) + '</option>'; }).join('') + '</select>' +
           '<select class="inp ad-role"><option value="">' + esc(s('role')) + '</option>' + (labels.roles || []).map(function (k) { return '<option value="' + k + '">' + esc(s('roles')[k] || k) + '</option>'; }).join('') + '</select>' +
           '<button class="pill sm" data-a="side" type="button">' + esc(s('add')) + '</button></div></div>' +
+        '<div class="card"><h4>' + esc(s('where')) + '</h4><p class="muted" style="font-size:13px">' + esc(s('whereLead')) + '</p>' +
+          '<label class="ad-check"><input type="checkbox" class="ad-nods"' + (m.noDeepseek ? ' checked' : '') + '> <span>' + esc(s('noDs')) + '</span></label>' +
+          '<p class="muted" style="font-size:12.5px;margin-top:6px">' + esc(s('noDsNote')) + '</p></div>' +
         '<div class="card"><h4>' + esc(s('signals')) + '</h4><p class="muted" style="font-size:13px">' + esc(s('signalsLead', { d: 180 })) + '</p><div class="ad-sig"><div class="skel" style="width:50%"></div></div></div>' +
         '<div style="margin-top:14px"><button class="pill sm ghost" data-a="clear" type="button">' + J.icon('trash') + esc(s('clear')) + '</button></div>';
 
@@ -120,6 +127,8 @@
         };
       });
       $$('[data-m]', body).forEach(function (sel) { sel.onchange = function () { var mm = manual(); if (sel.value) mm[sel.dataset.m] = sel.value; else delete mm[sel.dataset.m]; save(mm); }; });
+      var nods = $('.ad-nods', body);
+      if (nods) nods.onchange = function () { var mm = manual(); if (nods.checked) mm.noDeepseek = true; else delete mm.noDeepseek; save(mm); };
       var al = $('.ad-alpha', body);
       if (al) al.onchange = function () { if (AL) AL.save(al.value); };
       $$('[data-r]', body).forEach(function (b) { b.onclick = function () { var mm = manual(); mm.partyRoles.splice(+b.dataset.r, 1); save(mm); }; });

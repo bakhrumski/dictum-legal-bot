@@ -299,7 +299,7 @@ async function summarize(db, { id, actorId, ai }) {
 
 function publicRow(rec) {
   return {
-    id: rec.id, matterId: rec.matter_id, title: rec.title, clientId: rec.client_admin_id,
+    id: rec.id, matterId: rec.matter_id, title: rec.title, clientId: rec.client_admin_id, ownerId: rec.owner_id,
     consent: { by: rec.consent_by, at: rec.consent_at, method: rec.consent_method, note: rec.consent_note },
     status: rec.status, error: rec.error, durationSec: rec.duration_sec, bytes: rec.audio_bytes, chunks: rec.chunks,
     transcribedAt: rec.transcribed_at, audioDeleteAfter: rec.audio_delete_after, audioDeletedAt: rec.audio_deleted_at,
