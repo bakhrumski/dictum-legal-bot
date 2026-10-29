@@ -1,6 +1,6 @@
 # Ovozli buyruqlar — 2-daraja (dizayn, qoralama)
 
-Holati: **qoralama**, kod 9-bo'limdagi savollarga javobdan keyin boshlanadi.
+Holati: **qabul qilingan** (2026-10-29, egasi barcha takliflarni qabul qildi — 9-bo'lim).
 Egasi (2026-10-29): "message yozish mumkin bo'lgan joylarda ovozli komanda
 orqali bajarish". 1-daraja — har bir maydonda mikrofon, gapirilgan matn
 maydonga tushadi, hech narsa o'zi bajarilmaydi (#520, #529) — tayyor.
@@ -152,6 +152,16 @@ qilindi. Telegram'da ham xuddi shu kodlar.
 - Buyruqni brauzerda "doim tinglash" (wake word) — yo'q; faqat 🎙 bosilganda.
 
 ## 9. Egasiga savollar
+
+Javoblar (2026-10-29, egasi: "takliflaringni qabul qilaman"):
+1. 3.1 ro'yxati — shu bilan boshlanadi.
+2. Ochish buyruqlari ham tasdiq tugmasini kutadi.
+3. Chatda faqat ovoz buyruq bo'ladi, yozilgan matn — savol.
+4. 3.3 kontekst amallari — V4 da, 4 ta amal.
+5. O'lchov jadvali (`voice_command_events`, faqat kodlar) — V5 da.
+6. Telegram'da ochish buyruqlari ilova havolasi bilan javob beradi.
+
+Savollar (asl matn):
 
 1. **3.1 ro'yxati** — shu yetadimi? Qo'shish / olib tashlash kerakmi?
    Taklif: shu ro'yxat bilan boshlash.

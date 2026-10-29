@@ -66,7 +66,7 @@ Tartib va PR bo'linishi dizayn hujjatining 9-bo'limida.
 - [~] Ovozli buyruqlar 2-daraja (egasi, 2026-10-29): `docs/design/ovozli-buyruqlar-2.md`
   - chatda va Ishlar buyruq qatorida gapirilgan buyruq tasdiq tugmasi bilan
   bajariladi (AI'siz katalog, pul / o'chirish / yuborish ovoz bilan emas).
-  Qoralama; 9-bo'lim savollariga javob kutilmoqda. 1-daraja (#520, #529) tayyor.
+  Qabul qilingan (egasi barcha takliflarni qabul qildi). 1-daraja (#520, #529) tayyor.
 - [x] PR-E (#499): Parallel qadamlar, `needs_input`
   dan keyin davom ettirish.
 - [x] PR-F (#501): Telegram: ish holati bitta xabarda yangilanadi, tasdiq tugmalari.
