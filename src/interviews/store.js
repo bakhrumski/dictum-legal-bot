@@ -27,6 +27,21 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
+const privacy = require('../privacy/crypto');
+
+// sealed at rest (data protection E2): the AAD binds each value to its row
+const AAD = {
+  consentBy: id => `interview_recordings.consent_by:${id}`,
+  consentNote: id => `interview_recordings.consent_note:${id}`,
+  summary: id => `interview_recordings.summary:${id}`,
+  audio: id => `interview_audio.data:${id}`,
+  body: (id, v) => `interview_transcripts.body:${id}:${v}`,
+};
+function openRec(rec) {
+  if (!rec) return rec;
+  return { ...rec, consent_by: privacy.open(rec.consent_by, AAD.consentBy(rec.id)), consent_note: privacy.open(rec.consent_note, AAD.consentNote(rec.id)),
+    summary: privacy.openJson(rec.summary, AAD.summary(rec.id)) };
+}
 
 const CONSENT_METHODS = Object.freeze(['verbal_recording', 'written']);
 const STAFF = Object.freeze(['master', 'student', 'lawyer']);
@@ -74,7 +89,7 @@ function checkConsent(c = {}, now = new Date()) {
 /** A recording this account may see: its uploader or a master. Anyone else: null (a 404). */
 async function visible(db, id, actorId) {
   const r = await db.query('SELECT * FROM interview_recordings WHERE id = $1', [id]);
-  const rec = r.rows[0];
+  const rec = openRec(r.rows[0]);
   if (!rec) return null;
   if (Number(rec.owner_id) === Number(actorId)) return rec;
   return (await roleOf(db, actorId)) === 'master' ? rec : null;
@@ -102,13 +117,16 @@ async function create(db, { actorId, matterId, audio, mime, durationSec, consent
     if (!cl || cl.role !== 'user' || (role !== 'master' && Number(cl.referred_by_agent_id) !== Number(actorId))) return fail(400, 'invalid_client');
     client = cl.id;
   }
-  const rec = (await db.query(
-    `INSERT INTO interview_recordings (matter_id, owner_id, client_admin_id, title, consent_by, consent_at, consent_method, consent_note, consent_ack,
+  // the id first: the sealed fields are bound to it
+  const id = require('crypto').randomUUID();
+  const rec = openRec((await db.query(
+    `INSERT INTO interview_recordings (id, matter_id, owner_id, client_admin_id, title, consent_by, consent_at, consent_method, consent_note, consent_ack,
                                        audio_mime, audio_bytes, duration_sec, language)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, $9, $10, $11, $12) RETURNING *`,
-    [matterId, actorId, client, (String(title || '').trim() || `Intervyu: ${c.consent.by}`).slice(0, 160), c.consent.by, c.consent.at, c.consent.method, c.consent.note,
-      String(mime || 'audio/ogg').slice(0, 60), audio.length, Math.round(durationSec), language === 'ru' ? 'ru' : 'uz'])).rows[0];
-  await db.query('INSERT INTO interview_audio (recording_id, data) VALUES ($1, $2)', [rec.id, audio]);
+     VALUES ($13, $1, $2, $3, $4, $5, $6, $7, $8, true, $9, $10, $11, $12) RETURNING *`,
+    [matterId, actorId, client, (String(title || '').trim() || 'Intervyu').slice(0, 160), privacy.seal(c.consent.by, AAD.consentBy(id)), c.consent.at, c.consent.method,
+      c.consent.note == null ? null : privacy.seal(c.consent.note, AAD.consentNote(id)),
+      String(mime || 'audio/ogg').slice(0, 60), audio.length, Math.round(durationSec), language === 'ru' ? 'ru' : 'uz', id])).rows[0]);
+  await db.query('INSERT INTO interview_audio (recording_id, data) VALUES ($1, $2)', [rec.id, privacy.sealBytes(audio, AAD.audio(rec.id))]);
   await event(db, rec.id, 'uploaded', actorId, { consentMethod: c.consent.method, consentAt: c.consent.at.toISOString(), bytes: audio.length, durationSec: Math.round(durationSec), notice: consentText(env) });
   return { ok: true, recording: rec };
 }
@@ -157,7 +175,7 @@ async function transcribe(db, { id, stt, env = process.env, split = splitAudio }
   try {
     const a = (await db.query('SELECT data FROM interview_audio WHERE recording_id = $1', [id])).rows[0];
     if (!a) throw new Error('audio missing');
-    const chunks = await split(a.data, { durationSec: claimed.duration_sec, chunkSec: lim.chunkSec });
+    const chunks = await split(privacy.openBytes(a.data, AAD.audio(id)), { durationSec: claimed.duration_sec, chunkSec: lim.chunkSec });
     const parts = [];
     for (const ch of chunks) {
       const r = await stt.transcribeDetailed(ch.buffer, {
@@ -172,7 +190,7 @@ async function transcribe(db, { id, stt, env = process.env, split = splitAudio }
     }
     const text = parts.join('\n\n').trim();
     if (!text) throw new Error('no speech was recognised');
-    await db.query(`INSERT INTO interview_transcripts (recording_id, version, body, source) VALUES ($1, 1, $2, 'stt') ON CONFLICT DO NOTHING`, [id, text.slice(0, 400000)]);
+    await db.query(`INSERT INTO interview_transcripts (recording_id, version, body, source) VALUES ($1, 1, $2, 'stt') ON CONFLICT DO NOTHING`, [id, privacy.seal(text.slice(0, 400000), AAD.body(id, 1))]);
     await db.query(
       `UPDATE interview_recordings SET status = 'transcribed', chunks = $2, transcribed_at = now(),
               audio_delete_after = now() + make_interval(days => $3), updated_at = now() WHERE id = $1`, [id, chunks.length, lim.audioDays]);
@@ -187,7 +205,8 @@ async function transcribe(db, { id, stt, env = process.env, split = splitAudio }
 
 async function latestTranscript(db, id) {
   const r = await db.query('SELECT version, body, source, created_by, created_at FROM interview_transcripts WHERE recording_id = $1 ORDER BY version DESC LIMIT 1', [id]);
-  return r.rows[0] || null;
+  const t = r.rows[0];
+  return t ? { ...t, body: privacy.open(t.body, AAD.body(id, t.version)) } : null;
 }
 
 /** The person's corrected transcript: a new version, the older ones kept. */
@@ -199,9 +218,11 @@ async function addVersion(db, { id, actorId, body }) {
   const last = await latestTranscript(db, id);
   if (!last) return fail(409, 'no_transcript');
   if (last.body === text) return { ok: true, version: last.version, unchanged: true };
+  // the next version is known first: the sealed body is bound to it (the primary key refuses a parallel twin)
+  const version = last.version + 1;
   const v = (await db.query(
-    `INSERT INTO interview_transcripts (recording_id, version, body, source, created_by)
-     SELECT $1, COALESCE(MAX(version), 0) + 1, $2, 'edit', $3 FROM interview_transcripts WHERE recording_id = $1 RETURNING version`, [id, text, actorId])).rows[0];
+    `INSERT INTO interview_transcripts (recording_id, version, body, source, created_by) VALUES ($1, $2, $3, 'edit', $4) RETURNING version`,
+    [id, version, privacy.seal(text, AAD.body(id, version)), actorId])).rows[0];
   await event(db, id, 'transcript_version', actorId, { version: v.version });
   return { ok: true, version: v.version };
 }
@@ -271,7 +292,7 @@ async function summarize(db, { id, actorId, ai }) {
     current_price: String(a.current_price || '').slice(0, 600), confusing: list(a.confusing, 10), missing: list(a.missing, 10),
     signal: String(a.signal || '').slice(0, 600), price_answers: list(a.price_answers, 10), provider: r.provider || null,
   };
-  await db.query('UPDATE interview_recordings SET summary = $2, summary_at = now(), updated_at = now() WHERE id = $1', [id, JSON.stringify(summary)]);
+  await db.query('UPDATE interview_recordings SET summary = $2, summary_at = now(), updated_at = now() WHERE id = $1', [id, JSON.stringify(privacy.sealJson(summary, AAD.summary(id)))]);
   await event(db, id, 'summary', actorId, { transcriptVersion: t.version, quotes: quotes.length, quotesRemoved: summary.quotesRemoved });
   return { ok: true, summary };
 }
@@ -291,13 +312,14 @@ async function list(db, { matterId, actorId }) {
   const master = (await roleOf(db, actorId)) === 'master';
   const r = await db.query(
     `SELECT * FROM interview_recordings WHERE matter_id = $1 AND ($2::boolean OR owner_id = $3) ORDER BY created_at DESC LIMIT 100`, [matterId, master, actorId]);
-  return r.rows.map(publicRow);
+  return r.rows.map(x => publicRow(openRec(x)));
 }
 
 async function get(db, { id, actorId }) {
   const rec = await visible(db, id, actorId);
   if (!rec) return fail(404, 'not_found');
-  const versions = (await db.query('SELECT version, source, created_by, created_at, char_length(body) AS chars FROM interview_transcripts WHERE recording_id = $1 ORDER BY version', [id])).rows;
+  const versions = (await db.query('SELECT version, source, created_by, created_at, body FROM interview_transcripts WHERE recording_id = $1 ORDER BY version', [id])).rows
+    .map(({ body, ...v }) => ({ ...v, chars: privacy.open(body, AAD.body(id, v.version)).length }));
   const events = (await db.query('SELECT event, actor_id, details, at FROM interview_events WHERE recording_id = $1 ORDER BY at, id', [id])).rows;
   const t = await latestTranscript(db, id);
   return { ok: true, recording: publicRow(rec), transcript: t ? { version: t.version, body: t.body, source: t.source } : null, versions, events };

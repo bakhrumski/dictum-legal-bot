@@ -337,9 +337,24 @@ Known state of the suites (Sept 2026):
   ({"enc":…} for JSONB), `sealBytes`/`openBytes`; the AAD
   `<table>.<column>:<row id>` binds a value to its place; plain values pass
   through (columns switch row by row); a bad ring stops the server at start,
-  an unset one is a warning (stored unencrypted). Nothing is sealed yet: E2
-  (columns), E3 (redaction before AI), E4 (legal-chat, owner agreed, 20-question
-  before/after), E5-E7 follow the design. `tests/privacy-crypto.test.js`.
+  an unset one is a warning (stored unencrypted). E2a (2026-10-29): sealed now -
+  `document_scans.text` (AAD `document_scans.text:<admin>:<hash>`) and the
+  interview audio, transcripts, consent and summary; `scripts/seal-backfill.js`
+  seals older rows (dry run by default, `--apply` is the owner's). Next: E2b
+  (the other columns), E3 (redaction before AI), E4 (legal-chat, owner agreed,
+  20-question before/after), E5-E7. `tests/privacy-crypto.test.js`,
+  `tests/document-library.db.test.js`.
+- "Hujjatlarim" (2026-10-29, owner: every uploaded document stays for later
+  actions until the person deletes it; migration 029): `document_scans` is the
+  person's library - a text Word/PDF read by `/api/analyze/extract` (it now
+  returns `docId`) and every OCR scan are kept (`library`, `expires_at`
+  'infinity', never shortened by matters, never purged; `DOC_LIBRARY_MAX` 500,
+  then the old 7-day cache with `libraryFull`); one row per account and file.
+  Services use a document by its id through `resolveScans` (`scanId(s)`; a
+  `text` kind is billed as text, not as a scan; `last_used_at`). The text never
+  goes back to the browser. `/api/documents` (list without text, rename,
+  delete for good), page `#/hujjatlarim` and the "Hujjatlarim" picker in the
+  composer's attach menu and on Hujjat tahlili (`public/app/library.js`).
 - `src/ai/model-pricing.js` — **single source of truth for model prices**;
   every spend path, hybrid-pipeline included, reads it. Each price carries
   its source and check date; VoiceLab credits convert at the owner's

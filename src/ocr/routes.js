@@ -449,6 +449,23 @@ function mountAnalyzerRoutes(app, deps) {
   // the OCR provider call (tests pass a stub: no paid call in tests)
   const ocrFn = typeof deps.ocr === 'function' ? deps.ocr : callVisionOCR;
   // ── PDF text extraction ──
+  // "Hujjatlarim" (2026-10-29): a text document read here is kept in the
+  // person's library (sealed at rest) and returned with its id, so every later
+  // service can use it by that id without a second upload. A failure to keep
+  // it never fails the reading.
+  async function keepText(req, { text, pages, chars }) {
+    try {
+      if (!text || !req.session || !req.session.adminId) return {};
+      const buf = fs.readFileSync(req.file.path);
+      const row = await scanStore.saveScan(pool, { adminId: req.session.adminId, fileHash: scanStore.fileHash(buf), kind: 'text',
+        pages: Math.max(1, Number(pages) || 1), bytes: Math.max(1, buf.length), text, chars, name: req.file.originalname });
+      return { docId: row.id, libraryFull: !!row.libraryFull };
+    } catch (e) {
+      if (!/does not exist|column/u.test(String(e && e.message))) console.warn('[ANALYZE] document not kept in the library:', e.message);
+      return {};
+    }
+  }
+
   app.post('/api/analyze/extract', requireAuth, analyzeUpload.single('file'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'Fayl yuklanmadi' });
     let filePath = req.file.path;
@@ -504,7 +521,8 @@ function mountAnalyzerRoutes(app, deps) {
             meaning: 'mechanical: structures found around the missing words are the likely cause, not a proof' };
           res.set('Cache-Control', 'no-store');
         }
-        return res.json({ text, pageCount: size ? size.pages : 1, scanned: false, charCount: chars, tables: docx.tables,
+        const kept = await keepText(req, { text, pages: size ? size.pages : 1, chars });
+        return res.json({ text, pageCount: size ? size.pages : 1, scanned: false, charCount: chars, tables: docx.tables, ...kept,
           tableStructure: tables ? tables.structure : 'none', ...(tables && tables.causes ? { tableCauses: tables.causes } : {}),
           ...(tableCheck ? { tableCheck } : {}),
           units: size ? size.units : null, docTicket: ledger ? ledger.signDocTicket({ text, chars, tables }) : null });
@@ -525,7 +543,9 @@ function mountAnalyzerRoutes(app, deps) {
       // the PDF's own page count, signed with the text so the analysis is
       // billed by max(pages / 10, characters / 40 000)
       const size = ledger && !scanned ? ledger.docUnits({ chars: plain.length, pages }) : null;
+      const kept = scanned ? {} : await keepText(req, { text, pages, chars: plain.length });
       res.json({
+        ...kept,
         text: scanned ? '' : text,
         pageCount: pages,
         scanned,
@@ -686,7 +706,8 @@ function mountAnalyzerRoutes(app, deps) {
             const ocr = await ocrFn(buf, m.kind === 'pdf' ? 'application/pdf' : m.mimetype, String((req.body && req.body.lang) || 'uzb+rus'), { pages: m.pages });
             if (!ocr.text || ocr.text.length < 20) throw Object.assign(new Error('no text'), { code: 'OCR_EMPTY' });
             const store = usageLedger.current();
-            const row = await scanStore.saveScan(pool, { adminId: ctx.adminId, fileHash: hash, kind: m.kind, pages: m.pages, bytes: m.bytes, text: ocr.text, provider: ocr.provider, requestId: store ? store.requestId : null });
+            const row = await scanStore.saveScan(pool, { adminId: ctx.adminId, fileHash: hash, kind: m.kind, pages: m.pages, bytes: m.bytes, text: ocr.text, provider: ocr.provider, requestId: store ? store.requestId : null,
+              name: req.file && req.file.originalname });
             return { row, fresh: true };
           });
         } catch (e) {
