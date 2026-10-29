@@ -3893,7 +3893,21 @@ function providerError(prefix, resp, errBody = '') {
 // already inside the input/output counts; thinking tokens are not).
 const { usageFromGemini: geminiUsage, usageFromOpenAI: openaiUsage } = usageLedger;
 
+// ── Data protection E3 (src/privacy/redact.js): personal identifiers are
+// replaced before a text call leaves for a provider (every provider behind
+// callOpenAI / callGemini) and put back in its answer. Not on the
+// legal-answer pipeline yet (web chat, Telegram: E4). The map stays in the
+// request's memory; the ledger request gets the counts only.
+const withRedaction = require('../privacy/redact').createWrapper({
+  current: () => usageLedger.current(),
+  loadName: async (uid) => { const r = await pool.query('SELECT full_name FROM admins WHERE id = $1', [uid]); return r.rows[0] ? r.rows[0].full_name : null; },
+});
+
 async function callGemini(messages, options = {}) {
+  return withRedaction(messages, options, (msgs, opts) => callGeminiTracked(msgs, opts));
+}
+
+async function callGeminiTracked(messages, options = {}) {
   return usageLedger.track({ provider: 'gemini', model: 'gemini-2.5-flash', endpoint: options.endpoint, userId: options.userId || null, detail: options.detail || null,
     bound: modelPricing.callCostBound({ model: 'gemini-2.5-flash', thinkingUncapped: true }) },
     (call) => callGeminiOnce(messages, options, call));
@@ -4374,6 +4388,10 @@ async function paidModelsAllowed() {
 async function callOpenAI(messages, options = {}) {
   // a master's own test model for this request (src/ai/test-model.js)
   options = testModel.apply(options);
+  return withRedaction(messages, options, (msgs, opts) => callOpenAIChain(msgs, opts));
+}
+
+async function callOpenAIChain(messages, options) {
   return usageLedger.withChain(async () => {
     const viaZai = await tryZai(messages, options, options.model || MODELS.standard);
     if (viaZai) return viaZai;
@@ -8187,12 +8205,14 @@ app.post('/api/draft/legal-opinion/rate', requireAuth, async (req, res) => {
 // The explanation itself (not the digest) is written by DeepSeek
 // deepseek-flash, then GPT-6 Luna, then the last resort (src/ai/explain-router.js,
 // 2026-10-12; EXPLAIN_PROVIDER=default restores the cheap lane).
-const callExplainAI = require('../ai/explain-router').createExplainAI({
+const explainAIRaw = require('../ai/explain-router').createExplainAI({
   usageLedger, modelPricing, deepseek: require('../ai/deepseek'), callOpenAI, testModel: testModel.current,
   paidAllowed: async () => paidProviderConfigured() && await paidModelsAllowed(),
   spendAllowed: () => paidModelsAllowed(),
   lastResort: callGeminiLastResort, callDefault: callCheapAI,
 });
+// it calls DeepSeek itself: redacted here too (E3)
+const callExplainAI = (messages, options = {}) => withRedaction(messages, options, (m, o) => explainAIRaw(m, o));
 require('../rag/document-explain-route').mountExplainDocument(app, {
   requireAuth, requireServiceConfirm: require('../ai/ai-trigger').requireServiceConfirm, resolveScanDocs, tariffModule,
   callAI: callExplainAI, digest: digestLongDocumentDetailed, lexLangForText, logAudit,
