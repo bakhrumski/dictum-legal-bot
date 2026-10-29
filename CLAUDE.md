@@ -886,6 +886,13 @@ Known state of the suites (Sept 2026):
   Ishlar command bar lists, adds and deletes (`/api/voice/glossary`); 500
   rows an account (a learned row makes room, hand-made rows stay); account
   deletion removes it. Still suggestions only - never a replacement.
+  Voice commands level 2 (2026-10-29, owner; design `docs/design/ovozli-buyruqlar-2.md`,
+  accepted with all proposals, §9): a spoken command in the
+  chat or the Ishlar command bar becomes a card with [Bajarish] [Savol
+  sifatida yuborish] [Bekor] - never run by speaking alone; one catalogue
+  with no AI (`src/voice/commands.js`, to come); payments, deletion and
+  sending to others are never voice commands. Level 1 (a mic in every field,
+  #520; the command bar's mic in the same place, #529) is live.
 - `src/workspace/` — Workspace: routes, authz, Supabase
   realtime/storage, Workspace AI. Since 2026-10-28 (owner, migration 025)
   any active paid plan (Silver, Gold, Platinum) owns one (`PLAN_CATALOG`
