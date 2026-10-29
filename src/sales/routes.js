@@ -8,6 +8,9 @@
  *   POST /api/admin/sales/agents/:id/code              give (or renew) an offer code
  *   POST /api/admin/sales/agents/:id/code/revoke       take it back
  *   POST /api/admin/sales/agents/:id/demo  { userId }  link a master-made test account as the agent's demo + 14-day pilot entitlement
+ *   GET  /api/admin/sales/invites                      agent invite links (status only, never the token)
+ *   POST /api/admin/sales/invites  { note }            a new one-use, 7-day link t.me/<bot>?start=agi_<token> (shown once)
+ *   POST /api/admin/sales/invites/:id/revoke           cancel an unused one
  *   GET  /api/admin/sales/pilot-requests?status=       pending / approved / declined
  *   POST /api/admin/sales/pilot-requests/:id/approve   the 14-day pilot entitlement (docs/tariffs-v2.md §10)
  *   POST /api/admin/sales/pilot-requests/:id/decline   { note }
@@ -75,6 +78,19 @@ function mountSalesRoutes(app, { pool, requireAuth, requireMasterAdmin, requireS
   app.post('/api/admin/sales/agents/:id/demo', requireSameOrigin, requireMasterAdmin, safe(async (req, res) => {
     const out = await sales.linkDemo(pool, { masterId: me(req), agentId: id(req.params.id), userId: id(req.body && req.body.userId), ledger });
     if (out.ok) logAudit(req, 'sales.agent_demo', 'admin', id(req.body && req.body.userId));
+    reply(res, out);
+  }));
+  // agent invite links (src/sales/invites.js): the link is shown once
+  const invites = require('./invites');
+  app.get('/api/admin/sales/invites', requireMasterAdmin, safe(async (req, res) => { res.json({ invites: await invites.listInvites(pool), days: invites.INVITE_DAYS }); }));
+  app.post('/api/admin/sales/invites', requireSameOrigin, requireMasterAdmin, safe(async (req, res) => {
+    const out = await invites.createInvite(pool, { masterId: me(req), note: req.body && req.body.note, botUsername });
+    if (out.ok) logAudit(req, 'sales.agent_invite', 'agent_invite', out.invite.id);
+    reply(res, out);
+  }));
+  app.post('/api/admin/sales/invites/:id/revoke', requireSameOrigin, requireMasterAdmin, safe(async (req, res) => {
+    const out = await invites.revokeInvite(pool, { masterId: me(req), inviteId: id(req.params.id) });
+    if (out.ok) logAudit(req, 'sales.agent_invite_revoke', 'agent_invite', id(req.params.id));
     reply(res, out);
   }));
   app.get('/api/admin/sales/pilot-requests', requireMasterAdmin, safe(async (req, res) => {

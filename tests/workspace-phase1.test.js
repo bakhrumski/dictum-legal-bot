@@ -350,6 +350,7 @@ function transactionalPool(handler) {
       '20261028_028_interview_recordings.sql',
       '20261029_029_document_library.sql',
       '20261029_030_seal_e2b.sql',
+      '20261029_031_agent_invites.sql',
     ]);
     assert.strictEqual(stripOuterTransaction('BEGIN;\nSELECT 1;\nCOMMIT;'), 'SELECT 1;');
   });

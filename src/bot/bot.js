@@ -982,6 +982,28 @@ async function handleCallbackQuery(callbackQuery) {
     return;
   }
 
+  // an agent invite's tap (src/sales/invites.js): the token was held at /start, never in the button
+  if (data === 'agi_y' || data === 'agi_n') {
+    const inv = require('../sales/invites');
+    const appUrl = String(process.env.APP_URL || 'https://juristai.uz').replace(/\/+$/, '');
+    await bot.answerCallbackQuery(callbackQuery.id).catch(() => {});
+    if (callbackQuery.message) await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: callbackQuery.message.message_id }).catch(() => {});
+    if (!callbackQuery.message || callbackQuery.message.chat.type !== 'private') return;
+    const token = inv.take(callbackQuery.from.id);
+    if (data === 'agi_n') return;
+    if (!token) { await bot.sendMessage(chatId, inv.TEXTS.again).catch(() => {}); return; }
+    try {
+      const out = await inv.accept(pool, { from: callbackQuery.from, chatId, token });
+      if (!out.ok) { await bot.sendMessage(chatId, inv.TEXTS[out.error === 'master' ? 'master' : out.error === 'client' ? 'client' : 'bad']).catch(() => {}); return; }
+      const page = await require('../sales/agents').agentPage(pool, { agentId: out.adminId, botUsername: LEGAL_BOT_USERNAME, appUrl });
+      await bot.sendMessage(chatId, inv.TEXTS.done(out, page ? page.links : { web: `${appUrl}/?ref=${out.code}`, telegram: '' }, appUrl), { disable_web_page_preview: true }).catch(() => {});
+    } catch (error) {
+      console.warn('[BOT] agent invite failed:', error.message);
+      await bot.sendMessage(chatId, "Hozir bajarib bo'lmadi. Birozdan keyin havolani qayta oching.").catch(() => {});
+    }
+    return;
+  }
+
   // the one-tap pilot join (src/bot/pilot-join.js): the account is made from this Telegram
   if (data.startsWith(require('./pilot-join').PREFIX)) {
     const join = require('./pilot-join');
@@ -1253,6 +1275,24 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
   const username = msg.from.username || '';
   let param = (match[1] || '').trim();
   await telegramEconomy.recordTelegramActivity(chatId);
+
+  // CustDev agent invite: /start agi_<token> (src/sales/invites.js) - a
+  // master's one-use link; the tap below makes this Telegram's account an agent
+  if (/^agi_/.test(param)) {
+    const inv = require('../sales/invites');
+    const token = param.slice(inv.PREFIX.length);
+    try {
+      if (msg.chat.type !== 'private') return;
+      const open = await inv.peek(pool, token);
+      if (!open) { await bot.sendMessage(chatId, inv.TEXTS.bad).catch(() => {}); return; }
+      inv.hold(msg.from.id, token);
+      await bot.sendMessage(chatId, inv.TEXTS.ask(open.note), { reply_markup: inv.keyboard() }).catch(() => {});
+    } catch (e) {
+      console.warn('[BOT] agent invite not opened:', e.message);
+      await bot.sendMessage(chatId, inv.TEXTS.bad).catch(() => {});
+    }
+    return;
+  }
 
   // CustDev offer link: /start ref_<code> (src/sales/agents.js). The first agent
   // stays; an unknown code is ignored and the start goes on as a plain /start.

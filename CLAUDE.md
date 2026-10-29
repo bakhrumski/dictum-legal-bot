@@ -858,6 +858,17 @@ clients - name, registered, pilot status, units used, paid - never a
 question or answer (`GET /api/sales/me`, page `#/mijozlarim`, a nav item for
 an agent only). Master: Boshqaruv -> "CustDev pilot" (`/api/admin/sales/*`):
 pending requests, agents, codes, links, demo, registered / piloted / paid.
+Agents list and invite links (2026-10-29, owner; migration 031,
+`src/sales/invites.js`): the list holds only accounts with a code (taking the
+code back - "Agentlikdan chiqarish" - takes the account off it); a new agent
+comes by "Agent qo'shish": a master's one-use, 7-day link
+`t.me/<legal bot>?start=agi_<token>` (only its sha256 kept, shown once,
+revocable, an optional note). In the bot the link shows what accepting does;
+the tap (token held at /start for that Telegram user, 15 min, never in the
+button) makes the Telegram's account a student with a code - made from the
+Telegram identity if there is none, a `user` promoted, a student / lawyer
+kept; a master or a referred / demo client refused, the link left unused.
+`tests/agent-invites.db.test.js`.
 Client type and the one-tap join (2026-10-28, owner; migration 026):
 `admins.client_type` lawyer / accountant / hr / business / user is what the
 client does - it adapts the platform (the home "Sohangiz" chips save it,

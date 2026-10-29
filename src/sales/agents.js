@@ -333,6 +333,7 @@ async function agentPage(db, { agentId, botUsername, appUrl }) {
 }
 
 /** The master's view: staff accounts with their codes, demo account and client counts. */
+/** The agents: staff accounts with an offer code (2026-10-29, owner: not every staff account; a new one comes by an invite link, src/sales/invites.js). */
 async function agentsOverview(db) {
   const r = await db.query(
     `SELECT g.id, g.full_name, g.username, g.role, g.sales_agent_code,
@@ -341,7 +342,7 @@ async function agentsOverview(db) {
             (SELECT count(*)::int FROM pilot_requests q WHERE q.agent_id = g.id AND q.status = 'approved') AS piloted,
             (SELECT count(*)::int FROM admins c WHERE c.referred_by_agent_id = g.id AND ${PAID}) AS paid,
             (SELECT COALESCE(SUM(u.credits), 0)::int FROM tariff_usage u JOIN admins d ON d.id = u.admin_id WHERE d.demo_for_agent_id = g.id AND u.status = 'committed') AS demo_units
-       FROM admins g WHERE g.role = ANY($1) ORDER BY g.sales_agent_code IS NULL, g.full_name`, [STAFF]);
+       FROM admins g WHERE g.role = ANY($1) AND g.sales_agent_code IS NOT NULL ORDER BY g.full_name`, [STAFF]);
   return r.rows;
 }
 
