@@ -224,8 +224,9 @@
 
   /* ---------- ovozli yoki matnli buyruq (src/matters/commands.js, POST /api/matters/command) ---------- */
   function cmdBar() {
-    return '<div class="mt-cmd"><div class="mt-cmd-row"><input class="inp mt-cmd-in" maxlength="300" placeholder="' + esc(s('cmdPh')) + '">' +
-      '<button class="ib mt-mic" type="button" title="' + esc(s('cmdMic')) + '" hidden>' + J.icon('mic') + '</button>' +
+    // the microphone sits inside the field's right edge, like every other field's (dictate.js) - one look
+    return '<div class="mt-cmd"><div class="mt-cmd-row"><div class="mt-cmd-f"><input class="inp mt-cmd-in" maxlength="300" placeholder="' + esc(s('cmdPh')) + '">' +
+      '<button class="chip cmp-mic field-mic mt-mic" type="button" aria-label="' + esc(s('cmdMic')) + '" title="' + esc(s('cmdMic')) + '" hidden>' + J.icon('mic') + '</button></div>' +
       '<button class="pill sm" data-a="cmd" type="button">' + esc(s('cmdRun')) + '</button></div>' +
       '<p class="mt-cmd-st muted"></p><p class="mt-cmd-help muted">' + esc(s('cmdHelp')) + ' <button type="button" class="link mt-gloss">' + esc(s('gloss')) + '</button></p></div>';
   }
