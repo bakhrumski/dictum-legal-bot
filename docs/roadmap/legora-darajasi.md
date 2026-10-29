@@ -106,7 +106,9 @@ Tartib va PR bo'linishi dizayn hujjatining 9-bo'limida.
 - [~] Ma'lumot himoyasi 1-bosqich (egasi, 2026-10-28, occlum.io tahlilidan keyin):
   `docs/design/shifrlash-1-bosqich.md` - bazada shifrlash, AI'ga yuborishdan
   oldin shaxsiy ma'lumotni yashirish, provayder siyosati, kirish jurnali.
-  Qoralama; 9-bo'lim savollariga javob kutilmoqda.
+  Qabul qilingan (#516). E1 #518, E2a #519, E2b #521, E3 #522; E4 (huquqiy
+  javob zanjirida yashirish, `REDACT_LEGAL_CHAT`, 20 savollik oldin/keyin)
+  PR'da; E5-E7 navbatda.
 - [ ] Ma'lumot siyosati: hujjatlarni DeepSeek'ga yubormaslik opsiyasi
   (korporativ tarif), saqlash muddatlari, eksport va o'chirish.
 - [ ] SSO (korporativ mijoz so'rasa).
@@ -258,3 +260,9 @@ nima o'lchandi.
   tayyorlash: suhbatga qaytish, fayldan shablon) va #518 (E1, shifrlash
   moduli) merge. E2a PR: "Hujjatlarim" (har bir yuklangan hujjat egasi
   o'chirmaguncha) va shifrlangan saqlash.
+- 2026-10-29: #522 (E3, AI'ga yuborishdan oldin yashirish) merge. E4 PR:
+  `/api/legal-chat` (oqim ham), `/api/rag/*`, gibrid zanjir va Telegram bot
+  uchun yashirish - `REDACT_LEGAL_CHAT=on` bo'lmaguncha o'chiq (egasi 20
+  savollik solishtirishni ko'rgach yoqiladi), master `X-JAI-Redact` bilan
+  bitta so'rovda yoqib/o'chirib solishtiradi (`scripts/redaction-eval.js`);
+  `answer_cache.reply` shifrlanadi.

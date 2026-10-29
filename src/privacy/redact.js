@@ -23,6 +23,12 @@
  * of a request (digest parts, then the final call) sees the same placeholder
  * for the same value; the map lives in memory only and goes with the request
  * - never in a log, the ledger or the database: only the counts are recorded.
+ *
+ * E4 (2026-10-29): the legal-answer pipeline - /api/legal-chat (streamed
+ * too), /api/rag/* and the Telegram bot - is redacted the same way, but only
+ * with REDACT_LEGAL_CHAT=on (default off until the owner has seen the
+ * 20-question before/after, scripts/redaction-eval.js) or a master's
+ * X-JAI-Redact header for one request.
  */
 
 const TAGS = Object.freeze(['PASPORT', 'JSHSHIR', 'STIR', 'TELEFON', 'KARTA', 'HISOB', 'EMAIL', 'AVTO', 'SHAXS']);
@@ -89,9 +95,10 @@ function redact(text, map = createMap(), { names = [] } = {}) {
       return whole.replace(v, placeholder(map, rule.tag, v));
     });
   }
-  for (const name of names) {
-    const n = String(name || '').trim();
-    if (n.length < 4 || !/\s/u.test(n)) continue; // a single word is too likely a common word
+  const known = [...names.map(n => String(n || '').trim()).filter(n => n.length >= 4 && /\s/u.test(n)), // a single word is too likely a common word
+    // a name found after "F.I.Sh." / "fuqaro" (in this text or an earlier one of the request) is hidden wherever else it is written
+    ...[...map.byTag.entries()].filter(([ph]) => ph.startsWith('[SHAXS_')).map(([, v]) => v)];
+  for (const n of [...new Set(known)].sort((a, b) => b.length - a.length)) {
     out = out.replace(new RegExp(escapeRe(n), 'gu'), m => placeholder(map, 'SHAXS', m));
   }
   return out;
@@ -103,24 +110,58 @@ function restore(text, map) {
   return text.replace(/\[(PASPORT|JSHSHIR|STIR|TELEFON|KARTA|HISOB|EMAIL|AVTO|SHAXS)_(\d+)\]/gu, ph => (map.byTag.has(ph) ? map.byTag.get(ph) : ph));
 }
 
-/** Every string `text` of a messages array redacted (images and other parts untouched). */
-function redactMessages(messages, map, opts) {
-  if (!Array.isArray(messages)) return messages;
-  return messages.map(m => (m && typeof m.text === 'string' ? { ...m, text: redact(m.text, map, opts) } : m));
+/**
+ * The provider's streamed text restored piece by piece: a piece that ends
+ * inside what may be a placeholder ("[PASP", "[PASPORT_1") is held until the
+ * next piece shows whether it is one. push(delta) -> text to show now;
+ * flush() -> what is left at the end.
+ */
+function createStreamRestorer(map) {
+  let held = '';
+  const PARTIAL = /\[(?:[A-Z]{0,8}(?:_\d{0,4})?)$/u;
+  return {
+    push(delta) {
+      const text = held + String(delta == null ? '' : delta);
+      const m = PARTIAL.exec(text);
+      const cut = m ? m.index : text.length;
+      held = text.slice(cut);
+      return restore(text.slice(0, cut), map);
+    },
+    flush() { const t = held; held = ''; return restore(t, map); },
+  };
 }
 
+/** Every string `text` (or `content`) of a messages array redacted (images and other parts untouched). */
+function redactMessages(messages, map, opts) {
+  if (!Array.isArray(messages)) return messages;
+  return messages.map(m => {
+    if (!m) return m;
+    if (typeof m.text === 'string') return { ...m, text: redact(m.text, map, opts) };
+    if (typeof m.content === 'string') return { ...m, content: redact(m.content, map, opts) };
+    return m;
+  });
+}
+
+const LEGAL_KIND = /\/api\/legal-chat|\/api\/rag\//u;
+/** The legal-answer pipeline: the web chat, its advanced RAG routes and the Telegram bot. */
+const isLegalPipeline = store => !!store && (store.service === 'telegram' || LEGAL_KIND.test(String(store.kind || '')));
+
 /**
- * Whether the calls of this request are redacted, and its map. Not (yet):
- * the legal-answer pipeline - the web chat (/api/legal-chat), its advanced
- * RAG routes and the Telegram bot - which is E4, done with the owner's
- * consent after a before/after comparison. REDACT_AI=off stops it all.
+ * Whether the calls of this request are redacted, and its map.
+ * The legal-answer pipeline (E4) only with REDACT_LEGAL_CHAT=on, or when a
+ * database master turned it on or off for that one request
+ * (store.shared.redactLegal, header X-JAI-Redact) - the owner's 20-question
+ * before/after (scripts/redaction-eval.js) decides the default.
+ * REDACT_AI=off stops it all.
  */
 function forRequest(store, env = process.env) {
   if (String(env.REDACT_AI || 'on').toLowerCase() === 'off') return null;
   if (store) {
-    const kind = String(store.kind || '');
-    if (store.service === 'telegram') return null;
-    if (/\/api\/legal-chat|\/api\/rag\//u.test(kind)) return null;
+    if (isLegalPipeline(store)) {
+      const override = store.shared.redactLegal;
+      const on = typeof override === 'boolean' ? override : String(env.REDACT_LEGAL_CHAT || 'off').toLowerCase() === 'on';
+      if (!on) return null;
+    }
     if (!store.shared.redaction) store.shared.redaction = createMap();
     return store.shared.redaction;
   }
@@ -135,7 +176,12 @@ const countsOf = map => (map && Object.keys(map.counts).length ? { ...map.counts
  * usage-ledger request scope; loadName(userId): the account holder's full
  * name (read once per request).
  */
-function createWrapper({ current = () => null, loadName = async () => null, env = process.env } = {}) {
+// the account holder's name loader the server sets once (setNameLoader), for
+// wrappers made where the database is not at hand (the hybrid pipeline)
+let sharedLoadName = async () => null;
+function setNameLoader(fn) { if (typeof fn === 'function') sharedLoadName = fn; }
+
+function createWrapper({ current = () => null, loadName = (uid) => sharedLoadName(uid), env = process.env } = {}) {
   async function scope() {
     const store = current();
     const map = forRequest(store, env);
@@ -149,7 +195,7 @@ function createWrapper({ current = () => null, loadName = async () => null, env 
     }
     return { map, names: (store && store.shared.redactNames) || [] };
   }
-  return async function withRedaction(messages, options, run) {
+  async function withRedaction(messages, options, run) {
     const sc = await scope();
     if (!sc) return run(messages, options);
     const msgs = redactMessages(messages, sc.map, { names: sc.names });
@@ -158,7 +204,26 @@ function createWrapper({ current = () => null, loadName = async () => null, env 
     const opts = counts ? { ...options, detail: { ...(options && options.detail), redacted: counts } } : options;
     const result = await run(msgs, opts);
     return result && typeof result.text === 'string' ? { ...result, text: restore(result.text, sc.map) } : result;
+  }
+  /**
+   * The same for a streamed call: run(redactedMessages, options, onToken)
+   * where onToken gets restored pieces (a possible placeholder held across
+   * pieces), and the final text restored.
+   */
+  withRedaction.stream = async function withRedactionStream(messages, options, onToken, run) {
+    const sc = await scope();
+    if (!sc) return run(messages, options, onToken);
+    const msgs = redactMessages(messages, sc.map, { names: sc.names });
+    const counts = countsOf(sc.map);
+    const opts = counts ? { ...options, detail: { ...(options && options.detail), redacted: counts } } : options;
+    const restorer = createStreamRestorer(sc.map);
+    const emit = (delta) => { const t = restorer.push(delta); if (t && typeof onToken === 'function') onToken(t); };
+    let result;
+    try { result = await run(msgs, opts, emit); }
+    finally { const rest = restorer.flush(); if (rest && typeof onToken === 'function') { try { onToken(rest); } catch (_) { /* consumer */ } } }
+    return result && typeof result.text === 'string' ? { ...result, text: restore(result.text, sc.map) } : result;
   };
+  return withRedaction;
 }
 
-module.exports = { TAGS, createMap, redact, restore, redactMessages, forRequest, countsOf, createWrapper, luhn };
+module.exports = { TAGS, createMap, redact, restore, redactMessages, createStreamRestorer, isLegalPipeline, forRequest, countsOf, createWrapper, setNameLoader, luhn };
