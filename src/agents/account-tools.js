@@ -97,12 +97,14 @@ async function runAccountTool(name, { chatId, who = {}, lang = 'uz', deps = {} }
       const db = deps.db || require('../database/db').pool;
       const tgId = who.telegramUserId != null ? who.telegramUserId : chatId;
       const { rows } = await db.query(
-        `SELECT r.request_text, r.created_at, r.status, r.request_type
+        `SELECT r.id, r.request_text, r.created_at, r.status, r.request_type
            FROM requests r JOIN users u ON u.id = r.user_id
           WHERE u.telegram_id = $1 AND COALESCE(r.source_channel, 'telegram') = 'telegram'
           ORDER BY r.created_at DESC LIMIT 5`, [tgId]);
       if (!rows.length) return { action: 'tool_recent', reply: R ? 'У вас пока нет вопросов в боте.' : "Botda hali savollaringiz yo'q." };
-      const lines = rows.map((r, i) => `${i + 1}. ${dt(r.created_at)} — ${String(r.request_text || '').replace(/\s+/gu, ' ').slice(0, 120)}`);
+      // the questions are sealed at rest (E6, src/privacy/request-text.js)
+      const reqSeal = require('../privacy/request-text');
+      const lines = rows.map(r => reqSeal.openRequest(r, r.id, { response: null })).map((r, i) => `${i + 1}. ${dt(r.created_at)} — ${String(r.request_text || '').replace(/\s+/gu, ' ').slice(0, 120)}`);
       const more = R ? `Полная история и ответы — в приложении: ${app}` : `To'liq tarix va javoblar ilovada: ${app}`;
       return { action: 'tool_recent', reply: [R ? 'Ваши последние вопросы:' : "So'nggi savollaringiz:", ...lines, '', more].join('\n') };
     }

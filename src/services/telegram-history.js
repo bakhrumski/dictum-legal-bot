@@ -22,17 +22,31 @@ async function appendTelegramTurn(db, { adminId, question, answer, now = new Dat
     { role: 'user', text: String(question).slice(0, 8000), channel: 'telegram' },
     { role: 'model', text: String(answer).slice(0, 30000), channel: 'telegram' },
   ];
-  const found = await db.query(
-    `SELECT id FROM ai_chat_sessions WHERE admin_id = $1 AND topic = 'telegram' AND title = $2 ORDER BY id DESC LIMIT 1`, [adminId, title]);
-  if (found.rows.length) {
-    await db.query(`UPDATE ai_chat_sessions SET messages = COALESCE(messages, '[]'::jsonb) || $2::jsonb, updated_at = NOW() WHERE id = $1`,
-      [found.rows[0].id, JSON.stringify(turn)]);
-    return found.rows[0].id;
+  // E6: the messages are sealed (src/privacy/chat-sessions.js), so a turn is
+  // added by reading, opening, extending and sealing them again, in one transaction
+  const chats = require('../privacy/chat-sessions');
+  const client = typeof db.connect === 'function' ? await db.connect() : db;
+  const own = client !== db;
+  try {
+    if (own) await client.query('BEGIN');
+    const found = await client.query(
+      `SELECT id FROM ai_chat_sessions WHERE admin_id = $1 AND topic = 'telegram' AND title = $2 ORDER BY id DESC LIMIT 1`, [adminId, title]);
+    let id;
+    if (found.rows.length && await chats.appendMessages(client, { id: found.rows[0].id, adminId, add: turn })) {
+      id = found.rows[0].id;
+    } else {
+      id = (await client.query(
+        `INSERT INTO ai_chat_sessions (admin_id, title, databases, topic, messages, message_count) VALUES ($1, $2, $3, 'telegram', $4::jsonb, $5) RETURNING id`,
+        [adminId, title, ['lex.uz'], chats.sealMessages(turn, adminId), turn.length])).rows[0].id;
+    }
+    if (own) await client.query('COMMIT');
+    return id;
+  } catch (e) {
+    if (own) await client.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally {
+    if (own) client.release();
   }
-  const r = await db.query(
-    `INSERT INTO ai_chat_sessions (admin_id, title, databases, topic, messages) VALUES ($1, $2, $3, 'telegram', $4::jsonb) RETURNING id`,
-    [adminId, title, ['lex.uz'], JSON.stringify(turn)]);
-  return r.rows[0].id;
 }
 
 module.exports = { appendTelegramTurn, tashkentDay };

@@ -147,10 +147,11 @@ async function buildReport(db, { days = 90, perTopic = 50 } = {}) {
   await read('web_chat', `SELECT query, topic, weak, created_at FROM coverage_log
       WHERE created_at > NOW() - ($1::int * INTERVAL '1 day') ORDER BY created_at DESC LIMIT ${MAX_ROWS}`,
   r => ({ text: r.query, topic: r.topic, weak: r.weak === true, channel: 'web', at: r.created_at }));
-  await read('telegram', `SELECT request_text, category, created_at FROM requests
+  // the question is sealed at rest (E6): opened by its id
+  await read('telegram', `SELECT id, request_text, category, created_at FROM requests
       WHERE source_channel = 'telegram' AND COALESCE(request_type, 'text') = 'text'
         AND created_at > NOW() - ($1::int * INTERVAL '1 day') ORDER BY created_at DESC LIMIT ${MAX_ROWS}`,
-  r => ({ text: r.request_text, topic: r.category, weak: false, channel: 'telegram', at: r.created_at }));
+  r => ({ text: require('../privacy/request-text').openRequest(r, r.id, { response: null }).request_text, topic: r.category, weak: false, channel: 'telegram', at: r.created_at }));
 
   let bank = [];
   try {

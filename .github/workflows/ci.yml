@@ -123,6 +123,8 @@ jobs:
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/sealing-e2b.db.test.js
       - name: Data protection E5 - Workspace sealed at rest (db)
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/sealing-workspace.db.test.js
+      - name: Data protection E6 - chats, the human queue, blind index (db)
+        run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/sealing-e6.db.test.js
       - name: Speech glossary per account (learn, isolation, cap) on real Postgres
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/voice-glossary.db.test.js
       - name: Planner agent (master gate, approval, price, worker) on real Postgres

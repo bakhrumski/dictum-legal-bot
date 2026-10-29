@@ -610,7 +610,10 @@ function anonLabel(userId, dateStr) {
 }
 
 // Anonymize applicant personal info for non-master users
+// E6: the question and the answer are sealed at rest (src/privacy/request-text.js)
+const reqSeal = require('../privacy/request-text');
 function anonymizeRequest(row, role) {
+  row = reqSeal.openRequest(row);
   if (role === 'master') return row;
   return {
     ...row,
@@ -1908,7 +1911,9 @@ app.get('/api/requests', requireStaff, async (req, res) => {
     const search = String(req.query.search || '').trim().slice(0, 200);
     if (search) {
       const p = addParam(`%${search}%`);
-      where.push(`(r.request_text ILIKE ${p} OR u.first_name ILIKE ${p} OR u.username ILIKE ${p})`);
+      // a sealed question is found by its blind index (whole word roots), a plain one by ILIKE
+      const tk = addParam(reqSeal.bidx.queryTokens(search));
+      where.push(`(${reqSeal.searchClause('r.request_text', 'r.request_bidx', p, tk)} OR u.first_name ILIKE ${p} OR u.username ILIKE ${p})`);
     }
     if (req.query.category) {
       const requestedCategory = String(req.query.category).slice(0, 255);
@@ -2642,7 +2647,7 @@ app.post('/api/student-response', requireStaff, async (req, res) => {
       `, [requestId]);
       
       if (requestDetails.rows.length > 0) {
-        const { username, first_name, request_text, category } = requestDetails.rows[0];
+        const { username, first_name, request_text, category } = reqSeal.openRequest(requestDetails.rows[0], requestId);
         const masterNotification = `
 🔔 Student admindan yangi javob!
 
@@ -2698,7 +2703,7 @@ app.post('/api/approve-response', requireMasterAdmin, async (req, res) => {
       return res.status(404).json({ error: 'Request not found' });
     }
     
-    const { telegram_id, first_name, student_response, request_text, category, ai_response } = requestResult.rows[0];
+    const { telegram_id, first_name, student_response, request_text, category, ai_response } = reqSeal.openRequest(requestResult.rows[0], requestId, { response: 'ai_response' });
     
     // Use corrected answer if provided, otherwise use student response
     const finalResponse = (feedbackType && feedbackType !== 'correct' && correctedAnswer) ? correctedAnswer : student_response;
@@ -2712,17 +2717,20 @@ app.post('/api/approve-response', requireMasterAdmin, async (req, res) => {
           answered_at = NOW(),
           responded_by = $3
       WHERE id = $1
-    `, [requestId, finalResponse, req.session.fullName]);
+    `, [requestId, reqSeal.sealResponse(requestId, finalResponse), req.session.fullName]);
     
     // Save mentor feedback to learning dataset
     if (feedbackType) {
       try {
+        // a learning set keeps no identifiers (E6, §9 answer 6)
+        const { redact: hideIds, createMap } = require('../privacy/redact');
+        const ids = createMap();
         await saveMentorFeedback({
           request_id: requestId,
-          question: request_text,
-          ai_answer: ai_response || student_response,
+          question: hideIds(request_text, ids),
+          ai_answer: hideIds(ai_response || student_response, ids),
           mentor_feedback_type: feedbackType,
-          corrected_answer: correctedAnswer || '',
+          corrected_answer: hideIds(correctedAnswer || '', ids),
           corrected_legal_reasoning: correctedReasoning || '',
           corrected_law_articles: correctedArticles || '',
           legal_field: category || 'Umumiy',
@@ -2738,9 +2746,11 @@ app.post('/api/approve-response', requireMasterAdmin, async (req, res) => {
     let corpusAdded = false;
     if (addToCorpus && request_text && finalResponse) {
       try {
+        const { redact: hideIds, createMap } = require('../privacy/redact');
+        const ids = createMap();
         await insertVerifiedAnswer({
-          question: request_text,
-          answer: finalResponse,
+          question: hideIds(request_text, ids),
+          answer: hideIds(finalResponse, ids),
           category: category || 'boshqa',
           requestId,
           verifiedBy: req.session.adminId,
@@ -2818,7 +2828,7 @@ app.post('/api/master-response', requireMasterAdmin, async (req, res) => {
           answered_at = NOW(),
           responded_by = $3
       WHERE id = $2
-    `, [responseText, requestId, req.session.fullName]);
+    `, [reqSeal.sealResponse(requestId, responseText), requestId, req.session.fullName]);
     
     const message = `
 ✅ Yuristdan javob keldi!
@@ -2878,15 +2888,18 @@ app.post('/api/master-response-bulk', requireMasterAdmin, async (req, res) => {
 
     const { telegram_id, first_name } = requestResult.rows[0];
 
-    await pool.query(`
-      UPDATE requests
-      SET response_text = $1,
-          status = 'answered',
-          master_approved = TRUE,
-          answered_at = NOW(),
-          responded_by = $3
-      WHERE id = ANY($2::int[])
-    `, [responseText, ids, req.session.fullName]);
+    // each row's answer is sealed to its own id (E6)
+    for (const rid of ids) {
+      await pool.query(`
+        UPDATE requests
+        SET response_text = $1,
+            status = 'answered',
+            master_approved = TRUE,
+            answered_at = NOW(),
+            responded_by = $3
+        WHERE id = $2
+      `, [reqSeal.sealResponse(rid, responseText), rid, req.session.fullName]);
+    }
 
     const message = `
 ✅ Yuristdan javob keldi!
@@ -3320,7 +3333,7 @@ app.post('/api/assign-request', requireMasterAdmin, async (req, res) => {
           );
 
           if (reqResult.rows.length > 0) {
-            const req = reqResult.rows[0];
+            const req = reqSeal.openRequest(reqResult.rows[0]);
             const typeLabels = { text: 'Matn', voice: 'Ovozli xabar', video: 'Video', video_note: 'Video xabar', document: 'Fayl', photo: 'Rasm' };
             const typeLabel = typeLabels[req.request_type] || req.request_type;
             const dashboardUrl = process.env.DASHBOARD_URL || 'http://localhost:3000';
@@ -3442,7 +3455,7 @@ app.post('/api/assign-student', requireMasterAdmin, async (req, res) => {
             [requestId]
           );
           if (reqResult.rows.length > 0) {
-            const r = reqResult.rows[0];
+            const r = reqSeal.openRequest(reqResult.rows[0]);
             const preview = (r.request_text || '').substring(0, 100);
             await bot.sendMessage(student.telegram_chat_id,
               `📋 Sizga yangi murojaat tayinlandi!\n\n` +
@@ -5078,9 +5091,11 @@ ${feedbackNote}`;
     let archiveId = null;
     try {
       const archiveResult = await pool.query(
-        `INSERT INTO ai_analyses (request_id, admin_id, category, request_text, analysis_text, internal_reasoning)
-         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-        [requestId || null, req.session.adminId, detectedField || category, requestText, analysis, internalReasoning]
+        `INSERT INTO ai_analyses (request_id, admin_id, category, request_text, analysis_text, internal_reasoning, request_bidx)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+        [requestId || null, req.session.adminId, detectedField || category,
+          require('../privacy/request-text').sealAnalysis(req.session.adminId, requestText), analysis, internalReasoning,
+          require('../privacy/blind-index').tokens(requestText)]
       );
       archiveId = archiveResult.rows[0].id;
     } catch (archiveErr) {
@@ -8290,13 +8305,18 @@ Return ONLY JSON (no fences): {"title": "short Uzbek label of the document type 
 });
 
 // ========== AI CHAT SESSIONS CRUD ==========
+// E6: the messages are sealed at rest, bound to their account (src/privacy/chat-sessions.js)
+const chatSessions = require('../privacy/chat-sessions');
 
 // List sessions
 app.get('/api/ai-chat-sessions', requireAuth, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, title, databases, messages->0->>'text' as first_message,
-              jsonb_array_length(messages) as message_count,
+      // E6: a sealed messages column is an object - the list reads the stored count
+      // and never opens the messages; first_message only for an old plain row
+      `SELECT id, title, databases,
+              CASE WHEN jsonb_typeof(messages) = 'array' THEN messages->0->>'text' END as first_message,
+              COALESCE(message_count, CASE WHEN jsonb_typeof(messages) = 'array' THEN jsonb_array_length(messages) END, 0) as message_count,
               created_at, updated_at
        FROM ai_chat_sessions
        WHERE admin_id = $1
@@ -8323,7 +8343,7 @@ app.get('/api/ai-chat-sessions/:id', requireAuth, async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Suhbat topilmadi' });
     }
-    res.json(result.rows[0]);
+    res.json(chatSessions.openRow(result.rows[0], req.session.adminId));
   } catch (error) {
     console.error('[AI Sessions] Get error:', error);
     res.status(500).json({ error: 'Suhbat yuklanmadi' });
@@ -8339,24 +8359,26 @@ app.post('/api/ai-chat-sessions', requireAuth, async (req, res) => {
     }
 
     const dbs = Array.isArray(databases) && databases.length > 0 ? databases : ['lex.uz'];
-    const sessionTitle = title || (messages[0] && messages[0].text ? messages[0].text.substring(0, 60) : 'Nomsiz suhbat');
+    // the title stays readable for the list, with identifiers hidden (E6, §3.2)
+    const sessionTitle = chatSessions.listTitle(title || (messages[0] && messages[0].text ? messages[0].text.substring(0, 60) : 'Nomsiz suhbat'));
+    const sealedMessages = chatSessions.sealMessages(messages, req.session.adminId);
 
     if (id) {
       // Update existing session
       const result = await pool.query(
         `UPDATE ai_chat_sessions
-         SET title = $1, databases = $2, topic = $3, messages = $4::jsonb, updated_at = NOW()
+         SET title = $1, databases = $2, topic = $3, messages = $4::jsonb, message_count = $7, updated_at = NOW()
          WHERE id = $5 AND admin_id = $6
          RETURNING id`,
-        [sessionTitle, dbs, topic || null, JSON.stringify(messages), id, req.session.adminId]
+        [sessionTitle, dbs, topic || null, sealedMessages, id, req.session.adminId, messages.length]
       );
       if (result.rows.length === 0) {
         // Session not found — create new
         const newResult = await pool.query(
-          `INSERT INTO ai_chat_sessions (admin_id, title, databases, topic, messages)
-           VALUES ($1, $2, $3, $4, $5::jsonb)
+          `INSERT INTO ai_chat_sessions (admin_id, title, databases, topic, messages, message_count)
+           VALUES ($1, $2, $3, $4, $5::jsonb, $6)
            RETURNING id`,
-          [req.session.adminId, sessionTitle, dbs, topic || null, JSON.stringify(messages)]
+          [req.session.adminId, sessionTitle, dbs, topic || null, sealedMessages, messages.length]
         );
         return res.json({ id: newResult.rows[0].id });
       }
@@ -8364,10 +8386,10 @@ app.post('/api/ai-chat-sessions', requireAuth, async (req, res) => {
     } else {
       // Create new session
       const result = await pool.query(
-        `INSERT INTO ai_chat_sessions (admin_id, title, databases, topic, messages)
-         VALUES ($1, $2, $3, $4, $5::jsonb)
+        `INSERT INTO ai_chat_sessions (admin_id, title, databases, topic, messages, message_count)
+         VALUES ($1, $2, $3, $4, $5::jsonb, $6)
          RETURNING id`,
-        [req.session.adminId, sessionTitle, dbs, topic || null, JSON.stringify(messages)]
+        [req.session.adminId, sessionTitle, dbs, topic || null, sealedMessages, messages.length]
       );
       res.json({ id: result.rows[0].id });
     }
@@ -8396,7 +8418,7 @@ app.get('/api/ai-analyses', requireMasterAdmin, async (req, res) => {
   try {
     const { category, adminId, dateFrom, dateTo, search } = req.query;
     let query = `
-      SELECT aa.id, aa.request_id, aa.category, aa.request_text,
+      SELECT aa.id, aa.request_id, aa.admin_id, aa.category, aa.request_text,
              aa.analysis_text, aa.created_at,
              a.full_name as admin_name,
              r.user_id,
@@ -8426,8 +8448,10 @@ app.get('/api/ai-analyses', requireMasterAdmin, async (req, res) => {
       params.push(dateTo);
     }
     if (search) {
-      query += ` AND aa.request_text ILIKE $${paramIdx++}`;
-      params.push(`%${search}%`);
+      // sealed questions by their blind index, plain ones by ILIKE (E6)
+      const like = `$${paramIdx++}`, tk = `$${paramIdx++}`;
+      query += ` AND ${reqSeal.searchClause('aa.request_text', 'aa.request_bidx', like, tk)}`;
+      params.push(`%${search}%`, reqSeal.bidx.queryTokens(search));
     }
 
     query += ` ORDER BY aa.created_at DESC LIMIT 100`;
@@ -8435,7 +8459,7 @@ app.get('/api/ai-analyses', requireMasterAdmin, async (req, res) => {
     const result = await pool.query(query, params);
 
     // Add anonymous label to each row
-    const rows = result.rows.map(row => ({
+    const rows = result.rows.map(row => reqSeal.openAnalysis(row)).map(row => ({
       ...row,
       anon_name: row.user_id ? `Murojaatchi ${anonId(row.user_id, row.created_at, row.user_request_seq)}` : `Murojaatchi #${row.id}`
     }));
@@ -8451,7 +8475,7 @@ app.get('/api/ai-analyses', requireMasterAdmin, async (req, res) => {
 app.get('/api/ai-analyses/:id', requireMasterAdmin, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT aa.id, aa.request_id, aa.category, aa.request_text,
+      SELECT aa.id, aa.request_id, aa.admin_id, aa.category, aa.request_text,
              aa.analysis_text, aa.created_at,
              a.full_name as admin_name,
              r.user_id,
@@ -8466,7 +8490,7 @@ app.get('/api/ai-analyses/:id', requireMasterAdmin, async (req, res) => {
       return res.status(404).json({ error: 'Tahlil topilmadi' });
     }
 
-    const row = result.rows[0];
+    const row = reqSeal.openAnalysis(result.rows[0]);
     if (req.session.role !== 'master') {
       row.request_text = `Murojaatchi ${anonId(row.user_id || row.id, row.created_at, row.user_request_seq)}`;
     }
@@ -8484,7 +8508,7 @@ app.get('/api/ai-archive-grouped', requireMasterAdmin, async (req, res) => {
     const result = await pool.query(`
       SELECT r.id, r.category, r.created_at, r.answered_at,
              r.responded_by, r.user_id,
-             LEFT(r.request_text, 120) as topic,
+             r.request_text,
              ROW_NUMBER() OVER (PARTITION BY r.user_id ORDER BY r.created_at) as user_request_seq,
              aa.id as ai_analysis_id
       FROM requests r
@@ -8523,7 +8547,7 @@ app.get('/api/ai-archive-grouped', requireMasterAdmin, async (req, res) => {
         created_at: row.created_at,
         answered_at: row.answered_at,
         anon_id: userId ? anonId(userId, row.created_at, row.user_request_seq) : `#${row.id}`,
-        topic: row.topic || '',
+        topic: String(reqSeal.openRequest(row).request_text || '').slice(0, 120),
         has_ai: !!row.ai_analysis_id,
         ai_analysis_id: row.ai_analysis_id,
         responded_by: row.responded_by
@@ -8908,7 +8932,10 @@ app.post('/api/legal-dataset/from-analysis', requireMasterAdmin, async (req, res
       ORDER BY aa.created_at DESC LIMIT 1`, [requestId]);
 
     if (reqResult.rows.length === 0) return res.status(404).json({ error: 'Murojaat topilmadi' });
-    const { request_text, category, analysis_text } = reqResult.rows[0];
+    const { category, analysis_text } = reqResult.rows[0];
+    // the learning set keeps no identifiers (E6, §9 answer 6)
+    const { redact: hideIds, createMap } = require('../privacy/redact');
+    const request_text = hideIds(String(reqSeal.openRequest(reqResult.rows[0], requestId).request_text || ''), createMap());
     if (!analysis_text) return res.status(400).json({ error: 'AI tahlil topilmadi' });
 
     const example = await addExample({
@@ -9782,7 +9809,7 @@ app.post('/api/requests/:id/triage', requireMasterAdmin, async (req, res) => {
     const request = await pool.query('SELECT request_text, request_type FROM requests WHERE id = $1', [requestId]);
     if (request.rows.length === 0) return res.status(404).json({ error: 'So\'rov topilmadi' });
 
-    const { request_text, request_type } = request.rows[0];
+    const { request_text, request_type } = reqSeal.openRequest(request.rows[0], requestId);
     const result = await triageRequest(requestId, request_text, request_type);
     if (!result) return res.status(500).json({ error: 'Triage agent xatolik berdi' });
 
@@ -9801,7 +9828,7 @@ app.post('/api/requests/:id/classify', requireStaff, async (req, res) => {
     const request = await pool.query('SELECT request_text FROM requests WHERE id = $1', [requestId]);
     if (request.rows.length === 0) return res.status(404).json({ error: 'So\'rov topilmadi' });
 
-    const result = await classifyLegalField(request.rows[0].request_text, requestId);
+    const result = await classifyLegalField(reqSeal.openRequest(request.rows[0], requestId).request_text, requestId);
     res.json({ success: true, classification: result });
   } catch (error) {
     console.error('[API] Classification error:', error);

@@ -394,7 +394,24 @@ Known state of the suites (Sept 2026):
   240 characters and its body the answer). Fixed on the way: every new
   Workspace AI answer failed at finalization (`reused_memory_item_id` got
   text) and the memory-reuse path had uneven VALUES rows.
-  `tests/sealing-workspace.db.test.js`. Next: E6-E7.
+  `tests/sealing-workspace.db.test.js`.
+  E6a (2026-10-29, migration 033, §3.2 and §9 answers 1 / 6): web chats
+  (`ai_chat_sessions.messages`, AAD by account, `src/privacy/chat-sessions.js`)
+  are sealed; the list reads the readable title - identifiers hidden by the
+  redaction rules - and a stored `message_count`, never the messages; the
+  bot's Telegram turn is appended by read-modify-write under FOR UPDATE. The
+  human queue's `requests.request_text` / `response_text` (AAD by request id;
+  the bot inserts the row, then writes the sealed text in the same
+  transaction) and `ai_analyses.request_text` (AAD by author) are sealed, with
+  a blind index `request_bidx` (`src/privacy/blind-index.js`: HMAC of
+  5-character word roots, both alphabets folded, key derived from DATA_KEYS
+  with HKDF - `DATA_BIDX_KEY_ID`, else the first id in sort order, so a
+  rotation does not move it) that the staff search uses with ILIKE for old
+  plain rows (whole roots, every word; never part of a word). Learning sets
+  (mentor feedback, verified QA, the legal dataset) are written with
+  identifiers hidden. `seal-backfill.js` covers them (index and count
+  included; `--tables` limits a run). `tests/sealing-e6.db.test.js`.
+  Next: E6b (access log, DeepSeek opt-out), E7.
   `tests/privacy-crypto.test.js`, `tests/document-library.db.test.js`,
   `tests/sealing-e2b.db.test.js`, `tests/privacy-redact.test.js`,
   `tests/redaction-eval.test.js`.
