@@ -29,6 +29,12 @@
   var still = { get matches() { return reduceMQ.matches || userStill; } };
   if (userStill) document.documentElement.classList.add('still');
   var dict;
+  /* GET /api/landing-config bir marta: fon bezagi va E7 bo'limi shu javobni o'qiydi */
+  var cfgP = null;
+  function landingCfg() {
+    if (!cfgP) cfgP = fetch('/api/landing-config', { credentials: 'omit' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
+    return cfgP;
+  }
 
   /* ---------- til ---------- */
   var PAGE_LANG = document.documentElement.lang || 'uz';
@@ -1112,10 +1118,98 @@
     if (preview && ok[preview]) { apply(preview); return; }
     apply('1');
     if (!window.fetch) return;
-    fetch('/api/landing-config', { credentials: 'omit' })
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (d) { if (d && d.bg != null) apply(String(d.bg)); })
-      .catch(function () {});
+    landingCfg().then(function (d) { if (d && d.bg != null) apply(String(d.bg)); });
+  })();
+
+  /* ---------- E7: "Ma'lumotingiz qanday himoyalanadi" (#shifrlash). Bo'lim faqat server shifrlash (DATA_KEYS)
+     va AI'dan oldin yashirish yoqiq deb aytganda ochiladi - va'da rost bo'lishi uchun; izoh qaysi xizmatlar
+     yashirilishini serverdan oladi. Yangi animatsiya yo'q: yozish (caret), skan (beam), .slot.flip, .stamp,
+     barin, mdot. Harakat to'xtatilgan bo'lsa - yakuniy holat, harakatsiz. ---------- */
+  (function () {
+    var box = $('#shifrlash');
+    if (!box || !window.fetch) return;
+    landingCfg().then(function (d) {
+      var p = d && d.privacy;
+      if (!p || !p.encryptionAtRest || !p.redactAi) return;
+      box.hidden = false;
+      start(!!p.redactChat);
+    });
+    function start(chatToo) {
+      var card = $('.enc-card', box), line = $('.enc-line', box), note = $('.enc-note', box), stamp = $('.enc-stamp', box);
+      var steps = $$('.enc-steps li[data-s]', box), bars = $$('.enc-bar', box), foot = $('.enc-foot', box);
+      var token = 0, running = false;
+      function T(k) { return (dict && dict[k]) || (window.I18N.uz[k] || ''); }
+      function parts() {   // "{n:Aziz Karimov}, pasport {p:AA1234567}: ..." -> [{t, kind}]
+        var out = [], re = /\{([np]):([^}]*)\}|([^{]+)/g, m, src = T('enc.sample');
+        while ((m = re.exec(src))) {
+          if (m[1]) out.push({ t: m[2], kind: m[1] === 'n' ? 'SHAXS' : 'PASPORT' });
+          else m[3].split(/(\s+)/).forEach(function (w) { if (w) out.push({ t: w, kind: /^\s+$/.test(w) ? 'ws' : null }); });
+        }
+        return out;
+      }
+      function cipher(n) { var a = 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ0123456789-_', s = ''; for (var k = 0; k < Math.max(2, n); k++) s += a[(k * 37 + n * 11) % a.length]; return s; }
+      // the footer's motion switch stops it at once: the final state, still
+      function wait(ms, id) { return new Promise(function (ok, no) { setTimeout(function () { id === token && !still.matches ? ok() : no(); }, ms); }); }
+      async function flip(el, text, id) { el.classList.add('flip'); await wait(200, id); el.textContent = text; el.classList.remove('flip'); }
+      function step(n) {
+        steps.forEach(function (li, k) { li.classList.toggle('on', k === n - 1); li.classList.toggle('done', k < n - 1); });
+        bars.forEach(function (b, k) { b.classList.toggle('on', k === n - 2); b.classList.toggle('done', k < n - 2); });
+      }
+      function render(ps, slot) {
+        line.innerHTML = '';
+        // a space stays a plain text node: inline-block slots would swallow it
+        return ps.map(function (x) {
+          if (x.kind === 'ws') { line.appendChild(document.createTextNode(x.t)); return null; }
+          var el = document.createElement('span'); el.className = 'slot set'; el.textContent = slot ? x.t : ''; line.appendChild(el); return el;
+        });
+      }
+      function finalState() {   // harakatsiz: yashirilgan qator, izoh va belgi
+        step(5); var ps = parts(), els = render(ps, true);
+        ps.forEach(function (x, k) { if (x.kind && x.kind !== 'ws') { els[k].textContent = '[' + x.kind + '_1]'; els[k].classList.add('ph'); } });
+        note.textContent = T('enc.toAi'); note.classList.add('on'); stamp.textContent = T('enc.stored'); stamp.classList.add('on');
+      }
+      async function play(id) {
+        var ps = parts(), els, k;
+        line.classList.remove('cipher'); note.classList.remove('on'); stamp.classList.remove('on'); card.classList.remove('scan');
+        step(1); els = render(ps, false);
+        for (k = 0; k < ps.length; k++) {                     // 1. siz yozasiz: harfma-harf
+          if (!els[k]) continue;
+          els[k].classList.add('caret');
+          for (var c = 0; c < ps[k].t.length; c++) { els[k].textContent += ps[k].t[c]; await wait(28, id); }
+          els[k].classList.remove('caret');
+        }
+        await wait(700, id);
+        step(2); card.classList.add('scan'); await wait(1300, id);   // 2. skan, shaxsiy ma'lumot belgiga almashadi
+        for (k = 0; k < ps.length; k++) if (els[k] && ps[k].kind) { await flip(els[k], '[' + ps[k].kind + '_1]', id); els[k].classList.add('ph'); }
+        note.textContent = T('enc.toAi'); note.classList.add('on'); await wait(1700, id);
+        card.classList.remove('scan'); note.classList.remove('on');
+        step(3); line.classList.add('cipher');                // 3. bazada: butun qator shifr satriga
+        els.forEach(function (el) { if (el) el.classList.remove('ph'); });
+        var first = true;
+        for (k = 0; k < ps.length; k++) { if (!els[k]) continue; flip(els[k], (first ? 'enc:v1:' : '') + cipher(ps[k].t.length), id); first = false; await wait(60, id); }
+        stamp.textContent = T('enc.stored'); stamp.classList.add('on'); await wait(1900, id);
+        step(4); stamp.classList.remove('on'); line.classList.remove('cipher');   // 4. faqat sizga: asl matn qaytadi
+        for (k = 0; k < ps.length; k++) { if (!els[k]) continue; flip(els[k], ps[k].t, id); await wait(60, id); }
+        note.textContent = T('enc.reply'); note.classList.add('on'); await wait(2000, id);
+        step(5); await wait(2000, id);                         // oxirida 2 s pauza, keyin qaytadan
+      }
+      async function loop() {
+        if (running) return; running = true; var id = ++token;
+        try { while (id === token) await play(id); } catch (e) { /* to'xtatildi */ }
+        running = false;
+        if (still.matches) finalState();
+      }
+      function stop() { token++; }
+      function paint() {
+        foot.textContent = T(chatToo ? 'enc.footAll' : 'enc.footDocs');
+        if (still.matches) { stop(); finalState(); }
+      }
+      paint();
+      if (still.matches) return;
+      if ('IntersectionObserver' in window) {
+        new IntersectionObserver(function (es) { es.forEach(function (e) { if (e.isIntersecting && !still.matches) loop(); else stop(); }); }, { threshold: 0.35 }).observe(box);
+      } else loop();
+    }
   })();
 
   /* ---------- skroll to'xtaganda yaqin turgan bo'lim chegarasi ekran tepasiga tortiladi ---------- */

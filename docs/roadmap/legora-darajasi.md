@@ -277,3 +277,6 @@ nima o'lchandi.
 - 2026-10-29: E6b PR: kirish jurnali (xodim boshqa odam ma'lumotini ochganda
   qator, Boshqaruv → "Kirish jurnali") va "DeepSeek'ka yuborilmasin" tanlovi
   (Moslashish); landingda provayderlar rost yozildi.
+- 2026-10-29: #526 (E6a) va #527 (E6b) merge. E7 PR: landingdagi "Ma'lumotingiz
+  qanday himoyalanadi" animatsiyasi - faqat serverda shifrlash va yashirish
+  yoqiq bo'lganda ko'rinadi.

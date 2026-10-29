@@ -170,7 +170,7 @@ Ro'yxat sahifalari ochiq `title` bilan ishlaydi (shifr ochilmaydi).
 | E5 (PR) | Workspace izohlari, umumiy chat, shaxsiy xabarlar, Workspace AI savol/javob/kontekst, hujjat versiyasi matni shifrlanadi (migratsiya 032, `src/workspace/sealing.js`); fayllar Storage'ga shifrlangan holda yoziladi va server orqali ochilib beriladi (sha256 tekshiriladi); a'zolarning Storage'ga to'g'ridan-to'g'ri yozish siyosati olib tashlandi. Realtime allaqachon faqat signal edi. Ochiq qoladi: vazifa nomi/tavsifi va `workspace_memory_items` (3.2) | src, migrations, scripts |
 | E6a (PR) | Web chat xabarlari shifrlanadi (ro'yxat — shaxsiy ma'lumot yashirilgan sarlavha va saqlangan son); Telegram javobi o'qib-qayta-yozish bilan qo'shiladi; `requests` savol/javobi va `ai_analyses` savoli shifrlanadi, xodim qidiruvi ko'r indeks bilan (so'z ildizlari HMAC'i, migratsiya 033); o'rganish to'plamlariga shaxsiy ma'lumot yashirilib yoziladi | src, migrations, scripts |
 | E6b (PR) | Kirish jurnali (`data_access_log`, migratsiya 034, Boshqaruv → "Kirish jurnali"); "DeepSeek'ka yuborilmasin" — Moslashish sahifasida, odatiy o'chiq, "Hammasini tozalash"da saqlanadi; landing va tarif FAQ'da provayderlar nomi va mamlakati | src, migrations, public |
-| E7 | Landing animatsiyasi (10-bo'lim) — **faqat E2 va E3 jonli bo'lgandan keyin** (va'da rost bo'lishi kerak) | public |
+| E7 (PR) | Landing animatsiyasi (10-bo'lim): bo'lim faqat serverda shifrlash (`DATA_KEYS`) va yashirish yoqiq bo'lsa ochiladi (`/api/landing-config` → `privacy`), izoh qaysi xizmatlar yashirilishini aytadi; faqat landingdagi mavjud keyframe'lar (`caret`, `beam`, `.slot.flip`, `.stamp`, `barin`, `mdot`) | public, src (bayroqlar) |
 
 Har PR: migratsiya + down fayl, testlar, CI, brauzer tekshiruvi (UI bo'lsa).
 
@@ -234,4 +234,8 @@ gorizontal "yo'l" (telefonda vertikal), 4 qadam sikl bilan:
   bazada shifrlangan holda saqlanadi. Savol mazmuni javob uchun AI
   provayderga yuboriladi." + "Ma'lumotlaringiz qayerga boradi →" havolasi.
 - Faqat E2 va E3 jonli bo'lgandan keyin chiqadi (landing va'dalari rost
-  bo'lishi shart — 2026-10-20 auditi).
+  bo'lishi shart — 2026-10-20 auditi). Amalda (E7): bo'lim serverning
+  o'zi aytgan holatga bog'langan — `DATA_KEYS` qo'yilmaguncha ko'rinmaydi.
+  Mavjud yangi landing keyframe'lari ishlatildi (`jai-*` nomlari eski
+  landingniki): yozish `caret`, skan `beam`, almashish `.slot.flip`, belgi
+  `.stamp`, qadam `mdot`, chiziq `barin`.

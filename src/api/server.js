@@ -10194,8 +10194,19 @@ wordAddin.mountRoutes(app, { pool, requireAuth, requireSameOrigin: require('../a
 const landingConfig = require('../config/landing-config');
 app.get('/api/landing-config', async (req, res) => {
   res.set('Cache-Control', 'public, max-age=30');
-  res.json(await landingConfig.read(pool));
+  // E7: the landing shows its "how your data is protected" section only while
+  // what it promises is on here - sealing at rest (DATA_KEYS) and redaction
+  // before AI - and says which services the redaction covers. Flags only.
+  res.json({ ...(await landingConfig.read(pool)), privacy: privacyStatus() });
 });
+function privacyStatus(env = process.env) {
+  const on = (v, d) => String(v == null || v === '' ? d : v).toLowerCase() === 'on';
+  return {
+    encryptionAtRest: require('../privacy/crypto').enabled(),
+    redactAi: on(env.REDACT_AI, 'on'),
+    redactChat: on(env.REDACT_AI, 'on') && on(env.REDACT_LEGAL_CHAT, 'off'),
+  };
+}
 app.put('/api/admin/landing-config', requireMasterAdmin, require('../auth/same-origin').requireSameOrigin, async (req, res) => {
   try {
     const out = await landingConfig.write(pool, req.body || {}, req.session.adminId);
