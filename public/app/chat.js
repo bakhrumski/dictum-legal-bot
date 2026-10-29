@@ -304,7 +304,7 @@
         b.onclick = function () {
           var x = data.nextActions[+b.dataset.nx];
           if (x.kind === 'attorney') J.go('#/advokatlar');
-          else if (x.kind === 'document') { J.draftPrefill = { type: x.documentType || x.label, question: question, answer: data.reply, action: x.label }; J.go('#/tayyorlash?type=ai'); }
+          else if (x.kind === 'document') { J.draftPrefill = { type: x.documentType || x.label, question: question, answer: data.reply, action: x.label, from: location.hash || '#/' }; J.go('#/tayyorlash?type=ai'); }
         };
       });
       $('[data-a=copy]', body).onclick = function () { navigator.clipboard.writeText(J.plain(r.html)).then(function () { J.toast(t('act.copied')); }); };
