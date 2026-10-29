@@ -41,6 +41,8 @@ const COLUMNS = [
   { table: 'chat_messages', col: 'message', key: 'id', extra: 'admin_id', aad: r => `chat_messages.message:${r.admin_id}` },
   { table: 'agent_traces', col: 'input_summary', key: 'id', extra: 'request_id, agent_type', aad: r => `agent_traces:${r.request_id}:${r.agent_type}` },
   { table: 'agent_traces', col: 'output', key: 'id', json: true, extra: 'request_id, agent_type', aad: r => `agent_traces:${r.request_id}:${r.agent_type}` },
+  // E4: the web chat's shared answer cache (72 hours), bound to its key
+  { table: 'answer_cache', col: 'reply', key: 'key', aad: r => `answer_cache.reply:${r.key}` },
 ];
 
 async function main() {

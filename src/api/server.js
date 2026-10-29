@@ -454,6 +454,25 @@ app.use('/api/', testModel.createMiddleware({
   verifyMaster: require('../rag/document-explain-route').createVerifyMaster(pool),
   onApplied: (model) => usageLedger.annotate({ testModel: model }),
 }));
+// Data protection E4: a master turns the legal-answer pipeline's redaction on
+// or off for one request (header X-JAI-Redact: on | off; the role read from
+// the database), so scripts/redaction-eval.js can ask the same question both
+// ways. Anyone else's header is ignored.
+const verifyMasterForRedact = require('../rag/document-explain-route').createVerifyMaster(pool);
+app.use('/api/', async (req, res, next) => {
+  const raw = String(req.get('x-jai-redact') || '').trim().toLowerCase();
+  if (raw !== 'on' && raw !== 'off') return next();
+  try {
+    const s = req.session || {};
+    const store = usageLedger.current();
+    if (store && s.role === 'master' && s.adminId && await verifyMasterForRedact(s.adminId)) {
+      store.shared.redactLegal = raw === 'on';
+      res.setHeader('X-JAI-Redact', raw);
+      res.setHeader('Cache-Control', 'no-store');
+    }
+  } catch (_) { /* the header is a test aid: never blocks a request */ }
+  next();
+});
 // A test entitlement (pilot) has one total AI budget (src/ai/test-budget.js):
 // a request of that account reserves its per-request limit before its first
 // AI call. Every other account is untouched (a cached id set, no query).
@@ -3895,13 +3914,14 @@ const { usageFromGemini: geminiUsage, usageFromOpenAI: openaiUsage } = usageLedg
 
 // ── Data protection E3 (src/privacy/redact.js): personal identifiers are
 // replaced before a text call leaves for a provider (every provider behind
-// callOpenAI / callGemini) and put back in its answer. Not on the
-// legal-answer pipeline yet (web chat, Telegram: E4). The map stays in the
-// request's memory; the ledger request gets the counts only.
-const withRedaction = require('../privacy/redact').createWrapper({
-  current: () => usageLedger.current(),
-  loadName: async (uid) => { const r = await pool.query('SELECT full_name FROM admins WHERE id = $1', [uid]); return r.rows[0] ? r.rows[0].full_name : null; },
-});
+// callOpenAI / callOpenAIStream / callGemini, and the hybrid pipeline) and
+// put back in its answer. The legal-answer pipeline (web chat, its RAG
+// routes, Telegram: E4) only with REDACT_LEGAL_CHAT=on or a master's
+// X-JAI-Redact for one request. The map stays in the request's memory; the
+// ledger request gets the counts only.
+const redaction = require('../privacy/redact');
+redaction.setNameLoader(async (uid) => { const r = await pool.query('SELECT full_name FROM admins WHERE id = $1', [uid]); return r.rows[0] ? r.rows[0].full_name : null; });
+const withRedaction = redaction.createWrapper({ current: () => usageLedger.current() });
 
 async function callGemini(messages, options = {}) {
   return withRedaction(messages, options, (msgs, opts) => callGeminiTracked(msgs, opts));
@@ -4012,6 +4032,10 @@ async function callGeminiOnce(messages, options, call) {
 async function callOpenAIStream(messages, options = {}, onToken) {
   // a master's own test model for this request (src/ai/test-model.js)
   options = testModel.apply(options);
+  return withRedaction.stream(messages, options, onToken, (m, o, t) => callOpenAIStreamChain(m, o, t));
+}
+
+async function callOpenAIStreamChain(messages, options, onToken) {
   return usageLedger.withChain(async () => {
     const viaZai = await tryZai(messages, options, options.model || MODELS.standard, onToken);
     if (viaZai) return viaZai;
@@ -7287,6 +7311,8 @@ app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, t
     // never be served to customers.
     const cacheable = process.env.ANSWER_CACHE !== 'off'
       && !testModel.current()
+      // a master's X-JAI-Redact comparison asks the provider each time
+      && typeof (usageLedger.current() || { shared: {} }).shared.redactLegal !== 'boolean'
       && !hasDocument
       && (!Array.isArray(history) || history.length === 0);
     // The key carries the corpus revision and the prompt-policy versions, so
@@ -7305,6 +7331,8 @@ app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, t
         const c = await pool.query(
           `SELECT reply, provider, rag FROM answer_cache
             WHERE key = $1 AND created_at > NOW() - INTERVAL '72 hours'`, [cacheKey]);
+        // sealed at rest (E4), bound to its key; an older plain row reads as it is
+        const cachedReply = c.rows[0] ? privacy.open(c.rows[0].reply, `answer_cache.reply:${cacheKey}`) : null;
         if (c.rows[0]) {
           pool.query('UPDATE answer_cache SET hits = hits + 1 WHERE key = $1', [cacheKey]).catch(() => {});
           const payload = {
@@ -7314,14 +7342,14 @@ app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, t
             // bypassing the provider guard, the prompt rule and the scrubber
             // alike — which is exactly why a re-test after the fix returned
             // the same external citations.
-            reply: normalizeLegalAnswerCitations(normalizeResponseForUser(c.rows[0].reply), [], lexLangForText(message)),
+            reply: normalizeLegalAnswerCitations(normalizeResponseForUser(cachedReply), [], lexLangForText(message)),
             provider: (c.rows[0].provider || 'AI'),
             databases: Array.isArray(databases) && databases.length > 0 ? databases : ['lex.uz'],
             ragUsed: true,
             rag: c.rows[0].rag,
             qaBank: qaMatchInfo,
             cached: true,
-            nextActions: buildLegalNextActions({ question: message, answer: c.rows[0].reply, topic }),
+            nextActions: buildLegalNextActions({ question: message, answer: cachedReply, topic }),
           };
           if (sse) { sse({ type: 'done', ...payload }); return res.end(); }
           return res.json(payload);
@@ -7690,7 +7718,7 @@ app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, t
          ON CONFLICT (key) DO UPDATE
            SET reply = EXCLUDED.reply, provider = EXCLUDED.provider,
                rag = EXCLUDED.rag, created_at = NOW()`,
-        [cacheKey, displayReply, finalProvider, ragMeta ? JSON.stringify(ragMeta) : null]
+        [cacheKey, privacy.seal(displayReply, `answer_cache.reply:${cacheKey}`), finalProvider, ragMeta ? JSON.stringify(ragMeta) : null]
       ).catch(e => console.warn('[Answer Cache] write failed:', e.message));
     }
     // No answer text at all is a failed request: give the unit back.

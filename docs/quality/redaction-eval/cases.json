@@ -1,0 +1,25 @@
+{
+  "note": "Synthetic questions only: every name, number and plate is invented. pii = what must not reach the provider; keep = what must reach it unchanged (amounts, dates, articles, act codes). Used by scripts/redaction-eval.js.",
+  "cases": [
+    { "id": "R01", "question": "Ish beruvchi 3 oylik ish haqimni (har oy 4 500 000 so'm) to'lamayapti. Mening JShShIR: 31507905670021. Mehnat kodeksi bo'yicha qayerga murojaat qilaman?", "pii": ["31507905670021"], "keep": ["4 500 000", "3 oylik"] },
+    { "id": "R02", "question": "Pasportim AB1234567 yo'qoldi, yangi pasport olish uchun qancha davlat boji to'lanadi va necha kunda beriladi?", "pii": ["AB1234567"], "keep": [] },
+    { "id": "R03", "question": "F.I.Sh.: Toshmatov Sardor Akmalovich. 2025-yil 12-martda ijara shartnomasi tuzdim, ijarachi 2 oy to'lamadi. Shartnomani bir tomonlama bekor qila olamanmi?", "pii": ["Toshmatov Sardor Akmalovich"], "keep": ["2025-yil 12-mart", "2 oy"] },
+    { "id": "R04", "question": "Avtomobilim 01 A 777 BC raqamli, YPX inspektori 2026-yil 3-oktabrda tezlikni oshirganim uchun jarima yozdi. Ma'muriy javobgarlik to'g'risidagi kodeksning qaysi moddasi va jarimani qanday shikoyat qilaman?", "pii": ["01 A 777 BC"], "keep": ["2026-yil 3-oktabr"] },
+    { "id": "R05", "question": "Bank kartamdan (8600 1234 5678 9012) 2 400 000 so'm ruxsatsiz yechildi. Bank pulni qaytarishi shartmi, qaysi qonun asosida?", "pii": ["8600 1234 5678 9012"], "keep": ["2 400 000"] },
+    { "id": "R06", "question": "Telefonim +998 90 123 45 67 orqali kreditga ariza berilibdi, men bermaganman. Firibgarlik bo'yicha qayerga ariza yozaman?", "pii": ["90 123 45 67"], "keep": [] },
+    { "id": "R07", "question": "MChJ STIR 305123456, hisob raqami 20208000900123456789. Soliq qarzi uchun hisob raqam bloklandi, Soliq kodeksiga ko'ra blokni qanday olish mumkin?", "pii": ["305123456", "20208000900123456789"], "keep": [] },
+    { "id": "R08", "question": "Fuqaro Karimova Dilnoza Rustamovna bilan nikohdan ajralmoqchiman, 2 nafar farzandimiz bor (5 va 9 yosh). Aliment qancha foiz bo'ladi?", "pii": ["Karimova Dilnoza Rustamovna"], "keep": ["5 va 9 yosh"] },
+    { "id": "R09", "question": "Ish beruvchi meni 2026-yil 1-sentabrda ogohlantirmasdan ishdan bo'shatdi. Elektron pochta orqali (sardor.t@mail.uz) buyruq yubordi. Bu qonuniymi, necha kun ichida sudga murojaat qilishim kerak?", "pii": ["sardor.t@mail.uz"], "keep": ["2026-yil 1-sentabr"] },
+    { "id": "R10", "question": "Qo'shnim 10 000 000 so'm qarz olib, tilxat yozib bergan, 2025-yil 1-dekabrda qaytarishi kerak edi. Fuqarolik kodeksi bo'yicha qanday undiraman va da'vo muddati qancha?", "pii": [], "keep": ["10 000 000", "2025-yil 1-dekabr"] },
+    { "id": "R11", "question": "ID-karta AD7654321 bo'yicha ro'yxatdan o'tganman, lekin uy egasi propiskani bekor qilmoqchi. Uy-joy kodeksida bunday huquq bormi?", "pii": ["AD7654321"], "keep": [] },
+    { "id": "R12", "question": "Iste'molchi sifatida 2026-yil 15-oktabrda 6 500 000 so'mga muzlatgich oldim, 10 kunda buzildi. Iste'molchilar huquqlarini himoya qilish to'g'risidagi qonun bo'yicha almashtirishni talab qila olamanmi?", "pii": [], "keep": ["6 500 000", "2026-yil 15-oktabr", "10 kun"] },
+    { "id": "R13", "question": "Merosxo'rman. Otam Abdullayev Botir Karimovich (F.I.Sh.: Abdullayev Botir Karimovich) vasiyatnomasiz vafot etdi. Birinchi navbat merosxo'rlari kimlar va 6 oy muddat qachondan hisoblanadi?", "pii": ["Abdullayev Botir Karimovich"], "keep": ["6 oy"] },
+    { "id": "R14", "question": "Mening JShShIRim 41203856780015, pensiya stajim hisoblanmagan, 1998–2004-yillar kolxozda ishlaganman. Qanday hujjat bilan stajni tiklayman?", "pii": ["41203856780015"], "keep": ["1998–2004"] },
+    { "id": "R15", "question": "Yo'l-transport hodisasi: mening mashinam 10 123 ABC, aybdor haydovchi sug'urtasi bor. OSAGO bo'yicha zararni qancha muddatda to'lashadi?", "pii": ["10 123 ABC"], "keep": [] },
+    { "id": "R16", "question": "Telefon (93) 555-12-34 raqamidan menga qayta-qayta tahdid qilishyapti. Jinoyat kodeksining qaysi moddasi bo'yicha arizam ko'riladi?", "pii": ["(93) 555-12-34"], "keep": [] },
+    { "id": "R17", "question": "Mehnat shartnomasida sinov muddati 6 oy deb yozilgan. Mehnat kodeksiga ko'ra sinov muddati eng ko'pi bilan qancha bo'lishi mumkin?", "pii": [], "keep": ["6 oy"] },
+    { "id": "R18", "question": "Aziz Karimov ismli hisob egasiman. Kvartiramni 2026-yil 20-noyabrgacha 85 000 AQSh dollariga sotmoqchiman, notarial tasdiqlash majburiymi va qanday soliq to'lanadi?", "pii": ["Aziz Karimov"], "names": ["Aziz Karimov"], "keep": ["2026-yil 20-noyabr", "85 000"] },
+    { "id": "R19", "question": "VMQ-589 bo'yicha IT Park rezidenti sifatida daromad solig'idan imtiyoz bormi? Kompaniyamiz STIR: 307654321.", "pii": ["307654321"], "keep": ["VMQ-589"] },
+    { "id": "R20", "question": "Sud qarori 2026-yil 2-oktabrda chiqdi, menga 2026-yil 9-oktabrda topshirildi. Apellyatsiya shikoyati muddati qachondan boshlanadi? Murojaat uchun email: n.rahimova@gmail.com", "pii": ["n.rahimova@gmail.com"], "keep": ["2026-yil 2-oktabr", "2026-yil 9-oktabr"] }
+  ]
+}

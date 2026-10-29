@@ -5,9 +5,10 @@
  * an AI call and put back after it; amounts, dates and article numbers stay;
  * a 16-digit number that fails the Luhn check is not a card; one request
  * keeps one placeholder per value; the legal-answer pipeline (web chat,
- * Telegram) is not redacted yet (E4) and REDACT_AI=off stops it; the
- * provider sees no identifier, the caller gets the original back, the
- * ledger detail gets counts only.
+ * its RAG routes, Telegram) only with REDACT_LEGAL_CHAT=on or a master's
+ * per-request switch (E4), and REDACT_AI=off stops it; the provider sees no
+ * identifier, the caller gets the original back - streamed pieces too, a
+ * placeholder split across pieces included - the ledger detail gets counts only.
  */
 
 const assert = require('assert');
@@ -65,7 +66,7 @@ async function test(name, fn) {
     assert.strictEqual(out[1], img);
   });
 
-  await test('which requests: not the web chat, its RAG routes or Telegram (E4); REDACT_AI=off stops it', () => {
+  await test('which requests: the web chat, its RAG routes and Telegram only with REDACT_LEGAL_CHAT=on (E4); REDACT_AI=off stops it', () => {
     const st = (service, kind) => ({ service, kind, shared: {} });
     assert.strictEqual(r.forRequest(st('web', 'POST /api/legal-chat'), {}), null);
     assert.strictEqual(r.forRequest(st('web', 'POST /api/rag/justify-ask'), {}), null);
@@ -75,6 +76,51 @@ async function test(name, fn) {
     assert.strictEqual(r.forRequest(st('web', 'POST /api/analyze'), { REDACT_AI: 'off' }), null);
     const s = st('web', 'POST /api/analyze');
     assert.strictEqual(r.forRequest(s, {}), r.forRequest(s, {}), 'one map per request');
+    // E4: the flag, and a master's switch for one request either way
+    assert.ok(r.forRequest(st('web', 'POST /api/legal-chat'), { REDACT_LEGAL_CHAT: 'on' }));
+    assert.ok(r.forRequest(st('telegram', 'text'), { REDACT_LEGAL_CHAT: 'on' }));
+    assert.ok(r.forRequest(st('web', 'POST /api/rag/justify-ask'), { REDACT_LEGAL_CHAT: 'on' }));
+    const on = st('web', 'POST /api/legal-chat'); on.shared.redactLegal = true;
+    assert.ok(r.forRequest(on, {}));
+    const off = st('web', 'POST /api/legal-chat'); off.shared.redactLegal = false;
+    assert.strictEqual(r.forRequest(off, { REDACT_LEGAL_CHAT: 'on' }), null);
+    assert.strictEqual(r.forRequest(on, { REDACT_AI: 'off' }), null, 'REDACT_AI=off wins over the switch');
+    const other = st('web', 'POST /api/analyze'); other.shared.redactLegal = false;
+    assert.ok(r.forRequest(other, {}), 'the switch is for the legal pipeline only');
+  });
+
+  await test('messages with `content` (the hybrid pipeline) are redacted too', () => {
+    const out = r.redactMessages([{ role: 'user', content: 'tel +998 90 123 45 67' }], r.createMap());
+    assert.strictEqual(out[0].content, 'tel [TELEFON_1]');
+  });
+
+  await test('streamed pieces: a placeholder split across pieces is put back whole; other text is not held', () => {
+    const m = r.createMap();
+    r.redact('AA1234567 va aziz@mail.uz', m);
+    const sr = r.createStreamRestorer(m);
+    const shown = ['Pasport [PAS', 'PORT', '_1] egasi', ' [', 'EMAIL_1', ']', ' va [1] havola [x'].map(p => sr.push(p));
+    assert.deepStrictEqual(shown, ['Pasport ', '', 'AA1234567 egasi', ' ', '', 'aziz@mail.uz', ' va [1] havola [x']);
+    assert.strictEqual(sr.push(' [EMAIL'), ' ');
+    assert.strictEqual(sr.flush(), '[EMAIL', 'an unfinished tail is shown as it is at the end');
+  });
+
+  await test('the stream wrapper: provider sees placeholders, the reader gets each piece restored, the final text too', async () => {
+    const store = { service: 'web', kind: 'POST /api/legal-chat/stream', shared: { redactLegal: true }, userIdOf: () => null };
+    const wrap = r.createWrapper({ current: () => store, env: {} });
+    let seen = null; const got = [];
+    const out = await wrap.stream([{ role: 'user', text: 'Pasportim AA1234567 yo‘qoldi' }], {}, (t) => got.push(t), async (msgs, o, onToken) => {
+      seen = msgs[0].text;
+      for (const p of ['[PASPO', 'RT_1] raqamli ', 'pasport']) onToken(p);
+      return { text: '[PASPORT_1] raqamli pasport' };
+    });
+    assert.strictEqual(seen, 'Pasportim [PASPORT_1] yo‘qoldi');
+    assert.strictEqual(got.join(''), 'AA1234567 raqamli pasport');
+    assert.strictEqual(out.text, 'AA1234567 raqamli pasport');
+    // off: the call and its pieces as they are
+    store.shared = { redactLegal: false }; got.length = 0;
+    await wrap.stream([{ role: 'user', text: 'AA1234567' }], {}, (t) => got.push(t), async (msgs, o, onToken) => { seen = msgs[0].text; onToken('x'); return { text: 'x' }; });
+    assert.strictEqual(seen, 'AA1234567');
+    assert.deepStrictEqual(got, ['x']);
   });
 
   await test('the wrapper: the provider sees none of it, the caller gets it back, the ledger detail has counts only', async () => {
@@ -90,7 +136,7 @@ async function test(name, fn) {
     assert.strictEqual(out.text, 'Aziz Karimov (AA1234567) 333-moddaga ko‘ra…');
     assert.deepStrictEqual(opts.detail.redacted, { SHAXS: 1, PASPORT: 1, TELEFON: 1 });
     assert.ok(!JSON.stringify(opts.detail).includes('AA1234567'));
-    // the legal chat is left alone (E4)
+    // the legal chat is left alone unless REDACT_LEGAL_CHAT=on (E4)
     const chat = { service: 'web', kind: 'POST /api/legal-chat', shared: {}, userIdOf: () => 7 };
     const wrap2 = r.createWrapper({ current: () => chat, loadName: async () => 'Aziz Karimov', env: {} });
     await wrap2([{ role: 'user', text: 'AA1234567' }], {}, async (msgs) => { seen = msgs[0].text; return { text: 'ok' }; });

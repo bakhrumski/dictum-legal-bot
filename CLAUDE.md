@@ -350,9 +350,8 @@ Known state of the suites (Sept 2026):
   `service_orders.intake_data` and `attorney_consultation_requests.case_summary`
   (row first, then the sealed value, in one transaction; `openOrder` for the
   master's list and the quote message), `answer_feedback` and `chat_messages`
-  (AAD by author), `agent_traces` (AAD by request and agent). Not sealed:
-  `answer_cache` / `opinion_cache` (inside `/api/legal-chat`, left for E4 with
-  the owner's consent), the Workspace (E5). E3 (2026-10-29,
+  (AAD by author), `agent_traces` (AAD by request and agent); `answer_cache`
+  since E4. Not sealed: the Workspace (E5). E3 (2026-10-29,
   `src/privacy/redact.js`, no AI): before a text call leaves for a provider,
   passport / JShShIR / STIR (next to its word) / phone / card (Luhn) / account /
   email / car plate / the account holder's own full name and names after
@@ -361,13 +360,26 @@ Known state of the suites (Sept 2026):
   amounts, dates, articles and act codes are never touched; one map per
   usage-ledger request (memory only), the call's ledger `detail.redacted` holds
   counts. Hooked in `callOpenAI` (every provider behind it), `callGemini` and
-  the explanation router (`createWrapper`). Not yet: `/api/legal-chat`,
-  `/api/rag/*` and the Telegram bot (`forRequest` skips them: E4),
-  `callOpenAIStream`, the hybrid pipeline, embeddings / rerank, images and audio.
-  `REDACT_AI=off` stops it. Next: E4 (legal-chat, owner agreed, 20-question
-  before/after), E5-E7. `tests/privacy-crypto.test.js`,
-  `tests/document-library.db.test.js`, `tests/sealing-e2b.db.test.js`,
-  `tests/privacy-redact.test.js`.
+  the explanation router (`createWrapper`). E4 (2026-10-29): also
+  `callOpenAIStream` (each streamed piece restored, a placeholder split
+  across pieces held until whole: `createStreamRestorer`) and the hybrid
+  pipeline (`callWithFallback`, `content` messages); the legal-answer
+  pipeline (`/api/legal-chat`, `/api/rag/*`, the Telegram bot) is redacted
+  only with `REDACT_LEGAL_CHAT=on` (default off until the owner has read the
+  20-question before/after) or a database master's `X-JAI-Redact: on|off`
+  for one request (that request skips the answer cache). A name found after
+  "F.I.Sh." / "fuqaro" is hidden wherever else it is written. Before/after:
+  `scripts/redaction-eval.js` (dry: rules on `docs/quality/redaction-eval/cases.json`,
+  20 synthetic questions; live: each asked off / on through a running
+  server as a master, `REDACTION_EVAL_LIVE=yes`, `--approve <runSha>`,
+  `--out`; the comparison is mechanical - articles, acts, placeholders left,
+  length - a lawyer reads the pairs). `answer_cache.reply` is sealed (AAD
+  `answer_cache.reply:<key>`, in `seal-backfill.js`); `opinion_cache` is
+  created but never written, so nothing to seal. Not yet: embeddings /
+  rerank, images and audio. `REDACT_AI=off` stops it all. Next: E5-E7.
+  `tests/privacy-crypto.test.js`, `tests/document-library.db.test.js`,
+  `tests/sealing-e2b.db.test.js`, `tests/privacy-redact.test.js`,
+  `tests/redaction-eval.test.js`.
 - "Hujjatlarim" (2026-10-29, owner: every uploaded document stays for later
   actions until the person deletes it; migration 029): `document_scans` is the
   person's library - a text Word/PDF read by `/api/analyze/extract` (it now

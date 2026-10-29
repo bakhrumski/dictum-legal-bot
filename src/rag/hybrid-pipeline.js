@@ -340,7 +340,17 @@ async function callModel(model, messages, opts) {
  * Try each model in chain. Falls back on 404 / model-not-found, on missing API key,
  * and on transient 5xx. Bails on the first successful call.
  */
-async function callWithFallback(chain, messages, opts = {}) {
+// Data protection E4 (src/privacy/redact.js): identifiers hidden before the
+// call and put back in its text, under the same rules as callOpenAI - this
+// pipeline serves /api/rag/*, so only with REDACT_LEGAL_CHAT=on or a
+// master's X-JAI-Redact for the request.
+const withRedaction = require('../privacy/redact').createWrapper({ current: () => usageLedger.current() });
+
+function callWithFallback(chain, messages, opts = {}) {
+  return withRedaction(messages, opts, (msgs, o) => callWithFallbackRaw(chain, msgs, o));
+}
+
+async function callWithFallbackRaw(chain, messages, opts = {}) {
   checkBudget();
   const errors = [];
   for (const model of chain) {
