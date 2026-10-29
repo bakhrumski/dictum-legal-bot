@@ -352,10 +352,22 @@ Known state of the suites (Sept 2026):
   master's list and the quote message), `answer_feedback` and `chat_messages`
   (AAD by author), `agent_traces` (AAD by request and agent). Not sealed:
   `answer_cache` / `opinion_cache` (inside `/api/legal-chat`, left for E4 with
-  the owner's consent), the Workspace (E5). Next: E3 (redaction before AI), E4
-  (legal-chat, owner agreed, 20-question before/after), E5-E7.
-  `tests/privacy-crypto.test.js`, `tests/document-library.db.test.js`,
-  `tests/sealing-e2b.db.test.js`.
+  the owner's consent), the Workspace (E5). E3 (2026-10-29,
+  `src/privacy/redact.js`, no AI): before a text call leaves for a provider,
+  passport / JShShIR / STIR (next to its word) / phone / card (Luhn) / account /
+  email / car plate / the account holder's own full name and names after
+  "F.I.Sh." / "fuqaro" become `[PASPORT_1]`-style placeholders, put back in the
+  provider's answer (so word-for-word quote checks still see the original);
+  amounts, dates, articles and act codes are never touched; one map per
+  usage-ledger request (memory only), the call's ledger `detail.redacted` holds
+  counts. Hooked in `callOpenAI` (every provider behind it), `callGemini` and
+  the explanation router (`createWrapper`). Not yet: `/api/legal-chat`,
+  `/api/rag/*` and the Telegram bot (`forRequest` skips them: E4),
+  `callOpenAIStream`, the hybrid pipeline, embeddings / rerank, images and audio.
+  `REDACT_AI=off` stops it. Next: E4 (legal-chat, owner agreed, 20-question
+  before/after), E5-E7. `tests/privacy-crypto.test.js`,
+  `tests/document-library.db.test.js`, `tests/sealing-e2b.db.test.js`,
+  `tests/privacy-redact.test.js`.
 - "Hujjatlarim" (2026-10-29, owner: every uploaded document stays for later
   actions until the person deletes it; migration 029): `document_scans` is the
   person's library - a text Word/PDF read by `/api/analyze/extract` (it now
