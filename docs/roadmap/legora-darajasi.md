@@ -63,6 +63,10 @@ Tartib va PR bo'linishi dizayn hujjatining 9-bo'limida.
 - [x] PR-V (#498): Ishlarni ovoz bilan boshqarish: Telegram'da ulangan akkaunt
   orqali va ilova ichida (egasi, 2026-10-28). `src/matters/commands.js`.
   Keyingi qadam: ovoz bilan agent topshirig'i (reja → tasdiq) - PR-F bilan.
+- [~] Ovozli buyruqlar 2-daraja (egasi, 2026-10-29): `docs/design/ovozli-buyruqlar-2.md`
+  - chatda va Ishlar buyruq qatorida gapirilgan buyruq tasdiq tugmasi bilan
+  bajariladi (AI'siz katalog, pul / o'chirish / yuborish ovoz bilan emas).
+  Qoralama; 9-bo'lim savollariga javob kutilmoqda. 1-daraja (#520, #529) tayyor.
 - [x] PR-E (#499): Parallel qadamlar, `needs_input`
   dan keyin davom ettirish.
 - [x] PR-F (#501): Telegram: ish holati bitta xabarda yangilanadi, tasdiq tugmalari.
@@ -280,3 +284,6 @@ nima o'lchandi.
 - 2026-10-29: #526 (E6a) va #527 (E6b) merge. E7 PR: landingdagi "Ma'lumotingiz
   qanday himoyalanadi" animatsiyasi - faqat serverda shifrlash va yashirish
   yoqiq bo'lganda ko'rinadi.
+- 2026-10-29: #528 (E7) va #529 (buyruq qatori mikrofoni bir ko'rinishda)
+  merge. Ovozli buyruqlar 2-darajasi dizayni ochildi
+  (`docs/design/ovozli-buyruqlar-2.md`).
