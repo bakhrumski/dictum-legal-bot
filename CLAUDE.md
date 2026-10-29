@@ -411,7 +411,24 @@ Known state of the suites (Sept 2026):
   (mentor feedback, verified QA, the legal dataset) are written with
   identifiers hidden. `seal-backfill.js` covers them (index and count
   included; `--tables` limits a run). `tests/sealing-e6.db.test.js`.
-  Next: E6b (access log, DeepSeek opt-out), E7.
+  E6b (2026-10-29, migration 034, §5 / §6 / §9 answer 4): the access log
+  (`src/privacy/access-log.js`, table `data_access_log`) - a staff account
+  (master, lawyer, student) opening another person's sealed data leaves one
+  row per person: who, whose ('account' / 'telegram_user'), table, route,
+  rows seen, when - never the text; one's own data and ordinary accounts are
+  not logged; `ACCESS_LOG=off`. Hooked: the human queue (list, single,
+  export), the AI analysis archive, paid service orders, interview
+  recordings. Boshqaruv -> "Kirish jurnali" (`/app/#/boshqaruv/kirish`,
+  `GET /api/admin/access-log`, master only). "Not to DeepSeek"
+  (`src/privacy/provider-choice.js`): the Moslashish page's checkbox sets
+  `user_profile.manual.noDeepseek` (off by default, kept by "clear" and a
+  pause); while on, `tryDeepSeek`, the hybrid pipeline and the explanation
+  router skip DeepSeek for that account (the lane's GPT-6, then Gemini
+  answer); a Telegram request carries its linked account in
+  `shared.accountId` (the ledger's user is unchanged). The landing, the tariff
+  FAQ and the Moslashish page name the providers (DeepSeek - China; OpenAI,
+  Google - USA; VoiceLab - Uzbekistan) and the switch.
+  `tests/e6b-access-provider.db.test.js`. Next: E7.
   `tests/privacy-crypto.test.js`, `tests/document-library.db.test.js`,
   `tests/sealing-e2b.db.test.js`, `tests/privacy-redact.test.js`,
   `tests/redaction-eval.test.js`.

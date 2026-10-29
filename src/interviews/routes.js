@@ -83,10 +83,15 @@ function mountInterviewRoutes(app, { pool, requireAuth, requireSameOrigin, ai, u
   }));
 
   app.get('/api/matters/:id/interviews', requireAuth, staffOnly, guard(async (req, res) => {
-    res.json({ recordings: await store.list(pool, { matterId: uuid(req.params.id), actorId: me(req) }) });
+    const recordings = await store.list(pool, { matterId: uuid(req.params.id), actorId: me(req) });
+    // a master seeing another uploader's recordings leaves a row (E6b, src/privacy/access-log.js)
+    require('../privacy/access-log').note(pool, req, { table: 'interview_recordings', owners: (recordings || []).map(r => r.ownerId) });
+    res.json({ recordings });
   }));
   app.get('/api/interviews/:id', requireAuth, staffOnly, guard(async (req, res) => {
-    reply(res, await store.get(pool, { id: uuid(req.params.id), actorId: me(req) }));
+    const out = await store.get(pool, { id: uuid(req.params.id), actorId: me(req) });
+    if (out && out.ok) require('../privacy/access-log').note(pool, req, { table: 'interview_recordings', owners: [out.recording.ownerId] });
+    reply(res, out);
   }));
   app.put('/api/interviews/:id/transcript', requireSameOrigin, requireAuth, staffOnly, guard(async (req, res) => {
     reply(res, await store.addVersion(pool, { id: uuid(req.params.id), actorId: me(req), body: req.body && req.body.body }));

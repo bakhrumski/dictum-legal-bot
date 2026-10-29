@@ -82,6 +82,15 @@ async function testAccountFor(msgOrQuery) {
   } catch (e) {
     console.warn('[TEST-BUDGET] Telegram attach failed:', e.message);
   }
+  // the linked account's own choices for this request - e.g. "not to DeepSeek"
+  // (src/privacy/provider-choice.js) - without moving whose spend the ledger rows are
+  try {
+    const store = usageLedger.current();
+    if (store && store.shared && store.shared.accountId === undefined) {
+      const ident = await telegramIdentity(msgOrQuery);
+      store.shared.accountId = (ident && ident.adminId) || null;
+    }
+  } catch (_) { /* the default choices */ }
   return account;
 }
 

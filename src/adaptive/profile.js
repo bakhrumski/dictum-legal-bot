@@ -123,6 +123,8 @@ const ROLES = Object.freeze(['xaridor', 'sotuvchi', 'ijarachi', 'ijaraga_beruvch
  *   alphabet      new | old   (the Latin alphabet text is shown in; new by default)
  *   hidden        { areas: [code], acts: [docId] }   items the person removed
  *   partyRoles    [{ area, role }]                    their side, by area - only ever set here
+ *   noDeepseek    true                                 "not to DeepSeek" (E6b, src/privacy/provider-choice.js);
+ *                                                      kept by "clear" and by a pause - it is a privacy choice, not adaptation
  */
 function cleanManual(m = {}) {
   const out = {};
@@ -131,6 +133,7 @@ function cleanManual(m = {}) {
   if (['latn', 'cyrl'].includes(m.script)) out.script = m.script;
   // the Latin alphabet text is shown in: the 2026 one (default) or the old one (OʻRQ-1184)
   if (['new', 'old'].includes(m.alphabet)) out.alphabet = m.alphabet;
+  if (m.noDeepseek === true) out.noDeepseek = true;
   const h = m.hidden && typeof m.hidden === 'object' ? m.hidden : {};
   const areas = [...new Set((Array.isArray(h.areas) ? h.areas : []).filter(a => /^[a-z][a-z-]{1,30}$/u.test(String(a))))].slice(0, 40);
   const acts = [...new Set((Array.isArray(h.acts) ? h.acts : []).map(String).filter(a => /^\d{3,12}$/u.test(a)))].slice(0, 100);
@@ -237,7 +240,8 @@ function createProfileStore({ db }) {
   /** "Hammasini tozalash": every signal, the computed profile and what the person set go; pause stays as it was. */
   async function clear(adminId) {
     await db.query('DELETE FROM user_signals WHERE admin_id = $1', [adminId]);
-    await db.query(`UPDATE user_profile SET profile = '{}'::jsonb, manual = '{}'::jsonb, signals = 0, computed_at = now(), updated_at = now() WHERE admin_id = $1`, [adminId]);
+    // the provider choice is not adaptation: it stays (E6b)
+    await db.query(`UPDATE user_profile SET profile = '{}'::jsonb, manual = jsonb_strip_nulls(jsonb_build_object('noDeepseek', manual->'noDeepseek')), signals = 0, computed_at = now(), updated_at = now() WHERE admin_id = $1`, [adminId]);
     return get(adminId);
   }
 

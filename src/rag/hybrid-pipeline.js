@@ -161,7 +161,8 @@ function estimateTokens(text) {
 async function callOpenAIModel(model, messages, { temperature = 0.2, maxTokens = DEFAULT_MAX_OUTPUT_TOKENS, responseFormat = null } = {}) {
   // DeepSeek first; on a failure the OpenAI request below runs (its failed
   // attempt is a ledger row of its own)
-  if (deepseek.routes(model)) {
+  // the person's "not to DeepSeek" choice (E6b, src/privacy/provider-choice.js)
+  if (deepseek.routes(model) && await require('../privacy/provider-choice').deepseekAllowed(usageLedger.current())) {
     const started = Date.now();
     const dsLabel = `deepseek/${deepseek.modelFor(model)}`;
     try {
