@@ -103,6 +103,10 @@ Tartib va PR bo'linishi dizayn hujjatining 9-bo'limida.
 
 - [ ] Mijoz portali: yurist va mijoz uchun umumiy ish, fayllar, savollar,
   rollar, audit trail.
+- [~] Ma'lumot himoyasi 1-bosqich (egasi, 2026-10-28, occlum.io tahlilidan keyin):
+  `docs/design/shifrlash-1-bosqich.md` - bazada shifrlash, AI'ga yuborishdan
+  oldin shaxsiy ma'lumotni yashirish, provayder siyosati, kirish jurnali.
+  Qoralama; 9-bo'lim savollariga javob kutilmoqda.
 - [ ] Ma'lumot siyosati: hujjatlarni DeepSeek'ga yubormaslik opsiyasi
   (korporativ tarif), saqlash muddatlari, eksport va o'chirish.
 - [ ] SSO (korporativ mijoz so'rasa).
@@ -248,3 +252,5 @@ nima o'lchandi.
   #515 ochildi: mijoz turi va bir bosishda pilot (migratsiya 026), CustDev
   3-bosqich - pilot Workspace vazifalari va Telegram fikrlari (027), 4-bosqich -
   rozilik bilan intervyu yozuvlari (028).
+- 2026-10-28: #515 merge (mijoz turi, CustDev 3-4-bosqichlar). Ma'lumot
+  himoyasi 1-bosqich dizayni ochildi (`docs/design/shifrlash-1-bosqich.md`).
