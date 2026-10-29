@@ -1,6 +1,6 @@
 # Ma'lumot himoyasi, 1-bosqich: shifrlash va AI'ga yuborishdan oldin yashirish
 
-Holat: **qoralama** (2026-10-28). Egasining javobi (9-bo'lim) kelmaguncha kod boshlanmaydi.
+Holat: **qabul qilindi** (2026-10-29, egasi: "takliflaringni qabul qildim, E1 ni boshla!"). 9-bo'limdagi barcha takliflar qabul qilingan; javoblar o'sha yerda.
 
 Egasi (2026-10-28): "1-bosqichni boshla!" — occlum.io tahlilidan keyin. Occlum
 (Intel SGX LibOS) Render'da ishlamaydi va asosiy chiqish yo'llarini (AI
@@ -162,7 +162,7 @@ Ro'yxat sahifalari ochiq `title` bilan ishlaydi (shifr ochilmaydi).
 
 | PR | Nima | Tegadi |
 |---|---|---|
-| E1 | `src/privacy/crypto.js`, kalit halqasi, testlar; kalitsiz ishga tushmaslik (`DATA_KEYS` bo'lmasa — shifrlash o'chiq, ogohlantirish, keyin majburiy) | src |
+| E1 ✅ | `src/privacy/crypto.js`, kalit halqasi, `scripts/data-key.js`, `tests/privacy-crypto.test.js`; noto'g'ri `DATA_KEYS` serverni to'xtatadi, yo'q `DATA_KEYS` — ogohlantirish (shifrlash o'chiq) | src |
 | E2 | 3.1 ustunlari: yozishda shifr, o'qishda ikkala shakl; `seal-backfill.js` (quruq) | src, scripts |
 | E3 | `src/privacy/redact.js` + legal-chat'dan tashqari yo'llar; ledgerda sanoq | src |
 | E4 | legal-chat yo'li (`REDACT_LEGAL_CHAT`) — **egasining roziligi bilan** | src (javob zanjiri) |
@@ -172,7 +172,17 @@ Ro'yxat sahifalari ochiq `title` bilan ishlaydi (shifr ochilmaydi).
 
 Har PR: migratsiya + down fayl, testlar, CI, brauzer tekshiruvi (UI bo'lsa).
 
-## 9. Egasiga savollar
+## 9. Egasiga savollar va javoblar
+
+Javoblar (2026-10-29, egasi takliflarni qabul qildi):
+1. Admin qidiruvi — (b) ko'r indeks (so'z ildizlari HMAC'i).
+2. Ismlar — faqat akkaunt egasining o'z ismi va "F.I.Sh."/"fuqaro" yonidagi ismlar.
+3. `/api/legal-chat` ga yashirish — rozi; avval 20 ta savolda oldin/keyin solishtiriladi (E4).
+4. DeepSeek sozlamasi — odatiy o'chiq, Moslashish sahifasida tanlov, landingda rost yozuv.
+5. Kalitning oflayn nusxasi — egasida (parol menejeri yoki qog'oz), Render'dan tashqari bitta joy.
+6. O'rganish to'plamlari — shaxsiy ma'lumot yashirilib saqlanadi.
+
+Savollar (asl matn):
 
 1. **Admin qidiruvi** (`requests`, `ai_analyses` matni bo'yicha `ILIKE`):
    (a) shifrlab, qidiruvni olib tashlash; (b) ko'r indeks (so'z ildizlari

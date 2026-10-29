@@ -329,6 +329,17 @@ Known state of the suites (Sept 2026):
   `src/rag/question-aspects.js` splits a question into deadline,
   compensation, evidence and remedy and runs a light corpus search for each
   (Telegram, web chat, Workspace).
+- `src/privacy/crypto.js` (2026-10-29, data protection stage 1 / E1,
+  `docs/design/shifrlash-1-bosqich.md`, accepted with all proposals): AES-256-GCM
+  at rest, key ring `DATA_KEYS` = {"v1":"<32 bytes base64>"} + `DATA_KEY_ACTIVE`
+  (env only; `scripts/data-key.js` makes one; the owner keeps an offline copy -
+  a lost key is lost data). `seal`/`open` (text `enc:<id>:…`), `sealJson`/`openJson`
+  ({"enc":…} for JSONB), `sealBytes`/`openBytes`; the AAD
+  `<table>.<column>:<row id>` binds a value to its place; plain values pass
+  through (columns switch row by row); a bad ring stops the server at start,
+  an unset one is a warning (stored unencrypted). Nothing is sealed yet: E2
+  (columns), E3 (redaction before AI), E4 (legal-chat, owner agreed, 20-question
+  before/after), E5-E7 follow the design. `tests/privacy-crypto.test.js`.
 - `src/ai/model-pricing.js` — **single source of truth for model prices**;
   every spend path, hybrid-pipeline included, reads it. Each price carries
   its source and check date; VoiceLab credits convert at the owner's

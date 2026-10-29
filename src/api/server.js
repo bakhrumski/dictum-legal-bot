@@ -1,4 +1,7 @@
 require('dotenv').config();
+// encryption at rest (docs/design/shifrlash-1-bosqich.md): a bad DATA_KEYS ring stops
+// the server here; an unset one is a warning (values are stored unencrypted)
+require('../privacy/crypto').assertKeysValid();
 const express = require('express');
 const cors = require('cors');
 const session = require('express-session');
