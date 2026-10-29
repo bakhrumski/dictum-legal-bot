@@ -171,8 +171,23 @@ function keyIdOf(value) {
   return null;
 }
 
+/**
+ * A key of its own for one purpose (E6: the blind index), derived with HKDF
+ * from one ring key: DATA_BIDX_KEY_ID, else the first id in sort order - not
+ * the active one, so a rotation (v2 active, v1 kept) does not move it.
+ * null when no ring is set. The derived bytes never leave this process.
+ */
+function derivedKey(label, env = process.env) {
+  const r = current();
+  if (!r.keys.size) return null;
+  const id = String(env.DATA_BIDX_KEY_ID || '').trim() || [...r.keys.keys()].sort()[0];
+  const base = r.keys.get(id);
+  if (!base) throw new CryptoError('DATA_KEYS_INVALID', `DATA_BIDX_KEY_ID "${id.slice(0, 20)}" is not in DATA_KEYS`);
+  return Buffer.from(crypto.hkdfSync('sha256', base, Buffer.alloc(0), Buffer.from(`juristai:${label}`, 'utf8'), 32));
+}
+
 /** A new random key for DATA_KEYS (scripts/data-key.js). */
 const newKey = () => crypto.randomBytes(32).toString('base64');
 
 module.exports = { CryptoError, loadKeyRing, reload, assertKeysValid, enabled, seal, open, isSealed, sealJson, openJson, isSealedJson,
-  sealBytes, openBytes, isSealedBytes, keyIdOf, newKey };
+  sealBytes, openBytes, isSealedBytes, keyIdOf, newKey, derivedKey };

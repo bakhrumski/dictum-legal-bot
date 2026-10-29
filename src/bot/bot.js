@@ -1244,7 +1244,7 @@ async function handleCallbackQuery(callbackQuery) {
         return;
       }
 
-      const req = reqResult.rows[0];
+      const req = reqResult.rows[0]; // its text is not used here (sealed at rest, E6)
       if (req.status === 'answered') {
         bot.answerCallbackQuery(callbackQuery.id, { text: 'Bu murojaatga allaqachon javob berilgan!' });
         return;
@@ -1901,7 +1901,7 @@ async function handleTelegramMessage(msg) {
              FROM requests r JOIN users u ON r.user_id = u.id WHERE r.id = $1`,
             [pending.requestId]
           );
-          const req = reqInfo.rows[0];
+          const req = reqInfo.rows[0] && require('../privacy/request-text').openRequest(reqInfo.rows[0], pending.requestId);
 
           const masterNotification = `📝 Student javob berdi!\n\n👨‍🎓 Student: ${pending.fullName}\n📋 Murojaat #${pending.requestId}\n👤 Murojatchi: ${req?.first_name || ''} (@${req?.username || ''})\n\n📝 Student javobi:\n${responseText.substring(0, 200)}${responseText.length > 200 ? '...' : ''}\n\nDashboard: ${dashboardUrl()}\nTasdiqlash uchun dashboardga kiring!`;
 
@@ -1935,13 +1935,13 @@ async function handleTelegramMessage(msg) {
           return;
         }
 
-        const req = reqResult.rows[0];
+        const req = require('../privacy/request-text').openRequest(reqResult.rows[0], pending.requestId);
 
         await pool.query(
           `UPDATE requests SET response_text = $1, status = 'answered',
            responded_by = $2, master_approved = TRUE, answered_at = NOW()
            WHERE id = $3`,
-          [responseText, pending.fullName, pending.requestId]
+          [require('../privacy/request-text').sealResponse(pending.requestId, responseText), pending.fullName, pending.requestId]
         );
 
         // Send response to the client via Telegram
@@ -2504,13 +2504,20 @@ async function saveRequest(data, opts = {}) {
         response_text, responded_by, answered_at, source_channel, agent_intent,
         agent_action, requires_lawyer_review)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'telegram', $12, $13, $14) RETURNING id`,
-      [userId, data.request_text, data.request_type, data.file_id, data.file_size, data.file_name,
+      // the question and the agent's reply are written sealed right after, once the id is known (E6)
+      [userId, '', data.request_type, data.file_id, data.file_size, data.file_name,
        status, requestCategory,
-       agentReply, agentReply ? 'JuristAI Telegram agenti' : null,
+       null, agentReply ? 'JuristAI Telegram agenti' : null,
        status === 'ai_answered' ? new Date() : null,
        agentMeta.intent || null, agentMeta.action || null, status !== 'ai_answered']
     );
 
+    {
+      const reqSeal = require('../privacy/request-text');
+      const newId = insertResult.rows[0].id;
+      await reqSeal.writeRequestText(client, newId, data.request_text);
+      if (agentReply) await client.query('UPDATE requests SET response_text = $2 WHERE id = $1', [newId, reqSeal.sealResponse(newId, agentReply)]);
+    }
     await client.query('COMMIT');
 
     const requestId = insertResult.rows[0].id;

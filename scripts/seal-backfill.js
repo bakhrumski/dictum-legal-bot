@@ -9,6 +9,7 @@
  *   DATABASE_URL=... DATA_KEYS=... node scripts/seal-backfill.js           # count only
  *   DATABASE_URL=... DATA_KEYS=... node scripts/seal-backfill.js --apply   # seal the plain ones
  *   ... --files            # also the Workspace files in Storage (E5; SUPABASE_* needed)
+ *   ... --tables requests,ai_analyses   # only these tables
  *
  * The live database is written only by the owner (CLAUDE.md): run --apply
  * yourself, after DATA_KEYS is in Render and its offline copy is kept.
@@ -19,6 +20,9 @@
 const privacy = require('../src/privacy/crypto');
 const { textAad } = require('../src/ocr/scan-store');
 const ws = require('../src/workspace/sealing');
+const rt = require('../src/privacy/request-text');
+const bidx = require('../src/privacy/blind-index');
+const chats = require('../src/privacy/chat-sessions');
 
 const COLUMNS = [
   { table: 'document_scans', col: 'text', key: 'id', aad: r => textAad(r.admin_id, r.file_hash), extra: 'admin_id, file_hash' },
@@ -54,6 +58,12 @@ const COLUMNS = [
   { table: 'workspace_ai_runs', col: 'context_snapshot', key: 'id', json: true, extra: 'workspace_id', aad: r => ws.aad.aiContext(r.workspace_id) },
   { table: 'workspace_document_versions', col: 'content_text', key: 'id', extra: 'workspace_id, document_id', aad: r => ws.aad.versionText(r.workspace_id, r.document_id) },
   { table: 'workspace_document_versions', col: 'content_json', key: 'id', json: true, extra: 'workspace_id, document_id', aad: r => ws.aad.versionJson(r.workspace_id, r.document_id) },
+  // E6: the human queue, the AI analysis archive (with their blind index) and the web chats
+  { table: 'requests', col: 'request_text', key: 'id', aad: r => rt.aad.request(r.id), also: (r, plain) => ({ request_bidx: bidx.tokens(plain) }) },
+  { table: 'requests', col: 'response_text', key: 'id', aad: r => rt.aad.response(r.id) },
+  { table: 'ai_analyses', col: 'request_text', key: 'id', extra: 'admin_id', aad: r => rt.aad.analysis(r.admin_id), also: (r, plain) => ({ request_bidx: bidx.tokens(plain) }) },
+  { table: 'ai_chat_sessions', col: 'messages', key: 'id', json: true, extra: 'admin_id', aad: r => chats.aad(r.admin_id),
+    also: (r, plain) => ({ message_count: Array.isArray(plain) ? plain.length : null }) },
 ];
 
 /**
@@ -86,7 +96,10 @@ async function main() {
   if (apply && !ring.active) { console.error('DATA_KEYS is not set: nothing can be sealed'); process.exit(1); }
   const { pool } = require('../src/database/db');
   try {
-    for (const c of COLUMNS) {
+    // --tables a,b: only these tables (a staged run, or a test)
+    const ti = process.argv.indexOf('--tables');
+    const only = ti > -1 ? new Set(String(process.argv[ti + 1] || '').split(',').map(x => x.trim()).filter(Boolean)) : null;
+    for (const c of COLUMNS.filter(x => !only || only.has(x.table))) {
       const keys = Array.isArray(c.key) ? c.key : [c.key];
       const sel = [...new Set([...keys, c.col, ...(c.extra ? c.extra.split(/,\s*/u) : [])])].join(', ');
       let plain = 0, sealed = 0, done = 0;
@@ -101,9 +114,12 @@ async function main() {
         if (!apply) continue;
         const next = c.bytes ? privacy.sealBytes(v, c.aad(r)) : c.json ? JSON.stringify(privacy.sealJson(v, c.aad(r))) : privacy.seal(v, c.aad(r));
         const where = keys.map((k, i) => `${k} = $${i + 2}`).join(' AND ');
+        // columns written with the value (a blind index, a count), from the plain value
+        const also = c.also ? Object.entries(c.also(r, v)) : [];
+        const alsoSet = also.map(([col], i) => `, ${col} = $${keys.length + 3 + i}`).join('');
         // only a value still as it was: a row changed meanwhile is left for the next run
-        const u = await pool.query(`UPDATE ${c.table} SET ${c.col} = $1 WHERE ${where} AND ${c.col} = $${keys.length + 2}`,
-          [next, ...keys.map(k => r[k]), c.json ? JSON.stringify(v) : v]);
+        const u = await pool.query(`UPDATE ${c.table} SET ${c.col} = $1${alsoSet} WHERE ${where} AND ${c.col} = $${keys.length + 2}`,
+          [next, ...keys.map(k => r[k]), c.json ? JSON.stringify(v) : v, ...also.map(([, val]) => val)]);
         done += u.rowCount;
       }
       console.log(`${c.table}.${c.col}: ${sealed} sealed, ${plain} plain${apply ? `, ${done} sealed now` : ''}`);

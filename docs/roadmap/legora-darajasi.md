@@ -270,3 +270,7 @@ nima o'lchandi.
   Storage'da shifrlanadi, fayl server orqali yuklab olinadi; Workspace AI
   yangi javobni yakunlashdagi xato tuzatildi. Agentlar ro'yxati va taklif
   havolasi - alohida PR (#524).
+- 2026-10-29: #524 (agent taklif havolasi) va #525 (E5) merge. E6a PR: web
+  chatlar, murojaatlar navbati va AI tahlil arxivi shifrlanadi, xodim
+  qidiruvi ko'r indeks bilan; o'rganish to'plamlariga shaxsiy ma'lumot
+  yashirilib yoziladi.
