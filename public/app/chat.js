@@ -112,7 +112,7 @@
       var html = '';
       if (st.skill) html += '<span class="chip on static"><b>/</b><span>' + esc(st.skill.name) + '</span><button type="button" data-x="skill" aria-label="x">' + J.icon('x') + '</button></span>';
       st.files.forEach(function (f, i) {
-        html += '<span class="chip static">' + (f.status === 'reading' ? '<span class="spin"></span>' : J.icon('doc')) + '<span>' + esc(f.name) + (f.status === 'reading' ? ' · ' + esc(t('cmp.reading')) : '') + '</span>' +
+        html += '<span class="chip static">' + (f.status === 'reading' ? '<span class="spin"></span>' : J.icon('doc')) + '<span data-noalpha>' + esc(f.name) + (f.status === 'reading' ? ' · ' + esc(t('cmp.reading')) : '') + '</span>' +
           '<button type="button" data-x="' + i + '" aria-label="x">' + J.icon('x') + '</button></span>';
       });
       chips.innerHTML = html;
@@ -128,8 +128,18 @@
       menu = J.h('<div class="menu"></div>'); el.appendChild(menu);
       if (opts.menuDown) menu.classList.add('down');
       if (kind === 'at') {
-        menu.innerHTML = '<div class="menu-h">' + esc(t('cmp.attach')) + '</div><button type="button" class="mi on" data-a="up">' + J.icon('up') + '<span class="mi-t">' + esc(t('an.drop')) + '<small>' + esc(t('an.types')) + '</small></span></button>';
+        menu.innerHTML = '<div class="menu-h">' + esc(t('cmp.attach')) + '</div><button type="button" class="mi on" data-a="up">' + J.icon('up') + '<span class="mi-t">' + esc(t('an.drop')) + '<small>' + esc(t('an.types')) + '</small></span></button>' +
+          (J.pickDocs ? '<button type="button" class="mi" data-a="lib">' + J.icon('folder') + '<span class="mi-t">' + esc(t('nav.docs')) + '<small>' + esc(t('cmp.lib')) + '</small></span></button>' : '');
         $('[data-a=up]', menu).onclick = function () { closeMenu(); fileIn.click(); };
+        // "Hujjatlarim": an earlier upload, read on the server by its id - no second upload, no second OCR
+        var lb = $('[data-a=lib]', menu);
+        if (lb) lb.onclick = function () {
+          closeMenu();
+          J.pickDocs({ max: Math.max(0, 5 - st.files.length) || 1 }).then(function (picked) {
+            picked.forEach(function (f) { if (!st.files.some(function (x) { return x.scanId === f.scanId; })) st.files.push(f); });
+            drawChips();
+          });
+        };
         return;
       }
       var list = J.skills.all().filter(function (s) { return !q || (s.name + ' ' + s.area).toLowerCase().indexOf(q.toLowerCase()) > -1; });

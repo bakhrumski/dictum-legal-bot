@@ -73,9 +73,15 @@
       var tableCard = J.tabularText ? '<div class="card" style="margin-bottom:18px;display:flex;gap:14px;align-items:center;flex-wrap:wrap"><div style="flex:1;min-width:220px"><h4>' + J.icon('layers') + ' ' + esc(J.tabularText('entry')) + '</h4><p class="muted" style="font-size:14px">' + esc(J.tabularText('sub')) + '</p></div><a class="pill ghost" href="#/jadval">' + esc(J.tabularText('open')) + '<i>→</i></a></div>' : '';
       var pbCard = J.playbookText ? '<div class="card" style="margin-bottom:18px;display:flex;gap:14px;align-items:center;flex-wrap:wrap"><div style="flex:1;min-width:220px"><h4>' + J.icon('flag') + ' ' + esc(J.playbookText('entry')) + '</h4><p class="muted" style="font-size:14px">' + esc(J.playbookText('sub')) + '</p></div><a class="pill ghost" href="#/playbook">' + esc(J.playbookText('open')) + '<i>→</i></a></div>' : '';
       body.innerHTML = tableCard + pbCard + '<label class="drop"><span class="drop-ic">' + J.icon('up') + '</span><b>' + esc(t('an.drop')) + '</b><small>' + esc(t('an.types')) + '</small><span class="pill sm ghost drop-btn">' + esc(t('an.pick')) + '</span><input type="file" hidden accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.webp,.heic,.tif,.tiff,image/*"></label>' +
+        (J.pickDocs ? '<div style="text-align:center;margin:10px 0 4px"><button class="chip" type="button" data-a="anlib">' + J.icon('folder') + esc(t('nav.docs')) + '</button></div>' : '') +
         '<div class="an-gets">' + t('an.gets').map(function (x, i) { return '<div class="an-get"><span class="an-gi">' + J.icon(['flag', 'doc', 'scale'][i]) + '</span><div><b>' + esc(x[0]) + '</b><small>' + esc(x[1]) + '</small></div></div>'; }).join('') + '</div>';
       var drop = $('.drop', body), inp = $('input', body);
       inp.onchange = function () { if (inp.files[0]) take(inp.files[0]); };
+      // an earlier upload from "Hujjatlarim": used by its id, no second upload or OCR
+      var lib = $('[data-a=anlib]', body);
+      if (lib) lib.onclick = function () {
+        J.pickDocs({ max: 1 }).then(function (p) { if (!p.length) return; file = null; doc = { name: p[0].name, scanId: p[0].scanId, pages: p[0].pages, chars: p[0].chars, fromLibrary: true }; stepChoose(); });
+      };
       drop.addEventListener('dragover', function (e) { e.preventDefault(); drop.classList.add('over'); });
       drop.addEventListener('dragleave', function () { drop.classList.remove('over'); });
       drop.addEventListener('drop', function (e) { e.preventDefault(); drop.classList.remove('over'); if (e.dataTransfer.files[0]) take(e.dataTransfer.files[0]); });
@@ -114,7 +120,8 @@
         if (!sq.ok) { q.innerHTML = '<p class="err"></p>'; $('p', q).textContent = J.errMsg(sq.data); return; }
         doc.scanQuote = sq.data; units = sq.data.units; remaining = sq.data.remainingAfter; msg = sq.data.message || t('an.scan', { p: sq.data.pages, u: sq.data.units });
       } else {
-        var r = await J.api('/api/tariff/quote', { method: 'POST', body: { service: SVC_PLAN[s], text: doc.text, docTicket: doc.docTicket } });
+        // a library document: its size as the server measured it at upload (the charge itself is signed on the run)
+        var r = await J.api('/api/tariff/quote', { method: 'POST', body: doc.fromLibrary ? { service: SVC_PLAN[s], pages: doc.pages, chars: doc.chars } : { service: SVC_PLAN[s], text: doc.text, docTicket: doc.docTicket } });
         if (r.ok && !r.data.unlimited) {
           if (r.data.fits === false) { q.innerHTML = '<div class="note warn"></div>'; $('.note', q).textContent = t('an.toobig', { p: r.data.size && r.data.size.pages, m: r.data.maxPages }); return; }
           units = r.data.units; remaining = r.data.remainingAfter; msg = t('an.cost', { u: units, r: remaining });

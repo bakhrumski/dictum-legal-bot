@@ -254,3 +254,7 @@ nima o'lchandi.
   rozilik bilan intervyu yozuvlari (028).
 - 2026-10-28: #515 merge (mijoz turi, CustDev 3-4-bosqichlar). Ma'lumot
   himoyasi 1-bosqich dizayni ochildi (`docs/design/shifrlash-1-bosqich.md`).
+- 2026-10-29: #516 (ma'lumot himoyasi dizayni, qabul qilindi), #517 (hujjat
+  tayyorlash: suhbatga qaytish, fayldan shablon) va #518 (E1, shifrlash
+  moduli) merge. E2a PR: "Hujjatlarim" (har bir yuklangan hujjat egasi
+  o'chirmaguncha) va shifrlangan saqlash.

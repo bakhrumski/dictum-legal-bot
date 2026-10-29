@@ -15,7 +15,8 @@
  * every read shows a source that is gone or no longer the owner's as
  * missing rather than failing.
  *
- * Scans. A scan is kept 7 days (document_scans.expires_at). Added to a
+ * Scans. A library document ("Hujjatlarim", migration 029) is kept until its
+ * owner deletes it and nothing here shortens it. A cache scan is kept 7 days (document_scans.expires_at). Added to a
  * matter it is held while any open matter holds it (`SCAN_HELD`); when the
  * last such matter is closed or deleted, or the item removed, it gets
  * `SCAN_AFTER_CLOSE_DAYS` more (owner, 2026-10-28: "ish yopilguncha va yana
@@ -192,7 +193,7 @@ function createMatterStore({ db, resolveEntitlement = null }) {
     await db.query(
       `UPDATE document_scans s SET expires_at = now() + interval '${SCAN_AFTER_CLOSE_DAYS} days'
         WHERE s.id IN (SELECT ref_uuid FROM matter_items WHERE matter_id = $1 AND kind = 'scan')
-          AND s.expires_at > now() + interval '${SCAN_AFTER_CLOSE_DAYS} days'
+          AND s.expires_at > now() + interval '${SCAN_AFTER_CLOSE_DAYS} days' AND NOT s.library
           AND NOT EXISTS (SELECT 1 FROM matter_items i JOIN matters m ON m.id = i.matter_id
                            WHERE i.kind = 'scan' AND i.ref_uuid = s.id AND m.id <> $1
                              AND m.status = 'open' AND m.deleted_at IS NULL)`, [matterId]);
@@ -220,7 +221,7 @@ function createMatterStore({ db, resolveEntitlement = null }) {
     if (status === 'closed' && m.status !== 'closed') await holdScans(m.id);
     if (status === 'open' && m.status === 'closed') {
       await db.query(`UPDATE document_scans SET expires_at = now() + ${SCAN_HELD}
-        WHERE id IN (SELECT ref_uuid FROM matter_items WHERE matter_id = $1 AND kind = 'scan') AND expires_at > now()`, [m.id]);
+        WHERE id IN (SELECT ref_uuid FROM matter_items WHERE matter_id = $1 AND kind = 'scan') AND expires_at > now() AND NOT library`, [m.id]);
     }
     return view({ ...r.rows[0], access: m.access });
   }
@@ -281,7 +282,7 @@ function createMatterStore({ db, resolveEntitlement = null }) {
       throw e;
     }
     if (kind === 'scan' && m.status === 'open') {
-      await db.query(`UPDATE document_scans SET expires_at = now() + ${SCAN_HELD} WHERE id = $1 AND expires_at > now()`, [refUuid]);
+      await db.query(`UPDATE document_scans SET expires_at = now() + ${SCAN_HELD} WHERE id = $1 AND expires_at > now() AND NOT library`, [refUuid]);
     }
     await db.query('UPDATE matters SET updated_at = now() WHERE id = $1', [m.id]);
     const row = r.rows[0];
@@ -297,7 +298,7 @@ function createMatterStore({ db, resolveEntitlement = null }) {
     if (r.rows[0].kind === 'scan') {
       await db.query(
         `UPDATE document_scans s SET expires_at = now() + interval '${SCAN_AFTER_CLOSE_DAYS} days'
-          WHERE s.id = $1 AND s.expires_at > now() + interval '${SCAN_AFTER_CLOSE_DAYS} days'
+          WHERE s.id = $1 AND s.expires_at > now() + interval '${SCAN_AFTER_CLOSE_DAYS} days' AND NOT s.library
             AND NOT EXISTS (SELECT 1 FROM matter_items i JOIN matters mm ON mm.id = i.matter_id
                              WHERE i.kind = 'scan' AND i.ref_uuid = s.id AND mm.status = 'open' AND mm.deleted_at IS NULL)`, [r.rows[0].ref_uuid]);
     }
