@@ -611,8 +611,10 @@ textarea.inp{height:auto;min-height:96px;padding:10px 13px;resize:vertical;line-
 .mt-cmd{margin-bottom:18px}
 .mt-cmd-row{display:flex;gap:8px;align-items:center}
 .mt-cmd-row .inp{flex:1;min-width:0}
-.mt-mic{flex:none;width:42px;height:42px;border:1px solid var(--line);border-radius:12px}
-.mt-mic.on{background:var(--accent-soft);color:var(--cta);border-color:var(--cta)}
+.mt-cmd-f{position:relative;flex:1;min-width:0}
+.mt-cmd-f .inp{width:100%}
+.mt-cmd-f .inp{padding-right:44px}
+.mt-mic{position:absolute;right:6px;top:50%;transform:translateY(-50%);margin:0}
 .mt-cmd-st{font-size:13.5px;margin-top:8px;color:var(--fg);white-space:pre-line}
 .mt-cmd-st:empty{display:none}
 .mt-cmd-confirm{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
