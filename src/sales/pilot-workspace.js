@@ -198,7 +198,10 @@ async function feedbackRow(db, id) {
 async function comment(pool, actorId, f, body) {
   await withWorkspaceTransaction(pool, actorId, async (db) => {
     await requireWorkspaceAccess(db, f.workspace_id, actorId, { minimumRole: 'member', requireActive: true });
-    await db.query(`INSERT INTO workspace_task_comments (workspace_id, task_id, author_id, body) VALUES ($1, $2, $3, $4)`, [f.workspace_id, f.task_id, actorId, body]);
+    // sealed like every Workspace comment (E5, src/workspace/sealing.js)
+    const sealing = require('../workspace/sealing');
+    await db.query(`INSERT INTO workspace_task_comments (workspace_id, task_id, author_id, body) VALUES ($1, $2, $3, $4)`,
+      [f.workspace_id, f.task_id, actorId, sealing.sealText(body, sealing.aad.comment(f.workspace_id, f.task_id))]);
   });
 }
 

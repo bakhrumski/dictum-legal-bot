@@ -351,6 +351,7 @@ function transactionalPool(handler) {
       '20261029_029_document_library.sql',
       '20261029_030_seal_e2b.sql',
       '20261029_031_agent_invites.sql',
+      '20261029_032_seal_workspace.sql',
     ]);
     assert.strictEqual(stripOuterTransaction('BEGIN;\nSELECT 1;\nCOMMIT;'), 'SELECT 1;');
   });
@@ -425,7 +426,7 @@ function transactionalPool(handler) {
     // Sending needs the same role the room chat needs; reading does not.
     assert.ok(routes.includes('await requireCounterpart(db, workspaceId, userId, memberId);'));
     // The sender is the session, never a field the caller supplies.
-    assert.ok(routes.includes('[workspaceId, userId, memberId, body]'));
+    assert.ok(routes.includes('[workspaceId, userId, memberId, sealing.sealText(body, sealing.aad.dm(workspaceId))]'), 'the body sealed (E5)');
     assert.ok(!routes.includes('req.body.senderId'));
     // Only the recipient's own rows are marked read.
     assert.ok(routes.includes('WHERE workspace_id=$1 AND recipient_id=$2 AND sender_id=$3'));

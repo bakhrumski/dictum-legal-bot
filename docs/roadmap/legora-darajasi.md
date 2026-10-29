@@ -266,3 +266,7 @@ nima o'lchandi.
   savollik solishtirishni ko'rgach yoqiladi), master `X-JAI-Redact` bilan
   bitta so'rovda yoqib/o'chirib solishtiradi (`scripts/redaction-eval.js`);
   `answer_cache.reply` shifrlanadi.
+- 2026-10-29: #523 (E4) merge. E5 PR: Workspace matnlari va fayllari bazada /
+  Storage'da shifrlanadi, fayl server orqali yuklab olinadi; Workspace AI
+  yangi javobni yakunlashdagi xato tuzatildi. Agentlar ro'yxati va taklif
+  havolasi - alohida PR (#524).

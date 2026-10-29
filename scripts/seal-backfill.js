@@ -8,6 +8,7 @@
  *
  *   DATABASE_URL=... DATA_KEYS=... node scripts/seal-backfill.js           # count only
  *   DATABASE_URL=... DATA_KEYS=... node scripts/seal-backfill.js --apply   # seal the plain ones
+ *   ... --files            # also the Workspace files in Storage (E5; SUPABASE_* needed)
  *
  * The live database is written only by the owner (CLAUDE.md): run --apply
  * yourself, after DATA_KEYS is in Render and its offline copy is kept.
@@ -17,6 +18,7 @@
 
 const privacy = require('../src/privacy/crypto');
 const { textAad } = require('../src/ocr/scan-store');
+const ws = require('../src/workspace/sealing');
 
 const COLUMNS = [
   { table: 'document_scans', col: 'text', key: 'id', aad: r => textAad(r.admin_id, r.file_hash), extra: 'admin_id, file_hash' },
@@ -43,7 +45,40 @@ const COLUMNS = [
   { table: 'agent_traces', col: 'output', key: 'id', json: true, extra: 'request_id, agent_type', aad: r => `agent_traces:${r.request_id}:${r.agent_type}` },
   // E4: the web chat's shared answer cache (72 hours), bound to its key
   { table: 'answer_cache', col: 'reply', key: 'key', aad: r => `answer_cache.reply:${r.key}` },
+  // E5: the Workspace (src/workspace/sealing.js); the files are a separate pass (--files)
+  { table: 'workspace_task_comments', col: 'body', key: 'id', extra: 'workspace_id, task_id', aad: r => ws.aad.comment(r.workspace_id, r.task_id) },
+  { table: 'workspace_messages', col: 'body', key: 'id', extra: 'workspace_id', aad: r => ws.aad.message(r.workspace_id) },
+  { table: 'workspace_direct_messages', col: 'body', key: 'id', extra: 'workspace_id', aad: r => ws.aad.dm(r.workspace_id) },
+  { table: 'workspace_ai_messages', col: 'content', key: 'id', extra: 'workspace_id, thread_id', aad: r => ws.aad.aiMessage(r.workspace_id, r.thread_id) },
+  { table: 'workspace_ai_runs', col: 'request_text', key: 'id', extra: 'workspace_id', aad: r => ws.aad.aiRequest(r.workspace_id) },
+  { table: 'workspace_ai_runs', col: 'context_snapshot', key: 'id', json: true, extra: 'workspace_id', aad: r => ws.aad.aiContext(r.workspace_id) },
+  { table: 'workspace_document_versions', col: 'content_text', key: 'id', extra: 'workspace_id, document_id', aad: r => ws.aad.versionText(r.workspace_id, r.document_id) },
+  { table: 'workspace_document_versions', col: 'content_json', key: 'id', json: true, extra: 'workspace_id, document_id', aad: r => ws.aad.versionJson(r.workspace_id, r.document_id) },
 ];
+
+/**
+ * E5 files: each Workspace file still plain in Storage is read, sealed and
+ * written back in its place (the row's sha256 is the original's and stays).
+ * Needs SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY.
+ */
+async function sealFiles(pool, apply) {
+  const storage = require('../src/workspace/storage');
+  let plain = 0, sealed = 0, done = 0, failed = 0;
+  let rows;
+  try { rows = (await pool.query('SELECT storage_object_path, mime_type FROM workspace_document_files ORDER BY created_at')).rows; }
+  catch (e) { console.log(`workspace files: skipped (${e.message})`); return; }
+  for (const r of rows) {
+    try {
+      const buf = await storage.downloadWorkspaceObject(r.storage_object_path);
+      if (privacy.isSealedBytes(buf)) { sealed++; continue; }
+      plain++;
+      if (!apply) continue;
+      await storage.uploadWorkspaceObject(r.storage_object_path, ws.sealFile(buf, r.storage_object_path), r.mime_type, process.env, { upsert: true });
+      done++;
+    } catch (e) { failed++; console.log(`  ${r.storage_object_path}: ${e.message}`); }
+  }
+  console.log(`workspace files: ${sealed} sealed, ${plain} plain${apply ? `, ${done} sealed now` : ''}${failed ? `, ${failed} not read` : ''}`);
+}
 
 async function main() {
   const apply = process.argv.includes('--apply');
@@ -73,6 +108,7 @@ async function main() {
       }
       console.log(`${c.table}.${c.col}: ${sealed} sealed, ${plain} plain${apply ? `, ${done} sealed now` : ''}`);
     }
+    if (process.argv.includes('--files')) await sealFiles(pool, apply);
     if (!apply) console.log('dry run: nothing changed (add --apply to seal the plain values)');
   } finally {
     await pool.end();
