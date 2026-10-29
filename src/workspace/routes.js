@@ -22,7 +22,11 @@ const {
   createWorkspaceDownloadUrl,
   removeWorkspaceObject,
   uploadWorkspaceObject,
+  downloadWorkspaceObject,
 } = require('./storage');
+// E5: what people write in a Workspace and its files are sealed at rest (src/workspace/sealing.js)
+const sealing = require('./sealing');
+const privacyEnabled = () => require('../privacy/crypto').enabled();
 const {
   booleanValue,
   integer,
@@ -770,7 +774,7 @@ function mountWorkspaceRoutes(app, options) {
       pool.query(`SELECT m.* FROM workspace_task_memory_items tm JOIN workspace_memory_items m ON m.id=tm.memory_item_id WHERE tm.workspace_id=$1 AND tm.task_id=$2 AND m.superseded_at IS NULL ORDER BY m.created_at DESC`, [workspaceId, taskId]),
       pool.query(`SELECT l.*,a.username,a.full_name FROM workspace_activity_log l LEFT JOIN admins a ON a.id=l.actor_id WHERE l.workspace_id=$1 AND l.task_id=$2 ORDER BY l.created_at DESC LIMIT 200`, [workspaceId, taskId]),
     ]);
-    res.json({ task, assignees: assignees.rows, watchers: watchers.rows, comments: comments.rows,
+    res.json({ task, assignees: assignees.rows, watchers: watchers.rows, comments: comments.rows.map(c => sealing.openComment(c)),
       links: links.rows, documents: documents.rows, memory: memory.rows, activity: activity.rows });
   }));
 
@@ -871,10 +875,10 @@ function mountWorkspaceRoutes(app, options) {
       await requireTask(db, workspaceId, taskId);
       return (await db.query(
         `INSERT INTO workspace_task_comments (workspace_id,task_id,author_id,body)
-         VALUES ($1,$2,$3,$4) RETURNING *`, [workspaceId, taskId, userId, body]
+         VALUES ($1,$2,$3,$4) RETURNING *`, [workspaceId, taskId, userId, sealing.sealText(body, sealing.aad.comment(workspaceId, taskId))]
       )).rows[0];
     });
-    res.status(201).json({ comment });
+    res.status(201).json({ comment: sealing.openComment(comment) });
   }));
 
   router.patch('/workspaces/:workspaceId/tasks/:taskId/comments/:commentId', asyncRoute(async (req, res) => {
@@ -889,10 +893,10 @@ function mountWorkspaceRoutes(app, options) {
         `UPDATE workspace_task_comments SET body=$4
           WHERE workspace_id=$1 AND task_id=$2 AND id=$3 AND deleted_at IS NULL
             AND (author_id=$5 OR $6='owner') RETURNING *`,
-        [workspaceId, taskId, commentId, body, userId, access.role]
+        [workspaceId, taskId, commentId, sealing.sealText(body, sealing.aad.comment(workspaceId, taskId)), userId, access.role]
       );
       if (!result.rows[0]) throw new WorkspaceError(404, 'comment_not_found', 'Izoh topilmadi');
-      return result.rows[0];
+      return sealing.openComment(result.rows[0]);
     });
     res.json({ comment });
   }));
@@ -1059,7 +1063,7 @@ function mountWorkspaceRoutes(app, options) {
         ORDER BY m.created_at DESC LIMIT $2`,
       [workspaceId, limit]
     );
-    res.json({ messages: result.rows.reverse() });
+    res.json({ messages: result.rows.reverse().map(m => sealing.openMessage(m, workspaceId)) });
   }));
 
   router.post('/workspaces/:workspaceId/messages', asyncRoute(async (req, res) => {
@@ -1073,10 +1077,10 @@ function mountWorkspaceRoutes(app, options) {
       return (await db.query(
         `INSERT INTO workspace_messages(workspace_id,author_id,body,pinned_task_id)
          VALUES ($1,$2,$3,$4) RETURNING *`,
-        [workspaceId, userId, body, pinnedTaskId]
+        [workspaceId, userId, sealing.sealText(body, sealing.aad.message(workspaceId)), pinnedTaskId]
       )).rows[0];
     });
-    res.status(201).json({ message });
+    res.status(201).json({ message: sealing.openMessage(message) });
   }));
 
   /* -- Direct messages ----------------------------------------
@@ -1132,7 +1136,7 @@ function mountWorkspaceRoutes(app, options) {
         ORDER BY recent.created_at DESC NULLS LAST, COALESCE(a.full_name,a.username)`,
       [workspaceId, userId]
     );
-    res.json({ threads: result.rows });
+    res.json({ threads: result.rows.map(r => sealing.openDm(r, workspaceId, 'last_body')) });
   }));
 
   router.get('/workspaces/:workspaceId/direct-messages/:memberId', asyncRoute(async (req, res) => {
@@ -1153,7 +1157,7 @@ function mountWorkspaceRoutes(app, options) {
         ORDER BY m.created_at DESC LIMIT $4`,
       [workspaceId, userId, memberId, limit]
     );
-    res.json({ messages: result.rows.reverse(), counterpart });
+    res.json({ messages: result.rows.reverse().map(m => sealing.openDm(m, workspaceId)), counterpart });
   }));
 
   router.post('/workspaces/:workspaceId/direct-messages/:memberId', asyncRoute(async (req, res) => {
@@ -1169,10 +1173,10 @@ function mountWorkspaceRoutes(app, options) {
       return (await db.query(
         `INSERT INTO workspace_direct_messages(workspace_id,sender_id,recipient_id,body)
          VALUES ($1,$2,$3,$4) RETURNING *`,
-        [workspaceId, userId, memberId, body]
+        [workspaceId, userId, memberId, sealing.sealText(body, sealing.aad.dm(workspaceId))]
       )).rows[0];
     });
-    res.status(201).json({ message });
+    res.status(201).json({ message: sealing.openDm(message) });
   }));
 
   // Marks what this colleague sent you as read. Only the recipient's own rows
@@ -1250,9 +1254,10 @@ function mountWorkspaceRoutes(app, options) {
         `INSERT INTO workspace_document_versions
            (workspace_id,document_id,version_number,content_text,content_json,source_ai_run_id,created_by)
          VALUES ($1,$2,1,$3,$4,$5,$6) RETURNING *`,
-        [workspaceId, document.id, contentText, contentJson && JSON.stringify(contentJson), sourceAiRunId, userId]
+        [workspaceId, document.id, sealing.sealText(contentText, sealing.aad.versionText(workspaceId, document.id)),
+          contentJson == null ? null : sealing.sealJsonText(contentJson, sealing.aad.versionJson(workspaceId, document.id)), sourceAiRunId, userId]
       )).rows[0];
-      return { document, version };
+      return { document, version: sealing.openVersion(version) };
     });
     res.status(201).json({ ...created, storagePathPrefix: `${workspaceId}/${created.document.id}/${created.version.id}/` });
   }));
@@ -1281,7 +1286,8 @@ function mountWorkspaceRoutes(app, options) {
       // before the version row exists (Astra audit D1).
       const extracted = await extractUploadText(req.file.buffer, req.file.mimetype);
 
-      await uploadWorkspaceObject(objectPath, req.file.buffer, req.file.mimetype);
+      // the file is sealed before it leaves for Storage (its sha256 and size stay the original's)
+      await uploadWorkspaceObject(objectPath, sealing.sealFile(req.file.buffer, objectPath), req.file.mimetype);
       try {
         const created = await withWorkspaceTransaction(pool, userId, async (db) => {
           await requireWorkspaceAccess(db, workspaceId, userId, { minimumRole: 'member', requireActive: true });
@@ -1295,7 +1301,7 @@ function mountWorkspaceRoutes(app, options) {
             `INSERT INTO workspace_document_versions
                (id,workspace_id,document_id,version_number,content_text,created_by)
              VALUES ($1,$2,$3,1,$4,$5) RETURNING *`,
-            [versionId, workspaceId, documentId, extracted.text, userId]
+            [versionId, workspaceId, documentId, sealing.sealText(extracted.text, sealing.aad.versionText(workspaceId, documentId)), userId]
           )).rows[0];
           const file = (await db.query(
             `INSERT INTO workspace_document_files
@@ -1303,7 +1309,7 @@ function mountWorkspaceRoutes(app, options) {
              VALUES ($1,$2,$3,'original',$4,$5,$6,$7,$8) RETURNING *`,
             [fileId, workspaceId, versionId, objectPath, req.file.mimetype, req.file.size, digest, userId]
           )).rows[0];
-          return { document, version, file, textIndex: extracted.status };
+          return { document, version: sealing.openVersion(version), file, textIndex: extracted.status };
         });
         res.status(201).json(created);
       } catch (error) {
@@ -1326,8 +1332,44 @@ function mountWorkspaceRoutes(app, options) {
       [workspaceId, objectPath]
     )).rows[0];
     if (!file) throw new WorkspaceError(404, 'document_file_not_found', 'Hujjat fayli topilmadi');
-    const signedUrl = await createWorkspaceDownloadUrl(objectPath, 120);
-    res.json({ signedUrl, expiresIn: 120 });
+    // E5: files are sealed in Storage, so the download goes through the
+    // server, which opens it (the page opens this URL as before). With no
+    // DATA_KEYS a Storage-signed URL is still given (nothing to open);
+    // createWorkspaceDownloadUrl(objectPath stays for that case.
+    if (!privacyEnabled()) {
+      const signedUrl = await createWorkspaceDownloadUrl(objectPath, 120);
+      return res.json({ signedUrl, expiresIn: 120 });
+    }
+    res.json({ signedUrl: `/api/workspaces/${workspaceId}/document-files/${file.id}/content`, expiresIn: 120 });
+  }));
+
+  // the file itself, opened on the server (E5); the same access as the URL above
+  router.get('/workspaces/:workspaceId/document-files/:fileId/content', asyncStorageRoute(async (req, res) => {
+    const workspaceId = uuid(req.params.workspaceId, 'workspaceId');
+    const fileId = uuid(req.params.fileId, 'fileId');
+    await requireWorkspaceAccess(pool, workspaceId, actorId(req), { requireActive: true });
+    const file = (await pool.query(
+      `SELECT f.storage_object_path, f.mime_type, f.byte_size, f.sha256, d.title
+         FROM workspace_document_files f
+         JOIN workspace_document_versions v ON v.id=f.document_version_id
+         JOIN workspace_documents d ON d.id=v.document_id
+        WHERE f.workspace_id=$1 AND f.id=$2`, [workspaceId, fileId]
+    )).rows[0];
+    if (!file) throw new WorkspaceError(404, 'document_file_not_found', 'Hujjat fayli topilmadi');
+    const bytes = sealing.openFile(await downloadWorkspaceObject(file.storage_object_path), file.storage_object_path);
+    // the stored digest is the original's: a file that does not match is not sent
+    if (file.sha256 && crypto.createHash('sha256').update(bytes).digest('hex') !== file.sha256) {
+      throw new WorkspaceError(409, 'document_file_mismatch', 'Fayl saqlangan nusxaga mos kelmadi');
+    }
+    const name = String(file.storage_object_path).split('/').pop().replace(/^\d+-/, '') || 'file';
+    res.set({
+      'Content-Type': file.mime_type || 'application/octet-stream',
+      'Content-Length': String(bytes.length),
+      'Content-Disposition': `inline; filename="${name.replace(/[^\w.-]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(name)}`,
+      'Cache-Control': 'private, no-store',
+      'X-Content-Type-Options': 'nosniff',
+    });
+    res.end(bytes);
   }));
 
   router.get('/workspaces/:workspaceId/documents/:documentId/versions', asyncRoute(async (req, res) => {
@@ -1341,7 +1383,7 @@ function mountWorkspaceRoutes(app, options) {
         WHERE v.workspace_id=$1 AND v.document_id=$2 ORDER BY v.version_number DESC`,
       [workspaceId, documentId]
     );
-    res.json({ versions: result.rows });
+    res.json({ versions: result.rows.map(v => sealing.openVersion(v, workspaceId)) });
   }));
 
   router.patch('/workspaces/:workspaceId/documents/:documentId', asyncRoute(async (req, res) => {
@@ -1410,10 +1452,11 @@ function mountWorkspaceRoutes(app, options) {
         `INSERT INTO workspace_document_versions
            (workspace_id,document_id,version_number,content_text,content_json,source_ai_run_id,created_by)
          VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-        [workspaceId, documentId, next, contentText, contentJson && JSON.stringify(contentJson), sourceAiRunId, userId]
+        [workspaceId, documentId, next, sealing.sealText(contentText, sealing.aad.versionText(workspaceId, documentId)),
+          contentJson == null ? null : sealing.sealJsonText(contentJson, sealing.aad.versionJson(workspaceId, documentId)), sourceAiRunId, userId]
       )).rows[0];
       await db.query('UPDATE workspace_documents SET updated_at=now() WHERE id=$1', [documentId]);
-      return row;
+      return sealing.openVersion(row);
     });
     res.status(201).json({ version, storagePathPrefix: `${workspaceId}/${documentId}/${version.id}/` });
   }));
@@ -1509,7 +1552,7 @@ function mountWorkspaceRoutes(app, options) {
     );
     res.json({
       thread,
-      messages: messages.rows.map((message) => {
+      messages: messages.rows.map(m => sealing.openAiMessage(m, workspaceId, threadId)).map((message) => {
         const {
           content_json: contentJson,
           citations,

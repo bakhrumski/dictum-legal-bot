@@ -376,7 +376,25 @@ Known state of the suites (Sept 2026):
   length - a lawyer reads the pairs). `answer_cache.reply` is sealed (AAD
   `answer_cache.reply:<key>`, in `seal-backfill.js`); `opinion_cache` is
   created but never written, so nothing to seal. Not yet: embeddings /
-  rerank, images and audio. `REDACT_AI=off` stops it all. Next: E5-E7.
+  rerank, images and audio. `REDACT_AI=off` stops it all.
+  E5 (2026-10-29, migration 032, `src/workspace/sealing.js`): Workspace task
+  comments, room chat, direct messages, Workspace AI questions / answers /
+  context snapshots and document version text / JSON are sealed (AAD by
+  Workspace and its task / thread / document; the 20 000 / 4 000 limits moved
+  to the routes); uploaded files are sealed before Storage (the row keeps the
+  original size and sha256) and downloaded through the server
+  (`GET /api/workspaces/:id/document-files/:fileId/content`, opened, checked
+  against the sha256; the page's `document-download-url` now returns that
+  path; without DATA_KEYS a Storage-signed URL as before); the members'
+  direct Storage INSERT policy is dropped. Realtime was already a signal
+  (both pages re-read through the API); its rows now carry sealed text.
+  `seal-backfill.js` covers the columns and, with `--files`, the Storage
+  files. Not sealed: task titles / descriptions and `workspace_memory_items`
+  (searched in SQL; §3.2 - the memory item's title is the question's first
+  240 characters and its body the answer). Fixed on the way: every new
+  Workspace AI answer failed at finalization (`reused_memory_item_id` got
+  text) and the memory-reuse path had uneven VALUES rows.
+  `tests/sealing-workspace.db.test.js`. Next: E6-E7.
   `tests/privacy-crypto.test.js`, `tests/document-library.db.test.js`,
   `tests/sealing-e2b.db.test.js`, `tests/privacy-redact.test.js`,
   `tests/redaction-eval.test.js`.
