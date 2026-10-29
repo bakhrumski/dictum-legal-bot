@@ -35,7 +35,12 @@
       'adm.pilot': 'CustDev pilot', 'adm.pilot.d': 'Shogird-yurist agentlar, offer link, 14 kunlik pilot so\'rovlari', 'adm.t.pilot': 'Pilot so\'rovlari',
       'adm.pl.req': 'Kutilayotgan pilot so\'rovlari', 'adm.pl.client': 'Mijoz', 'adm.pl.agent': 'Agent', 'adm.pl.via': 'Qayerdan', 'adm.pl.approve': '14 kunlik pilotni berish', 'adm.pl.decline': 'Rad etish',
       'adm.pl.approved': 'Pilot berildi: 14 kun, chat 120 · tahlil 8 · xulosa 4 · loyiha 6 · OCR 20, AI budjeti $10', 'adm.pl.agents': 'Agentlar', 'adm.pl.code': 'Kod', 'adm.pl.links': 'Offer link',
-      'adm.pl.give': 'Kod berish', 'adm.pl.renew': 'Yangilash', 'adm.pl.revoke': 'Olib qo\'yish', 'adm.pl.reg': 'Ro\'yxatdan o\'tgan', 'adm.pl.piloted': 'Pilotda', 'adm.pl.paid': 'Pullik',
+      'adm.pl.give': 'Kod berish', 'adm.pl.renew': 'Kodni yangilash', 'adm.pl.revoke': 'Agentlikdan chiqarish',
+      'adm.pl.add': 'Agent qo\'shish', 'adm.pl.addQ': 'Kim uchun? (masalan: ism yoki guruh — faqat sizning ro\'yxatingiz uchun, ixtiyoriy)',
+      'adm.pl.none': 'Hali agent yo\'q. «Agent qo\'shish» bilan havola yarating va uni agentga yuboring: u havolani Telegram\'da ochib, bir tugma bilan agent bo\'ladi.',
+      'adm.pl.inv': 'Taklif havolalari', 'adm.pl.invMade': 'Havola yaratildi va nusxa olindi. U faqat hozir ko\'rinadi: bir marta ishlaydi, 7 kun amal qiladi.',
+      'adm.pl.invCancel': 'Bekor qilish', 'adm.pl.st.open': 'Kutilmoqda', 'adm.pl.st.used': 'Ishlatildi', 'adm.pl.st.revoked': 'Bekor qilingan', 'adm.pl.st.expired': 'Muddati o\'tgan',
+      'adm.pl.for': 'Kim uchun', 'adm.pl.until': 'Amal qiladi', 'adm.pl.status': 'Holat', 'adm.pl.reg': 'Ro\'yxatdan o\'tgan', 'adm.pl.piloted': 'Pilotda', 'adm.pl.paid': 'Pullik',
       'adm.pl.demo': 'Demo akkaunt', 'adm.pl.demoUnits': 'Demo sarfi (birlik)', 'adm.pl.demoLink': 'Demo ulash', 'adm.pl.demoQ': 'Master yaratgan test akkauntning ID raqami (Boshqaruv → test akkaunt). Unga 14 kunlik pilot huquqi beriladi.',
       'adm.pl.note': 'Agent huquq, tarif yoki chegirma bera olmaydi: kod, pilot va demo faqat shu yerda, master tomonidan. Agent faqat o\'z mijozlari ro\'yxatini ko\'radi (savol-javob matnisiz). Yurist, buxgalter, HR yoki tadbirkor mijozga pilot avtomatik ochiladi (jami 20, har agentga 4; PILOT_AUTO=off to\'xtatadi), qolgani shu yerda kutadi.', 'adm.pl.copied': 'Nusxa olindi',
       'adm.today': 'Bugun', 'adm.t.reg': 'Kutilayotgan arizalar', 'adm.t.orders': 'Yurist narxini kutayotgan buyurtmalar', 'adm.t.del': "O'chirish so'rovlari", 'adm.t.fb': 'Yangi xato xabarlari', 'adm.t.ai': 'Bugungi AI xarajati', 'adm.t.buy': 'Bugungi xaridlar', 'adm.buy': 'Bir martalik xaridlar', 'adm.buy.d': 'Telegram Stars orqali sotilgan xizmatlar', 'adm.buy.count': 'Xaridlar', 'adm.buy.uzs': "Katalog narxi, so'm", 'adm.buy.today': 'Bugun', 'adm.buy.product': 'Xizmat', 'adm.buy.units': 'Birlik', 'adm.buy.list': "So'nggi xaridlar", 'adm.buy.left': 'Qolgan', 'adm.buy.refunded': 'Qaytarilgan', 'adm.buy.ok': "To'langan", 'adm.buy.none': "Hali xarid yo'q (jadval migratsiyasi ishlamagan bo'lishi mumkin).", 'adm.buy.note': "So'mdagi summa — sotuv paytidagi katalog narxi. Stars'dan haqiqatda tushgan pul bu yerda ko'rinmaydi; qaytarilganlar hisoblanmaydi.", 'adm.p.chat5': '5 ta savol', 'adm.p.draft': 'AI hujjat loyihasi', 'adm.p.analysis': 'AI tahlil', 'adm.p.opinion': 'AI xulosa', 'adm.t.unknown': "ta narxi noma'lum",
@@ -690,7 +695,33 @@
   function viewPilot() {
     shell('pilot', function (body, again) {
       body.innerHTML = '<p class="muted" style="font-size:13px;margin-bottom:14px">' + esc(t('adm.pl.note')) + '</p><div class="pl-ws"></div><h3 style="font-size:16px;margin:0 0 10px">' + esc(t('adm.pl.req')) + '</h3><div class="pl-q">' + skel() + '</div>' +
-        '<h3 style="font-size:16px;margin:22px 0 10px">' + esc(t('adm.pl.agents')) + '</h3><div class="pl-a">' + skel() + '</div><div class="pl-fb"></div>';
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin:22px 0 10px"><h3 style="font-size:16px;margin:0">' + esc(t('adm.pl.agents')) + '</h3>' +
+        '<button class="pill sm" type="button" data-add>' + esc(t('adm.pl.add')) + '</button></div><div class="pl-new"></div><div class="pl-a">' + skel() + '</div><div class="pl-inv"></div><div class="pl-fb"></div>';
+      // agent invite links (src/sales/invites.js): a one-use, 7-day t.me link; the link itself is shown only once
+      $('[data-add]', body).onclick = async function () {
+        var b = this, note = G.prompt(t('adm.pl.addQ'), '');
+        if (note === null) return;
+        busy(b, true); var x = await J.api('/api/admin/sales/invites', { method: 'POST', body: { note: note } }); busy(b, false);
+        if (!x.ok) return J.toast(J.errMsg(x.data), 6000);
+        var link = x.data.link;
+        $('.pl-new', body).innerHTML = '<div class="card" style="margin-bottom:12px"><p style="font-size:13.5px;margin:0 0 8px">' + esc(t('adm.pl.invMade')) + '</p><code data-noalpha style="word-break:break-all;font-size:13px">' + esc(link) + '</code></div>';
+        try { await navigator.clipboard.writeText(link); J.toast(t('adm.pl.copied')); } catch (_) { /* the link is on the page */ }
+        loadInvites();
+      };
+      function loadInvites() {
+        J.api('/api/admin/sales/invites').then(function (r) {
+          var box = $('.pl-inv', body); if (!r.ok) { box.innerHTML = ''; return; }
+          var list = r.data.invites || [];
+          if (!list.length) { box.innerHTML = ''; return; }
+          box.innerHTML = '<h3 style="font-size:15px;margin:18px 0 8px">' + esc(t('adm.pl.inv')) + '</h3>' + table([t('adm.time'), t('adm.pl.for'), t('adm.pl.until'), t('adm.pl.status'), ''], list.map(function (i) {
+            var st = t('adm.pl.st.' + i.status) + (i.status === 'used' && i.used_by ? ' — ' + (i.used_by_name || '') + ' @' + (i.used_by_username || '') : '');
+            return '<tr>' + td(dt(i.created_at)) + td(i.note || '—') + td(dt(i.expires_at)) + td(st) +
+              '<td>' + (i.status === 'open' ? '<button class="pill ghost sm" data-ic="' + i.id + '" type="button">' + esc(t('adm.pl.invCancel')) + '</button>' : '') + '</td></tr>';
+          }));
+          $$('[data-ic]', box).forEach(function (b) { b.onclick = async function () { var x = await J.api('/api/admin/sales/invites/' + b.dataset.ic + '/revoke', { method: 'POST', body: {} }); if (!x.ok) return J.toast(J.errMsg(x.data), 6000); loadInvites(); }; });
+        });
+      }
+      loadInvites();
       // stage 3: the pilot's internal Workspace (migration 025/027) - opened once by a master; agents join it with their code
       J.api('/api/admin/sales/workspace').then(function (r) {
         var box = $('.pl-ws', body); if (!r.ok) return;
@@ -715,18 +746,19 @@
       J.api('/api/admin/sales/agents').then(function (r) {
         var box = $('.pl-a', body); if (!r.ok) { box.innerHTML = errBox(r); return; }
         var list = r.data.agents || [];
+        if (!list.length) { box.innerHTML = '<p class="muted" style="font-size:13.5px;margin:0">' + esc(t('adm.pl.none')) + '</p>'; return; }
         box.innerHTML = table([t('adm.pl.agent'), t('adm.pl.code'), t('adm.pl.reg'), t('adm.pl.piloted'), t('adm.pl.paid'), t('adm.pl.demo'), t('adm.pl.demoUnits'), ''], list.map(function (a) {
           return '<tr>' + td((a.full_name || '') + ' @' + (a.username || '') + ' · ' + a.role) + td(a.sales_agent_code ? '<code>' + esc(a.sales_agent_code) + '</code> <button class="pill ghost sm" data-cp="' + esc(a.sales_agent_code) + '" type="button">' + esc(t('adm.pl.links')) + '</button>' : '—', true) +
             td(n0(a.registered)) + td(n0(a.piloted)) + td(n0(a.paid)) + td(a.demo_id ? '#' + a.demo_id : '—') + td(n0(a.demo_units)) +
-            '<td style="white-space:nowrap"><button class="pill sm" data-code="' + a.id + '" type="button">' + esc(a.sales_agent_code ? t('adm.pl.renew') : t('adm.pl.give')) + '</button>' +
-            (a.sales_agent_code ? ' <button class="pill ghost sm" data-rv="' + a.id + '" type="button">' + esc(t('adm.pl.revoke')) + '</button>' : '') +
-            ' <button class="pill ghost sm" data-demo="' + a.id + '" type="button">' + esc(t('adm.pl.demoLink')) + '</button></td></tr>';
+            '<td><div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;min-width:150px"><button class="pill ghost sm" data-code="' + a.id + '" type="button">' + esc(t('adm.pl.renew')) + '</button>' +
+            ' <button class="pill ghost sm" data-rv="' + a.id + '" type="button">' + esc(t('adm.pl.revoke')) + '</button>' +
+            ' <button class="pill ghost sm" data-demo="' + a.id + '" type="button">' + esc(t('adm.pl.demoLink')) + '</button></div></td></tr>';
         }));
         $$('[data-cp]', box).forEach(function (b) { b.onclick = function () {
           var c = b.dataset.cp, txt = location.origin + '/?ref=' + c + '\nhttps://t.me/' + (J.bots && J.bots.legal || 'yuristga_savolbot') + '?start=ref_' + c;
           navigator.clipboard.writeText(txt).then(function () { J.toast(t('adm.pl.copied')); });
         }; });
-        $$('[data-code]', box).forEach(function (b) { b.onclick = async function () { busy(b, true); var x = await J.api('/api/admin/sales/agents/' + b.dataset.code + '/code', { method: 'POST', body: {} }); busy(b, false); if (!x.ok) return J.toast(J.errMsg(x.data), 6000); again(); }; });
+        $$('[data-code]', box).forEach(function (b) { b.onclick = async function () { if (!(await J.confirm(t('adm.pl.renew') + '? Eski havolalar ishlamay qoladi.', t('adm.pl.renew')))) return; busy(b, true); var x = await J.api('/api/admin/sales/agents/' + b.dataset.code + '/code', { method: 'POST', body: {} }); busy(b, false); if (!x.ok) return J.toast(J.errMsg(x.data), 6000); again(); }; });
         $$('[data-rv]', box).forEach(function (b) { b.onclick = async function () { if (!(await J.confirm(t('adm.pl.revoke') + '?', t('adm.pl.revoke')))) return; var x = await J.api('/api/admin/sales/agents/' + b.dataset.rv + '/code/revoke', { method: 'POST', body: {} }); if (!x.ok) return J.toast(J.errMsg(x.data), 6000); again(); }; });
         $$('[data-demo]', box).forEach(function (b) { b.onclick = async function () {
           var v = G.prompt(t('adm.pl.demoQ')); if (!v) return;

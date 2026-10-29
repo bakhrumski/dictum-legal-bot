@@ -111,6 +111,8 @@ jobs:
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/workspace-entitlement.db.test.js
       - name: Client type + one-tap pilot join (db)
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/pilot-join.db.test.js
+      - name: CustDev agent invite links (db)
+        run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/agent-invites.db.test.js
       - name: CustDev stage 3 - pilot tasks and feedback (db)
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/pilot-feedback.db.test.js
       - name: CustDev stage 4 - interview recordings with consent (db)
