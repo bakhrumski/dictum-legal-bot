@@ -185,34 +185,57 @@
     var v = J.mount('<div class="wrap"><div class="vh"><div><h2>' + esc(t('dr.title')) + '</h2><p>' + esc(t('dr.sub')) + '</p></div></div><div class="dr-body"></div></div>');
     var body = $('.dr-body', v);
     if (!J.hasService('draft')) { body.innerHTML = J.lockBox('Silver', t('pl.f.draft', { n: '10+' })); bindLock(body); return; }
+    // a next step chosen under a chat answer (or a recording): kept for the whole visit, so "back" from a result keeps it
+    var pre = J.draftPrefill; J.draftPrefill = null;
     function home() {
       // the claim-draft agent (agent.js): step by step, quotes checked against lex.uz
       var agentCard = J.agentText ? '<div class="card" style="margin-bottom:18px;display:flex;gap:14px;align-items:center;flex-wrap:wrap"><div style="flex:1;min-width:220px"><h4>' + J.icon('scale') + ' ' + esc(J.agentText('title')) + '</h4><p class="muted" style="font-size:14px">' + esc(J.agentText('sub')) + '</p></div><a class="pill" href="#/agent/dava">' + esc(J.agentText('entry')) + '<i>→</i></a></div>' : '';
-      body.innerHTML = agentCard + '<div class="card" style="margin-bottom:26px"><h4>' + J.icon('spark') + ' ' + esc(t('dr.ai')) + '</h4><p class="muted" style="font-size:14px;margin-bottom:14px">' + esc(t('dr.ai.d')) + '</p>' +
+      var aiCard = '<div class="card" style="margin-bottom:' + (pre ? '18' : '26') + 'px"><h4>' + J.icon('spark') + ' ' + esc(t('dr.ai')) + '</h4><p class="muted" style="font-size:14px;margin-bottom:14px">' + esc(t('dr.ai.d')) + '</p>' +
+        (pre ? '<div class="note-blue dr-cont" style="font-size:13.5px;margin-bottom:14px"><b>' + esc(t('dr.cont')) + ':</b> <span class="dr-cont-a"></span><br>' + esc(t('dr.cont.d')) + '</div>' : '') +
         '<div class="field"><label>' + esc(t('dr.type')) + '</label><input class="inp" data-f="type" placeholder="' + esc(t('dr.type.ph')) + '"></div>' +
-        '<div class="field"><label>' + esc(t('dr.details')) + '</label><textarea class="inp" data-f="det" placeholder="' + esc(t('dr.details.ph')) + '"></textarea></div>' +
-        '<button class="pill" data-a="gen">' + esc(t('dr.gen')) + '<i>→</i></button></div>' +
+        '<div class="field"><label>' + esc(t('dr.details')) + '</label><textarea class="inp" data-f="det" placeholder="' + esc(t(pre ? 'dr.cont.ph' : 'dr.details.ph')) + '"></textarea></div>' +
+        '<button class="pill" data-a="gen">' + esc(t('dr.gen')) + '<i>→</i></button></div>';
+      // from a chat: the way back first, and the AI card (the step chosen there) above the agent card
+      body.innerHTML = (pre && pre.from ? '<button class="chip" data-a="backchat" type="button" style="margin-bottom:16px">' + J.icon('back') + esc(t('dr.backchat')) + '</button>' : '') +
+        (pre ? aiCard + agentCard : agentCard + aiCard) +
         '<div class="tabs"><button class="on" data-tab="all">' + esc(t('dr.templates')) + '</button><button data-tab="mine">' + esc(t('dr.mine')) + '</button></div>' +
+        '<div class="dr-up" hidden></div>' +
         '<div class="search" style="margin-bottom:14px">' + J.icon('search') + '<input class="inp" data-f="q" placeholder="' + esc(t('dr.search')) + '"></div><div class="grid3 tpl-list"><div class="skel"></div></div>';
-      var pre = J.draftPrefill; J.draftPrefill = null;
-      if (pre) { $('[data-f=type]', body).value = pre.type || ''; $('[data-f=det]', body).value = ''; }
+      var bc = $('[data-a=backchat]', body);
+      if (bc) bc.onclick = function () { J.go(pre.from); };
+      if (pre) { $('[data-f=type]', body).value = pre.type || ''; $('[data-f=det]', body).value = ''; $('.dr-cont-a', body).textContent = pre.action || pre.type || ''; }
       else if (q.get('type') === 'claim') $('[data-f=type]', body).value = J.lang === 'ru' ? 'Претензия' : J.lang === 'en' ? 'Demand letter' : 'Talabnoma';
       $('[data-a=gen]', body).onclick = function () { gen(pre); };
       var all = [], tab = 'all';
-      $$('[data-tab]', body).forEach(function (b) { b.onclick = function () { tab = b.dataset.tab; $$('[data-tab]', body).forEach(function (x) { x.classList.toggle('on', x === b); }); draw(); }; });
+      $$('[data-tab]', body).forEach(function (b) { b.onclick = function () { tab = b.dataset.tab; $$('[data-tab]', body).forEach(function (x) { x.classList.toggle('on', x === b); }); $('.dr-up', body).hidden = tab !== 'mine'; draw(); }; });
+      // own templates from this computer (POST /api/templates/analyze -> review -> /api/templates/mine)
+      $('.dr-up', body).innerHTML = '<div class="card" style="margin-bottom:14px;display:flex;gap:14px;align-items:center;flex-wrap:wrap"><p class="muted" style="font-size:14px;flex:1;min-width:220px;margin:0">' + esc(t('dr.upload.d')) + '</p>' +
+        '<label class="pill" style="cursor:pointer">' + J.icon('plus') + esc(t('dr.upload')) + '<input type="file" accept=".docx,.doc,.pdf" hidden data-f="tplfile"></label></div>';
+      $('[data-f=tplfile]', body).onchange = function () { var f = this.files[0]; this.value = ''; if (f) uploadTpl(f, function () { J.api('/api/templates').then(function (r) { all = r.ok ? (r.data.templates || []) : []; draw(); }); }); };
       $('[data-f=q]', body).oninput = draw;
       function draw() {
         var s = ($('[data-f=q]', body).value || '').toLowerCase();
         var list = all.filter(function (x) { return (tab === 'mine' ? x.isMine : true) && (!s || (L(x.name) + ' ' + L(x.description)).toLowerCase().indexOf(s) > -1); });
         $('.tpl-list', body).innerHTML = list.length ? list.map(function (x) {
-          return '<button class="tile" data-id="' + esc(x.slug || x.id) + '"><div class="tile-h">' + J.icon('doc') + esc(x.category || '') + '</div><b>' + esc(L(x.name)) + '</b><p>' + esc(L(x.description)) + '</p><div class="tile-f"><span class="tag">' + (x.fieldCount || 0) + ' ·</span>' + (x.isMine ? J.scopeTag('p') : '') + '</div></button>';
+          return '<button class="tile" data-id="' + esc(x.slug || x.id) + '"><div class="tile-h">' + J.icon('doc') + esc(x.category || '') + '</div><b>' + esc(L(x.name)) + '</b><p>' + esc(L(x.description)) + '</p><div class="tile-f"><span class="tag">' + (x.fieldCount || 0) + ' ·</span>' + (x.isMine ? J.scopeTag('p') + ' <span class="pill sm ghost" role="button" tabindex="0" data-del="' + esc(x.id) + '" aria-label="' + esc(t('dr.del')) + '" style="margin-left:auto">' + J.icon('trash') + '</span>' : '') + '</div></button>';
         }).join('') : '<div class="empty-state">' + esc(tab === 'mine' ? t('dr.mine.empty') : '—') + '</div>';
-        $$('.tile', body).forEach(function (b) { b.onclick = function () { openTpl(b.dataset.id); }; });
+        $$('.tile', body).forEach(function (b) { b.onclick = function (e) { if (e.target.closest('[data-del]')) return; openTpl(b.dataset.id); }; });
+        $$('[data-del]', body).forEach(function (d) {
+          d.onclick = async function (e) {
+            e.stopPropagation();
+            if (!(await J.confirm(t('dr.del.q'), t('dr.del')))) return;
+            var r = await J.api('/api/templates/mine/' + encodeURIComponent(d.dataset.del), { method: 'DELETE' });
+            if (!r.ok) { J.toast(J.errMsg(r.data)); return; }
+            all = all.filter(function (x) { return String(x.id) !== String(d.dataset.del); }); draw();
+          };
+        });
       }
       J.api('/api/templates').then(function (r) { all = r.ok ? (r.data.templates || []) : []; draw(); });
     }
     async function gen(pre) {
       var type = $('[data-f=type]', body).value.trim(), det = $('[data-f=det]', body).value.trim();
+      // continuing a chat: the question and answer are the details; extra lines are optional
+      if (!det && pre) det = t('dr.cont.none');
       if (!type || !det) { J.toast(t('dr.details.ph')); return; }
       var btn = $('[data-a=gen]', body); btn.disabled = true; btn.innerHTML = '<span class="spin"></span>';
       var r = await J.api('/api/draft/ai-generate', { method: 'POST', body: { docType: type, details: det, continuation: pre ? { question: pre.question, answer: pre.answer, selectedAction: pre.action } : null } });
@@ -226,6 +249,44 @@
       $('h2', body).textContent = title; $('.doc', body).innerHTML = clean;
       $('[data-a=back]', body).onclick = home;
       $('[data-a=word]', body).onclick = function () { J.exportWord(title, $('.doc', body).innerHTML); };
+    }
+    async function uploadTpl(file, done) {
+      var m = J.modal({ cls: 'sm', html: '<h2>' + esc(t('dr.upload')) + '</h2><div style="display:flex;gap:10px;align-items:center;margin-top:14px"><span class="spin"></span>' + esc(t('dr.upload.busy')) + '</div>' });
+      var fd = new FormData(); fd.append('file', file);
+      var r = await J.api('/api/templates/analyze', { method: 'POST', body: fd });
+      J.refreshTariff && J.refreshTariff();
+      if (!r.ok) { m.close(); if (!J.handleLimit(r.data)) J.toast(J.errMsg(r.data), 6000); return; }
+      var tpl = r.data.template || {}, fields = Array.isArray(tpl.fields) ? tpl.fields.slice() : [];
+      m.close();
+      var mm = J.modal({ html: '<h2>' + esc(t('dr.upload.review')) + '</h2><p class="muted" style="font-size:13px"></p>' +
+        '<div class="field" style="margin-top:12px"><label>' + esc(t('dr.upload.name')) + '</label><input class="inp" data-f="tn" maxlength="120"></div>' +
+        '<h4 style="margin:14px 0 6px">' + esc(t('dr.upload.fields')) + '</h4><div class="dr-ff"></div>' +
+        '<h4 style="margin:16px 0 6px">' + esc(t('dr.upload.preview')) + '</h4><div class="card" style="max-height:260px;overflow:auto"><div class="md doc dr-pv"></div></div>' +
+        '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px"><button class="pill ghost" type="button" data-a="no">' + esc(J.t('cancel')) + '</button><button class="pill" type="button" data-a="ok">' + esc(t('dr.upload.save')) + '</button></div>' });
+      $('p.muted', mm.body).textContent = file.name;
+      $('[data-f=tn]', mm.body).value = L(tpl.name) || file.name.replace(/\.[^.]+$/, '');
+      $('.dr-pv', mm.body).innerHTML = J.cleanHtml(String(tpl.body || '').replace(/\{\{\s*([a-z0-9_]+)\s*\}\}/gi, '[$1]'));
+      function drawFields() {
+        $('.dr-ff', mm.body).innerHTML = fields.length ? fields.map(function (f, i) {
+          return '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><input class="inp" data-fl="' + i + '" maxlength="80" style="flex:1"><small class="muted">' + esc(f.type || 'text') + '</small><button class="pill sm ghost" type="button" data-fx="' + i + '" aria-label="' + esc(t('dr.del')) + '">×</button></div>';
+        }).join('') : '<p class="muted" style="font-size:13px">' + esc(t('dr.upload.nofields')) + '</p>';
+        fields.forEach(function (f, i) { $('[data-fl="' + i + '"]', mm.body).value = L(f.label) || f.key; });
+        $$('[data-fl]', mm.body).forEach(function (el) { el.oninput = function () { var f = fields[+el.dataset.fl]; f.label = { uz: el.value, ru: (f.label && f.label.ru) || el.value }; }; });
+        $$('[data-fx]', mm.body).forEach(function (b) { b.onclick = function () { fields.splice(+b.dataset.fx, 1); drawFields(); }; });
+      }
+      drawFields();
+      $('[data-a=no]', mm.body).onclick = function () { mm.close(); };
+      $('[data-a=ok]', mm.body).onclick = async function () {
+        var name = $('[data-f=tn]', mm.body).value.trim(); if (!name) { $('[data-f=tn]', mm.body).focus(); return; }
+        // a removed field stays in the text as its own placeholder, so nothing of the document is lost
+        var keep = {}; fields.forEach(function (f) { keep[f.key] = 1; });
+        var bodyHtml = String(tpl.body || '').replace(/\{\{\s*([a-z0-9_]+)\s*\}\}/gi, function (m0, k) { return keep[k] ? m0 : '[' + k + ']'; });
+        var b = this; b.disabled = true;
+        var s2 = await J.api('/api/templates/mine', { method: 'POST', body: { name: { uz: name, ru: (tpl.name && tpl.name.ru) || name }, description: tpl.description || { uz: '', ru: '' }, category: tpl.category || 'boshqa', lang: tpl.lang || 'uz', fields: fields, body: bodyHtml } });
+        b.disabled = false;
+        if (!s2.ok) { J.toast(J.errMsg(s2.data), 6000); return; }
+        mm.close(); J.toast(t('dr.upload.saved')); done();
+      };
     }
     async function openTpl(id) {
       body.innerHTML = '<div class="skel"></div>';

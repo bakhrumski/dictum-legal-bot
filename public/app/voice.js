@@ -263,7 +263,7 @@
         $('.card p', body).textContent = a.summary || '';
         if (a.document) { $('.doc-t', body).textContent = a.document.type || ''; $('.doc-r', body).textContent = a.document.reason || ''; }
         $$('[data-task]', body).forEach(function (c) { c.onchange = function () { var it2 = get(id); it2.analysis.tasks[+c.dataset.task].done = c.checked; put(it2); }; });
-        var d = $('[data-a=draft]', body); if (d) d.onclick = function () { J.draftPrefill = { type: a.document.type, question: sumText(get(id)), answer: (it.segments || []).map(function (g) { return spkName(it, g.speaker) + ': ' + g.text; }).join('\n').slice(0, 11000), action: a.document.type }; J.go('#/tayyorlash?type=ai'); };
+        var d = $('[data-a=draft]', body); if (d) d.onclick = function () { J.draftPrefill = { type: a.document.type, question: sumText(get(id)), answer: (it.segments || []).map(function (g) { return spkName(it, g.speaker) + ': ' + g.text; }).join('\n').slice(0, 11000), action: a.document.type, from: location.hash || '#/yozuvlar' }; J.go('#/tayyorlash?type=ai'); };
         $('[data-a=ask]', body).onclick = function () { J.startChat({ text: t('vc.ask.q') + '\n\n' + sumText(get(id)).slice(0, 4000), skill: null, files: [] }); };
         $('[data-a=tg]', body).onclick = async function () {
           var r = await J.api('/api/voice/send-telegram', { method: 'POST', body: { text: sumText(get(id)) } });
