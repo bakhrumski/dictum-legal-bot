@@ -2,6 +2,15 @@ require('dotenv').config();
 // encryption at rest (docs/design/shifrlash-1-bosqich.md): a bad DATA_KEYS ring stops
 // the server here; an unset one is a warning (values are stored unencrypted)
 require('../privacy/crypto').assertKeysValid();
+// sealed at rest (data protection E2b): staff chat messages and answer-error
+// reports, each bound to its author
+const privacy = require('../privacy/crypto');
+const chatAad = adminId => `chat_messages.message:${adminId}`;
+const feedbackAad = (col, adminId) => `answer_feedback.${col}:${adminId}`;
+function openChatRow(r) {
+  return { ...r, message: privacy.open(r.message, chatAad(r.admin_id)),
+    ...(r.reply_message != null ? { reply_message: privacy.open(r.reply_message, chatAad(r.reply_admin_id)) } : {}) };
+}
 const express = require('express');
 const cors = require('cors');
 const session = require('express-session');
@@ -1551,7 +1560,7 @@ async function notifyMastersInChat({ reporterId, reporterName, errorType, select
   const authorId = reporterId || masters.rows[0].id;
   await pool.query(
     `INSERT INTO chat_messages (admin_id, message, mentions) VALUES ($1, $2, $3)`,
-    [authorId, message.slice(0, 2000), JSON.stringify(usernames.map(u => u.toLowerCase()))]
+    [authorId, privacy.seal(message.slice(0, 2000), chatAad(authorId)), JSON.stringify(usernames.map(u => u.toLowerCase()))]
   );
 }
 
@@ -1575,7 +1584,9 @@ app.post('/api/answer-feedback', requireAuth, async (req, res) => {
       `INSERT INTO answer_feedback
          (request_id, analysis_id, source, selected_text, error_type, suggestion, question, answer_text, submitted_by, submitter_name)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
-      [requestId, analysisId, source, selectedText, errorType, suggestion, question, answerText, req.session.adminId, req.session.fullName]
+      [requestId, analysisId, source, privacy.seal(selectedText, feedbackAad('selected_text', req.session.adminId)), errorType,
+        privacy.seal(suggestion, feedbackAad('suggestion', req.session.adminId)), privacy.seal(question, feedbackAad('question', req.session.adminId)),
+        privacy.seal(answerText, feedbackAad('answer_text', req.session.adminId)), req.session.adminId, req.session.fullName]
     );
 
     // Ping the Master-Admin(s) in the team chat so a new flag is seen at once.
@@ -1604,7 +1615,8 @@ app.get('/api/admin/answer-feedback', requireMasterAdmin, async (req, res) => {
          FROM answer_feedback WHERE status = $1
         ORDER BY created_at DESC LIMIT 100`, [status]);
     const cnt = await pool.query(`SELECT COUNT(*)::int AS n FROM answer_feedback WHERE status = 'new'`);
-    res.json({ feedback: r.rows, newCount: cnt.rows[0].n });
+    const open = (row, col) => privacy.open(row[col], feedbackAad(col, row.submitted_by));
+    res.json({ feedback: r.rows.map(x => ({ ...x, selected_text: open(x, 'selected_text'), suggestion: open(x, 'suggestion'), question: open(x, 'question'), answer_text: open(x, 'answer_text') })), newCount: cnt.rows[0].n });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -2357,7 +2369,9 @@ app.get('/api/admin/service-orders', requireMasterAdmin, async (req, res) => {
        ORDER BY so.created_at DESC
        LIMIT $${params.length}
     `, params);
-    res.json({ items: result.rows });
+    // the intake is sealed at rest (data protection E2b): opened for the master here
+    const { openOrder } = require('../services/legal-marketplace');
+    res.json({ items: result.rows.map(openOrder) });
   } catch (error) {
     res.status(500).json({ error: 'Pullik xizmat buyurtmalarini olishda xatolik' });
   }
@@ -2408,7 +2422,7 @@ app.patch('/api/admin/service-orders/:id', requireMasterAdmin, async (req, res) 
     `, [status, quote, lawyerId, id, share.pct, share.feeMinor, share.payoutMinor, keepLawyer]);
     if (!result.rows.length) return res.status(404).json({ error: 'Buyurtma topilmadi' });
     logAudit(req, 'service_order.update.' + status, 'service_order', id);
-    const order = result.rows[0];
+    const order = require('../services/legal-marketplace').openOrder(result.rows[0]);
     // the customer learns the price once, when it is approved
     if (status === 'approved_awaiting_payment' && before.status !== status && order.telegram_chat_id && bot) {
       bot.sendMessage(order.telegram_chat_id, commission.quoteMessage(order, { formatUzs: require('../rag/one-time-products').formatUzs }))
@@ -3631,7 +3645,7 @@ app.get('/api/chat/messages', requireStaff, async (req, res) => {
         const fresh = await pool.query(`
           SELECT cm.id, cm.message, cm.mentions, cm.reply_to_id, cm.created_at,
                  a.id as admin_id, a.username, a.full_name, a.role,
-                 rm.message as reply_message, ra.full_name as reply_sender, ra.role as reply_role
+                 rm.message as reply_message, rm.admin_id as reply_admin_id, ra.full_name as reply_sender, ra.role as reply_role
           FROM chat_messages cm
           JOIN admins a ON cm.admin_id = a.id
           LEFT JOIN chat_messages rm ON cm.reply_to_id = rm.id
@@ -3639,12 +3653,12 @@ app.get('/api/chat/messages', requireStaff, async (req, res) => {
           ORDER BY cm.id DESC
           LIMIT $1
         `, [limit]);
-        return res.json({ messages: fresh.rows.reverse(), reset: true });
+        return res.json({ messages: fresh.rows.reverse().map(openChatRow), reset: true });
       }
       query = `
         SELECT cm.id, cm.message, cm.mentions, cm.reply_to_id, cm.created_at,
                a.id as admin_id, a.username, a.full_name, a.role,
-               rm.message as reply_message, ra.full_name as reply_sender, ra.role as reply_role
+               rm.message as reply_message, rm.admin_id as reply_admin_id, ra.full_name as reply_sender, ra.role as reply_role
         FROM chat_messages cm
         JOIN admins a ON cm.admin_id = a.id
         LEFT JOIN chat_messages rm ON cm.reply_to_id = rm.id
@@ -3658,7 +3672,7 @@ app.get('/api/chat/messages', requireStaff, async (req, res) => {
       query = `
         SELECT cm.id, cm.message, cm.mentions, cm.reply_to_id, cm.created_at,
                a.id as admin_id, a.username, a.full_name, a.role,
-               rm.message as reply_message, ra.full_name as reply_sender, ra.role as reply_role
+               rm.message as reply_message, rm.admin_id as reply_admin_id, ra.full_name as reply_sender, ra.role as reply_role
         FROM chat_messages cm
         JOIN admins a ON cm.admin_id = a.id
         LEFT JOIN chat_messages rm ON cm.reply_to_id = rm.id
@@ -3670,7 +3684,7 @@ app.get('/api/chat/messages', requireStaff, async (req, res) => {
     }
 
     const result = await pool.query(query, params);
-    const messages = sinceId > 0 ? result.rows : result.rows.reverse();
+    const messages = (sinceId > 0 ? result.rows : result.rows.reverse()).map(openChatRow);
     // Include total count so client can detect individual deletions
     const totalResult = await pool.query('SELECT COUNT(*)::int as total FROM chat_messages');
     res.json({ messages, total: totalResult.rows[0].total });
@@ -3747,21 +3761,21 @@ app.post('/api/chat/messages', requireStaff, async (req, res) => {
       `INSERT INTO chat_messages (admin_id, message, mentions, reply_to_id)
        VALUES ($1, $2, $3, $4)
        RETURNING id, message, mentions, reply_to_id, created_at`,
-      [req.session.adminId, message.trim(), JSON.stringify(mentions), replyId]
+      [req.session.adminId, privacy.seal(message.trim(), chatAad(req.session.adminId)), JSON.stringify(mentions), replyId]
     );
 
-    const newMsg = result.rows[0];
+    const newMsg = { ...result.rows[0], message: message.trim() };
     let replyData = {};
     if (replyId) {
       const replyResult = await pool.query(
-        `SELECT cm.message, a.full_name as reply_sender, a.role as reply_role
+        `SELECT cm.message, cm.admin_id, a.full_name as reply_sender, a.role as reply_role
          FROM chat_messages cm JOIN admins a ON cm.admin_id = a.id WHERE cm.id = $1`,
         [replyId]
       );
       if (replyResult.rows.length > 0) {
         replyData = {
           reply_to_id: replyId,
-          reply_message: replyResult.rows[0].message,
+          reply_message: privacy.open(replyResult.rows[0].message, chatAad(replyResult.rows[0].admin_id)),
           reply_sender: replyResult.rows[0].reply_sender,
           reply_role: replyResult.rows[0].reply_role
         };

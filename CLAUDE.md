@@ -340,10 +340,22 @@ Known state of the suites (Sept 2026):
   an unset one is a warning (stored unencrypted). E2a (2026-10-29): sealed now -
   `document_scans.text` (AAD `document_scans.text:<admin>:<hash>`) and the
   interview audio, transcripts, consent and summary; `scripts/seal-backfill.js`
-  seals older rows (dry run by default, `--apply` is the owner's). Next: E2b
-  (the other columns), E3 (redaction before AI), E4 (legal-chat, owner agreed,
-  20-question before/after), E5-E7. `tests/privacy-crypto.test.js`,
-  `tests/document-library.db.test.js`.
+  seals older rows (dry run by default, `--apply` is the owner's). E2b
+  (2026-10-29, migration 030): `tg_conversations` turns / context (AAD by
+  chat), `matters.summary` and `matter_items.note` (a note's title is "Yozuv",
+  not its first words, while sealing is on), `agent_runs` input / plan / result
+  and `agent_run_steps.output` (the run store opens every row it returns;
+  answers, the Telegram target and row tags are read, opened, changed, sealed
+  and written back only while unchanged; `openResult` for the matter export),
+  `service_orders.intake_data` and `attorney_consultation_requests.case_summary`
+  (row first, then the sealed value, in one transaction; `openOrder` for the
+  master's list and the quote message), `answer_feedback` and `chat_messages`
+  (AAD by author), `agent_traces` (AAD by request and agent). Not sealed:
+  `answer_cache` / `opinion_cache` (inside `/api/legal-chat`, left for E4 with
+  the owner's consent), the Workspace (E5). Next: E3 (redaction before AI), E4
+  (legal-chat, owner agreed, 20-question before/after), E5-E7.
+  `tests/privacy-crypto.test.js`, `tests/document-library.db.test.js`,
+  `tests/sealing-e2b.db.test.js`.
 - "Hujjatlarim" (2026-10-29, owner: every uploaded document stays for later
   actions until the person deletes it; migration 029): `document_scans` is the
   person's library - a text Word/PDF read by `/api/analyze/extract` (it now

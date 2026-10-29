@@ -508,8 +508,33 @@ async function revealAttorneyContactAfterConsent(data = {}, db = pool) {
   return consultation.rows.length ? contact : null;
 }
 
+// sealed at rest (data protection E2b): what the person told about their case,
+// bound to the row - written in two steps (the row first, for its id) in one transaction
+const privacy = require('../privacy/crypto');
+const intakeAad = id => `service_orders.intake_data:${id}`;
+const caseAad = id => `attorney_consultation_requests.case_summary:${id}`;
+/** A service order row as the page and the bot use it (intake opened). */
+function openOrder(row) {
+  if (!row) return row;
+  return { ...row, intake_data: privacy.openJson(row.intake_data, intakeAad(row.id)) };
+}
+async function inTransaction(db, fn) {
+  if (typeof db.connect !== 'function') return fn(db); // already a client
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+    const out = await fn(client);
+    await client.query('COMMIT');
+    return out;
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally { client.release(); }
+}
+
 async function createConsultationRequest(data = {}, db = pool) {
-  const result = await db.query(
+  return inTransaction(db, async (tx) => {
+  const result = await tx.query(
     `INSERT INTO attorney_consultation_requests
        (request_id, user_id, telegram_chat_id, case_summary, legal_field,
         legal_subfield, region, language, urgency, matched_attorney_ids, consent_to_share)
@@ -518,7 +543,7 @@ async function createConsultationRequest(data = {}, db = pool) {
     [
       data.requestId || null,
       data.telegramChatId || null,
-      data.caseSummary || null,
+      null,
       data.legalField || null,
       data.legalSubfield || null,
       data.region || null,
@@ -527,12 +552,18 @@ async function createConsultationRequest(data = {}, db = pool) {
       JSON.stringify((data.attorneyIds || []).slice(0, 10)),
     ]
   );
-  return result.rows[0];
+  const row = result.rows[0];
+  if (row && data.caseSummary) {
+    await tx.query('UPDATE attorney_consultation_requests SET case_summary = $2 WHERE id = $1', [row.id, privacy.seal(data.caseSummary, caseAad(row.id))]);
+  }
+  return row ? { ...row, case_summary: data.caseSummary || null } : row;
+  });
 }
 
 async function createServiceOrder(data = {}, db = pool) {
   const serviceSlug = data.serviceSlug || 'legal-document';
-  const result = await db.query(
+  return inTransaction(db, async (tx) => {
+  const result = await tx.query(
     `INSERT INTO service_orders
        (service_id, request_id, user_id, telegram_chat_id, status, intake_data)
      SELECT sc.id, $2, (SELECT id FROM users WHERE telegram_id = $3 LIMIT 1), $3,
@@ -542,9 +573,14 @@ async function createServiceOrder(data = {}, db = pool) {
      ON CONFLICT (request_id) WHERE request_id IS NOT NULL
      DO UPDATE SET intake_data = EXCLUDED.intake_data, updated_at = NOW()
      RETURNING *`,
-    [serviceSlug, data.requestId || null, data.telegramChatId || null, JSON.stringify(data.intakeData || {})]
+    [serviceSlug, data.requestId || null, data.telegramChatId || null, JSON.stringify({})]
   );
-  return result.rows[0] || null;
+  const row = result.rows[0];
+  if (!row) return null;
+  const sealed = privacy.sealJson(data.intakeData || {}, intakeAad(row.id));
+  await tx.query('UPDATE service_orders SET intake_data = $2::jsonb WHERE id = $1', [row.id, JSON.stringify(sealed)]);
+  return { ...row, intake_data: data.intakeData || {} };
+  });
 }
 
 async function recordTelegramAgentEvent(event = {}, db = pool) {
@@ -568,6 +604,7 @@ async function recordTelegramAgentEvent(event = {}, db = pool) {
 }
 
 module.exports = {
+  openOrder,
   initLegalMarketplaceSchema,
   findMatchingAttorneys,
   createConsultationRequest,

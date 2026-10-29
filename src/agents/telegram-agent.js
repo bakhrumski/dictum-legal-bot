@@ -213,6 +213,12 @@ async function finalizeDailyAiAnswer(chatId, reservation = {}) {
   }
 }
 
+// sealed at rest (data protection E2b): the bot's recent turns and the
+// conversation's context are the person's own words; bound to the chat
+const privacy = require('../privacy/crypto');
+const turnsAad = chatId => `tg_conversations.turns:${chatId}`;
+const contextAad = chatId => `tg_conversations.context:${chatId}`;
+
 async function loadConversation(chatId) {
   try {
     await ensureTable();
@@ -222,13 +228,15 @@ async function loadConversation(chatId) {
       [chatId]
     );
     if (!r.rows.length) return { turns: [], clarifyCount: 0, mode: 'automatic', state: 'idle', language: 'uz', context: {} };
+    const turns = privacy.openJson(r.rows[0].turns, turnsAad(chatId));
+    const context = privacy.openJson(r.rows[0].context, contextAad(chatId));
     return {
-      turns: Array.isArray(r.rows[0].turns) ? r.rows[0].turns : [],
+      turns: Array.isArray(turns) ? turns : [],
       clarifyCount: r.rows[0].clarify_count || 0,
       mode: r.rows[0].mode || 'automatic',
       state: r.rows[0].state || 'idle',
       language: r.rows[0].language || 'uz',
-      context: r.rows[0].context && typeof r.rows[0].context === 'object' ? r.rows[0].context : {},
+      context: context && typeof context === 'object' ? context : {},
     };
   } catch (e) {
     console.warn('[TG-AGENT] loadConversation failed:', e.message);
@@ -245,7 +253,7 @@ async function saveConversation(chatId, turns, clarifyCount) {
        VALUES ($1, $2::jsonb, $3, NOW())
        ON CONFLICT (chat_id) DO UPDATE
          SET turns = $2::jsonb, clarify_count = $3, updated_at = NOW()`,
-      [chatId, JSON.stringify(trimmed), clarifyCount]
+      [chatId, JSON.stringify(privacy.sealJson(trimmed, turnsAad(chatId))), clarifyCount]
     );
   } catch (e) {
     console.warn('[TG-AGENT] saveConversation failed:', e.message);
@@ -437,7 +445,7 @@ async function setConversationState(chatId, state, context) {
         state = EXCLUDED.state,
         context = CASE WHEN $4 THEN EXCLUDED.context ELSE tg_conversations.context END,
         updated_at = NOW()
-    `, [chatId, state, JSON.stringify(hasContext ? context : {}), hasContext]);
+    `, [chatId, state, JSON.stringify(privacy.sealJson(hasContext ? context : {}, contextAad(chatId))), hasContext]);
   } catch (_) { /* non-fatal */ }
 }
 

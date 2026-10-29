@@ -14,11 +14,31 @@
  */
 
 const crypto = require('crypto');
+const privacy = require('../../privacy/crypto');
 
 const TERMINAL = Object.freeze(['done', 'failed', 'cancelled', 'budget', 'needs_input']);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 const isUuid = v => typeof v === 'string' && UUID.test(v);
 const short = (v, max) => (v == null ? null : String(v).slice(0, max));
+
+// sealed at rest (data protection E2b): a run's input (documents, facts), its
+// plan (the task's words), its result, and each step's checkpoint, bound to
+// the run (and step); every row this store returns is opened
+const AAD = {
+  input: id => `agent_runs.input:${id}`,
+  plan: id => `agent_runs.plan:${id}`,
+  result: id => `agent_runs.result:${id}`,
+  output: (runId, stepId) => `agent_run_steps.output:${runId}:${stepId}`,
+};
+const sealCol = (col, id, v) => (v == null ? null : JSON.stringify(privacy.sealJson(v, AAD[col](id))));
+function openRun(row) {
+  if (!row) return row;
+  const out = { ...row };
+  for (const col of ['input', 'plan', 'result']) if (col in out && out[col] != null) out[col] = privacy.openJson(out[col], AAD[col](row.id));
+  return out;
+}
+/** A run's result as stored (sealed or not) -> the value (src/matters/store.js reads results for export). */
+const openResult = (id, value) => (value == null ? value : privacy.openJson(value, AAD.result(id)));
 
 class RunError extends Error {
   constructor(status, code, message) { super(message); this.status = status; this.code = code; }
@@ -35,12 +55,13 @@ function createRunStore({ db, maxActivePerUser = Number(process.env.AGENT_RUNS_A
     if (active.rows[0].n >= maxActivePerUser) {
       throw new RunError(429, 'too_many_runs', `Bir vaqtda ${maxActivePerUser} tadan ortiq agent ishi bo'lmaydi. Avvalgilari tugashini kuting.`);
     }
+    const id = crypto.randomUUID();
     const r = await db.query(
-      `INSERT INTO agent_runs (admin_id, matter_id, workflow, channel, input, jobs, budget, request_id, status, plan, price)
-       VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb, $8, $9, $10::jsonb, $11::jsonb) RETURNING *`,
-      [adminId, matterId, workflow, channel, JSON.stringify(input == null ? {} : input), JSON.stringify(jobs || []),
-        JSON.stringify(budget || {}), requestId || crypto.randomUUID(), status, plan ? JSON.stringify(plan) : null, price ? JSON.stringify(price) : null]);
-    return r.rows[0];
+      `INSERT INTO agent_runs (id, admin_id, matter_id, workflow, channel, input, jobs, budget, request_id, status, plan, price)
+       VALUES ($12, $1, $2, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb, $8, $9, $10::jsonb, $11::jsonb) RETURNING *`,
+      [adminId, matterId, workflow, channel, sealCol('input', id, input == null ? {} : input), JSON.stringify(jobs || []),
+        JSON.stringify(budget || {}), requestId || crypto.randomUUID(), status, plan ? sealCol('plan', id, plan) : null, price ? JSON.stringify(price) : null, id]);
+    return openRun(r.rows[0]);
   }
 
   /**
@@ -63,7 +84,7 @@ function createRunStore({ db, maxActivePerUser = Number(process.env.AGENT_RUNS_A
            FOR UPDATE SKIP LOCKED
            LIMIT 1)
         RETURNING *`, [workerId, String(leaseSec)]);
-    return r.rows[0] || null;
+    return openRun(r.rows[0]) || null;
   }
 
   /** Keep the lease; false when the run is no longer this worker's (it was taken over). */
@@ -83,14 +104,15 @@ function createRunStore({ db, maxActivePerUser = Number(process.env.AGENT_RUNS_A
        ON CONFLICT (run_id, step_id) DO UPDATE
           SET label = EXCLUDED.label, status = EXCLUDED.status, output = EXCLUDED.output, note = EXCLUDED.note,
               error = EXCLUDED.error, ms = EXCLUDED.ms, finished_at = now()`,
-      [runId, short(entry.id, 60), short(entry.label, 200) || '', entry.status, entry.status === 'ok' ? json : null,
+      [runId, short(entry.id, 60), short(entry.label, 200) || '', entry.status,
+        entry.status === 'ok' && json != null ? JSON.stringify(privacy.sealJson(output, AAD.output(runId, short(entry.id, 60)))) : null,
         short(entry.note, 200), short(entry.error, 200), Number.isFinite(entry.ms) ? Math.round(entry.ms) : null]);
   }
 
   /** The outputs of the steps a previous attempt finished: { stepId: output }. */
   async function checkpoints(runId) {
     const r = await db.query(`SELECT step_id, output FROM agent_run_steps WHERE run_id = $1 AND status = 'ok' AND output IS NOT NULL`, [runId]);
-    return Object.fromEntries(r.rows.map(x => [x.step_id, x.output]));
+    return Object.fromEntries(r.rows.map(x => [x.step_id, privacy.openJson(x.output, AAD.output(runId, x.step_id))]));
   }
 
   /**
@@ -108,7 +130,7 @@ function createRunStore({ db, maxActivePerUser = Number(process.env.AGENT_RUNS_A
         WHERE id = $1 AND status NOT IN ('done', 'failed', 'cancelled', 'budget', 'needs_input')
           AND ($7 OR lease_owner = $2)
         RETURNING id`,
-      [id, workerId, status, result == null ? null : JSON.stringify(result), short(error, 300), spent ? JSON.stringify(spent) : null, !!force]);
+      [id, workerId, status, sealCol('result', id, result), short(error, 300), spent ? JSON.stringify(spent) : null, !!force]);
     // a run waiting for the person's answer keeps its input and checkpoints (it resumes)
     if (r.rowCount && status !== 'needs_input') await db.query('UPDATE agent_run_steps SET output = NULL WHERE run_id = $1', [id]);
     return r.rowCount > 0;
@@ -122,12 +144,17 @@ function createRunStore({ db, maxActivePerUser = Number(process.env.AGENT_RUNS_A
    */
   async function resume(id, adminId, { answers = {}, jobs = [] } = {}) {
     if (!isUuid(id)) return null;
+    // the sealed input is opened, the answers merged and sealed again; the
+    // update only lands while the input is still the one that was read
+    const cur = await db.query(`SELECT input FROM agent_runs WHERE id = $1 AND admin_id = $2 AND status = 'needs_input' AND NOT cancel_requested`, [id, adminId]);
+    if (!cur.rows[0]) return null;
+    const input = privacy.openJson(cur.rows[0].input, AAD.input(id)) || {};
+    const next = { ...input, answers: { ...(input.answers || {}), ...(answers || {}) } };
     const r = await db.query(
-      `UPDATE agent_runs SET status = 'queued', jobs = $4::jsonb, result = NULL, error = NULL, finished_at = NULL, attempts = 0,
-              input = jsonb_set(COALESCE(input, '{}'::jsonb), '{answers}', COALESCE(input->'answers', '{}'::jsonb) || $3::jsonb)
-        WHERE id = $1 AND admin_id = $2 AND status = 'needs_input' AND NOT cancel_requested RETURNING *`,
-      [id, adminId, JSON.stringify(answers || {}), JSON.stringify(jobs || [])]);
-    return r.rows[0] || null;
+      `UPDATE agent_runs SET status = 'queued', jobs = $4::jsonb, result = NULL, error = NULL, finished_at = NULL, attempts = 0, input = $3::jsonb
+        WHERE id = $1 AND admin_id = $2 AND status = 'needs_input' AND NOT cancel_requested AND input IS NOT DISTINCT FROM $5::jsonb RETURNING *`,
+      [id, adminId, sealCol('input', id, next), JSON.stringify(jobs || []), cur.rows[0].input == null ? null : JSON.stringify(cur.rows[0].input)]);
+    return openRun(r.rows[0]) || null;
   }
 
   /**
@@ -158,24 +185,31 @@ function createRunStore({ db, maxActivePerUser = Number(process.env.AGENT_RUNS_A
       `UPDATE agent_runs SET status = 'queued', jobs = $3::jsonb
         WHERE id = $1 AND admin_id = $2 AND status = 'awaiting_approval' AND NOT cancel_requested RETURNING *`,
       [id, adminId, JSON.stringify(jobs || [])]);
-    return r.rows[0] || null;
+    return openRun(r.rows[0]) || null;
   }
 
   /** The chat and status message a Telegram run reports to (src/agents/runs/notify.js). */
   async function setTelegram(id, adminId, telegram) {
     if (!isUuid(id)) return false;
+    const cur = await db.query('SELECT input FROM agent_runs WHERE id = $1 AND admin_id = $2 AND input IS NOT NULL', [id, adminId]);
+    if (!cur.rows[0]) return false;
+    const input = privacy.openJson(cur.rows[0].input, AAD.input(id)) || {};
     const r = await db.query(
-      `UPDATE agent_runs SET input = jsonb_set(COALESCE(input, '{}'::jsonb), '{telegram}', $3::jsonb)
-        WHERE id = $1 AND admin_id = $2 AND input IS NOT NULL RETURNING id`, [id, adminId, JSON.stringify(telegram)]);
+      `UPDATE agent_runs SET input = $3::jsonb WHERE id = $1 AND admin_id = $2 AND input IS NOT DISTINCT FROM $4::jsonb RETURNING id`,
+      [id, adminId, sealCol('input', id, { ...input, telegram }), JSON.stringify(cur.rows[0].input)]);
     return r.rowCount > 0;
   }
 
   /** Row tags of the person's own finished table (result.body.tags); false for anything else. */
   async function setTags(id, adminId, tags) {
     if (!isUuid(id)) return false;
+    const cur = await db.query(`SELECT result FROM agent_runs WHERE id = $1 AND admin_id = $2 AND workflow = 'tabular_review' AND result IS NOT NULL`, [id, adminId]);
+    if (!cur.rows[0]) return false;
+    const result = privacy.openJson(cur.rows[0].result, AAD.result(id));
+    if (!result || typeof result !== 'object' || !result.body || typeof result.body !== 'object') return false;
     const r = await db.query(
-      `UPDATE agent_runs SET result = jsonb_set(result, '{body,tags}', $3::jsonb)
-        WHERE id = $1 AND admin_id = $2 AND workflow = 'tabular_review' AND result ? 'body' RETURNING id`, [id, adminId, JSON.stringify(tags || {})]);
+      `UPDATE agent_runs SET result = $3::jsonb WHERE id = $1 AND admin_id = $2 AND result IS NOT DISTINCT FROM $4::jsonb RETURNING id`,
+      [id, adminId, sealCol('result', id, { ...result, body: { ...result.body, tags: tags || {} } }), JSON.stringify(cur.rows[0].result)]);
     return r.rowCount > 0;
   }
 
@@ -183,7 +217,7 @@ function createRunStore({ db, maxActivePerUser = Number(process.env.AGENT_RUNS_A
   async function row(id, adminId) {
     if (!isUuid(id)) return null;
     const r = await db.query('SELECT * FROM agent_runs WHERE id = $1 AND admin_id = $2', [id, adminId]);
-    return r.rows[0] || null;
+    return openRun(r.rows[0]) || null;
   }
 
   async function isCancelled(id) {
@@ -194,7 +228,7 @@ function createRunStore({ db, maxActivePerUser = Number(process.env.AGENT_RUNS_A
   /** Queued runs whose owner asked to stop: [{ row }] for the worker to settle. */
   async function cancelledQueued() {
     const r = await db.query(`SELECT * FROM agent_runs WHERE status = 'queued' AND cancel_requested LIMIT 20`);
-    return r.rows;
+    return r.rows.map(openRun);
   }
 
   /** The person's own run with its trace; null for anyone else's. Never the input. */
@@ -204,7 +238,7 @@ function createRunStore({ db, maxActivePerUser = Number(process.env.AGENT_RUNS_A
       `SELECT id, admin_id, matter_id, workflow, channel, status, result, error, attempts, cancel_requested, spent, plan, price,
               created_at, started_at, finished_at, expires_at
          FROM agent_runs WHERE id = $1 AND admin_id = $2`, [id, adminId]);
-    const run = r.rows[0];
+    const run = openRun(r.rows[0]);
     if (!run) return null;
     const s = await db.query(
       `SELECT step_id, label, status, note, error, ms, finished_at FROM agent_run_steps WHERE run_id = $1 ORDER BY started_at, finished_at`, [id]);
@@ -249,4 +283,4 @@ async function deleteAccountRuns(db, adminId) {
   await db.query('DELETE FROM agent_runs WHERE admin_id = $1', [adminId]);
 }
 
-module.exports = { createRunStore, deleteAccountRuns, RunError, TERMINAL, isUuid };
+module.exports = { createRunStore, deleteAccountRuns, RunError, TERMINAL, isUuid, openResult };

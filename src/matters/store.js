@@ -40,6 +40,11 @@ class MatterError extends Error {
   constructor(status, code, message) { super(message); this.status = status; this.code = code; }
 }
 
+// sealed at rest (data protection E2b): a matter's summary and its notes,
+// each bound to its row; the length limits are checked here, before sealing
+const privacy = require('../privacy/crypto');
+const summaryAad = id => `matters.summary:${id}`;
+const noteAad = id => `matter_items.note:${id}`;
 const clean = (v, max) => String(v == null ? '' : v).replace(/\s+/gu, ' ').trim().slice(0, max);
 const isUuid = v => typeof v === 'string' && UUID.test(v);
 
@@ -80,7 +85,7 @@ function createMatterStore({ db, resolveEntitlement = null }) {
   }
 
   const view = m => ({
-    id: m.id, title: m.title, summary: m.summary, status: m.status,
+    id: m.id, title: m.title, summary: privacy.open(m.summary, summaryAad(m.id)), status: m.status,
     workspaceId: m.workspace_id || null, access: m.access, createdAt: m.created_at, updatedAt: m.updated_at,
   });
 
@@ -119,9 +124,10 @@ function createMatterStore({ db, resolveEntitlement = null }) {
         ? "Sinov tarifida bitta ochiq ish bo'ladi. Ko'proq ish uchun tarif kerak."
         : `Ochiq ishlar soni ${limit} tadan oshmaydi. Eskilarini yoping.`);
     }
+    const id = require('crypto').randomUUID();
     const r = await db.query(
-      `INSERT INTO matters (owner_id, workspace_id, title, summary) VALUES ($1, $2, $3, $4) RETURNING *`,
-      [adminId, workspaceId || null, t, String(summary || '').slice(0, 4000)]);
+      `INSERT INTO matters (id, owner_id, workspace_id, title, summary) VALUES ($5, $1, $2, $3, $4) RETURNING *`,
+      [adminId, workspaceId || null, t, privacy.seal(String(summary || '').slice(0, 4000), summaryAad(id)), id]);
     return view({ ...r.rows[0], access: 'write' });
   }
 
@@ -156,7 +162,7 @@ function createMatterStore({ db, resolveEntitlement = null }) {
       own: Number(m.owner_id) === Number(adminId),
       items: items.map((i) => {
         const base = { id: i.id, kind: i.kind, title: i.title, createdAt: i.created_at };
-        if (i.kind === 'note') return { ...base, note: i.note };
+        if (i.kind === 'note') return { ...base, note: privacy.open(i.note, noteAad(i.id)) };
         if (i.kind === 'chat') {
           const c = chats.get(Number(i.ref_int));
           return c ? { ...base, ref: Number(i.ref_int), available: true, updatedAt: c.updated_at } : { ...base, ref: Number(i.ref_int), available: false };
@@ -184,7 +190,10 @@ function createMatterStore({ db, resolveEntitlement = null }) {
       `SELECT a.id, a.workflow, a.status, a.result FROM matter_items i JOIN agent_runs a ON a.id = i.ref_uuid AND a.admin_id = $2
         WHERE i.matter_id = $1 AND i.kind = 'agent_run' AND a.result IS NOT NULL`, [m.id, m.owner_id]).catch(() => ({ rows: [] }));
     const out = {};
-    for (const row of r.rows) out[row.id] = { workflow: row.workflow, status: row.status, body: (row.result && row.result.body) || {} };
+    for (const row of r.rows) {
+      const result = require('../agents/runs/store').openResult(row.id, row.result);
+      out[row.id] = { workflow: row.workflow, status: row.status, body: (result && result.body) || {} };
+    }
     return out;
   }
 
@@ -204,7 +213,8 @@ function createMatterStore({ db, resolveEntitlement = null }) {
     if (!m) return null;
     const title = patch.title != null ? clean(patch.title, 160) : m.title;
     if (title.length < 2) throw new MatterError(400, 'invalid', "Ish nomi kamida 2 ta harf bo'lsin");
-    const summary = patch.summary != null ? String(patch.summary).slice(0, 4000) : m.summary;
+    // the stored value stays as it is (already sealed, or sealed now) unless a new one is given
+    const summary = privacy.seal(patch.summary != null ? String(patch.summary).slice(0, 4000) : m.summary, summaryAad(m.id));
     let status = m.status;
     if (patch.status != null) {
       if (!['open', 'closed'].includes(patch.status)) throw new MatterError(400, 'invalid', "Holat: open yoki closed");
@@ -249,7 +259,8 @@ function createMatterStore({ db, resolveEntitlement = null }) {
     if (kind === 'note') {
       text = String(note || '').trim().slice(0, 8000);
       if (!text) throw new MatterError(400, 'invalid', "Yozuv matni bo'sh");
-      if (!name) name = clean(text, 80);
+      // the title stays readable in the database: a sealed note does not lend it its first words
+      if (!name) name = privacy.enabled() ? 'Yozuv' : clean(text, 80);
     } else if (kind === 'chat') {
       const cid = Number(ref);
       if (!Number.isSafeInteger(cid) || cid <= 0) throw new MatterError(404, 'not_found', 'Chat topilmadi');
@@ -272,11 +283,12 @@ function createMatterStore({ db, resolveEntitlement = null }) {
       if (!name) name = RUN_TITLE[a.rows[0].workflow] || 'Agent natijasi';
     }
     let r;
+    const itemId = require('crypto').randomUUID();
     try {
       r = await db.query(
-        `INSERT INTO matter_items (matter_id, kind, ref_int, ref_uuid, title, note, added_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, kind, title, created_at`,
-        [m.id, kind, refInt, refUuid, name, text, adminId]);
+        `INSERT INTO matter_items (id, matter_id, kind, ref_int, ref_uuid, title, note, added_by)
+         VALUES ($8, $1, $2, $3, $4, $5, $6, $7) RETURNING id, kind, title, created_at`,
+        [m.id, kind, refInt, refUuid, name, text == null ? null : privacy.seal(text, noteAad(itemId)), adminId, itemId]);
     } catch (e) {
       if (e && e.code === '23505') throw new MatterError(409, 'exists', "Bu element ishda allaqachon bor");
       throw e;

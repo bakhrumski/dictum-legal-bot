@@ -186,7 +186,9 @@ const ANSWER = "**Tahlil**\n\nPudratchi ishni boshlamasa, buyurtmachi shartnomad
         const usage = async () => (await pool.query(`SELECT status FROM tariff_usage WHERE meta->>'runId' = $1 ORDER BY id`, [p.body.runId])).rows.map(x => x.status);
         assert.deepStrictEqual(await usage(), ['released'], 'nothing held while waiting for the answer');
         const raw = (await pool.query('SELECT input FROM agent_runs WHERE id = $1', [p.body.runId])).rows[0];
-        assert.ok(raw.input && raw.input.task, 'the input is kept while the run waits');
+        // sealed at rest when DATA_KEYS is set (data protection E2b): opened the way the store opens it
+        const kept = raw.input && require('../src/privacy/crypto').openJson(raw.input, `agent_runs.input:${p.body.runId}`);
+        assert.ok(kept && kept.task, 'the input is kept while the run waits');
         assert.strictEqual((await call('POST', `/api/agent/runs/${p.body.runId}/input`, { answer: '' })).status, 422);
         const before = calls.answer;
         assert.strictEqual((await call('POST', `/api/agent/runs/${p.body.runId}/input`, { answer: "2026-yil mart, 12 mln so'm" })).status, 200);
