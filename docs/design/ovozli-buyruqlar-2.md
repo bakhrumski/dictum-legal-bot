@@ -137,7 +137,7 @@ qilindi. Telegram'da ham xuddi shu kodlar.
 
 | PR | Nima | Tegadi |
 |---|---|---|
-| V1 | `src/voice/commands.js` — katalog (3.1 + mavjud 3.2), `POST /api/voice/command/parse` va `/run`; testlar: musbat iboralar (uz eski/yangi alifbo, ru), noto'g'ri tanish 0 (`tests/` dagi barcha matnlar + savollar to'plami) | src, tests |
+| V1 (PR) | `src/voice/commands.js` — katalog (3.1 + mavjud 3.2), `POST /api/voice/command/parse` va `/run`; testlar: musbat iboralar (uz eski/yangi alifbo, ru), noto'g'ri tanish 0 (`tests/` dagi barcha matnlar + savollar to'plami) | src, tests |
 | V2 | Chat: ovozdan keyin karta, [Bajarish] [Savol sifatida yuborish] [Bekor]; brauzerda tekshiruv | public |
 | V3 | Ishlar buyruq qatori ham shu kartaga o'tadi (mavjud tasdiqlar o'z joyida) | public |
 | V4 | 3.3 kontekst amallari (nusxa, Word, ishga biriktirish, tahlilni ochish) | public, src |

@@ -287,3 +287,5 @@ nima o'lchandi.
 - 2026-10-29: #528 (E7) va #529 (buyruq qatori mikrofoni bir ko'rinishda)
   merge. Ovozli buyruqlar 2-darajasi dizayni ochildi
   (`docs/design/ovozli-buyruqlar-2.md`).
+- 2026-10-29: #530 (ovozli buyruqlar 2-daraja dizayni) qabul qilindi va merge.
+  V1 PR: AI'siz buyruqlar katalogi va `POST /api/voice/command/parse` / `run`.

@@ -11804,12 +11804,21 @@ async function runMigrations() {
 
     // Matters: one legal matter and the links to its chats, scans and notes
     // (docs/design/matter-va-agent-runs.md); no AI, no tariff unit
+    let matterStore = null;
     try {
-      require('../matters/routes').mountMatterRoutes(app, {
+      matterStore = require('../matters/routes').mountMatterRoutes(app, {
         requireAuth, requireSameOrigin: require('../auth/same-origin').requireSameOrigin, pool,
         resolveEntitlement: require('../rag/tariff-ledger').resolveEntitlement,
       });
     } catch (e) { console.log('[MATTERS] Mount skipped:', e.message); }
+
+    // Voice commands level 2 (docs/design/ovozli-buyruqlar-2.md): a spoken
+    // command becomes a card; nothing runs until its token is run. No AI, no unit.
+    try {
+      require('../voice/command-routes').mountVoiceCommandRoutes(app, {
+        requireAuth, requireSameOrigin: require('../auth/same-origin').requireSameOrigin, pool, matterStore,
+      });
+    } catch (e) { console.log('[VOICE-CMD] Mount skipped:', e.message); }
 
     // Adaptive account (docs/design/adaptiv-akkaunt.md): A1 records, A2 the
     // person's own page - see, edit, pause, clear (src/adaptive/routes.js);
