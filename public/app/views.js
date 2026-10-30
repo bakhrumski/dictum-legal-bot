@@ -17,7 +17,44 @@
     J.setTitle(t('nav.home'));
     var hr = new Date().getHours(), greet = hr < 11 ? t('hello.m') : hr < 18 ? t('hello.d') : t('hello.e');
     var name = ((J.S.user && J.S.user.fullName) || '').split(' ')[0];
-    var persona = J.S.persona || 'citizen';
+    var rv = J.roleView ? J.roleView() : null;
+    var persona = rv || J.S.persona || 'citizen';
+    document.body.classList.toggle('role-view', !!rv);
+    // a role view: the role's own page - no field chips, no sub-line, no Telegram banner, three recent chats
+    if (rv) {
+      var lean = J.mount('<div class="home rh">' +
+        '<div class="rv-bar"><span class="rv-tag">' + esc(t('rv.badge')) + ' <b>' + esc(t('role.' + rv)) + '</b></span><a href="#/rol">' + esc(t('rv.other')) + '</a><a href="#/rol/chiqish">' + esc(t('rv.exit')) + '</a></div>' +
+        '<h1 class="hello"></h1><div class="cmp-host"></div><p class="hint">' + esc(t('cmp.hint')) + '</p>' +
+        '<div class="tasks"></div><div class="recent"><h3>' + esc(t('recent')) + '</h3><div class="rows"></div></div></div>');
+      $('.hello', lean).textContent = greet + (name ? ', ' + name : '') + '.';
+      var lc = J.composer($('.cmp-host', lean), { menuDown: true, placeholder: t('rv.ph.' + rv), onSend: function (p) { J.startChat(p); } });
+      J.homeComposer = lc;
+      var list = t('tasks.' + rv).slice(0, 4);
+      $('.tasks', lean).innerHTML = list.map(function (x, i) {
+        return '<button class="task" data-i="' + i + '"><span class="ti">' + J.icon(TASK_IC[x[0]] || 'spark') + '</span><span><b>' + esc(x[1]) + '</b><small>' + esc(x[2]) + '</small></span></button>';
+      }).join('');
+      $$('.task', lean).forEach(function (b) {
+        b.onclick = function () {
+          var x = list[+b.dataset.i], k = x[0];
+          if (k === 'chat') { lc.setText(x[3] || ''); return; }
+          if (k === 'lawyer') return J.go('#/advokatlar');
+          if (k === 'draft') return J.go('#/tayyorlash');
+          if (k === 'claim') return J.go('#/tayyorlash?type=claim');
+          if (k === 'team') return J.go('#/jamoa');
+          if (k === 'skills') return J.go('#/konikmalar');
+          lc.setSkill(k);
+        };
+      });
+      var drawLeanRecent = function () {
+        var rows = (J.S.sessions || []).slice(0, 3);
+        $('.rows', lean).innerHTML = rows.length ? rows.map(function (s) { return '<div class="row" data-id="' + esc(s.id) + '">' + J.icon('chat') + '<span>' + esc(s.title || s.first_message || '—') + '</span><small>' + esc(J.fmtDate(s.updated_at || s.created_at)) + '</small></div>'; }).join('')
+          : '<div class="empty-state" style="padding:18px 4px;text-align:left">' + esc(t('hist.empty')) + '</div>';
+        $$('.row', lean).forEach(function (r) { r.onclick = function () { J.go('#/c/' + r.dataset.id); }; });
+      };
+      drawLeanRecent(); J.on('sessions', function () { if (document.body.contains(lean)) drawLeanRecent(); });
+      lc.focus();
+      return;
+    }
     var v = J.mount('<div class="home">' +
       '<h1 class="hello"></h1><p class="hello-sub">' + esc(t('hello.sub')) + '</p>' +
       '<div class="cmp-host"></div><p class="hint">' + esc(t('cmp.hint')) + '</p>' +
@@ -59,6 +96,18 @@
     }
     drawTasks(); drawRecent(); J.on('sessions', function () { if (document.body.contains(v)) drawRecent(); });
     cmp.focus();
+  };
+
+  /* ================= ROLLAR BO'YICHA KO'RINISH (#/rol) ================= */
+  J.viewRoles = function () {
+    J.setTitle(t('rv.title'));
+    var cur = J.roleView ? J.roleView() : null;
+    var v = J.mount('<div class="wrap"><div class="vh"><div><h2>' + esc(t('rv.title')) + '</h2><p>' + esc(t('rv.lead')) + '</p></div></div><div class="rv-grid"></div>' +
+      (cur ? '<p style="margin-top:18px"><a class="pill ghost" href="#/rol/chiqish">' + esc(t('rv.exit')) + '</a></p>' : '') + '</div>');
+    $('.rv-grid', v).innerHTML = ROLES.map(function (r) {
+      var n = J.ROLE_VIEWS[r].nav.length;
+      return '<a class="card rv-card' + (r === cur ? ' on' : '') + '" href="#/rol/' + J.ROLE_VIEWS[r].slug + '"><b>' + esc(t('role.' + r)) + '</b><small class="muted">' + esc(t('rv.sections', { n: n })) + '</small></a>';
+    }).join('');
   };
 
   /* ================= HUJJAT TAHLILI ================= */
