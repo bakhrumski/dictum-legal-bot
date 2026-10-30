@@ -143,9 +143,34 @@
         };
         return;
       }
+      // "yangi ish och" with no name: the next step is the name, not a toast (2026-10-30, owner)
+      if (d.needsTitle) {
+        if (opts.onNeedsTitle) { close(); opts.onNeedsTitle(d); return; }
+        askTitle(d); return;
+      }
       if (d.reply) J.toast(d.reply, 6000);
       go({ route: d.matterId ? '/ishlar/' + d.matterId : '/ishlar' });
     };
+    /** the name asked inside the card: typed (or dictated into the field), then opened as written */
+    function askTitle(d) {
+      $('.vc-heard', card).textContent = d.reply;
+      var acts = $('.vc-acts', card);
+      acts.innerHTML = '<input class="inp vc-name" maxlength="160"><button type="button" class="pill sm" data-v="ok">' + esc(t('vcmd.run')) + '</button><button type="button" class="pill sm ghost" data-v="no">' + esc(t('vcmd.cancel')) + '</button>';
+      var name = $('.vc-name', acts);
+      name.setAttribute('aria-label', d.reply);
+      $('[data-v=no]', acts).onclick = function () { close(); if (opts.onClose) opts.onClose(); };
+      async function ok() {
+        var v = name.value.trim();
+        if (v.length < 2) { name.focus(); return; }
+        var x = await J.api('/api/matters/command', { method: 'POST', body: { text: (J.lang === 'ru' ? 'новое дело: ' : 'yangi ish och: ') + v, lang: J.lang === 'ru' ? 'ru' : 'uz' } });
+        if (!x.ok) { J.toast(J.errMsg(x.data), 5000); return; }
+        if (x.data.reply) J.toast(x.data.reply, 5000);
+        go({ route: x.data.matterId ? '/ishlar/' + x.data.matterId : '/ishlar' });
+      }
+      $('[data-v=ok]', acts).onclick = ok;
+      name.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); ok(); } });
+      name.focus();
+    }
     return { close: close, el: card };
   };
 

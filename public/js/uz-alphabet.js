@@ -89,8 +89,10 @@
     });
   }
   /** sahifani kuzatadi: yangi chiqqan matn ham yangi yozuvda (o'tkazish takrorlansa ham o'zgarmaydi) */
+  /* an English interface stays as written: "Chat" is not Uzbek "ch" (2026-10-30) */
+  A.englishUi = function () { return typeof document !== 'undefined' && /^en/i.test(document.documentElement.lang || ''); };
   A.start = function () {
-    if (typeof document === 'undefined' || A.mode() !== 'new' || A._observer) return;
+    if (typeof document === 'undefined' || A.mode() !== 'new' || A.englishUi() || A._observer) return;
     var run = function () {
       convertNode(document.body);
       if (document.title) document.title = A.toNew(document.title);
@@ -105,7 +107,7 @@
     if (document.body) run(); else document.addEventListener('DOMContentLoaded', run);
   };
   /** nusxa olinganda ham ko'rgan yozuvingiz */
-  A.forCopy = function (text) { return A.mode() === 'new' ? A.toNew(text) : String(text == null ? '' : text); };
+  A.forCopy = function (text) { return A.mode() === 'new' && !A.englishUi() ? A.toNew(text) : String(text == null ? '' : text); };
 
   /* nusxa tugmalari (clipboard.writeText) ham ko'ringan yozuvni oladi */
   function wrapClipboard() {
@@ -120,7 +122,7 @@
 
   /* birinchi marta: "matnlar yangi alifboda; eskisini xohlaysizmi?" (javobsiz qolsa yangi qoladi) */
   A.offer = function () {
-    if (typeof document === 'undefined' || A.choice() || document.getElementById('jai-alpha-offer')) return;
+    if (typeof document === 'undefined' || A.choice() || A.englishUi() || document.getElementById('jai-alpha-offer')) return;
     var ru = /^ru/.test(document.documentElement.lang || '');
     var bar = document.createElement('div');
     bar.id = 'jai-alpha-offer';
