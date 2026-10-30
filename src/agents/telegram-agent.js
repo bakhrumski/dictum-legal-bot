@@ -1288,6 +1288,20 @@ Agar texnik uzilish yuz bersa, limitingiz avtomatik tiklanadi.`,
   if (intent.intent === 'ilova_sahifa' && intent.page) {
     const page = intent.page;
     const R = page.lang === 'ru';
+    // "hujjatlarim": the list itself here, with a button a document (src/bot/telegram-library.js), not a link
+    if (page.kind === 'open' && page.action === 'documents') {
+      const lib = require('../bot/telegram-library');
+      const account = await require('../bot/telegram-roles').getLinkedAccount(pool, chatId, who && who.telegramUserId != null && Number(chatId) > 0 ? who.telegramUserId : null).catch(() => null);
+      require('../voice/command-events').note(pool, { place: 'telegram', kind: 'open', action: 'documents', outcome: account ? 'run' : 'shown', via: voice ? 'voice' : 'text', lang: page.lang });
+      if (!account) {
+        const reply = lib.T(page.lang).noLink;
+        await remember(reply, 0);
+        return complete({ handled: true, reply, action: 'documents_no_link', escalate: false, meta: { intent: intent.intent } });
+      }
+      const out = await lib.listFor(pool, account.id, page.lang);
+      await remember(out.reply, 0);
+      return complete({ handled: true, reply: out.reply, action: 'tool_documents_list', escalate: false, meta: { intent: intent.intent, docs: out.docs, url: out.url, lang: page.lang } });
+    }
     const url = `${String(process.env.APP_URL || 'https://juristai.uz').replace(/\/+$/u, '')}${require('../voice/commands').appPath(page)}`;
     const reply = page.kind === 'blocked'
       ? (R ? `Это действие не выполняется голосом или в боте — его делают сами на странице:\n${url}` : `Bu amal ovoz bilan yoki botda bajarilmaydi — uni sahifada o'zingiz qilasiz:\n${url}`)

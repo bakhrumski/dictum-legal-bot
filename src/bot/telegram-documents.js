@@ -68,6 +68,7 @@ function formatAnalysis(a = {}, { fileName = '', units = null } = {}) {
  * getAnalyzer() -> async (text, {adminId}) => { analysis } | { raw, parseError },
  * identityOf(msgOrQuery) -> { telegramUserId, adminId }, holdForLawyer(chatId, file),
  * sales (src/bot/one-time-sales.js, optional: buy the analysis when the plan has no units),
+ * saveToLibrary(msg, { buf, read }) (optional: keep the file in the linked account's "Hujjatlarim"),
  * fetchImpl (tests).
  */
 function createDocumentFlow(deps) {
@@ -80,12 +81,12 @@ function createDocumentFlow(deps) {
     if (!doc || !isDocCandidate(doc) || !deps.getAnalyzer()) return false;
     const chatId = msg.chat.id;
     if (doc.file_size && doc.file_size > MAX_BYTES) return false; // the old path says "5 MB"
-    let read;
+    let read, buf;
     try {
       const link = await deps.bot.getFileLink(doc.file_id);
       const resp = await (deps.fetchImpl || fetch)(link, { signal: AbortSignal.timeout(60000) });
       if (!resp.ok) throw new Error(`download ${resp.status}`);
-      const buf = Buffer.from(await resp.arrayBuffer());
+      buf = Buffer.from(await resp.arrayBuffer());
       read = await deps.extract(buf, { fileName: doc.file_name, mimeType: doc.mime_type });
     } catch (e) {
       console.warn('[TG-DOC] read failed, lawyer queue:', e.message);
@@ -93,6 +94,8 @@ function createDocumentFlow(deps) {
     }
     if (read.unsupported || read.scanned || !read.text) return false; // scans: the lawyer queue as before
     const size = deps.ledger.docUnits({ pages: read.pages, chars: read.chars });
+    // a linked account keeps the file in "Hujjatlarim" too (src/bot/telegram-library.js): one list for bot and site
+    if (deps.saveToLibrary) await deps.saveToLibrary(msg, { buf, read }).catch((e) => console.warn('[TG-DOC] library save failed:', e.message));
     sweep();
     offers.set(chatId, { text: read.text, units: size.units, pages: size.pages, chars: read.chars, fileName: doc.file_name || 'hujjat',
       file: { request_type: 'document', file_id: doc.file_id, file_size: doc.file_size, file_name: doc.file_name || 'fayl' }, at: Date.now() });
@@ -141,7 +144,7 @@ function createDocumentFlow(deps) {
       return;
     }
     if (!job.allowed) {
-      offers.set(chatId, { ...o, at: Date.now() }); // the lawyer option stays
+      if (o.file) offers.set(chatId, { ...o, at: Date.now() }); // the lawyer option stays
       const rows = [];
       let price = '';
       if (deps.sales) {
@@ -152,9 +155,10 @@ function createDocumentFlow(deps) {
         rows.push([deps.sales.button('analysis', need, `🤖 AI tahlil — ${otp.starsLabel('analysis', need)}`)]);
         price = `\n\nBitta tahlilni alohida sotib olish mumkin: ${otp.formatUzs(otp.PRODUCTS.analysis.priceUzs * need)} (hozircha Telegram Stars orqali ${otp.starsFor('analysis') * need} ⭐). To'lovdan keyin tahlil darhol boshlanadi; xatoda birlik qaytariladi.`;
       }
-      rows.push([{ text: '👨‍⚖️ Yuristga yuborish', callback_data: 'tgdoc_lawyer' }]);
+      // a library document (src/bot/telegram-library.js) has no Telegram file for the lawyer queue
+      if (o.file) rows.push([{ text: '👨‍⚖️ Yuristga yuborish', callback_data: 'tgdoc_lawyer' }]);
       await deps.bot.sendMessage(chatId,
-        `Tarifingizda bu hujjat uchun tahlil birligi yetarli emas (kerak: ${o.units}). Tariflar: ${deps.tariffUrl || 'https://juristai.uz/tariff.html'}${price}\n\nYoki faylni yurist navbatiga yuboring:`,
+        `Tarifingizda bu hujjat uchun tahlil birligi yetarli emas (kerak: ${o.units}). Tariflar: ${deps.tariffUrl || 'https://juristai.uz/tariff.html'}${price}${o.file ? '\n\nYoki faylni yurist navbatiga yuboring:' : ''}`,
         { reply_markup: { inline_keyboard: rows } });
       return;
     }

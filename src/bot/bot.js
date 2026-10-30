@@ -481,6 +481,20 @@ const documentFlow = require('./telegram-documents').createDocumentFlow({
     await bot.sendMessage(chatId, tariffTexts.fileHeldText({ tooShortNote: '', minChars: MIN_FILE_DESC }));
   },
   tariffUrl: `${String(process.env.APP_URL || 'https://juristai.uz').replace(/\/+$/u, '')}/tariff.html`,
+  // a linked account's file is kept in its "Hujjatlarim" (the same list the site and "hujjatlarim" here show)
+  saveToLibrary: async (msg, { buf, read }) => {
+    const account = await getLinkedAccount(pool, msg.chat.id, privateSenderId(msg)).catch(() => null);
+    if (!account || !buf) return;
+    const scanStore = require('../ocr/scan-store');
+    await scanStore.saveScan(pool, { adminId: account.id, fileHash: scanStore.fileHash(buf), kind: 'text', pages: read.pages || 1, bytes: buf.length,
+      text: read.text, chars: read.chars, provider: 'telegram', name: (msg.document && msg.document.file_name) || null });
+  },
+});
+// "hujjatlarim" in the bot: a document's card and its AI analysis (src/bot/telegram-library.js)
+const libraryFlow = require('./telegram-library').createLibraryFlow({
+  bot, pool, ledger: require('../rag/tariff-ledger'), documentFlow,
+  linkedAccount: (q) => getLinkedAccount(pool, q.message.chat.id, privateSenderId(q)).catch(() => null),
+  langOf: (q) => (/^ru/u.test(String((q.from && q.from.language_code) || '')) ? 'ru' : 'uz'),
 });
 
 // ========== OPTIONAL CHANNEL SUBSCRIPTION ==========
@@ -627,6 +641,10 @@ function agentActionKeyboard(agentResult) {
       ] };
     }
     return { inline_keyboard: [[yes, no]] };
+  }
+  // "hujjatlarim" in the bot (src/bot/telegram-library.js): a button a document, then the site
+  if (agentResult.action === 'tool_documents_list' && agentResult.meta && Array.isArray(agentResult.meta.docs)) {
+    return require('./telegram-library').listKeyboard(agentResult.meta.docs, String(agentResult.meta.url || ''), agentResult.meta.lang);
   }
   // a page of the app asked for in the bot (V5, src/voice/commands.js): one link button
   if (agentResult.action === 'tool_open_page' && agentResult.meta && /^https:\/\//u.test(String(agentResult.meta.url || ''))) {
@@ -899,6 +917,7 @@ async function handleCallbackQuery(callbackQuery) {
   }
 
   // a document's AI analysis or its lawyer queue (src/bot/telegram-documents.js)
+  if (await libraryFlow.onCallback(callbackQuery)) return;
   if (await documentFlow.onCallback(callbackQuery)) return;
   // a document order waiting for its details is dropped: the next message is a new one
   if (data === 'docin_cancel') {

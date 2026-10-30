@@ -931,7 +931,16 @@ Known state of the suites (Sept 2026):
   V5 (2026-10-30, migration 035): in Telegram an open / blocked command,
   typed or spoken, is answered with its link and one URL button (intent
   `ilova_sahifa` after the matter and account actions, `appPath`; nothing is
-  done in the bot; MATTERS=off drops "Ishlarim" there too).
+  done in the bot; MATTERS=off drops "Ishlarim" there too). Except
+  "hujjatlarim" (2026-10-30, owner: a link made the person leave the bot):
+  `src/bot/telegram-library.js` lists a linked account's library in the chat
+  (name, pages, date - never the text; 8 newest, the rest "on the site"),
+  a button a document (`tglo_<id>`) opens its card naming the analysis
+  units, `tgla_<id>` runs the bot's own paid analysis
+  (`telegram-documents.runAnalysis`, no lawyer-queue button for a library
+  document); another account's id is "not found"; a PDF / Word sent to the
+  bot by a linked account is saved to the same library (`saveToLibrary`).
+  `tests/telegram-library.test.js`.
   `voice_command_events` (`src/voice/command-events.js`): place, kind,
   action, outcome (shown / run / ask / as_question / cancel), voice or text,
   lang, time - never the text, never the account; the card's [Bekor] and
