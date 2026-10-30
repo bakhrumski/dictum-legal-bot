@@ -187,7 +187,10 @@
           var r = await J.api('/api/voice/dictate', { method: 'POST', body: fd });
           reset();
           if (!r.ok) { J.toast(J.errMsg(r.data), 5000); return; }
+          var wasEmpty = !ta.value.trim();
           ta.value = (ta.value.trim() ? ta.value.trim() + ' ' : '') + r.data.text; grow(); sync(); ta.focus();
+          // level 2: a spoken command becomes a card - it never runs by itself (docs/design/ovozli-buyruqlar-2.md)
+          if (wasEmpty) voiceCommand(r.data.text);
           // a word that looks like a mis-heard legal term is named, never changed (src/voice/glossary.js)
           var sg = r.data.suggestions || [];
           if (sg.length) J.toast(t('cmp.mic.check') + ' ' + sg.map(function (x) { return '«' + x.from + '» → «' + x.to + '»?'; }).join(', '), 7000);
@@ -200,7 +203,66 @@
       };
     })();
 
+    /* ---------- ovozli buyruq (2-daraja): POST /api/voice/command/parse -> karta; faqat [Bajarish] bosilganda
+       /run (token: bir marta, 10 daqiqa). Yozilgan matn buyruq emas - faqat gapirilgani. ---------- */
+    var vcCard = null;
+    function closeCard() { if (vcCard) { vcCard.remove(); vcCard = null; } }
+    async function voiceCommand(text) {
+      closeCard();
+      if (opts.voiceCommands === false) return;
+      var p = await J.api('/api/voice/command/parse', { method: 'POST', body: { text: text, place: 'chat', voice: true } });
+      var c = p.ok && p.data && p.data.command;
+      if (!c || ta.value.trim() !== String(text).trim()) return;
+      showCard(c, text);
+    }
+    function showCard(c, heard) {
+      closeCard();
+      var blocked = c.kind === 'blocked';
+      vcCard = J.h('<div class="vc-card" role="dialog" aria-live="polite"><div class="vc-h"><span class="vc-t">' + J.icon('mic') + esc(t('vcmd.title')) + '</span><b class="vc-l"></b></div>' +
+        '<p class="vc-heard muted"><span>' + esc(t('vcmd.heard')) + '</span> <i></i></p>' +
+        '<div class="vc-acts"><button type="button" class="pill sm" data-v="run">' + esc(blocked ? t('vcmd.open') : t('vcmd.run')) + '</button>' +
+        '<button type="button" class="pill sm ghost" data-v="ask">' + esc(t('vcmd.ask')) + '</button>' +
+        '<button type="button" class="pill sm ghost" data-v="no">' + esc(t('vcmd.cancel')) + '</button></div></div>');
+      $('.vc-l', vcCard).textContent = c.label;
+      $('.vc-heard i', vcCard).textContent = '«' + heard + '»';
+      el.insertBefore(vcCard, el.firstChild);
+      $('[data-v=no]', vcCard).onclick = function () { closeCard(); ta.focus(); };
+      $('[data-v=ask]', vcCard).onclick = function () { closeCard(); submit(); };
+      $('[data-v=run]', vcCard).onclick = async function () {
+        var b = this; b.disabled = true;
+        var r = await J.api('/api/voice/command/run', { method: 'POST', body: { token: c.token } });
+        b.disabled = false;
+        if (!r.ok) { J.toast(r.status === 410 ? t('vcmd.gone') : J.errMsg(r.data), 5000); closeCard(); return; }
+        afterRun(r.data);
+      };
+    }
+    function go(d) {
+      closeCard(); ta.value = ''; grow(); sync();
+      if (d.href) { location.href = d.href; return; }
+      if (d.route) J.go('#' + d.route);
+    }
+    function afterRun(d) {
+      if (d.kind === 'open' || d.kind === 'blocked') return go(d);
+      // a matter command: its reply; a write waits for its own confirmation (src/matters/commands.js)
+      if (d.confirm && d.confirm.token) {
+        // the card already names what was heard; the server's reply speaks of typing a fix, which is the bot's way
+        var acts = $('.vc-acts', vcCard);
+        acts.innerHTML = '<button type="button" class="pill sm" data-v="ok">' + esc(t('vcmd.confirm')) + '</button><button type="button" class="pill sm ghost" data-v="no">' + esc(t('vcmd.cancel')) + '</button>';
+        $('[data-v=no]', acts).onclick = function () { J.api('/api/matters/command', { method: 'POST', body: { cancel: d.confirm.token } }); closeCard(); };
+        $('[data-v=ok]', acts).onclick = async function () {
+          var x = await J.api('/api/matters/command', { method: 'POST', body: { confirm: d.confirm.token } });
+          if (!x.ok) { J.toast(J.errMsg(x.data), 5000); return; }
+          if (x.data.reply) J.toast(x.data.reply, 5000);
+          go({ route: x.data.matterId ? '/ishlar/' + x.data.matterId : '/ishlar' });
+        };
+        return;
+      }
+      if (d.reply) J.toast(d.reply, 6000);
+      go({ route: d.matterId ? '/ishlar/' + d.matterId : '/ishlar' });
+    }
+
     ta.addEventListener('input', function () {
+      closeCard();
       grow(); sync();
       var m = ta.value.match(/(?:^|\s)\/([^\s]*)$/);
       if (m) openMenu('sl', m[1]); else if (/(?:^|\s)@$/.test(ta.value)) { ta.value = ta.value.replace(/@$/, ''); openMenu('at'); } else if (menu && !menu.querySelector('[data-a=up]')) closeMenu();

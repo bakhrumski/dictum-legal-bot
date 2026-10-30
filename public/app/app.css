@@ -672,4 +672,12 @@ textarea.inp{height:auto;min-height:96px;padding:10px 13px;resize:vertical;line-
 .sl-tbl th,.sl-tbl td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line-2)}
 .sl-tbl th{color:var(--muted);font-weight:500;font-size:13px}
 @media (max-width:520px){.sl-link{grid-template-columns:minmax(0,1fr)}}
-
+/* ovozli buyruq kartasi (2-daraja): gapirilgan buyruq tasdiq tugmasini kutadi */
+.vc-card{border:1px solid var(--line);border-radius:14px;background:var(--surface);padding:12px 14px;margin:0 0 10px}
+.vc-card .vc-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0}
+.vc-t{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--cta);background:var(--accent-soft);border-radius:99px;padding:3px 10px}
+.vc-t svg.i{width:13px;height:13px}
+.vc-l{font-weight:600;font-size:14.5px;min-width:0;overflow-wrap:anywhere}
+.vc-heard{font-size:13px;margin:6px 0 0;overflow-wrap:anywhere}
+.vc-heard i{font-style:normal}
+.vc-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
