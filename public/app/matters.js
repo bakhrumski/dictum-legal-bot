@@ -233,14 +233,41 @@
   /** Wires a command bar; `matterId` is the matter on screen (the default for "yozuv qo'sh: …"). */
   function wireCmd(root, matterId, after) {
     var input = $('.mt-cmd-in', root), st = $('.mt-cmd-st', root), mic = $('.mt-mic', root), go = $('[data-a=cmd]', root);
-    var awaitingTitle = false, dictated = null;
+    var awaitingTitle = false, dictated = null, card = null;
     $('.mt-gloss', root).onclick = glossaryModal;
+    function closeCard() { if (card) { card.close(); card = null; } }
+    // the glossary learns from the heard text once it is used (unchanged here: its suggestions are kept as words)
+    function learnHeard() {
+      if (!dictated) return;
+      J.api('/api/voice/glossary/learn', { method: 'POST', body: { heard: dictated.heard, final: String(input.value), suggested: dictated.suggested } }); dictated = null;
+    }
+    /** level 2 (docs/design/ovozli-buyruqlar-2.md): the catalogue's card, the same as the chat's */
+    function showCard(c, heard) {
+      closeCard();
+      // the card sits at the top of the command bar itself (root may be the whole page)
+      card = J.voiceCard($('.mt-cmd', root) || root, c, heard, {
+        lastMatterId: matterId || current() || null, beforeRun: learnHeard,
+        onClose: function () { card = null; input.focus(); },
+        onDone: function () { card = null; input.value = ''; st.textContent = ''; },
+      });
+    }
+    input.addEventListener('input', closeCard);
     async function run(text, extra) {
       if (!extra && !String(text || '').trim()) { input.focus(); return; }
       // the person's own glossary learns from what they changed in the heard text (src/voice/user-glossary.js)
       if (!extra && dictated) { J.api('/api/voice/glossary/learn', { method: 'POST', body: { heard: dictated.heard, final: String(text), suggested: dictated.suggested } }); dictated = null; }
       // "yangi ish och" came with no name: the next words are the name (unless they are a command)
       if (!extra && awaitingTitle && !/^(?:yangi ish|ish och|ishlar|новое дело|мои дела)/i.test(String(text).trim())) text = (J.lang === 'ru' ? 'новое дело: ' : 'yangi ish och: ') + String(text).trim();
+      // a page, or an action never done by voice: the catalogue (src/voice/commands.js); a typed one with "Bajarish"
+      // pressed opens its page at once, a blocked one only offers its page
+      if (!extra && !awaitingTitle && J.parseVoiceCommand) {
+        var c = await J.parseVoiceCommand(text, 'matters');
+        if (c && c.kind === 'blocked') { showCard(c, String(text).trim()); return; }
+        if (c && c.kind === 'open') {
+          var o = await J.api('/api/voice/command/run', { method: 'POST', body: { token: c.token } });
+          if (o.ok) { input.value = ''; if (o.data.href) location.href = o.data.href; else if (o.data.route) J.go('#' + o.data.route); return; }
+        }
+      }
       awaitingTitle = false;
       go.disabled = true; st.textContent = '';
       var r = await J.api('/api/matters/command', { method: 'POST', body: extra || { text: text, lastMatterId: matterId || current() || null, lang: J.lang === 'ru' ? 'ru' : 'uz' } });
@@ -307,6 +334,11 @@
         input.value = r.data.text || '';
         dictated = { heard: input.value, suggested: r.data.suggestions || [] };
         heardCheck(r.data.suggestions || []);
+        // a spoken command becomes the card; it runs only by its [Bajarish]
+        if (J.parseVoiceCommand && input.value.trim()) {
+          var c = await J.parseVoiceCommand(input.value, 'matters');
+          if (c && input.value === dictated.heard) showCard(c, input.value);
+        }
       };
       rec.start();
       mic.classList.add('on'); st.textContent = '';
