@@ -67,7 +67,7 @@ function stubStore(seed = []) {
     const seen = new Set();
     for (const f of fs.readdirSync(__dirname)) {
       // the files that hold commands on purpose
-      if (!f.endsWith('.js') || f === path.basename(__filename) || f === 'matters.db.test.js' || f === 'voice-glossary.db.test.js' || f === 'uz-alphabet.test.js') continue;
+      if (!f.endsWith('.js') || f === path.basename(__filename) || f === 'matters.db.test.js' || f === 'voice-glossary.db.test.js' || f === 'uz-alphabet.test.js' || f === 'voice-commands.test.js') continue;
       for (const m of fs.readFileSync(path.join(__dirname, f), 'utf8').matchAll(/["'`]([^"'`\n]{12,300})["'`]/gu)) if (/\s/u.test(m[1])) seen.add(m[1]);
     }
     const hits = [...seen].filter(q => c.parseCommand(q));

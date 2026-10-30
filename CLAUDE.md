@@ -893,6 +893,19 @@ Known state of the suites (Sept 2026):
   with no AI (`src/voice/commands.js`, to come); payments, deletion and
   sending to others are never voice commands. Level 1 (a mic in every field,
   #520; the command bar's mic in the same place, #529) is live.
+  V1 (2026-10-29): `src/voice/commands.js` - the catalogue: `open` (pages:
+  Hujjatlarim, Ishlarim, Hujjat tahlili, da'vo arizasi / hujjat tayyorlash,
+  Jadvalli tahlil, Playbook, yangi / oxirgi suhbat, Suhbatlarim, Yozuvlar,
+  Jamoa, Advokatlar, limit / hisob, Tariflar, Moslashish), `matter` (the
+  matter commands passed through, run as spoken: writes wait for their own
+  confirmation) and `blocked` (account / document / chat deletion, paying,
+  sending to Telegram or a lawyer - only the page is offered); uz in both
+  alphabets and ru; in the chat only a spoken text counts (`voice: true`).
+  `POST /api/voice/command/parse` -> a command with a token (nothing runs),
+  `POST /api/voice/command/run` (the token: once, that account, 10 minutes)
+  (`src/voice/command-routes.js`, same-origin, no AI, no unit,
+  `VOICE_COMMANDS=off`). `tests/voice-commands.test.js` scans every string of
+  tests/ and both evaluation sets for false hits. The cards in the app are V2/V3.
 - `src/workspace/` — Workspace: routes, authz, Supabase
   realtime/storage, Workspace AI. Since 2026-10-28 (owner, migration 025)
   any active paid plan (Silver, Gold, Platinum) owns one (`PLAN_CATALOG`
