@@ -311,3 +311,8 @@ nima o'lchandi.
   Egasining qoidasi: har bir o'zgarish odamga aniq yengillik berishi kerak
   (CLAUDE.md, "Working agreement"). V5 ning Telegram havolasi bu qoidaga
   to'liq javob bermaydi: odam baribir botdan chiqadi.
+- 2026-10-30: #539 (hujjatlar, "har o'zgarish yengillik berishi kerak"
+  qoidasi) merge. Telegram'da "hujjatlarim" ro'yxati PR (#540). Hujjat
+  muharriri (Word kabi, birgalikda tahrir, AI tahlil va imlo tekshiruvi)
+  dizayni ochildi: `docs/design/hujjat-muharriri.md` (qoralama, egasining
+  9-bo'limdagi javoblarini kutadi).
