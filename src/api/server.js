@@ -11816,7 +11816,7 @@ async function runMigrations() {
     // command becomes a card; nothing runs until its token is run. No AI, no unit.
     try {
       require('../voice/command-routes').mountVoiceCommandRoutes(app, {
-        requireAuth, requireSameOrigin: require('../auth/same-origin').requireSameOrigin, pool, matterStore,
+        requireAuth, requireSameOrigin: require('../auth/same-origin').requireSameOrigin, requireMasterAdmin, pool, matterStore,
       });
     } catch (e) { console.log('[VOICE-CMD] Mount skipped:', e.message); }
 

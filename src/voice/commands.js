@@ -102,6 +102,14 @@ const BLOCKED = [
   { action: 'send', route: '/', re: [/^(?:telegram(?:im)?|advokat|yurist)(?:ga)?\s+yubor(?:ing)?$/u, /^(?:отправь|перешли)\s+(?:в\s+telegram|адвокату|юристу)$/u] },
 ];
 
+/** The site path of an open / blocked command: the app's hash route, or a page (V5: Telegram links). */
+function appPath(cmd) {
+  if (!cmd) return null;
+  if (cmd.href) return cmd.href;
+  if (cmd.action === 'last_chat') return '/app/#/suhbatlar';
+  return `/app/#${cmd.route || '/'}`;
+}
+
 const lang = text => (/[Ѐ-ӿ]/u.test(String(text || '')) ? 'ru' : 'uz');
 const TEXTS = {
   uz: { open: l => `Ochish: ${l}`, blocked: "Bu amal ovoz bilan bajarilmaydi — sahifani ochaymi?", gone: "Buyruq eskirgan — qaytadan ayting." },
@@ -110,7 +118,9 @@ const TEXTS = {
 
 /**
  * The command a text is, or null. place: 'chat' | 'matters' | 'telegram';
- * in the chat only a spoken text counts (voice: true).
+ * in the chat only a spoken text counts (voice: true). In Telegram (V5) the
+ * bot answers open and blocked commands with a link (`appPath`); matter
+ * commands keep their own path there (src/matters/commands.js).
  */
 function parse(text, { place = 'chat', voice = false } = {}) {
   const raw = String(text || '').trim();
@@ -157,11 +167,24 @@ function sweep(now = Date.now()) {
 }
 
 /** A parsed command kept for this account until it is run (or 10 minutes pass). */
-function issue(cmd, adminId, now = Date.now()) {
+function issue(cmd, adminId, now = Date.now(), { place = 'chat', via = 'voice' } = {}) {
   sweep(now);
   const token = require('crypto').randomBytes(16).toString('base64url');
-  pending.set(token, { adminId: Number(adminId), cmd, at: now });
+  pending.set(token, { adminId: Number(adminId), cmd, place, via, at: now });
   return token;
+}
+
+/** What a token holds for this account, without using it (V5: the event of a run, a cancel, a question). */
+function peek(token, adminId, now = Date.now()) {
+  sweep(now);
+  const p = pending.get(String(token || ''));
+  return p && p.adminId === Number(adminId) ? { kind: p.cmd.kind, action: p.cmd.action, lang: p.cmd.lang, place: p.place, via: p.via } : null;
+}
+
+/** The card was cancelled or sent as a question: the token is dropped. */
+function drop(token, adminId) {
+  const p = pending.get(String(token || ''));
+  if (p && p.adminId === Number(adminId)) pending.delete(String(token));
 }
 
 /**
@@ -204,4 +227,4 @@ async function run(token, { adminId, store = null, db = null, lastMatterId = nul
   return { ok: false, status: 400, error: 'unknown' };
 }
 
-module.exports = { PAGES, CONTEXT, BLOCKED, MAX_LEN, TOKEN_TTL_MS, parse, issue, run, norm, _pending: pending };
+module.exports = { PAGES, CONTEXT, BLOCKED, MAX_LEN, TOKEN_TTL_MS, parse, issue, peek, drop, run, norm, appPath, _pending: pending };

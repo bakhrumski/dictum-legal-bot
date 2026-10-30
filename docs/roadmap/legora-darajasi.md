@@ -67,7 +67,7 @@ Tartib va PR bo'linishi dizayn hujjatining 9-bo'limida.
   - chatda va Ishlar buyruq qatorida gapirilgan buyruq tasdiq tugmasi bilan
   bajariladi (AI'siz katalog, pul / o'chirish / yuborish ovoz bilan emas).
   Qabul qilingan (egasi barcha takliflarni qabul qildi). 1-daraja (#520, #529) tayyor.
-  V1 (#531), V2 (#532), V3 (#533) tayyor; V4 (kontekst amallari) PR; V5 (Telegram) keyin.
+  V1 (#531), V2 (#532), V3 (#533), V4 (#535) tayyor; V5 (Telegram havolalari, o'lchov) PR.
 - [x] PR-E (#499): Parallel qadamlar, `needs_input`
   dan keyin davom ettirish.
 - [x] PR-F (#501): Telegram: ish holati bitta xabarda yangilanadi, tasdiq tugmalari.
@@ -298,3 +298,9 @@ nima o'lchandi.
   aks holda tanlash oynasi), "shu hujjatni tahlil qil" (tahlil sahifasi
   hujjat bilan, narx tasdig'i o'z joyida). Faqat chatda, faqat gapirilganda,
   amal qiladigan narsa bo'lsagina karta chiqadi.
+- 2026-10-30: #535 (V4) va #536 (ingliz interfeysi yangi alifboga
+  o'girilmaydi; nomsiz "yangi ish och" nomni so'rab davom etadi) merge.
+  V5 PR: Telegram'da ilova sahifasi buyruqlari havola va tugma bilan
+  javob oladi (botda hech narsa bajarilmaydi); `voice_command_events`
+  (migration 035, faqat kodlar - matn ham, akkaunt ham yo'q) va
+  Boshqaruv -> "Ovozli buyruqlar" haftalik ko'rinishi.

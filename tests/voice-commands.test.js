@@ -82,7 +82,7 @@ const V = { place: 'chat', voice: true };
     // strings that ARE commands on purpose elsewhere: the bot's account action "limitim qancha?" (account-tools
     // tests), and page names used as labels - saying a page's name opens it, which is the point
     const meant = new Set(['Limitim qancha?', 'limit ', 'Hujjat tahlili', 'Jadvalli tahlil']);
-    const hits = [...seen].filter(q => !meant.has(q) && (vc.parse(q, { place: 'matters' }) || vc.parse(q, { place: 'chat', voice: true })));
+    const hits = [...seen].filter(q => !meant.has(q) && (vc.parse(q, { place: 'matters' }) || vc.parse(q, { place: 'telegram' }) || vc.parse(q, { place: 'chat', voice: true })));
     assert.ok(seen.size > 1000, `strings scanned: ${seen.size}`);
     assert.deepStrictEqual(hits, []);
   });
@@ -143,6 +143,74 @@ const V = { place: 'chat', voice: true };
     assert.ok(out.ok && out.kind === 'matter');
     assert.strictEqual(created, false, 'not written by speaking');
     assert.ok(out.confirm || out.token || /confirm|heard/u.test(JSON.stringify(out)), JSON.stringify(out).slice(0, 200));
+  });
+
+  const ev = require('../src/voice/command-events');
+  const fakeDb = () => { const rows = []; return { rows, query: async (sql, args) => { assert.match(sql, /voice_command_events/u); rows.push(args); return { rows: [] }; } }; };
+
+  await test('V5 events: codes only - a bad code, an unknown place or VOICE_COMMAND_EVENTS=off writes nothing', async () => {
+    const db = fakeDb();
+    assert.strictEqual(await ev.record(db, { place: 'chat', kind: 'open', action: 'documents', outcome: 'shown', via: 'voice', lang: 'uz' }, {}), true);
+    assert.deepStrictEqual(db.rows[0], ['chat', 'open', 'documents', 'shown', 'voice', 'uz']);
+    for (const bad of [{ place: 'web', kind: 'open', action: 'x', outcome: 'run' }, { place: 'chat', kind: 'open', action: 'Hujjatlarim och', outcome: 'run' },
+      { place: 'chat', kind: 'open', action: 'documents', outcome: 'clicked' }, null]) assert.strictEqual(await ev.record(db, bad, {}), false);
+    assert.strictEqual(await ev.record(db, { place: 'chat', kind: 'open', action: 'documents', outcome: 'run' }, { VOICE_COMMAND_EVENTS: 'off' }), false);
+    assert.strictEqual(db.rows.length, 1);
+    // a failing table never stops a command
+    assert.strictEqual(await ev.record({ query: async () => { throw new Error('relation "voice_command_events" does not exist'); } }, { place: 'chat', kind: 'open', action: 'documents', outcome: 'run' }, {}), false);
+    const src = fs.readFileSync(path.join(__dirname, '../migrations/20261030_035_voice_command_events.sql'), 'utf8');
+    assert.ok(!/admin_id|text\s+TEXT|user_id|chat_id/iu.test(src.replace(/--.*$/gmu, '')), 'no account and no text in the table');
+  });
+
+  await test('V5 summary: per place and action, spoken / typed, and how often a card was a question', async () => {
+    const rows = [
+      { place: 'chat', kind: 'open', action: 'documents', via: 'voice', outcome: 'shown', n: 8 }, { place: 'chat', kind: 'open', action: 'documents', via: 'voice', outcome: 'run', n: 5 },
+      { place: 'chat', kind: 'open', action: 'documents', via: 'voice', outcome: 'as_question', n: 2 }, { place: 'chat', kind: 'open', action: 'documents', via: 'voice', outcome: 'cancel', n: 1 },
+      { place: 'telegram', kind: 'open', action: 'documents', via: 'text', outcome: 'shown', n: 3 },
+    ];
+    const out = await ev.summary({ query: async (sql, args) => { assert.deepStrictEqual(args, [30]); return { rows }; } }, { days: 30 });
+    const chat = out.items.find(x => x.place === 'chat');
+    assert.deepStrictEqual([chat.shown, chat.voice, chat.run, chat.as_question, chat.cancel, chat.questionShare], [8, 8, 5, 2, 1, 0.25]);
+    assert.deepStrictEqual([out.items.find(x => x.place === 'telegram').text, out.total.shown, out.days], [3, 11, 30]);
+    assert.strictEqual((await ev.summary({ query: async (s, a) => { assert.deepStrictEqual(a, [90]); return { rows: [] }; } }, { days: 999 })).days, 90);
+  });
+
+  await test('V5 tokens: peek tells the event without using the token; drop removes it for that account only', async () => {
+    const c = vc.parse('hujjatlarim', V);
+    const t = vc.issue(c, 7, Date.now(), { place: 'chat', via: 'voice' });
+    assert.deepStrictEqual(vc.peek(t, 7), { kind: 'open', action: 'documents', lang: 'uz', place: 'chat', via: 'voice' });
+    assert.strictEqual(vc.peek(t, 8), null);
+    vc.drop(t, 8);
+    assert.ok(vc.peek(t, 7), 'another account cannot drop it');
+    vc.drop(t, 7);
+    assert.strictEqual(vc.peek(t, 7), null);
+    const src = fs.readFileSync(path.join(__dirname, '../src/voice/command-routes.js'), 'utf8');
+    assert.match(src, /outcome: 'shown'/u); assert.match(src, /'ask' : 'run'/u); assert.match(src, /\/api\/voice\/command\/event/u); assert.match(src, /requireMasterAdmin/u);
+    const page = fs.readFileSync(path.join(__dirname, '../public/app/chat.js'), 'utf8');
+    assert.match(page, /told\('cancel'\)/u); assert.match(page, /told\('as_question'\)/u);
+  });
+
+  await test('V5 Telegram: an app page, typed or spoken, is answered with its link; questions, matters and account actions keep their way', () => {
+    const agent = require('../src/agents/telegram-agent');
+    const it = agent.classifyDeterministicIntent('Hujjatlarimni och');
+    assert.deepStrictEqual([it.intent, it.page.action, vc.appPath(it.page)], ['ilova_sahifa', 'documents', '/app/#/hujjatlarim']);
+    assert.strictEqual(vc.appPath(agent.classifyDeterministicIntent('jadvalli tahlil').page), '/app/#/jadval');
+    assert.strictEqual(vc.appPath(agent.classifyDeterministicIntent('мои документы').page), '/app/#/hujjatlarim');
+    assert.strictEqual(vc.appPath(vc.parse('oxirgi suhbat', { place: 'telegram' })), '/app/#/suhbatlar');
+    assert.strictEqual(vc.appPath(vc.parse('tariflar', { place: 'telegram' })), '/tariflar.html');
+    const blocked = agent.classifyDeterministicIntent("hujjatlarimni o'chir");
+    assert.deepStrictEqual([blocked.intent, blocked.page.kind], ['ilova_sahifa', 'blocked']);
+    assert.strictEqual(agent.classifyDeterministicIntent('Ishlarim').intent, 'ish_amal', 'matters keep their own path');
+    assert.strictEqual(agent.classifyDeterministicIntent('limitim qancha?').intent, 'hisob_amal', 'account actions keep theirs');
+    assert.strictEqual(agent.classifyDeterministicIntent("Hujjatlarimni qanday tasdiqlatsam bo'ladi?"), null, 'a question is a question');
+    assert.strictEqual(vc.parse('javobni nusxala', { place: 'telegram' }), null, 'chat actions are not in the bot');
+    process.env.VOICE_COMMANDS = 'off';
+    try { assert.strictEqual(agent.classifyDeterministicIntent('Hujjatlarimni och'), null); } finally { delete process.env.VOICE_COMMANDS; }
+    const bot = fs.readFileSync(path.join(__dirname, '../src/bot/bot.js'), 'utf8');
+    assert.match(bot, /action === 'tool_open_page'[\s\S]{0,200}url: agentResult\.meta\.url/u, 'one link button');
+    const src = fs.readFileSync(path.join(__dirname, '../src/agents/telegram-agent.js'), 'utf8');
+    assert.match(src, /place: 'telegram', kind: page\.kind, action: page\.action, outcome: 'shown'/u);
+    assert.match(src, /place: 'telegram', kind: 'matter'/u);
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);
