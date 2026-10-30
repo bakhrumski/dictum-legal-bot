@@ -92,6 +92,60 @@
 
   /* ================= YOZISH OYNASI ================= */
   /** opts: {onSend(payload), placeholder, compact} → api {el, focus, setSkill, addFiles, busy(bool), clearDocs} */
+  /* ---------- ovozli buyruq kartasi (2-daraja, docs/design/ovozli-buyruqlar-2.md) - chat va Ishlar buyruq qatori.
+     Gapirish o'zi hech narsa bajarmaydi: [Bajarish] tokenni /api/voice/command/run ga yuboradi; sahifa ochiladi;
+     taqiqlangan amal faqat sahifasini ochadi; ishga yozadigan buyruq o'z [Tasdiqlash]ini kutadi. ---------- */
+  J.parseVoiceCommand = async function (text, place) {
+    var p = await J.api('/api/voice/command/parse', { method: 'POST', body: { text: text, place: place, voice: true } });
+    return (p.ok && p.data && p.data.command) || null;
+  };
+  /** host: the card goes first inside it. opts: ask (show "Savol sifatida"), onAsk, onClose, onDone, beforeRun. Returns { close }. */
+  J.voiceCard = function (host, c, heard, opts) {
+    opts = opts || {};
+    var blocked = c.kind === 'blocked', closed = false;
+    var card = J.h('<div class="vc-card" aria-live="polite"><div class="vc-h"><span class="vc-t">' + J.icon('mic') + esc(t('vcmd.title')) + '</span><b class="vc-l"></b></div>' +
+      '<p class="vc-heard muted"><span>' + esc(t('vcmd.heard')) + '</span> <i></i></p>' +
+      '<div class="vc-acts"><button type="button" class="pill sm" data-v="run">' + esc(blocked ? t('vcmd.open') : t('vcmd.run')) + '</button>' +
+      (opts.ask ? '<button type="button" class="pill sm ghost" data-v="ask">' + esc(t('vcmd.ask')) + '</button>' : '') +
+      '<button type="button" class="pill sm ghost" data-v="no">' + esc(t('vcmd.cancel')) + '</button></div></div>');
+    $('.vc-l', card).textContent = c.label;
+    $('.vc-heard i', card).textContent = '«' + heard + '»';
+    host.insertBefore(card, host.firstChild);
+    function close() { if (!closed) { closed = true; card.remove(); } }
+    function go(d) {
+      close(); if (opts.onDone) opts.onDone(d);
+      if (d.href) { location.href = d.href; return; }
+      if (d.route) J.go('#' + d.route);
+    }
+    $('[data-v=no]', card).onclick = function () { close(); if (opts.onClose) opts.onClose(); };
+    if (opts.ask) $('[data-v=ask]', card).onclick = function () { close(); if (opts.onAsk) opts.onAsk(); };
+    $('[data-v=run]', card).onclick = async function () {
+      var b = this; b.disabled = true;
+      if (opts.beforeRun) opts.beforeRun();
+      var r = await J.api('/api/voice/command/run', { method: 'POST', body: { token: c.token, lastMatterId: opts.lastMatterId || null } });
+      b.disabled = false;
+      if (!r.ok) { J.toast(r.status === 410 ? t('vcmd.gone') : J.errMsg(r.data), 5000); close(); if (opts.onClose) opts.onClose(); return; }
+      var d = r.data;
+      if (d.kind === 'open' || d.kind === 'blocked') return go(d);
+      // a matter command: a write waits for its own confirmation (src/matters/commands.js)
+      if (d.confirm && d.confirm.token) {
+        var acts = $('.vc-acts', card);
+        acts.innerHTML = '<button type="button" class="pill sm" data-v="ok">' + esc(t('vcmd.confirm')) + '</button><button type="button" class="pill sm ghost" data-v="no">' + esc(t('vcmd.cancel')) + '</button>';
+        $('[data-v=no]', acts).onclick = function () { J.api('/api/matters/command', { method: 'POST', body: { cancel: d.confirm.token } }); close(); if (opts.onClose) opts.onClose(); };
+        $('[data-v=ok]', acts).onclick = async function () {
+          var x = await J.api('/api/matters/command', { method: 'POST', body: { confirm: d.confirm.token } });
+          if (!x.ok) { J.toast(J.errMsg(x.data), 5000); return; }
+          if (x.data.reply) J.toast(x.data.reply, 5000);
+          go({ route: x.data.matterId ? '/ishlar/' + x.data.matterId : '/ishlar' });
+        };
+        return;
+      }
+      if (d.reply) J.toast(d.reply, 6000);
+      go({ route: d.matterId ? '/ishlar/' + d.matterId : '/ishlar' });
+    };
+    return { close: close, el: card };
+  };
+
   J.composer = function (host, opts) {
     var st = { skill: null, files: [], busy: false };
     var el = J.h('<div class="cmp">' +
@@ -203,62 +257,21 @@
       };
     })();
 
-    /* ---------- ovozli buyruq (2-daraja): POST /api/voice/command/parse -> karta; faqat [Bajarish] bosilganda
-       /run (token: bir marta, 10 daqiqa). Yozilgan matn buyruq emas - faqat gapirilgani. ---------- */
+    /* ---------- ovozli buyruq (2-daraja): POST /api/voice/command/parse -> karta (J.voiceCard); faqat [Bajarish]
+       bosilganda /run. Yozilgan matn buyruq emas - faqat gapirilgani. ---------- */
     var vcCard = null;
-    function closeCard() { if (vcCard) { vcCard.remove(); vcCard = null; } }
+    function closeCard() { if (vcCard) { vcCard.close(); vcCard = null; } }
     async function voiceCommand(text) {
       closeCard();
       if (opts.voiceCommands === false) return;
-      var p = await J.api('/api/voice/command/parse', { method: 'POST', body: { text: text, place: 'chat', voice: true } });
-      var c = p.ok && p.data && p.data.command;
+      var c = await J.parseVoiceCommand(text, 'chat');
       if (!c || ta.value.trim() !== String(text).trim()) return;
-      showCard(c, text);
-    }
-    function showCard(c, heard) {
-      closeCard();
-      var blocked = c.kind === 'blocked';
-      vcCard = J.h('<div class="vc-card" role="dialog" aria-live="polite"><div class="vc-h"><span class="vc-t">' + J.icon('mic') + esc(t('vcmd.title')) + '</span><b class="vc-l"></b></div>' +
-        '<p class="vc-heard muted"><span>' + esc(t('vcmd.heard')) + '</span> <i></i></p>' +
-        '<div class="vc-acts"><button type="button" class="pill sm" data-v="run">' + esc(blocked ? t('vcmd.open') : t('vcmd.run')) + '</button>' +
-        '<button type="button" class="pill sm ghost" data-v="ask">' + esc(t('vcmd.ask')) + '</button>' +
-        '<button type="button" class="pill sm ghost" data-v="no">' + esc(t('vcmd.cancel')) + '</button></div></div>');
-      $('.vc-l', vcCard).textContent = c.label;
-      $('.vc-heard i', vcCard).textContent = '«' + heard + '»';
-      el.insertBefore(vcCard, el.firstChild);
-      $('[data-v=no]', vcCard).onclick = function () { closeCard(); ta.focus(); };
-      $('[data-v=ask]', vcCard).onclick = function () { closeCard(); submit(); };
-      $('[data-v=run]', vcCard).onclick = async function () {
-        var b = this; b.disabled = true;
-        var r = await J.api('/api/voice/command/run', { method: 'POST', body: { token: c.token } });
-        b.disabled = false;
-        if (!r.ok) { J.toast(r.status === 410 ? t('vcmd.gone') : J.errMsg(r.data), 5000); closeCard(); return; }
-        afterRun(r.data);
-      };
-    }
-    function go(d) {
-      closeCard(); ta.value = ''; grow(); sync();
-      if (d.href) { location.href = d.href; return; }
-      if (d.route) J.go('#' + d.route);
-    }
-    function afterRun(d) {
-      if (d.kind === 'open' || d.kind === 'blocked') return go(d);
-      // a matter command: its reply; a write waits for its own confirmation (src/matters/commands.js)
-      if (d.confirm && d.confirm.token) {
-        // the card already names what was heard; the server's reply speaks of typing a fix, which is the bot's way
-        var acts = $('.vc-acts', vcCard);
-        acts.innerHTML = '<button type="button" class="pill sm" data-v="ok">' + esc(t('vcmd.confirm')) + '</button><button type="button" class="pill sm ghost" data-v="no">' + esc(t('vcmd.cancel')) + '</button>';
-        $('[data-v=no]', acts).onclick = function () { J.api('/api/matters/command', { method: 'POST', body: { cancel: d.confirm.token } }); closeCard(); };
-        $('[data-v=ok]', acts).onclick = async function () {
-          var x = await J.api('/api/matters/command', { method: 'POST', body: { confirm: d.confirm.token } });
-          if (!x.ok) { J.toast(J.errMsg(x.data), 5000); return; }
-          if (x.data.reply) J.toast(x.data.reply, 5000);
-          go({ route: x.data.matterId ? '/ishlar/' + x.data.matterId : '/ishlar' });
-        };
-        return;
-      }
-      if (d.reply) J.toast(d.reply, 6000);
-      go({ route: d.matterId ? '/ishlar/' + d.matterId : '/ishlar' });
+      vcCard = J.voiceCard(el, c, text, {
+        ask: true,
+        onAsk: function () { vcCard = null; submit(); },
+        onClose: function () { vcCard = null; ta.focus(); },
+        onDone: function () { vcCard = null; ta.value = ''; grow(); sync(); },
+      });
     }
 
     ta.addEventListener('input', function () {
