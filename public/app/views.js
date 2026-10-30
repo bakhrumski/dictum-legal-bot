@@ -22,8 +22,14 @@
     document.body.classList.toggle('role-view', !!rv);
     // a role view: the role's own page - no field chips, no sub-line, no Telegram banner, three recent chats
     if (rv) {
-      var lean = J.mount('<div class="home rh">' +
-        '<div class="rv-bar"><span class="rv-tag">' + esc(t('rv.badge')) + ' <b>' + esc(t('role.' + rv)) + '</b></span><a href="#/rol">' + esc(t('rv.other')) + '</a><a href="#/rol/chiqish">' + esc(t('rv.exit')) + '</a></div>' +
+      // a preview (#/rol/<rol>, this tab) or the client's own view (their field; core.js J.roleAuto)
+      var preview = !!J.rolePreview();
+      var chips = '<div class="rv-pick"' + (preview || !J.roleChosen() ? '' : ' hidden') + '>' + (preview ? '' : '<span class="rv-pick-t">' + esc(t(J.roleChosen() ? 'roles.label' : 'rv.pick')) + '</span>') +
+        (preview ? '' : ROLES.map(function (r) { return '<button type="button" class="chip' + (r === rv ? ' on' : '') + '" data-r="' + r + '">' + esc(t('role.' + r)) + '</button>'; }).join('')) + '</div>';
+      var bar = preview
+        ? '<div class="rv-bar"><span class="rv-tag">' + esc(t('rv.badge')) + ' <b>' + esc(t('role.' + rv)) + '</b></span><a href="#/rol">' + esc(t('rv.other')) + '</a><a href="#/rol/chiqish">' + esc(t('rv.exit')) + '</a></div>'
+        : (J.roleChosen() ? '<div class="rv-bar"><span class="rv-tag">' + esc(t('roles.label')) + ': <b>' + esc(t('role.' + rv)) + '</b></span><button type="button" class="link rv-change">' + esc(t('rv.change')) + '</button><a href="#/rol/hammasi">' + esc(t('rv.all')) + '</a></div>' : '') + chips;
+      var lean = J.mount('<div class="home rh">' + bar +
         '<h1 class="hello"></h1><div class="cmp-host"></div><p class="hint">' + esc(t('cmp.hint')) + '</p>' +
         '<div class="tasks"></div><div class="recent"><h3>' + esc(t('recent')) + '</h3><div class="rows"></div></div></div>');
       $('.hello', lean).textContent = greet + (name ? ', ' + name : '') + '.';
@@ -52,13 +58,20 @@
         $$('.row', lean).forEach(function (r) { r.onclick = function () { J.go('#/c/' + r.dataset.id); }; });
       };
       drawLeanRecent(); J.on('sessions', function () { if (document.body.contains(lean)) drawLeanRecent(); });
+      // the client's field: picked here, saved as their type (grants nothing), the view follows it
+      var ch = $('.rv-change', lean); if (ch) ch.onclick = function () { var pk = $('.rv-pick', lean); pk.hidden = !pk.hidden; };
+      $$('.rv-pick [data-r]', lean).forEach(function (b) {
+        b.onclick = function () { J.setPersona(b.dataset.r, true); J.redrawNav(); J.viewHome(); };
+      });
       lc.focus();
       return;
     }
     var v = J.mount('<div class="home">' +
       '<h1 class="hello"></h1><p class="hello-sub">' + esc(t('hello.sub')) + '</p>' +
       '<div class="cmp-host"></div><p class="hint">' + esc(t('cmp.hint')) + '</p>' +
-      '<div class="roles"><span class="kicker">' + esc(t('roles.label')) + '</span>' + ROLES.map(function (r) { return '<button class="chip' + (r === persona ? ' on' : '') + '" data-r="' + r + '">' + esc(t('role.' + r)) + '</button>'; }).join('') + '</div>' +
+      '<div class="roles"><span class="kicker">' + esc(t('roles.label')) + '</span>' + ROLES.map(function (r) { return '<button class="chip' + (r === persona ? ' on' : '') + '" data-r="' + r + '">' + esc(t('role.' + r)) + '</button>'; }).join('') +
+        // a client who opened every section can go back to their field's simpler view
+        (J.S.user && J.S.user.role === 'user' && J.roleFull() ? '<a class="rv-back" href="#/rol/sodda">' + esc(t('rv.lean')) + '</a>' : '') + '</div>' +
       '<div class="tasks"></div><div class="tg-host"></div>' +
       '<div class="recent"><h3>' + esc(t('recent')) + '</h3><div class="rows"></div></div></div>');
     $('.hello', v).textContent = greet + (name ? ', ' + name : '') + '.';
