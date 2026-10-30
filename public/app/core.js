@@ -110,14 +110,32 @@
     hr: { slug: 'hr', nav: ['#/', '#/hujjatlarim', '#/tahlil', '#/tayyorlash', '#/yozuvlar'] },
     firm: { slug: 'firma', nav: ['#/', '#/ishlar', '#/jamoa', '#/hujjatlarim', '#/tahlil', '#/tayyorlash', '#/konikmalar', '#/yozuvlar'] },
   };
-  J.roleView = function () {
+  /* 2026-10-30, egasi: "har rol uchun avtomatik". A client account (role user) sees its own role's view by default -
+     the role is its "Sohangiz" (client type; none chosen yet = Fuqaro, with the choice offered on the home page).
+     "Barcha bo'limlar" switches this browser to the full view (localStorage jai-role-full), "Soddalashtirilgan
+     ko'rinish" back. Staff keep the full view; anyone can still preview a role in this tab (#/rol/<rol>). */
+  J.rolePreview = function () {
     var r = null; try { r = sessionStorage.getItem('jai-role-view'); } catch (e) {}
     return r && J.ROLE_VIEWS[r] ? r : null;
   };
+  J.roleFull = function () { try { return localStorage.getItem('jai-role-full') === '1'; } catch (e) { return false; } };
+  J.setRoleFull = function (on) {
+    try { if (on) localStorage.setItem('jai-role-full', '1'); else localStorage.removeItem('jai-role-full'); } catch (e) {}
+  };
+  /** is this account's own role view on (not a preview)? */
+  J.roleAuto = function () { var u = J.S.user; return !!(u && u.role === 'user') && !J.roleFull(); };
+  J.roleView = function () {
+    var r = J.rolePreview();
+    if (r) return r;
+    if (!J.roleAuto()) return null;
+    return J.ROLE_VIEWS[J.S.persona] ? J.S.persona : 'citizen';
+  };
+  /** has the client chosen their field (client type) yet? */
+  J.roleChosen = function () { var u = J.S.user; return !!(u && u.clientType); };
   J.setRoleView = function (r) {
     try { if (r) sessionStorage.setItem('jai-role-view', r); else sessionStorage.removeItem('jai-role-view'); } catch (e) {}
     if (r) J.S.persona = r;   // only this tab: the account's own type is not changed
-    document.body.classList.toggle('role-view', !!r);
+    document.body.classList.toggle('role-view', !!J.roleView());
   };
 
   J.isStaff = function () { var u = J.S.user; return !!(u && u.role && u.role !== 'user'); };

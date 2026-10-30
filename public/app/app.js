@@ -20,7 +20,9 @@
     // a role view (#/rol/<rol>) shows only that role's sections
     var rv = J.roleView && J.roleView(), keep = rv ? J.ROLE_VIEWS[rv].nav : null;
     var items = NAV.filter(function (n) { return !keep || keep.indexOf(n[0]) > -1; })
-      .concat(J.salesAgent ? [['#/mijozlarim', 'user', 'nav.myClients']] : [], J.isMaster && J.isMaster() ? [['#/boshqaruv', 'shield', 'nav.admin']] : []);
+      .concat(J.salesAgent ? [['#/mijozlarim', 'user', 'nav.myClients']] : [], J.isMaster && J.isMaster() ? [['#/boshqaruv', 'shield', 'nav.admin']] : [],
+        // the client's own role view: the other sections are one click away
+        rv && !J.rolePreview() ? [['#/rol/hammasi', 'more', 'rv.all']] : []);
     $('#nav').innerHTML = items.map(function (n) {
       var lock = (n[0] === '#/tayyorlash' && !J.hasService('draft') && !J.needsPlan()) || (n[0] === '#/jamoa' && !J.isStaff() && /^(sinov|none)$/.test(J.planKey()));
       return '<a href="' + n[0] + '" data-r="' + n[0] + '" title="' + esc(t(n[2])) + '">' + J.icon(n[1]) + '<span>' + esc(t(n[2])) + '</span>' + (lock ? '<span class="lock">' + J.icon('lock') + '</span>' : '') + '</a>';
@@ -87,6 +89,12 @@
   J.route(/^\/$/, function () { J.viewHome(); });
   // role views: #/rol (the list), #/rol/<fuqaro|tadbirkor|yurist|buxgalter|hr|firma>, #/rol/chiqish
   J.route(/^\/rol$/, function () { J.viewRoles(); });
+  // the client's own view (core.js J.roleAuto): every section, or the role's sections again
+  J.route(/^\/rol\/(hammasi|sodda)$/, function (w) {
+    J.setRoleFull(w === 'hammasi');
+    document.body.classList.toggle('role-view', !!J.roleView());
+    J.redrawNav(); J.go('#/');
+  });
   J.route(/^\/rol\/([a-z]+)$/, function (slug) {
     var key = null;
     Object.keys(J.ROLE_VIEWS).forEach(function (k) { if (J.ROLE_VIEWS[k].slug === slug) key = k; });
@@ -135,6 +143,7 @@
     if (!ok) return J.toLogin();
     // ishchi guruhga taklif: kirishdan oldin saqlangan bo'lsa, taklif sahifasiga
     try { var inv = sessionStorage.getItem('juristai-workspace-invite'); if (inv) { sessionStorage.removeItem('juristai-workspace-invite'); location.href = '/workspace-invite.html?token=' + encodeURIComponent(inv); return; } } catch (e) {}
+    document.body.classList.toggle('role-view', !!J.roleView());
     drawMe(); drawNav(); drawUsage(); drawHist();
     document.body.classList.remove('booting');
     J.render();
