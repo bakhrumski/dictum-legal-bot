@@ -315,10 +315,11 @@
     }
     function result(title, html) {
       var clean = J.cleanHtml(html);
-      body.innerHTML = '<div class="vh" style="margin-bottom:14px"><div><div class="kicker">' + esc(t('dr.result')) + '</div><h2 style="font-size:24px;margin-top:6px"></h2></div><div style="display:flex;gap:8px"><button class="pill sm" data-a="word">' + J.icon('word') + esc(t('dr.export')) + '</button><button class="pill sm ghost" data-a="back">' + esc(t('dr.back')) + '</button></div></div><div class="card"><div class="md doc" contenteditable="true" spellcheck="false"></div></div>';
+      body.innerHTML = '<div class="vh" style="margin-bottom:14px"><div><div class="kicker">' + esc(t('dr.result')) + '</div><h2 style="font-size:24px;margin-top:6px"></h2></div><div style="display:flex;gap:8px"><button class="pill sm" data-a="word">' + J.icon('word') + esc(t('dr.export')) + '</button>' + (J.openInEditor ? '<button class="pill sm ghost" data-a="ed">' + J.icon('pen') + esc(t('dr.editor')) + '</button>' : '') + '<button class="pill sm ghost" data-a="back">' + esc(t('dr.back')) + '</button></div></div><div class="card"><div class="md doc" contenteditable="true" spellcheck="false"></div></div>';
       $('h2', body).textContent = title; $('.doc', body).innerHTML = clean;
       $('[data-a=back]', body).onclick = home;
       $('[data-a=word]', body).onclick = function () { J.exportWord(title, $('.doc', body).innerHTML); };
+      var edb = $('[data-a=ed]', body); if (edb) edb.onclick = function () { edb.disabled = true; J.openInEditor(title, $('.doc', body).innerHTML); };
     }
     async function uploadTpl(file, done) {
       var m = J.modal({ cls: 'sm', html: '<h2>' + esc(t('dr.upload')) + '</h2><div style="display:flex;gap:10px;align-items:center;margin-top:14px"><span class="spin"></span>' + esc(t('dr.upload.busy')) + '</div>' });

@@ -949,6 +949,30 @@ Known state of the suites (Sept 2026):
   "Ovozli buyruqlar" (`/app/#/boshqaruv/ovoz`, `GET /api/admin/voice-commands`,
   master), with the question share (as_question / shown) as the
   false-recognition signal.
+- `src/editor/` (2026-10-30, D1 of `docs/design/hujjat-muharriri.md`; owner:
+  every plan, sharing by link with any platform user later in D3, AI
+  spelling from the AI limit plus our own rule checker in D5): a document
+  edited in the app - an AI draft ("Muharrirda ochish" on the draft and
+  claim pages), a Word / PDF / .txt opened from Hujjatlarim ("Word / PDF
+  ochish", `POST /api/editor/import`: Word keeps headings, bold, lists,
+  tables, links and alignment - mammoth plus an alignment marker; headers /
+  footers, footnotes, comments, tracked changes and pictures are named in a
+  banner, a scan is refused), a library document (paragraphs) or blank.
+  Page `#/muharrir/<id>` (`public/app/editor.js`): an A4 sheet with page
+  lines, toolbar (block, font, size, B I U S, colour, highlight, alignment,
+  lists, table, undo / redo), autosave after 1.5 s, versions (auto every 10
+  minutes, named, restore keeps the current text first), Word export
+  (`html-to-docx.js` now writes colour, highlight, font and size) and PDF by
+  the browser's print dialog (print CSS shows the sheet only). The editor
+  is TipTap 3.31.4 built once into `public/vendor/editor/` (MIT, see its
+  README / LICENSES.txt), loaded only on that page. Storage (migration 036):
+  `doc_editor_documents` / `doc_editor_versions`, HTML cleaned by
+  `src/editor/sanitize.js` (the editor's own markup only; attribute values
+  are written raw, so a quote or space in an href or font name drops it) and
+  sealed (AAD by document / version); owner only (404 otherwise); a save
+  names its `revision` - a stale tab gets 409 and stops saving; 300
+  documents an account (`EDITOR_MAX_DOCS`), 2 MB each; account deletion
+  removes them; `EDITOR=off`. `tests/editor.test.js`, `tests/editor.db.test.js`.
 - `src/workspace/` — Workspace: routes, authz, Supabase
   realtime/storage, Workspace AI. Since 2026-10-28 (owner, migration 025)
   any active paid plan (Silver, Gold, Platinum) owns one (`PLAN_CATALOG`

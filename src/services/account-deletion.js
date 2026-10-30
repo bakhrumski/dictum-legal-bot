@@ -108,6 +108,8 @@ async function complete(db, id, { handledBy, revoke = async () => {} } = {}) {
       // interview recordings made with this person as the client (CustDev stage 4): audio, transcripts and consents
       await db.query('DELETE FROM interview_recordings WHERE client_admin_id = $1', [adminId]).catch(() => {});
       await db.query(`DELETE FROM document_scans WHERE admin_id = $1`, [adminId]).catch(() => {});
+      // documents written in the app's editor and their versions
+      await require('../editor/store').deleteAccountDocuments(db, adminId).catch(() => {});
       await require('../agents/runs/store').deleteAccountRuns(db, adminId).catch(() => {});
       await require('../voice/user-glossary').deleteAccountGlossary(db, adminId).catch(() => {});
       await require('../adaptive/profile').deleteAccountProfile(db, adminId).catch(() => {});

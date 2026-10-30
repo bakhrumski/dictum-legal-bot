@@ -316,3 +316,8 @@ nima o'lchandi.
   muharriri (Word kabi, birgalikda tahrir, AI tahlil va imlo tekshiruvi)
   dizayni ochildi: `docs/design/hujjat-muharriri.md` (qoralama, egasining
   9-bo'limdagi javoblarini kutadi).
+- 2026-10-30: #540 (Telegram'da "hujjatlarim") va #541 (muharrir dizayni)
+  merge; egasi takliflarni qabul qildi (barcha tariflar, havola orqali
+  ulashish, yangi paketlar, imlo — AI limitidan + o'z tuzatuvchimiz). D1 PR:
+  bir kishilik muharrir — AI loyiha / Word / PDF / Hujjatlarim hujjati A4
+  sahifada, asboblar paneli, avtosaqlash, versiyalar, Word va PDF.

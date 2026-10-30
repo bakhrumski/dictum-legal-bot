@@ -355,6 +355,7 @@ function transactionalPool(handler) {
       '20261029_033_request_text_index.sql',
       '20261029_034_data_access_log.sql',
       '20261030_035_voice_command_events.sql',
+      '20261030_036_doc_editor.sql',
     ]);
     assert.strictEqual(stripOuterTransaction('BEGIN;\nSELECT 1;\nCOMMIT;'), 'SELECT 1;');
   });

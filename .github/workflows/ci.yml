@@ -131,6 +131,8 @@ jobs:
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/voice-glossary.db.test.js
       - name: Planner agent (master gate, approval, price, worker) on real Postgres
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/agent-planner.db.test.js
+      - name: Document editor D1 (sealed, owner only, revisions, versions) on real Postgres
+        run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/editor.db.test.js
 
   audit:
     name: npm audit (report only)

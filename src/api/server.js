@@ -353,6 +353,8 @@ app.use(cors((req, cb) => {
 // tabular review sends the text of up to 100 documents (src/agents/workflows/tabular-review.js)
 app.use('/api/agent/tabular-review', express.json({ limit: '20mb' }));
 app.use('/api/agent/playbook-review', express.json({ limit: '3mb' }));
+// the editor saves a whole document (src/editor/store.js MAX_HTML 2 MB) plus its JSON wrapping
+app.use('/api/editor/docs', express.json({ limit: '3mb' }));
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 try { app.use(require('cookie-parser')()); } catch { console.log('[WARN] cookie-parser not installed, refresh tokens via cookie disabled'); }
@@ -10161,6 +10163,9 @@ require('../sales/routes').mountSalesRoutes(app, { pool, requireAuth, requireMas
 
 // "Hujjatlarim": the person's kept documents (src/documents/routes.js, migration 029)
 require('../documents/routes').mountDocumentRoutes(app, { pool, requireAuth, requireSameOrigin: require('../auth/same-origin').requireSameOrigin, logAudit });
+// The document editor (docs/design/hujjat-muharriri.md, D1): Word-like editing in the app, versions, Word export
+require('../editor/routes').mountEditorRoutes(app, { pool, requireAuth, requireSameOrigin: require('../auth/same-origin').requireSameOrigin,
+  extractFileText: (buf, o) => require('../ocr/routes').extractFileText(buf, o), logAudit });
 
 // CustDev stage 4: interview recordings on a Matter, with consent (src/interviews/)
 require('../interviews/routes').mountInterviewRoutes(app, { pool, requireAuth, requireSameOrigin: require('../auth/same-origin').requireSameOrigin,

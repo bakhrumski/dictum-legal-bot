@@ -27,6 +27,18 @@ function xml(s) {
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F￾￿]/g, '');
 }
 
+/** A CSS colour (#rgb, #rrggbb, rgb()) -> "RRGGBB", else null. */
+function hexOf(v) {
+  const s = String(v || '').trim();
+  let m = /^#([0-9a-f]{3})$/i.exec(s);
+  if (m) return m[1].split('').map(c => c + c).join('').toUpperCase();
+  m = /^#([0-9a-f]{6})(?:[0-9a-f]{2})?$/i.exec(s);
+  if (m) return m[1].toUpperCase();
+  m = /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})/i.exec(s);
+  if (m) return [m[1], m[2], m[3]].map(n => Math.min(255, Number(n)).toString(16).padStart(2, '0')).join('').toUpperCase();
+  return null;
+}
+
 function alignOf($el) {
   const style = String($el.attr('style') || '');
   const m = /text-align\s*:\s*(left|right|center|justify)/i.exec(style);
@@ -73,17 +85,31 @@ function createConverter() {
       if (/font-weight\s*:\s*(bold|[6-9]00)/i.test(style)) f.b = true;
       if (/font-style\s*:\s*italic/i.test(style)) f.i = true;
       if (/text-decoration[^;]*underline/i.test(style)) f.u = true;
+      // the editor's inline styles (src/editor/sanitize.js): colour, background / highlight, font, size
+      const color = hexOf((/(?:^|;)\s*color\s*:\s*([^;]+)/i.exec(style) || [])[1]);
+      if (color) f.color = color;
+      const bg = hexOf((/background-color\s*:\s*([^;]+)/i.exec(style) || [])[1]) || (name === 'mark' ? (hexOf($n.attr('data-color')) || 'FFF59D') : null);
+      if (bg) f.shd = bg;
+      const font = (/font-family\s*:\s*([^;]+)/i.exec(style) || [])[1];
+      if (font) f.font = font.split(',')[0].replace(/["']/g, '').trim().slice(0, 60);
+      const size = /font-size\s*:\s*(\d+(?:\.\d+)?)(px|pt)/i.exec(style);
+      if (size) f.sz = Math.max(2, Math.min(192, Math.round((size[2].toLowerCase() === 'px' ? Number(size[1]) * 0.75 : Number(size[1])) * 2)));
       out += runs($, $n.contents(), f);
     });
     return out;
   }
 
   function run(text, fmt) {
+    // run properties in the schema's order (rFonts, b, i, strike, color, sz, u, shd, vertAlign)
     let rPr = '';
+    if (fmt.font) rPr += `<w:rFonts w:ascii="${xml(fmt.font)}" w:hAnsi="${xml(fmt.font)}" w:cs="${xml(fmt.font)}"/>`;
     if (fmt.b) rPr += '<w:b/><w:bCs/>';
     if (fmt.i) rPr += '<w:i/><w:iCs/>';
-    if (fmt.u) rPr += '<w:u w:val="single"/>';
     if (fmt.strike) rPr += '<w:strike/>';
+    if (fmt.color) rPr += `<w:color w:val="${fmt.color}"/>`;
+    if (fmt.sz) rPr += `<w:sz w:val="${fmt.sz}"/><w:szCs w:val="${fmt.sz}"/>`;
+    if (fmt.u) rPr += '<w:u w:val="single"/>';
+    if (fmt.shd) rPr += `<w:shd w:val="clear" w:color="auto" w:fill="${fmt.shd}"/>`;
     if (fmt.vert) rPr += `<w:vertAlign w:val="${fmt.vert}"/>`;
     return `<w:r>${rPr ? `<w:rPr>${rPr}</w:rPr>` : ''}<w:t xml:space="preserve">${xml(text)}</w:t></w:r>`;
   }

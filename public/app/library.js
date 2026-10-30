@@ -8,11 +8,11 @@
     uz: { title: 'Hujjatlarim', lead: 'Yuklagan hujjatlaringiz shu yerda — siz o‘chirmaguningizcha saqlanadi. Keyingi safar qayta yuklamasdan tanlang.',
       sealed: 'Matnlar bazada shifrlangan holda saqlanadi.', notSealed: '', none: 'Hali hujjat yo‘q. Chatga yoki «Hujjat tahlili»ga fayl yuklang — u shu yerda qoladi.',
       pick: 'Hujjatlarimdan tanlash', choose: 'Tanlash', cancel: 'Bekor qilish', rename: 'Nomini o‘zgartirish', del: 'O‘chirish', delQ: 'Hujjat butunlay o‘chiriladi (matni ham). Davom etasizmi?',
-      kinds: { text: 'Matnli', pdf: 'Skan PDF', image: 'Rasm' }, pages: '{n} bet', used: 'oxirgi ishlatilgan', added: 'qo‘shilgan', count: '{n} / {m} ta hujjat', search: 'Qidirish', max: 'Ko‘pi bilan {n} ta' },
+      kinds: { text: 'Matnli', pdf: 'Skan PDF', image: 'Rasm' }, pages: '{n} bet', used: 'oxirgi ishlatilgan', added: 'qo‘shilgan', count: '{n} / {m} ta hujjat', search: 'Qidirish', max: 'Ko‘pi bilan {n} ta', edit: 'Muharrirda' },
     ru: { title: 'Мои документы', lead: 'Загруженные документы хранятся здесь, пока вы их не удалите. В следующий раз выберите без повторной загрузки.',
       sealed: 'Тексты хранятся в базе в зашифрованном виде.', notSealed: '', none: 'Документов пока нет. Загрузите файл в чат или в «Анализ документа» — он останется здесь.',
       pick: 'Выбрать из моих документов', choose: 'Выбрать', cancel: 'Отмена', rename: 'Переименовать', del: 'Удалить', delQ: 'Документ будет удалён полностью (вместе с текстом). Продолжить?',
-      kinds: { text: 'Текстовый', pdf: 'Скан PDF', image: 'Изображение' }, pages: '{n} стр.', used: 'последнее использование', added: 'добавлен', count: '{n} / {m} документов', search: 'Поиск', max: 'Не более {n}' }
+      kinds: { text: 'Текстовый', pdf: 'Скан PDF', image: 'Изображение' }, pages: '{n} стр.', used: 'последнее использование', added: 'добавлен', count: '{n} / {m} документов', search: 'Поиск', max: 'Не более {n}', edit: 'В редакторе' }
   };
   function s(k, v) { var d = S[J.lang] || S.uz, x = d[k] !== undefined ? d[k] : S.uz[k]; if (typeof x === 'string' && v) Object.keys(v).forEach(function (n) { x = x.replace('{' + n + '}', v[n]); }); return x; }
   if (G.JAI_I18N) ['uz', 'ru', 'en'].forEach(function (l) { var d = G.JAI_I18N[l] = G.JAI_I18N[l] || {}; if (d['nav.docs'] === undefined) d['nav.docs'] = l === 'ru' ? 'Мои документы' : (l === 'en' ? 'My documents' : 'Hujjatlarim'); });
@@ -59,17 +59,24 @@
   J.viewDocs = function () {
     J.setTitle(s('title'));
     var v = J.mount('<div class="wrap narrow"><div class="vh"><div><h2>' + esc(s('title')) + '</h2><p class="lib-lead"></p></div></div>' +
+      '<div class="lib-ed"></div>' +
       '<div class="search" style="margin-bottom:14px">' + J.icon('search') + '<input class="inp" data-f="q" placeholder="' + esc(s('search')) + '"></div><div class="lib-l"><div class="skel"></div></div></div>');
+    // the editor's documents and "open a Word / PDF" (public/app/editor.js)
+    if (J.editorDocsBlock) J.editorDocsBlock($('.lib-ed', v));
     var all = [];
     function draw() {
       var q = ($('[data-f=q]', v).value || '').toLowerCase();
       var list = all.filter(function (d) { return !q || String(d.name || '').toLowerCase().indexOf(q) > -1; });
       $('.lib-l', v).innerHTML = list.length ? list.map(function (d) {
         return '<div class="mt-item lib-it" data-id="' + esc(d.id) + '"><span>' + J.icon(d.kind === 'text' ? 'doc' : 'scan') + '</span><span style="flex:1;min-width:0"><b class="lib-n" data-noalpha style="display:block;overflow-wrap:anywhere"></b><small class="muted">' + esc(meta(d)) + '</small></span>' +
+          (J.openLibraryInEditor ? '<button class="pill sm ghost" type="button" data-ed="' + esc(d.id) + '">' + esc(s('edit')) + '</button>' : '') +
           '<button class="pill sm ghost" type="button" data-rn="' + esc(d.id) + '" aria-label="' + esc(s('rename')) + '">' + J.icon('pen') + '</button>' +
           '<button class="pill sm ghost" type="button" data-del="' + esc(d.id) + '" aria-label="' + esc(s('del')) + '">' + J.icon('trash') + '</button></div>';
       }).join('') : '<div class="empty-state">' + esc(s('none')) + '</div>';
       list.forEach(function (d) { var el = $('[data-id="' + d.id + '"] .lib-n', v); if (el) el.textContent = d.name || 'Hujjat'; });
+      $$('[data-ed]', v).forEach(function (b) {
+        b.onclick = function () { b.disabled = true; J.openLibraryInEditor(all.filter(function (x) { return x.id === b.dataset.ed; })[0]); };
+      });
       $$('[data-rn]', v).forEach(function (b) {
         b.onclick = async function () {
           var d = all.filter(function (x) { return x.id === b.dataset.rn; })[0];
