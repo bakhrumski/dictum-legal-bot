@@ -99,6 +99,27 @@
     }
   };
 
+  /* ---------- rollar bo'yicha alohida ko'rinish (2026-10-30, egasi: "har user role ... alohida qilib ko'raylik").
+     Ko'rib chiqish rejimi: #/rol/<rol> shu tabda faqat o'sha rolga kerakli bo'limlarni va soddalashtirilgan bosh sahifani
+     ko'rsatadi; hisobga hech narsa yozilmaydi; #/rol/chiqish odatiy ko'rinishga qaytaradi. ---------- */
+  J.ROLE_VIEWS = {
+    citizen: { slug: 'fuqaro', nav: ['#/', '#/hujjatlarim', '#/tahlil', '#/tayyorlash', '#/advokatlar'] },
+    biz: { slug: 'tadbirkor', nav: ['#/', '#/hujjatlarim', '#/tahlil', '#/tayyorlash', '#/ishlar', '#/advokatlar'] },
+    lawyer: { slug: 'yurist', nav: ['#/', '#/ishlar', '#/hujjatlarim', '#/tahlil', '#/tayyorlash', '#/konikmalar', '#/yozuvlar'] },
+    acct: { slug: 'buxgalter', nav: ['#/', '#/hujjatlarim', '#/tahlil', '#/tayyorlash'] },
+    hr: { slug: 'hr', nav: ['#/', '#/hujjatlarim', '#/tahlil', '#/tayyorlash', '#/yozuvlar'] },
+    firm: { slug: 'firma', nav: ['#/', '#/ishlar', '#/jamoa', '#/hujjatlarim', '#/tahlil', '#/tayyorlash', '#/konikmalar', '#/yozuvlar'] },
+  };
+  J.roleView = function () {
+    var r = null; try { r = sessionStorage.getItem('jai-role-view'); } catch (e) {}
+    return r && J.ROLE_VIEWS[r] ? r : null;
+  };
+  J.setRoleView = function (r) {
+    try { if (r) sessionStorage.setItem('jai-role-view', r); else sessionStorage.removeItem('jai-role-view'); } catch (e) {}
+    if (r) J.S.persona = r;   // only this tab: the account's own type is not changed
+    document.body.classList.toggle('role-view', !!r);
+  };
+
   J.isStaff = function () { var u = J.S.user; return !!(u && u.role && u.role !== 'user'); };
   J.balance = function () { return (J.S.tariff && J.S.tariff.balance) || {}; };
   J.planKey = function () {

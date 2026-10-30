@@ -681,3 +681,11 @@ textarea.inp{height:auto;min-height:96px;padding:10px 13px;resize:vertical;line-
 .vc-heard{font-size:13px;margin:6px 0 0;overflow-wrap:anywhere}
 .vc-heard i{font-style:normal}
 .vc-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+/* rollar bo'yicha ko'rinish (#/rol) */
+.rv-bar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:13px;margin-bottom:18px}
+.rv-tag{background:var(--accent-soft);color:var(--cta-dark);border-radius:99px;padding:3px 10px}
+.rv-bar a{color:var(--muted)}
+.rv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.rv-card{display:flex;flex-direction:column;gap:4px;text-decoration:none;color:var(--fg)}
+.rv-card.on{border-color:var(--cta)}
+.home.rh .hello{margin-bottom:18px}
