@@ -1,6 +1,6 @@
 # Hujjat muharriri — platformaning o'zida Word kabi (dizayn, qoralama)
 
-Holati: **qoralama** — kod 9-bo'limdagi savollarga javobdan keyin boshlanadi.
+Holati: **qabul qilingan** (2026-10-30, egasi takliflarni qabul qildi; javoblar 9-bo'limda). D1 — PR.
 
 Egasi (2026-10-30, skrinshot: Word'ga o'xshash sahifa, yuqorida asboblar
 paneli, o'ngda izohlar): hujjat loyihasi platformaning o'zida Word kabi
@@ -127,7 +127,7 @@ ishlaydi, B esa AI'ga tayanadi.
 
 | PR | Nima | Kim yutadi | Tegadi |
 |---|---|---|---|
-| D1 | Muharrir bir kishi uchun: AI loyiha yoki yuklangan Word/PDF "Muharrirda ochish", A4 ko'rinish, asboblar, avtosaqlash va versiyalar, Word va PDF yuklab olish | Loyihani Word'ga o'tkazmasdan shu yerda tuzatadi | src, migrations, public, package (vendor) |
+| D1 (PR) | Muharrir bir kishi uchun: AI loyiha yoki yuklangan Word/PDF "Muharrirda ochish", A4 ko'rinish, asboblar, avtosaqlash va versiyalar, Word va PDF yuklab olish | Loyihani Word'ga o'tkazmasdan shu yerda tuzatadi | src, migrations, public, package (vendor) |
 | D2 | Izohlar paneli (belgilash, javob, hal qilindi), Word eksportda izohlar | Kimdan qanday izoh kelgani bitta joyda | src, public |
 | D3 | Ulashish va birgalikda tahrir: taklif havolasi, rollar, real vaqt, boshqa odam kursori, @eslatma Telegram'ga | Fayl borib-kelmaydi, ikkalasi bitta nusxada | src, migrations, public, package (`ws`) |
 | D4 | AI tahlil paneli hujjat ichida: band joyi belgilanadi, taklif "o'zgarish" sifatida kiritiladi | Tahlil va tuzatish bir oynada | src, public |
@@ -148,6 +148,18 @@ Har PR alohida, har birida brauzerda (kompyuter va ~390px) tekshiruv va
   `public/word/` o'z yo'lida qoladi).
 
 ## 9. Egasiga savollar
+
+Javoblar (2026-10-30, egasi: "takliflaringni qabul qilaman"):
+1. Platformadagi har qanday foydalanuvchi havola orqali qo'shiladi (hozircha).
+2. Barcha tariflarda.
+3. Yangi paketlarga rozi (TipTap/ProseMirror, Yjs, `ws`).
+4. AI imlo tuzatish AI limitidan (birlik) ketadi; platforma ichida o'zimizning
+   texnik / imlo tuzatuvchimiz ham quriladi (D5: AI'siz qoidalar bepul).
+5-9. Takliflar qabul qilindi: PDF brauzer orqali; odam o'zgarishlarini
+   kuzatish D3 dan keyin; Workspace hujjatlari D3 da shu muharrirda;
+   o'chirilgan akkaunt izohlari ismsiz qoladi; tartib D1 → D5.
+
+Savollar (asl matn):
 
 1. **Kim qo'shiladi?** (a) faqat Workspace a'zolari; (b) har qanday JuristAI
    akkaunti havola orqali (mijoz ham); (c) ikkalasi. Taklif: (c) — Workspace
