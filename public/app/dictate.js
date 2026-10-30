@@ -16,7 +16,8 @@
     if (el.readOnly || el.disabled) return false;
     if (/one-time-code|username|current-password|new-password/i.test(el.getAttribute('autocomplete') || '')) return false;
     // places with their own microphone, and anything marked off
-    if (el.closest('.cmp, .mt-cmd, [data-nomic]')) return false;
+    // (the voice card's own field, e.g. the matter name asked after "yangi ish och", takes it: .vc-name)
+    if (el.closest('.cmp, .mt-cmd, [data-nomic]') && !el.classList.contains('vc-name')) return false;
     if (!el.closest('#app, .modal, main, body')) return false;
     return true;
   }

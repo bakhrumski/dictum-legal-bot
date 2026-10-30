@@ -36,7 +36,7 @@
       running: 'Bajarilmoqda…', answer: 'Javob', vf: { verified: 'Manbalar bilan tekshirildi', partial: 'Ayrim da’volar manbada tasdiqlanmadi va olib tashlandi', unverified: 'Tekshiruvchi ishlamadi — javobni manba bilan qo‘lda tekshiring', no_claims: 'Raqam yoki muddat da’volari yo‘q; iqtiboslar manbada tekshirildi' },
       sources: 'Manbalar',
       askH: 'Agent savol beryapti', askPh: 'Javobingiz', askSend: 'Javob berish va davom etish', askNote: 'Javobdan keyin narx qayta band qilinadi va ish davom etadi.',
-      cmdPh: 'Buyruq: «ishlarim», «yangi ish och: …», «… ishiga yozuv: …»', cmdRun: 'Bajarish', cmdMic: 'Ovozli buyruq', cmdListen: 'Gapiring… (to‘xtatish uchun bosing)', cmdBusy: 'Matnga aylantirilmoqda…', gloss: 'Lug‘atim', glossAdd: 'Qo‘shish', glossLead: 'Ovozdan matnga aylantirishda sizning so‘zlaringiz: noto‘g‘ri eshitilgan so‘z va uning to‘g‘risi, yoki o‘z so‘zingiz (mijoz ismi, atama). Faqat taklif uchun ishlatiladi, so‘z o‘zi almashtirilmaydi. Tuzatishlaringizdan o‘zi ham o‘rganadi.', glossHeard: 'Eshitilgan (ixtiyoriy): Qudratxo‘ja', glossTerm: 'To‘g‘risi: Pudratchi', glossLearned: 'o‘rganilgan', glossManual: 'qo‘lda', glossEmpty: 'Hali so‘z yo‘q.', heardCheck: 'Matnni tekshiring, kerak bo‘lsa tuzating va «Bajarish»ni bosing.',
+      cmdPh: 'Buyruq: «ishlarim», «yangi ish och: …», «… ishiga yozuv: …»', cmdRun: 'Bajarish', cmdMic: 'Ovozli buyruq', cmdListen: 'Gapiring… (to‘xtatish uchun bosing)', cmdBusy: 'Matnga aylantirilmoqda…', gloss: 'Lug‘atim', glossAdd: 'Qo‘shish', glossLead: 'Ovozdan matnga aylantirishda sizning so‘zlaringiz: noto‘g‘ri eshitilgan so‘z va uning to‘g‘risi, yoki o‘z so‘zingiz (mijoz ismi, atama). Faqat taklif uchun ishlatiladi, so‘z o‘zi almashtirilmaydi. Tuzatishlaringizdan o‘zi ham o‘rganadi.', glossHeard: 'Eshitilgan (ixtiyoriy): Qudratxo‘ja', glossTerm: 'To‘g‘risi: Pudratchi', glossLearned: 'o‘rganilgan', glossManual: 'qo‘lda', glossEmpty: 'Hali so‘z yo‘q.', heardCheck: 'Matnni tekshiring, kerak bo‘lsa tuzating va «Bajarish»ni bosing.', cmdName: 'Ish nomi: masalan, Pudratchi bilan nizo', cmdNameHeard: 'Ish nomi shunday eshitildi. Kerak bo‘lsa tuzating va «Bajarish»ni bosing.',
       cmdHelp: 'Ovoz yoki matn bilan: «ishlarim» · «yangi ish och: Pudratchi bilan nizo» · «pudrat ishiga yozuv: sud 12-noyabr» · «pudrat ishini ko‘rsat» · «pudrat ishini yop». Xuddi shu buyruqlar Telegram botida ham ishlaydi (akkaunt ulangan bo‘lsa).',
       yes: 'Ha', micDenied: 'Mikrofonga ruxsat berilmadi.',
     },
@@ -68,7 +68,7 @@
       running: 'Выполняется…', answer: 'Ответ', vf: { verified: 'Проверено по источникам', partial: 'Часть утверждений не подтвердилась и удалена', unverified: 'Проверка не сработала — сверьте ответ с источником вручную', no_claims: 'Утверждений с цифрами и сроками нет; цитаты сверены с источником' },
       sources: 'Источники',
       askH: 'Агент задаёт вопрос', askPh: 'Ваш ответ', askSend: 'Ответить и продолжить', askNote: 'После ответа цена резервируется снова и работа продолжается.',
-      cmdPh: 'Команда: «мои дела», «новое дело: …», «заметка в дело …: …»', cmdRun: 'Выполнить', cmdMic: 'Голосовая команда', cmdListen: 'Говорите… (нажмите, чтобы остановить)', cmdBusy: 'Распознаём…', gloss: 'Мой словарь', glossAdd: 'Добавить', glossLead: 'Ваши слова для распознавания речи: неверно услышанное слово и правильное, или своё слово (имя клиента, термин). Используется только для подсказок, слово само не заменяется. Словарь учится на ваших исправлениях.', glossHeard: 'Услышано (необязательно)', glossTerm: 'Правильно', glossLearned: 'выучено', glossManual: 'вручную', glossEmpty: 'Пока слов нет.', heardCheck: 'Проверьте текст, исправьте при необходимости и нажмите «Выполнить».',
+      cmdPh: 'Команда: «мои дела», «новое дело: …», «заметка в дело …: …»', cmdRun: 'Выполнить', cmdMic: 'Голосовая команда', cmdListen: 'Говорите… (нажмите, чтобы остановить)', cmdBusy: 'Распознаём…', gloss: 'Мой словарь', glossAdd: 'Добавить', glossLead: 'Ваши слова для распознавания речи: неверно услышанное слово и правильное, или своё слово (имя клиента, термин). Используется только для подсказок, слово само не заменяется. Словарь учится на ваших исправлениях.', glossHeard: 'Услышано (необязательно)', glossTerm: 'Правильно', glossLearned: 'выучено', glossManual: 'вручную', glossEmpty: 'Пока слов нет.', heardCheck: 'Проверьте текст, исправьте при необходимости и нажмите «Выполнить».', cmdName: 'Название дела: например, Спор с подрядчиком', cmdNameHeard: 'Название дела услышано так. Исправьте при необходимости и нажмите «Выполнить».',
       cmdHelp: 'Голосом или текстом: «мои дела» · «новое дело: Спор с подрядчиком» · «заметка в дело подряд: суд 12 ноября» · «покажи дело подряд» · «закрой дело подряд». Те же команды работают в Telegram-боте (если аккаунт привязан).',
       yes: 'Да', micDenied: 'Нет доступа к микрофону.',
     },
@@ -100,7 +100,7 @@
       running: 'Running…', answer: 'Answer', vf: { verified: 'Checked against the sources', partial: 'Some claims were not confirmed by the sources and were removed', unverified: 'The checker did not run — check the answer against the source by hand', no_claims: 'No figure or deadline claims; quotes checked in the source' },
       sources: 'Sources',
       askH: 'The agent asks', askPh: 'Your answer', askSend: 'Answer and continue', askNote: 'After the answer the price is reserved again and the work continues.',
-      cmdPh: 'Command (Uzbek or Russian): «ishlarim», «yangi ish och: …»', cmdRun: 'Run', cmdMic: 'Voice command', cmdListen: 'Speak… (press to stop)', cmdBusy: 'Transcribing…', gloss: 'My glossary', glossAdd: 'Add', glossLead: 'Your words for speech recognition: a mis-heard word and the right one, or a word of your own (a client\'s name, a term). Used for suggestions only; nothing is replaced by itself. It learns from your corrections.', glossHeard: 'Heard (optional)', glossTerm: 'Correct', glossLearned: 'learned', glossManual: 'added', glossEmpty: 'No words yet.', heardCheck: 'Check the text, fix it if needed and press «Run».',
+      cmdPh: 'Command (Uzbek or Russian): «ishlarim», «yangi ish och: …»', cmdRun: 'Run', cmdMic: 'Voice command', cmdListen: 'Speak… (press to stop)', cmdBusy: 'Transcribing…', gloss: 'My glossary', glossAdd: 'Add', glossLead: 'Your words for speech recognition: a mis-heard word and the right one, or a word of your own (a client\'s name, a term). Used for suggestions only; nothing is replaced by itself. It learns from your corrections.', glossHeard: 'Heard (optional)', glossTerm: 'Correct', glossLearned: 'learned', glossManual: 'added', glossEmpty: 'No words yet.', heardCheck: 'Check the text, fix it if needed and press «Run».', cmdName: 'Matter name: e.g. Dispute with the contractor', cmdNameHeard: 'The matter name was heard like this. Fix it if needed and press «Run».',
       cmdHelp: 'By voice or text, in Uzbek or Russian: «ishlarim» / «мои дела» · «yangi ish och: …» / «новое дело: …» · «… ishiga yozuv: …» · «… ishini yop». The same commands work in the Telegram bot (with a linked account).',
       yes: 'Yes', micDenied: 'Microphone access was refused.',
     },
@@ -249,8 +249,23 @@
         lastMatterId: matterId || current() || null, beforeRun: learnHeard,
         onClose: function () { card = null; input.focus(); },
         onDone: function () { card = null; input.value = ''; st.textContent = ''; },
+        // "yangi ish och" with no name: the bar itself waits for the name - spoken by its 🎙 or typed
+        onNeedsTitle: function (d) { card = null; askName(d.reply); },
       });
     }
+    function askName(reply) {
+      awaitingTitle = true; input.value = ''; dictated = null;
+      st.textContent = reply;
+      input.placeholder = shown(s('cmdName'));
+      var no = J.h('<button type="button" class="link mt-name-no"></button>');
+      no.textContent = s('cancel');
+      no.onclick = function () { stopName(); st.textContent = ''; input.focus(); };
+      st.appendChild(document.createTextNode(' ')); st.appendChild(no);
+      input.focus();
+    }
+    function stopName() { awaitingTitle = false; input.placeholder = shown(s('cmdPh')); }
+    // a placeholder set later is not seen by the alphabet's observer (text nodes only): converted here
+    function shown(v) { var A = G.JAIAlphabet; return A && A.mode() === 'new' && !A.englishUi() ? A.toNew(v) : v; }
     input.addEventListener('input', closeCard);
     async function run(text, extra) {
       if (!extra && !String(text || '').trim()) { input.focus(); return; }
@@ -268,7 +283,7 @@
           if (o.ok) { input.value = ''; if (o.data.href) location.href = o.data.href; else if (o.data.route) J.go('#' + o.data.route); return; }
         }
       }
-      awaitingTitle = false;
+      stopName();
       go.disabled = true; st.textContent = '';
       var r = await J.api('/api/matters/command', { method: 'POST', body: extra || { text: text, lastMatterId: matterId || current() || null, lang: J.lang === 'ru' ? 'ru' : 'uz' } });
       go.disabled = false;
@@ -284,7 +299,7 @@
         return;
       }
       input.value = '';
-      if (d.needsTitle) { awaitingTitle = true; st.textContent = d.reply; input.focus(); return; }
+      if (d.needsTitle) { askName(d.reply); return; }
       if (d.matterId) setCurrent(d.matterId);
       // a command that redraws the page says what it did in a toast (the bar is drawn again)
       if ((d.action === 'matter_created' || d.action === 'matter_shown') && d.matterId) { J.toast(d.reply, 5000); J.go('#/ishlar/' + d.matterId); return; }
@@ -292,10 +307,10 @@
       st.textContent = d.reply || '';
     }
     /** the dictated text waits in the box; a glossary suggestion is one click away */
-    function heardCheck(sugg) {
+    function heardCheck(sugg, label) {
       st.innerHTML = '';
       var box = J.h('<span class="mt-heard"><span class="mt-heard-t"></span></span>');
-      $('.mt-heard-t', box).textContent = s('heardCheck');
+      $('.mt-heard-t', box).textContent = label || s('heardCheck');
       sugg.forEach(function (x) {
         var b = J.h('<button type="button" class="chip mt-sugg"></button>');
         b.textContent = x.from + ' → ' + x.to;
@@ -333,7 +348,9 @@
         // the heard text is checked before it runs (2026-10-28: "Pudratchi" was heard as "Qudratxo'ja")
         input.value = r.data.text || '';
         dictated = { heard: input.value, suggested: r.data.suggestions || [] };
-        heardCheck(r.data.suggestions || []);
+        heardCheck(r.data.suggestions || [], awaitingTitle ? s('cmdNameHeard') : null);
+        // the name asked for: the heard words wait in the box for "Bajarish", they are not a command
+        if (awaitingTitle) return;
         // a spoken command becomes the card; it runs only by its [Bajarish]
         if (J.parseVoiceCommand && input.value.trim()) {
           var c = await J.parseVoiceCommand(input.value, 'matters');
