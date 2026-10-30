@@ -8,6 +8,9 @@
  *   open     go to a page of the app (3.1) - nothing is written
  *   matter   the matter commands of src/matters/commands.js (3.2), unchanged:
  *            their own confirmations and "as heard" checks stay
+ *   context  the open answer in the chat (3.3, V4): copy it, its Word file,
+ *            attach the chat to a matter, open the attached document's analysis
+ *            (the analysis' own cost confirmation stays) - chat only
  *   blocked  payments, deletion, sending to others (3.4): never run by voice;
  *            the card only offers to open the page where it is done by hand
  *
@@ -75,6 +78,21 @@ const PAGES = [
     re: [new RegExp(`^(?:moslashish|sozlamalar(?:im)?)(?:ni|ga)?${OPEN}$`, 'u'), /^(?:адаптация|настройки)$/u] },
 ];
 
+/** 3.3 (V4): actions on the open chat - only in the chat, only spoken. */
+const CONTEXT = [
+  { action: 'copy_answer', label: { uz: 'Javobni nusxalash', ru: 'Скопировать ответ' },
+    re: [/^(?:shu\s+)?javob(?:ni)?\s+(?:nusxala|nusxalang|nusxa\s+ol|nusxa\s+oling|kopiya\s+qil)$/u, /^(?:скопируй|копируй)\s+(?:этот\s+)?ответ$/u] },
+  { action: 'word_answer', label: { uz: 'Javobni Word’ga yuklash', ru: 'Скачать ответ в Word' },
+    re: [/^(?:shu\s+)?(?:javob(?:ni)?\s+)?word(?:ga|'ga)?\s+(?:yukla|yuklang|yuklab\s+ol|yuklab\s+ber|saqla|saqlang)$/u, /^(?:shu\s+)?javob(?:ni)?\s+(?:yukla|yuklang|yuklab\s+ol|yuklab\s+ber)$/u,
+      /^(?:скачай|сохрани)\s+(?:этот\s+)?(?:ответ\s+)?(?:в\s+)?word$/u, /^скачай\s+(?:этот\s+)?ответ$/u] },
+  { action: 'attach_matter', label: { uz: 'Suhbatni ishga biriktirish', ru: 'Прикрепить чат к делу' }, matter: true,
+    re: [/^(?:shu\s+)?suhbat(?:ni)?\s+([^:]{2,120}?)\s+ishiga\s+(?:biriktir|biriktiring|qo'sh|qo'shing|saqla|saqlang)$/u,
+      /^(?:shu\s+)?suhbat(?:ni)?\s+ish(?:ga|lar(?:im)?ga)\s+(?:biriktir|biriktiring|qo'sh|qo'shing|saqla|saqlang)$/u,
+      /^(?:прикрепи|добавь|сохрани)\s+(?:этот\s+)?чат\s+(?:к\s+делу|в\s+дело)(?:\s+(.{2,120}))?$/u] },
+  { action: 'analyze_doc', label: { uz: 'Shu hujjatni tahlil qilish', ru: 'Анализ этого документа' },
+    re: [/^shu\s+hujjat(?:ni)?\s+(?:tahlil\s+qil|tahlil\s+qiling|tahlil\s+qilib\s+ber|tekshir|tekshiring)$/u, /^(?:проанализируй|проверь)\s+этот\s+документ$/u] },
+];
+
 /** 3.4: never by voice - the card offers the page where it is done by hand. */
 const BLOCKED = [
   { action: 'delete_account', route: '/hisob', re: [/^(?:akkaunt(?:im)?|hisob(?:im)?)(?:ni)?\s+(?:o'chir|o'chiring|o'chirib\s+tashla)$/u, /^удали(?:ть)?\s+(?:мой\s+)?аккаунт$/u] },
@@ -101,6 +119,17 @@ function parse(text, { place = 'chat', voice = false } = {}) {
   const t = norm(raw), L = lang(raw);
   for (const p of PAGES) {
     if (p.re.some(re => re.test(t))) return { kind: 'open', action: p.action, route: p.route || null, href: p.href || null, label: TEXTS[L].open(p.label[L] || p.label.uz), lang: L };
+  }
+  if (place === 'chat') {
+    for (const c of CONTEXT) {
+      for (const re of c.re) {
+        const m = re.exec(t);
+        if (!m) continue;
+        const matter = c.matter && m[1] ? require('../../public/js/uz-alphabet').toOld(m[1]).trim() : null;
+        const label = c.label[L] || c.label.uz;
+        return { kind: 'context', action: c.action, matter, label: matter ? `${label}: «${matter}»` : label, lang: L };
+      }
+    }
   }
   for (const b of BLOCKED) {
     if (b.re.some(re => re.test(t))) return { kind: 'blocked', action: b.action, route: b.route || null, href: b.href || null, label: TEXTS[L].blocked, lang: L };
@@ -140,7 +169,7 @@ function issue(cmd, adminId, now = Date.now()) {
  * only; matter: src/matters/commands.js as a spoken command (its writes are
  * shown as heard and wait for their own confirmation).
  */
-async function run(token, { adminId, store = null, db = null, lastMatterId = null, now = Date.now() } = {}) {
+async function run(token, { adminId, store = null, db = null, lastMatterId = null, context = null, now = Date.now() } = {}) {
   sweep(now);
   const p = pending.get(String(token || ''));
   if (!p || p.adminId !== Number(adminId)) return { ok: false, status: 410, error: 'gone', message: TEXTS.uz.gone };
@@ -154,6 +183,19 @@ async function run(token, { adminId, store = null, db = null, lastMatterId = nul
     }
     return { ok: true, kind: cmd.kind, action: cmd.action, route: route || null, href: cmd.href || null };
   }
+  if (cmd.kind === 'context') {
+    // copy, Word and the analysis are done by the page (it holds the answer and the document)
+    if (cmd.action !== 'attach_matter') return { ok: true, kind: 'context', action: cmd.action };
+    const chatId = Number(context && context.chatId);
+    if (!store || !Number.isInteger(chatId) || chatId <= 0) return { ok: true, kind: 'context', action: 'attach_matter', needsPick: true };
+    if (!cmd.matter) return { ok: true, kind: 'context', action: 'attach_matter', needsPick: true };
+    const all = (await store.list(adminId)).filter(m => m.status === 'open');
+    const r = matterCommands.resolveMatter(cmd.matter, all);
+    if (r.none || r.many) return { ok: true, kind: 'context', action: 'attach_matter', needsPick: true, many: (r.many || []).map(m => ({ id: m.id, title: m.title })) };
+    const item = await store.addItem(r.matter.id, adminId, { kind: 'chat', ref: chatId, title: String((context && context.title) || '').slice(0, 240) || undefined });
+    if (!item) return { ok: true, kind: 'context', action: 'attach_matter', needsPick: true };
+    return { ok: true, kind: 'context', action: 'attach_matter', matterId: r.matter.id, matterTitle: r.matter.title };
+  }
   if (cmd.kind === 'matter') {
     if (!store) return { ok: false, status: 503, error: 'matters_unavailable' };
     const out = await matterCommands.runCommand(cmd.args, { adminId, store, lang: cmd.lang, lastId: lastMatterId, voice: true });
@@ -162,4 +204,4 @@ async function run(token, { adminId, store = null, db = null, lastMatterId = nul
   return { ok: false, status: 400, error: 'unknown' };
 }
 
-module.exports = { PAGES, BLOCKED, MAX_LEN, TOKEN_TTL_MS, parse, issue, run, norm, _pending: pending };
+module.exports = { PAGES, CONTEXT, BLOCKED, MAX_LEN, TOKEN_TTL_MS, parse, issue, run, norm, _pending: pending };

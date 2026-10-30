@@ -906,6 +906,16 @@ Known state of the suites (Sept 2026):
   (`src/voice/command-routes.js`, same-origin, no AI, no unit,
   `VOICE_COMMANDS=off`). `tests/voice-commands.test.js` scans every string of
   tests/ and both evaluation sets for false hits. The cards in the app are V2/V3.
+  V2 (#532): in the chat a spoken text that is a command becomes a card
+  (`J.voiceCard` in `public/app/chat.js`); typing closes it. V3 (#533): the
+  Ishlar command bar uses the same card. V4 (2026-10-30): `context` commands,
+  chat only and spoken only, a card only when there is something to act on -
+  copy the last answer, the last answer as Word, attach the chat to a matter
+  (the named open matter, `run` with `context.chatId`; no name, none or
+  several -> the page's matter picker) and "shu hujjatni tahlil qil" (the
+  composer's or the chat's last document opens Hujjat tahlili at the service
+  choice, the cost confirmation unchanged; "hujjatni tahlil qil" without
+  "shu" is still the page).
 - `src/workspace/` — Workspace: routes, authz, Supabase
   realtime/storage, Workspace AI. Since 2026-10-28 (owner, migration 025)
   any active paid plan (Silver, Gold, Platinum) owns one (`PLAN_CATALOG`
