@@ -628,6 +628,10 @@ function agentActionKeyboard(agentResult) {
     }
     return { inline_keyboard: [[yes, no]] };
   }
+  // a page of the app asked for in the bot (V5, src/voice/commands.js): one link button
+  if (agentResult.action === 'tool_open_page' && agentResult.meta && /^https:\/\//u.test(String(agentResult.meta.url || ''))) {
+    return { inline_keyboard: [[{ text: agentResult.meta.lang === 'ru' ? '📱 Открыть' : '📱 Ochish', url: agentResult.meta.url }]] };
+  }
   if (agentResult.action === 'attorney_intake_started') return attorneyFieldKeyboard();
   if (agentResult.action === 'document_intake_started') return documentTypeKeyboard();
   if (agentResult.action === 'greeting' || agentResult.action === 'intake_cancelled') return serviceKeyboard();

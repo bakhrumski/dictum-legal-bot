@@ -117,8 +117,10 @@
       if (d.href) { location.href = d.href; return; }
       if (d.route) J.go('#' + d.route);
     }
-    $('[data-v=no]', card).onclick = function () { close(); if (opts.onClose) opts.onClose(); };
-    if (opts.ask) $('[data-v=ask]', card).onclick = function () { close(); if (opts.onAsk) opts.onAsk(); };
+    // V5: a cancel, or a question taken for a command, is counted as codes only (src/voice/command-events.js)
+    function told(outcome) { J.api('/api/voice/command/event', { method: 'POST', body: { token: c.token, outcome: outcome } }); }
+    $('[data-v=no]', card).onclick = function () { told('cancel'); close(); if (opts.onClose) opts.onClose(); };
+    if (opts.ask) $('[data-v=ask]', card).onclick = function () { told('as_question'); close(); if (opts.onAsk) opts.onAsk(); };
     $('[data-v=run]', card).onclick = async function () {
       var b = this; b.disabled = true;
       if (opts.beforeRun) opts.beforeRun();

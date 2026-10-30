@@ -915,7 +915,21 @@ Known state of the suites (Sept 2026):
   several -> the page's matter picker) and "shu hujjatni tahlil qil" (the
   composer's or the chat's last document opens Hujjat tahlili at the service
   choice, the cost confirmation unchanged; "hujjatni tahlil qil" without
-  "shu" is still the page).
+  "shu" is still the page). After it (#536): a nameless "yangi ish och" asks
+  for the name - the Ishlar bar waits for it (spoken by its 🎙 or typed, then
+  Bajarish), the chat card shows its own name field with a mic (`.vc-name`).
+  V5 (2026-10-30, migration 035): in Telegram an open / blocked command,
+  typed or spoken, is answered with its link and one URL button (intent
+  `ilova_sahifa` after the matter and account actions, `appPath`; nothing is
+  done in the bot; MATTERS=off drops "Ishlarim" there too).
+  `voice_command_events` (`src/voice/command-events.js`): place, kind,
+  action, outcome (shown / run / ask / as_question / cancel), voice or text,
+  lang, time - never the text, never the account; the card's [Bekor] and
+  [Savol sifatida] call `POST /api/voice/command/event`; a failed write never
+  stops a command; `VOICE_COMMAND_EVENTS=off`. Weekly view: Boshqaruv ->
+  "Ovozli buyruqlar" (`/app/#/boshqaruv/ovoz`, `GET /api/admin/voice-commands`,
+  master), with the question share (as_question / shown) as the
+  false-recognition signal.
 - `src/workspace/` — Workspace: routes, authz, Supabase
   realtime/storage, Workspace AI. Since 2026-10-28 (owner, migration 025)
   any active paid plan (Silver, Gold, Platinum) owns one (`PLAN_CATALOG`
@@ -1033,7 +1047,8 @@ placeholders (inputs, textareas, code, `[data-noalpha]` untouched; links,
 emails, `code`, mixed-case names like MChJ / JuristAI and act codes like
 OʻRQ-1184 kept; a U+200C keeps a sample of the old letters as it is), copy
 buttons copy what is shown, a one-time bar offers the old alphabet (no
-answer = new). The choice: `localStorage jai-alphabet` and, signed in,
+answer = new); an English interface (`html lang` en: the app sets it in the head
+from its `lang`, and `/en/`) is never converted and gets no offer (#536). The choice: `localStorage jai-alphabet` and, signed in,
 `user_profile.manual.alphabet` (the Moslashish page). The bot
 (`src/bot/alphabet.js`, migration 023 `tg_alphabet`): `sendMessage` /
 `editMessageText` and button labels in the chat's script, the old one

@@ -418,6 +418,13 @@ function classifyDeterministicIntent(text) {
   // an account action the bot does itself (src/agents/account-tools.js)
   const tool = require('./account-tools').detectAccountAction(t);
   if (tool) return { intent: 'hisob_amal', action: tool, missing: [] };
+  // a page of the app, typed or spoken (voice commands level 2, V5): the bot
+  // answers with its link - nothing is done in the bot (src/voice/commands.js)
+  if (String(process.env.VOICE_COMMANDS || '').toLowerCase() !== 'off') {
+    const page = require('../voice/commands').parse(t, { place: 'telegram' });
+    const mattersOff = page && page.action === 'matters' && String(process.env.MATTERS || '').toLowerCase() === 'off';
+    if (page && !mattersOff && (page.kind === 'open' || page.kind === 'blocked')) return { intent: 'ilova_sahifa', page, missing: [] };
+  }
   if (isAccountRequest(t)) return { intent: 'hisob_yordam', missing: [] };
   if (HUMAN_RE.test(t))    return { intent: 'yurist_kerak', missing: [] };
   return null;
@@ -1276,6 +1283,20 @@ Agar texnik uzilish yuz bersa, limitingiz avtomatik tiklanadi.`,
     }
   }
 
+  // ── A page of the app (V5): its link and a button; counted as codes only
+  // (src/voice/command-events.js). No AI call, no quota, nothing done here.
+  if (intent.intent === 'ilova_sahifa' && intent.page) {
+    const page = intent.page;
+    const R = page.lang === 'ru';
+    const url = `${String(process.env.APP_URL || 'https://juristai.uz').replace(/\/+$/u, '')}${require('../voice/commands').appPath(page)}`;
+    const reply = page.kind === 'blocked'
+      ? (R ? `Это действие не выполняется голосом или в боте — его делают сами на странице:\n${url}` : `Bu amal ovoz bilan yoki botda bajarilmaydi — uni sahifada o'zingiz qilasiz:\n${url}`)
+      : `${page.label}\n${url}`;
+    require('../voice/command-events').note(pool, { place: 'telegram', kind: page.kind, action: page.action, outcome: 'shown', via: voice ? 'voice' : 'text', lang: page.lang });
+    await remember(reply, 0);
+    return complete({ handled: true, reply, action: 'tool_open_page', escalate: false, meta: { intent: intent.intent, page: page.action, url, lang: page.lang } });
+  }
+
   if (intent.intent === 'ish_amal' && intent.command) {
     const commands = require('../matters/commands');
     const cmdLang = /[\u0400-\u04ff]/u.test(question) ? 'ru' : 'uz';
@@ -1296,6 +1317,7 @@ Agar texnik uzilish yuz bersa, limitingiz avtomatik tiklanadi.`,
       if (out.learn) await ug.learn(account.id, out.learn).catch(() => {});
       if (out.matterId) lastMatterByChat.set(String(chatId), out.matterId);
       if (out.needsTitle) pendingMatterTitle.set(String(chatId), Date.now());
+      require('../voice/command-events').note(pool, { place: 'telegram', kind: 'matter', action: intent.command.action, outcome: out.confirm || out.needsTitle ? 'ask' : 'run', via: voice ? 'voice' : 'text', lang: cmdLang });
       if (out.confirm && voice && (out.confirm.action === 'create' || out.confirm.action === 'note')) pendingVoiceWrite.set(String(chatId), { token: out.confirm.token, at: Date.now() });
       await remember(out.reply, 0);
       return complete({ handled: true, reply: out.reply, action: out.confirm ? 'tool_matter_confirm' : out.action, escalate: false,
