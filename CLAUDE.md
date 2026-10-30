@@ -40,6 +40,16 @@ The owner writes in Uzbek; answer in Uzbek unless asked otherwise.
   not (e.g. no real iPhone available — Safari behaviour was simulated).
 - The owner's design rules for the new app: no coloured left-stripe cards;
   a coloured text background only in light blue.
+- **Every change must make something easier for a real person** (owner,
+  2026-10-30, "har bir promptda inobatga olishing kerak"): a client, a
+  lawyer, an agent or the owner must get fewer steps, less time, less risk
+  or less to read. Before building, say who gains what and how; when a
+  request (or a stage of a design) would only add a link to what the person
+  can already reach, or a feature nobody will feel, say so plainly and
+  propose the version that removes the real step. Report the gain with
+  every change, not only what was built. (Lesson: V5 answered "hujjatlarimni
+  och" in Telegram with a link to the site - the person still had to leave
+  the bot; the useful version shows the documents in the bot itself.)
 
 ## Commands
 
@@ -992,6 +1002,15 @@ no master's click (`maybeAutoApprove`, one at a time under an advisory lock;
 in all and `PILOT_AUTO_PER_AGENT` (4) for that agent; "user" and anything
 past a cap waits for a master; `PILOT_AUTO=off` stops it.
 `tests/pilot-join.db.test.js`.
+Role views (2026-10-30, owner; #534 preview, #538 automatic, frontend only):
+the client type picks the app's view - a client account (role `user`) sees
+its field's sections and a lean home page by default (`J.ROLE_VIEWS` in
+`public/app/core.js`: Fuqaro, Tadbirkor, Yurist, Buxgalter, HR, Advokatlik
+firmasi; no type yet = Fuqaro with "Sohangizni tanlang" on the home page,
+one tap saves the type). "Barcha bo'limlar" (`#/rol/hammasi`, the last nav
+item) shows every section in this browser (`localStorage jai-role-full`),
+"Soddalashtirilgan ko'rinish" (`#/rol/sodda`) goes back; staff keep the
+full view; `#/rol/<rol>` previews a role in one tab (sessionStorage).
 Stage 3 (migration 027, `src/sales/pilot-workspace.js`, no AI): a master
 opens the pilot's internal Workspace once (Boshqaruv → CustDev pilot,
 `pilot_workspace`); agents with a code are members (also when a code is
