@@ -82,8 +82,10 @@ async function test(name, fn) {
     assert.ok(/process\.env\.GOOGLE_AUTH_ENABLED === 'true'/.test(server));
     for (const route of ["app.get('/auth/google', ", "app.get('/auth/google/callback'"]) {
       const body = between(route, "\n});");
-      assert.ok(/if \(!googleAuthEnabled\(\)\) return res\.redirect\('\/login\.html\?error=google_disabled'\)/.test(body.slice(0, 400)), route);
+      // The login page is /login.html, or /app/kirish.html when APP_HOME=/app/.
+      assert.ok(/if \(!googleAuthEnabled\(\)\) return res\.redirect\((?:'\/login\.html\?error=google_disabled'|LOGIN_PAGE \+ '\?error=google_disabled')\)/.test(body.slice(0, 400)), route);
     }
+    assert.ok(/const LOGIN_PAGE = APP_HOME\.startsWith\('\/app'\) \? '\/app\/kirish\.html' : '\/login\.html';/.test(server), 'LOGIN_PAGE falls back to /login.html');
     const login = fs.readFileSync(path.join(__dirname, '..', 'public', 'login.html'), 'utf8');
     const googleButtons = login.match(/<[^>]*\/auth\/google\?mode=[^>]*>/g) || [];
     assert.ok(googleButtons.length >= 2 && googleButtons.every(b => /data-auth="google" hidden/.test(b)), 'every Google button starts hidden');

@@ -556,7 +556,10 @@ function stripRawLexAttributions(value = '') {
         // Preserve that canonical link when the cache row no longer includes
         // the original RAG chunks needed to reconstruct it.
         const plain = String(label || '').replace(/[*_]/gu, '').trim();
-        const canonicalProvision = /\p{L}[\s\S]*\d+\s*[-–—]\s*(?:modda|band)\s*,\s*(?:\d+\s*[-–—]\s*qism|tegishli\s+(?:qism|band))/iu.test(plain);
+        // "Act, N-modda, M-qism", an older "..., tegishli qism", or since
+        // 2026-10-27 "Act, N-modda" alone when no part is known
+        const canonicalProvision = /\p{L}[\s\S]*,\s*\d+\s*[-–—]\s*(?:modda|band)(?:\s*,\s*(?:\d+\s*[-–—]\s*qism|tegishli\s+(?:qism|band)))?\s*$/iu.test(plain)
+          || /\p{L}[\s\S]*\d+\s*[-–—]\s*(?:modda|band)\s*,\s*(?:\d+\s*[-–—]\s*qism|tegishli\s+(?:qism|band))/iu.test(plain);
         const canonicalAct = /\p{L}[\s\S]*\((?:O['\u02bb\u02bc\u2018\u2019`]?RQ|PQ|PF|VMQ)-\d+(?:-[IVXLCDM]+)?\)/iu.test(plain);
         return canonicalProvision || canonicalAct ? whole : label;
       }
@@ -723,8 +726,9 @@ function citationLocatorLabel(ref = '', type = 'modda', partNumber = '', lang = 
     const word = type === 'band' ? 'пункт' : 'статья';
     return `${word} ${ref}${partNumber ? `, часть ${ruPartOrdinal(partNumber)}` : ''}`;
   }
-  const partLabel = partNumber ? `${partNumber}-qism` : (type === 'band' ? 'tegishli band' : 'tegishli qism');
-  return `${ref}-${type}, ${partLabel}`;
+  // no part known: the article alone (2026-10-27, owner: "523-modda, tegishli
+  // qism" read as filler)
+  return partNumber ? `${ref}-${type}, ${partNumber}-qism` : `${ref}-${type}`;
 }
 
 /** Regex sources for an act's Russian title in any case form ([] when it has none). */
@@ -1194,8 +1198,26 @@ function linkBareArticleRefs(text = '', chunks = [], lang = 'uz') {
 // Qonuni (O'RQ-1137)"): the quote marks around the link, the "gi" of
 // «...»gi, and the number the label already shows are removed.
 const LINK = String.raw`\[[^\]\n]+\]\([^)\s]+\)`;
+// "Title ([**Title (VMQ-734)**](url))" - the model wrote the title, the
+// identifier was linked with the full title: the title once, as the link
+// (2026-10-13)
+function dropTitleBeforeLink(value = '') {
+  const norm = t => String(t || '').toLocaleLowerCase('uz').replace(/[ʻʼ‘’`'"“”«»]/gu, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  return String(value || '').replace(/\(\s*(\[(\**)([^\]\n]+?)\s*\(([^()\]\n]+-\d+[^()\]\n]*)\)\2\]\([^)\s]+\))\s*\)/gu, (whole, link, _b, title, _id, offset, all) => {
+    const before = all.slice(Math.max(0, offset - title.length - 20), offset);
+    const t = norm(title);
+    if (t.length < 15) return whole;
+    // the words just before the "(" end with the same title
+    const words = before.replace(/\s+$/u, '');
+    for (let cut = 0; cut <= 20 && cut < words.length; cut++) {
+      if (norm(words.slice(cut)) === t) return `\u0000CUT${words.length - cut}\u0000${link}`;
+    }
+    return whole;
+  }).replace(/([\s\S]*?)\u0000CUT(\d+)\u0000/gu, (m, head, n) => head.replace(/\s+$/u, '').slice(0, Math.max(0, head.replace(/\s+$/u, '').length - Number(n))).replace(/\s+$/u, '') + ' ');
+}
+
 function tidyAroundLinks(value = '') {
-  return String(value || '')
+  return dropTitleBeforeLink(String(value || ''))
     // «[link]»gi Qonuni / [link]»gi Qonuni -> [link] Qonuni
     .replace(new RegExp(String.raw`(?:[«"\u201c\u201e]\s*)?(${LINK})\s*[»"\u201d]\s*-?\s*gi(?=\s+\p{L})`, 'gu'), '$1')
     // «[link]» / "[link]"; a lone » or « at the link

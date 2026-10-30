@@ -361,7 +361,7 @@ async function claimTelegramAnswer(chatId, identity = {}) {
   if (r.kind === 'staff') return { allowed: true, source: 'staff', reservationId: null };
   if (r.allowed) {
     return { allowed: true, source: 'tariff', reservationId: r.jobKey, plan: r.plan, kind: r.kind, legacy: r.rules === 'legacy_v1',
-      used: r.used, limit: r.limit, remaining: r.remaining, endsAt: r.endsAt || null, paidCredits: 0 };
+      used: r.used, limit: r.limit, remaining: r.remaining, endsAt: r.endsAt || null, paidCredits: 0, oneTime: !!r.oneTime };
   }
   if (r.pending) return { allowed: false, pending: true, source: null, plan: r.plan, kind: r.kind, limit: r.limit, paidCredits: 0 };
   // no tariff allowance left: a Stars answer credit, if any was bought
@@ -386,6 +386,8 @@ async function getTelegramAnswerStatus(chatId, identity = {}) {
   if (b.kind === 'staff' || b.legacy) tariffRemaining = Infinity;
   else if (b.kind === 'none') tariffRemaining = b.trialAvailable ? b.trialQuotas.chat : 0;
   else tariffRemaining = b.services.chat.remaining;
+  // questions bought one at a time (src/rag/one-time-products.js) come after the plan's
+  if (Number.isFinite(tariffRemaining)) tariffRemaining += (b.oneTime && b.oneTime.chat) || 0;
   return {
     allowed: !pending && (tariffRemaining > 0 || wallet.paidCredits > 0),
     pending, plan: b.plan || (b.kind === 'none' && b.trialAvailable ? 'sinov' : null), kind: b.kind,

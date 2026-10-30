@@ -1,0 +1,134 @@
+#!/usr/bin/env node
+'use strict';
+
+/**
+ * Data protection E2: seal the rows written before encryption at rest was on
+ * (docs/design/shifrlash-1-bosqich.md §3.1). Dry run by default: counts the
+ * plain and sealed values per column and changes nothing.
+ *
+ *   DATABASE_URL=... DATA_KEYS=... node scripts/seal-backfill.js           # count only
+ *   DATABASE_URL=... DATA_KEYS=... node scripts/seal-backfill.js --apply   # seal the plain ones
+ *   ... --files            # also the Workspace files in Storage (E5; SUPABASE_* needed)
+ *   ... --tables requests,ai_analyses   # only these tables
+ *
+ * The live database is written only by the owner (CLAUDE.md): run --apply
+ * yourself, after DATA_KEYS is in Render and its offline copy is kept.
+ * Each row is sealed in its own UPDATE that only touches a still-plain value,
+ * so a run can be stopped and started again.
+ */
+
+const privacy = require('../src/privacy/crypto');
+const { textAad } = require('../src/ocr/scan-store');
+const ws = require('../src/workspace/sealing');
+const rt = require('../src/privacy/request-text');
+const bidx = require('../src/privacy/blind-index');
+const chats = require('../src/privacy/chat-sessions');
+
+const COLUMNS = [
+  { table: 'document_scans', col: 'text', key: 'id', aad: r => textAad(r.admin_id, r.file_hash), extra: 'admin_id, file_hash' },
+  { table: 'interview_transcripts', col: 'body', key: ['recording_id', 'version'], aad: r => `interview_transcripts.body:${r.recording_id}:${r.version}` },
+  { table: 'interview_recordings', col: 'consent_by', key: 'id', aad: r => `interview_recordings.consent_by:${r.id}` },
+  { table: 'interview_recordings', col: 'consent_note', key: 'id', aad: r => `interview_recordings.consent_note:${r.id}` },
+  { table: 'interview_recordings', col: 'summary', key: 'id', json: true, aad: r => `interview_recordings.summary:${r.id}` },
+  { table: 'interview_audio', col: 'data', key: 'recording_id', bytes: true, aad: r => `interview_audio.data:${r.recording_id}` },
+  // E2b
+  { table: 'tg_conversations', col: 'turns', key: 'chat_id', json: true, aad: r => `tg_conversations.turns:${r.chat_id}` },
+  { table: 'tg_conversations', col: 'context', key: 'chat_id', json: true, aad: r => `tg_conversations.context:${r.chat_id}` },
+  { table: 'matters', col: 'summary', key: 'id', aad: r => `matters.summary:${r.id}` },
+  { table: 'matter_items', col: 'note', key: 'id', aad: r => `matter_items.note:${r.id}` },
+  { table: 'agent_runs', col: 'input', key: 'id', json: true, aad: r => `agent_runs.input:${r.id}` },
+  { table: 'agent_runs', col: 'plan', key: 'id', json: true, aad: r => `agent_runs.plan:${r.id}` },
+  { table: 'agent_runs', col: 'result', key: 'id', json: true, aad: r => `agent_runs.result:${r.id}` },
+  { table: 'agent_run_steps', col: 'output', key: ['run_id', 'step_id'], json: true, aad: r => `agent_run_steps.output:${r.run_id}:${r.step_id}` },
+  { table: 'service_orders', col: 'intake_data', key: 'id', json: true, aad: r => `service_orders.intake_data:${r.id}` },
+  { table: 'attorney_consultation_requests', col: 'case_summary', key: 'id', aad: r => `attorney_consultation_requests.case_summary:${r.id}` },
+  ...['selected_text', 'suggestion', 'question', 'answer_text'].map(col =>
+    ({ table: 'answer_feedback', col, key: 'id', extra: 'submitted_by', aad: r => `answer_feedback.${col}:${r.submitted_by}` })),
+  { table: 'chat_messages', col: 'message', key: 'id', extra: 'admin_id', aad: r => `chat_messages.message:${r.admin_id}` },
+  { table: 'agent_traces', col: 'input_summary', key: 'id', extra: 'request_id, agent_type', aad: r => `agent_traces:${r.request_id}:${r.agent_type}` },
+  { table: 'agent_traces', col: 'output', key: 'id', json: true, extra: 'request_id, agent_type', aad: r => `agent_traces:${r.request_id}:${r.agent_type}` },
+  // E4: the web chat's shared answer cache (72 hours), bound to its key
+  { table: 'answer_cache', col: 'reply', key: 'key', aad: r => `answer_cache.reply:${r.key}` },
+  // E5: the Workspace (src/workspace/sealing.js); the files are a separate pass (--files)
+  { table: 'workspace_task_comments', col: 'body', key: 'id', extra: 'workspace_id, task_id', aad: r => ws.aad.comment(r.workspace_id, r.task_id) },
+  { table: 'workspace_messages', col: 'body', key: 'id', extra: 'workspace_id', aad: r => ws.aad.message(r.workspace_id) },
+  { table: 'workspace_direct_messages', col: 'body', key: 'id', extra: 'workspace_id', aad: r => ws.aad.dm(r.workspace_id) },
+  { table: 'workspace_ai_messages', col: 'content', key: 'id', extra: 'workspace_id, thread_id', aad: r => ws.aad.aiMessage(r.workspace_id, r.thread_id) },
+  { table: 'workspace_ai_runs', col: 'request_text', key: 'id', extra: 'workspace_id', aad: r => ws.aad.aiRequest(r.workspace_id) },
+  { table: 'workspace_ai_runs', col: 'context_snapshot', key: 'id', json: true, extra: 'workspace_id', aad: r => ws.aad.aiContext(r.workspace_id) },
+  { table: 'workspace_document_versions', col: 'content_text', key: 'id', extra: 'workspace_id, document_id', aad: r => ws.aad.versionText(r.workspace_id, r.document_id) },
+  { table: 'workspace_document_versions', col: 'content_json', key: 'id', json: true, extra: 'workspace_id, document_id', aad: r => ws.aad.versionJson(r.workspace_id, r.document_id) },
+  // E6: the human queue, the AI analysis archive (with their blind index) and the web chats
+  { table: 'requests', col: 'request_text', key: 'id', aad: r => rt.aad.request(r.id), also: (r, plain) => ({ request_bidx: bidx.tokens(plain) }) },
+  { table: 'requests', col: 'response_text', key: 'id', aad: r => rt.aad.response(r.id) },
+  { table: 'ai_analyses', col: 'request_text', key: 'id', extra: 'admin_id', aad: r => rt.aad.analysis(r.admin_id), also: (r, plain) => ({ request_bidx: bidx.tokens(plain) }) },
+  { table: 'ai_chat_sessions', col: 'messages', key: 'id', json: true, extra: 'admin_id', aad: r => chats.aad(r.admin_id),
+    also: (r, plain) => ({ message_count: Array.isArray(plain) ? plain.length : null }) },
+];
+
+/**
+ * E5 files: each Workspace file still plain in Storage is read, sealed and
+ * written back in its place (the row's sha256 is the original's and stays).
+ * Needs SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY.
+ */
+async function sealFiles(pool, apply) {
+  const storage = require('../src/workspace/storage');
+  let plain = 0, sealed = 0, done = 0, failed = 0;
+  let rows;
+  try { rows = (await pool.query('SELECT storage_object_path, mime_type FROM workspace_document_files ORDER BY created_at')).rows; }
+  catch (e) { console.log(`workspace files: skipped (${e.message})`); return; }
+  for (const r of rows) {
+    try {
+      const buf = await storage.downloadWorkspaceObject(r.storage_object_path);
+      if (privacy.isSealedBytes(buf)) { sealed++; continue; }
+      plain++;
+      if (!apply) continue;
+      await storage.uploadWorkspaceObject(r.storage_object_path, ws.sealFile(buf, r.storage_object_path), r.mime_type, process.env, { upsert: true });
+      done++;
+    } catch (e) { failed++; console.log(`  ${r.storage_object_path}: ${e.message}`); }
+  }
+  console.log(`workspace files: ${sealed} sealed, ${plain} plain${apply ? `, ${done} sealed now` : ''}${failed ? `, ${failed} not read` : ''}`);
+}
+
+async function main() {
+  const apply = process.argv.includes('--apply');
+  const ring = privacy.reload();
+  if (apply && !ring.active) { console.error('DATA_KEYS is not set: nothing can be sealed'); process.exit(1); }
+  const { pool } = require('../src/database/db');
+  try {
+    // --tables a,b: only these tables (a staged run, or a test)
+    const ti = process.argv.indexOf('--tables');
+    const only = ti > -1 ? new Set(String(process.argv[ti + 1] || '').split(',').map(x => x.trim()).filter(Boolean)) : null;
+    for (const c of COLUMNS.filter(x => !only || only.has(x.table))) {
+      const keys = Array.isArray(c.key) ? c.key : [c.key];
+      const sel = [...new Set([...keys, c.col, ...(c.extra ? c.extra.split(/,\s*/u) : [])])].join(', ');
+      let plain = 0, sealed = 0, done = 0;
+      let rows;
+      try { rows = (await pool.query(`SELECT ${sel} FROM ${c.table} WHERE ${c.col} IS NOT NULL`)).rows; }
+      catch (e) { console.log(`${c.table}.${c.col}: skipped (${e.message})`); continue; }
+      for (const r of rows) {
+        const v = r[c.col];
+        const isSealed = c.bytes ? privacy.isSealedBytes(v) : c.json ? privacy.isSealedJson(v) : privacy.isSealed(v);
+        if (isSealed) { sealed++; continue; }
+        plain++;
+        if (!apply) continue;
+        const next = c.bytes ? privacy.sealBytes(v, c.aad(r)) : c.json ? JSON.stringify(privacy.sealJson(v, c.aad(r))) : privacy.seal(v, c.aad(r));
+        const where = keys.map((k, i) => `${k} = $${i + 2}`).join(' AND ');
+        // columns written with the value (a blind index, a count), from the plain value
+        const also = c.also ? Object.entries(c.also(r, v)) : [];
+        const alsoSet = also.map(([col], i) => `, ${col} = $${keys.length + 3 + i}`).join('');
+        // only a value still as it was: a row changed meanwhile is left for the next run
+        const u = await pool.query(`UPDATE ${c.table} SET ${c.col} = $1${alsoSet} WHERE ${where} AND ${c.col} = $${keys.length + 2}`,
+          [next, ...keys.map(k => r[k]), c.json ? JSON.stringify(v) : v, ...also.map(([, val]) => val)]);
+        done += u.rowCount;
+      }
+      console.log(`${c.table}.${c.col}: ${sealed} sealed, ${plain} plain${apply ? `, ${done} sealed now` : ''}`);
+    }
+    if (process.argv.includes('--files')) await sealFiles(pool, apply);
+    if (!apply) console.log('dry run: nothing changed (add --apply to seal the plain values)');
+  } finally {
+    await pool.end();
+  }
+}
+
+main().catch(e => { console.error(e.message); process.exit(1); });

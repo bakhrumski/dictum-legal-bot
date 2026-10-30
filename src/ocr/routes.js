@@ -75,20 +75,35 @@ const noBound = { usd: null, reason: 'image input tokens per page are not publis
 // the provider answered: a cut reading is not a provider fault (no retry, no breaker)
 const truncated = (who) => Object.assign(new Error(`${who}: OCR output reached its cap: the text would be cut`), { code: 'OCR_TRUNCATED', providerAnswered: true });
 
+// A model for this request only (the master's OCR comparison): it was set in
+// process.env and reached every OCR call running at the same time, customers'
+// included (2026-10-20 review). AsyncLocalStorage keeps it to the one request.
+const { AsyncLocalStorage } = require('async_hooks');
+const ocrModelScope = new AsyncLocalStorage();
+/** Run fn with Gemini OCR on `model` for this async call chain only. */
+function withOcrModel(model, fn) { return ocrModelScope.run({ model: String(model || '') }, fn); }
+
 const readers = {
   // Gemini Developer API; cap = the output budget of the pages in this call
-  async gemini({ data, mimeType, prompt, cap }) {
+  // model: GEMINI_OCR_MODEL (default gemini-2.5-flash, as before). Gemini 2.x
+  // turns thinking off with thinkingBudget 0; Gemini 3.x takes thinkingLevel
+  // (minimal is the lowest; it does not promise zero thinking tokens).
+  async gemini({ data, mimeType, prompt, cap, model }) {
+    const scoped = ocrModelScope.getStore();
+    const m = String(model || (scoped && scoped.model) || process.env.GEMINI_OCR_MODEL || 'gemini-2.5-flash').trim();
+    const thinkingConfig = /^gemini-2\./u.test(m) ? { thinkingBudget: 0 } : { thinkingLevel: 'minimal' };
     const body = {
       contents: [{ role: 'user', parts: [
         { inlineData: { mimeType, data: data.toString('base64') } },
         { text: prompt },
       ]}],
-      generationConfig: { temperature: 0.1, maxOutputTokens: cap, thinkingConfig: { thinkingBudget: 0 } },
+      generationConfig: { temperature: 0.1, maxOutputTokens: cap, thinkingConfig },
     };
-    const text = await usageLedger.track({ provider: 'gemini', model: 'gemini-2.5-flash', stage: 'ocr', bound: noBound }, async (call) => {
+    const text = await usageLedger.track({ provider: 'gemini', model: m, stage: 'ocr', bound: noBound }, async (call) => {
+      // the key goes in a header: a URL with ?key= ends up in proxy and error logs
       const resp = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(OCR_TIMEOUT_MS) }
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(m)}:generateContent`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': String(process.env.GEMINI_API_KEY || '') }, body: JSON.stringify(body), signal: AbortSignal.timeout(OCR_TIMEOUT_MS) }
       );
       if (!resp.ok) {
         const err = await resp.text().catch(() => '');
@@ -98,13 +113,17 @@ const readers = {
       call.usage({ ...usageLedger.usageFromGemini(json.usageMetadata), modelReturned: json.modelVersion || null });
       const cand = json.candidates?.[0] || {};
       // the text did not fit the cap: never hand on a cut reading
-      if (cand.finishReason === 'MAX_TOKENS') throw truncated('gemini');
+      if (cand.finishReason === 'MAX_TOKENS') {
+        // the cut text is kept on the error for diagnosis only (never used as a reading)
+        const partial = (cand.content?.parts || []).filter(p => p.text && !p.thought).map(p => p.text).join('');
+        throw Object.assign(truncated('gemini'), { partialText: partial.slice(-1500), outTokens: json.usageMetadata?.candidatesTokenCount || null, thoughtTokens: json.usageMetadata?.thoughtsTokenCount || null });
+      }
       const parts = cand.content?.parts || [];
       const out = parts.filter(p => p.text && !p.thought).map(p => p.text).join('').trim();
       if (!out) throw Object.assign(new Error('Gemini Vision returned empty text'), { code: 'OCR_EMPTY_REPLY', providerAnswered: true });
       return out;
     });
-    return { text, provider: 'Gemini Vision' };
+    return { text, provider: 'Gemini Vision', model: m };
   },
   // VoiceLab and OpenAI vision: images only, the cap they had before #411
   async voicelab({ data, mimeType, prompt }) {
@@ -362,6 +381,56 @@ function pageText(sink) {
     });
 }
 
+/**
+ * Text of an uploaded PDF or DOCX, as /api/analyze/extract reads it (no AI):
+ * { kind, text, pages, chars, scanned }. A legacy .doc, a scan (too little
+ * text) or another type gives scanned/unsupported - the caller decides.
+ * Used by the Telegram bot's document analysis (2026-10-20).
+ */
+async function extractFileText(buf, { fileName = '', mimeType = '' } = {}) {
+  const name = String(fileName || '').toLowerCase();
+  const isDocx = /\.docx$/u.test(name) || mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  const isPdf = /\.pdf$/u.test(name) || mimeType === 'application/pdf';
+  if (isDocx) {
+    if (buf.length < 4 || buf[0] !== 0x50 || buf[1] !== 0x4b) return { kind: 'docx', unsupported: 'corrupt' };
+    const docx = await require('./docx-text').docxText(buf);
+    const chars = contentChars(docx.text);
+    return { kind: 'docx', text: docx.text, pages: null, chars, scanned: chars < 80 };
+  }
+  if (isPdf) {
+    const pdfParse = require('pdf-parse/lib/pdf-parse.js');
+    const pageTexts = [];
+    const parsed = await pdfParse(new Uint8Array(buf), { pagerender: pageText(pageTexts) });
+    const pagesRead = Array.from({ length: Math.max(pageTexts.length, parsed.numpages || 0) }, (_, i) => pageTexts[i] || '');
+    const plain = pagesRead.join('\n').trim() || (parsed.text || '').trim();
+    const text = plain && pageTexts.length ? markPages(pagesRead).trim() : plain;
+    return { kind: 'pdf', text, pages: parsed.numpages || 1, chars: plain.length, scanned: plain.length < 80 };
+  }
+  return { kind: 'other', unsupported: 'type' };
+}
+
+/**
+ * The document analysis itself (the same prompt and checks as POST
+ * /api/analyze), for callers that metered the job themselves: { analysis }
+ * or { raw, parseError }. callAI and digestLongDocument are the server's.
+ */
+async function analyzeDocumentText(text, { callAI, digestLongDocument = null, adminId = null, langHint = null } = {}) {
+  const full = String(text || '').trim();
+  const body = full.length > MAX_ANALYSIS_CHARS && typeof digestLongDocument === 'function'
+    ? await digestLongDocument(full, adminId)
+    : full.slice(0, MAX_ANALYSIS_CHARS);
+  const langNote = langHint === 'ru' ? '\n(Document language: Russian)' : langHint === 'uz' ? '\n(Document language: Uzbek)' : '';
+  const result = await callAI([
+    { role: 'system', text: SYSTEM_PROMPT },
+    { role: 'user', text: `Analyze this legal document:${langNote}\n\n---\n${body}\n---` },
+  ], { temperature: 0.15, maxTokens: 4096, endpoint: '/api/analyze' });
+  let analysis = salvageJson(result.text);
+  if (analysis && typeof analysis === 'object' && !analysis.summary && !analysis.docType) analysis = null;
+  if (!analysis) return { raw: result.text, parseError: true, provider: result.provider };
+  for (const k of ['riskItems', 'missingClauses', 'complianceIssues', 'strengths']) analysis[k] = Array.isArray(analysis[k]) ? analysis[k] : [];
+  return { analysis, provider: result.provider };
+}
+
 function mountAnalyzerRoutes(app, deps) {
   const { requireAuth, callAI, tariffModule, digestLongDocument } = deps;
   if (!deps.pool) throw new TypeError('mountAnalyzerRoutes needs deps.pool (scan cache)');
@@ -380,6 +449,23 @@ function mountAnalyzerRoutes(app, deps) {
   // the OCR provider call (tests pass a stub: no paid call in tests)
   const ocrFn = typeof deps.ocr === 'function' ? deps.ocr : callVisionOCR;
   // ── PDF text extraction ──
+  // "Hujjatlarim" (2026-10-29): a text document read here is kept in the
+  // person's library (sealed at rest) and returned with its id, so every later
+  // service can use it by that id without a second upload. A failure to keep
+  // it never fails the reading.
+  async function keepText(req, { text, pages, chars }) {
+    try {
+      if (!text || !req.session || !req.session.adminId) return {};
+      const buf = fs.readFileSync(req.file.path);
+      const row = await scanStore.saveScan(pool, { adminId: req.session.adminId, fileHash: scanStore.fileHash(buf), kind: 'text',
+        pages: Math.max(1, Number(pages) || 1), bytes: Math.max(1, buf.length), text, chars, name: req.file.originalname });
+      return { docId: row.id, libraryFull: !!row.libraryFull };
+    } catch (e) {
+      if (!/does not exist|column/u.test(String(e && e.message))) console.warn('[ANALYZE] document not kept in the library:', e.message);
+      return {};
+    }
+  }
+
   app.post('/api/analyze/extract', requireAuth, analyzeUpload.single('file'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'Fayl yuklanmadi' });
     let filePath = req.file.path;
@@ -435,7 +521,8 @@ function mountAnalyzerRoutes(app, deps) {
             meaning: 'mechanical: structures found around the missing words are the likely cause, not a proof' };
           res.set('Cache-Control', 'no-store');
         }
-        return res.json({ text, pageCount: size ? size.pages : 1, scanned: false, charCount: chars, tables: docx.tables,
+        const kept = await keepText(req, { text, pages: size ? size.pages : 1, chars });
+        return res.json({ text, pageCount: size ? size.pages : 1, scanned: false, charCount: chars, tables: docx.tables, ...kept,
           tableStructure: tables ? tables.structure : 'none', ...(tables && tables.causes ? { tableCauses: tables.causes } : {}),
           ...(tableCheck ? { tableCheck } : {}),
           units: size ? size.units : null, docTicket: ledger ? ledger.signDocTicket({ text, chars, tables }) : null });
@@ -456,7 +543,9 @@ function mountAnalyzerRoutes(app, deps) {
       // the PDF's own page count, signed with the text so the analysis is
       // billed by max(pages / 10, characters / 40 000)
       const size = ledger && !scanned ? ledger.docUnits({ chars: plain.length, pages }) : null;
+      const kept = scanned ? {} : await keepText(req, { text, pages, chars: plain.length });
       res.json({
+        ...kept,
         text: scanned ? '' : text,
         pageCount: pages,
         scanned,
@@ -617,7 +706,8 @@ function mountAnalyzerRoutes(app, deps) {
             const ocr = await ocrFn(buf, m.kind === 'pdf' ? 'application/pdf' : m.mimetype, String((req.body && req.body.lang) || 'uzb+rus'), { pages: m.pages });
             if (!ocr.text || ocr.text.length < 20) throw Object.assign(new Error('no text'), { code: 'OCR_EMPTY' });
             const store = usageLedger.current();
-            const row = await scanStore.saveScan(pool, { adminId: ctx.adminId, fileHash: hash, kind: m.kind, pages: m.pages, bytes: m.bytes, text: ocr.text, provider: ocr.provider, requestId: store ? store.requestId : null });
+            const row = await scanStore.saveScan(pool, { adminId: ctx.adminId, fileHash: hash, kind: m.kind, pages: m.pages, bytes: m.bytes, text: ocr.text, provider: ocr.provider, requestId: store ? store.requestId : null,
+              name: req.file && req.file.originalname });
             return { row, fresh: true };
           });
         } catch (e) {
@@ -752,4 +842,5 @@ function mountAnalyzerRoutes(app, deps) {
   console.log('[ANALYZE] OCR & analyzer routes mounted');
 }
 
-module.exports = { mountAnalyzerRoutes, callVisionOCR, pageText };
+// readers: for the master's side-by-side OCR comparison (/api/admin/ocr/compare)
+module.exports = { mountAnalyzerRoutes, callVisionOCR, pageText, readers, withOcrModel, extractFileText, analyzeDocumentText };

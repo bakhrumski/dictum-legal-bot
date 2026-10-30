@@ -5,10 +5,25 @@ const { WorkspaceError } = require('./errors');
 const ROLE_WEIGHT = Object.freeze({ viewer: 1, member: 2, owner: 3 });
 const WORKSPACE_CREATOR_ACCOUNT_ROLES = new Set(['user', 'master']);
 
-function isActivePlatinum(row) {
-  if (!row || String(row.tariff_plan || '').toLowerCase() !== 'platinum') return false;
+const STAFF_ROLES = new Set(['master', 'student', 'lawyer']);
+
+// Owning a Workspace: an active Silver, Gold or Platinum plan (2026-10-28,
+// owner: "Workspace ni barcha tarif uchun och"; was Platinum only), the same
+// rule as the database's has_workspace_entitlement (migration 025).
+function isActiveOwnerPlan(row) {
+  if (!row || planWeight(row.tariff_plan) < 1) return false;
   if (!row.tariff_expires_at) return true;
   return new Date(row.tariff_expires_at).getTime() >= Date.now();
+}
+// the old name, kept for its callers: it now means any paid plan
+const isActivePlatinum = isActiveOwnerPlan;
+
+// An internal (staff) Workspace is active while its owner is a master, with no
+// plan (the CustDev pilot); a row carries w.internal and owner.role as owner_role.
+function isWorkspaceOwnerActive(row) {
+  if (!row) return false;
+  if (row.internal && String(row.owner_role || '').toLowerCase() === 'master') return true;
+  return isActiveOwnerPlan(row);
 }
 
 function planWeight(plan) {
@@ -29,12 +44,20 @@ function isActivePaidPlan(row, minimumPlan = 'silver') {
   return !expiresAt || new Date(expiresAt).getTime() >= Date.now();
 }
 
-function canCreateWorkspace(row) {
-  return Boolean(
-    row
-    && WORKSPACE_CREATOR_ACCOUNT_ROLES.has(String(row.role || '').toLowerCase())
-    && isActivePlatinum(row)
-  );
+function canCreateWorkspace(row, { internal = false } = {}) {
+  if (!row) return false;
+  const role = String(row.role || '').toLowerCase();
+  // an internal Workspace: a master only, no plan needed
+  if (internal) return role === 'master';
+  return Boolean(WORKSPACE_CREATOR_ACCOUNT_ROLES.has(role) && isActiveOwnerPlan(row));
+}
+
+/** A member keeps access by their own paid plan; in an internal Workspace, by being staff. */
+function isMemberActive(row) {
+  if (!row) return false;
+  if (row.role === 'owner') return true;
+  if (row.internal && STAFF_ROLES.has(String(row.member_role || '').toLowerCase())) return true;
+  return isActivePaidPlan(row, 'silver');
 }
 
 async function getWorkspaceAccess(db, workspaceId, userId) {
@@ -45,7 +68,9 @@ async function getWorkspaceAccess(db, workspaceId, userId) {
             w.owner_id,
             w.default_language,
             w.deleted_at,
+            w.internal,
             wm.role,
+            owner.role AS owner_role,
             owner.tariff_plan,
             owner.tariff_expires_at,
             member_account.tariff_plan AS member_tariff_plan,
@@ -65,8 +90,8 @@ async function getWorkspaceAccess(db, workspaceId, userId) {
     throw new WorkspaceError(404, 'workspace_not_found', 'Workspace topilmadi');
   }
 
-  const ownerActive = isActivePlatinum(access);
-  const memberActive = access.role === 'owner' || isActivePaidPlan(access, 'silver');
+  const ownerActive = isWorkspaceOwnerActive(access);
+  const memberActive = isMemberActive(access);
   return { ...access, ownerActive, memberActive, isActive: ownerActive && memberActive };
 }
 
@@ -85,7 +110,7 @@ async function requireWorkspaceAccess(db, workspaceId, userId, options = {}) {
       'workspace_platinum_required',
       access.ownerActive
         ? 'Workspace’dan foydalanish uchun kamida faol Silver tarifi kerak'
-        : 'Workspace’dan foydalanish uchun Owner’ning faol Platinum tarifi kerak'
+        : 'Workspace’dan foydalanish uchun Owner’ning faol pullik tarifi (Silver, Gold yoki Platinum) kerak'
     );
   }
 
@@ -129,6 +154,10 @@ module.exports = {
   getWorkspaceAccess,
   isActivePaidPlan,
   isActivePlatinum,
+  isActiveOwnerPlan,
+  isWorkspaceOwnerActive,
+  isMemberActive,
+  STAFF_ROLES,
   requireTask,
   requireWorkspaceAccess,
   withWorkspaceTransaction,

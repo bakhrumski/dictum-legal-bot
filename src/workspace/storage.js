@@ -65,14 +65,15 @@ async function storageRequest(path, options = {}, env = process.env) {
   return payload;
 }
 
-async function uploadWorkspaceObject(objectPath, buffer, mimeType, env = process.env) {
+async function uploadWorkspaceObject(objectPath, buffer, mimeType, env = process.env, { upsert = false } = {}) {
   return storageRequest(
     `/object/${WORKSPACE_BUCKET}/${encodedObjectPath(objectPath)}`,
     {
-      method: 'POST',
+      // upsert: only the seal-backfill puts a sealed copy in place of a plain one
+      method: upsert ? 'PUT' : 'POST',
       headers: {
         'Content-Type': mimeType,
-        'x-upsert': 'false',
+        'x-upsert': upsert ? 'true' : 'false',
         'cache-control': '3600',
       },
       body: buffer,
@@ -113,8 +114,32 @@ async function createWorkspaceDownloadUrl(objectPath, expiresIn = 120, env = pro
   return signedPath.startsWith('http') ? signedPath : `${config.supabaseUrl}/storage/v1${signedPath}`;
 }
 
+/**
+ * The object's bytes, read with the service role (E5: files are sealed, so
+ * the server opens them and streams them; the browser no longer gets a
+ * signed Storage URL).
+ */
+async function downloadWorkspaceObject(objectPath, env = process.env) {
+  const { supabaseUrl, serviceRoleKey } = storageConfiguration(env);
+  const response = await fetch(`${supabaseUrl}/storage/v1/object/authenticated/${WORKSPACE_BUCKET}/${encodedObjectPath(objectPath)}`, {
+    signal: AbortSignal.timeout(Number(env.STORAGE_TIMEOUT_MS) || 60000),
+    headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` },
+  });
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    let payload = {};
+    try { payload = JSON.parse(text); } catch (_) { payload = { message: text }; }
+    const error = new Error(payload.message || payload.error || `Supabase Storage HTTP ${response.status}`);
+    error.code = payload.errorCode || payload.code || 'workspace_storage_error';
+    error.status = response.status;
+    throw error;
+  }
+  return Buffer.from(await response.arrayBuffer());
+}
+
 module.exports = {
   WORKSPACE_BUCKET,
+  downloadWorkspaceObject,
   createWorkspaceDownloadUrl,
   projectRefFromDatabaseUrl,
   removeWorkspaceObject,

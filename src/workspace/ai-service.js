@@ -1,5 +1,7 @@
 'use strict';
 
+// E5: Workspace AI questions, answers, context and document text are sealed at rest (src/workspace/sealing.js)
+const sealing = require('./sealing');
 const crypto = require('crypto');
 const { getLegalPolicyVersions } = require('../rag/legal-prompt-policy');
 const { WorkspaceError } = require('./errors');
@@ -140,7 +142,7 @@ async function loadContext(db, workspaceId, taskId, question) {
       ORDER BY d.updated_at DESC
       LIMIT 30`,
     [workspaceId, taskId]
-  )).rows;
+  )).rows.map(d => ({ ...d, content_text: sealing.openText(d.content_text, sealing.aad.versionText(workspaceId, d.id)) || '' }));
 
   const authoritativeMemory = (await db.query(
     `SELECT mi.id, mi.kind, mi.title
@@ -277,7 +279,7 @@ async function loadThreadHistory(db, workspaceId, threadId) {
       LIMIT 12`,
     [workspaceId, threadId]
   );
-  return result.rows.reverse();
+  return result.rows.reverse().map(m => sealing.openAiMessage(m, workspaceId, threadId));
 }
 
 function memoryResponse(memory, run, threadId) {
@@ -337,9 +339,9 @@ function createWorkspaceAiService({ pool, generateAnswer }) {
            ) VALUES (
              $1,$2,$3,$4,$5,$6,$7,$8,'reused','workspace-memory',0,0,0,$9,$10,now(),now()
            ) RETURNING *`,
-          [workspaceId, taskId, thread.id, userId, question, context.reuseKey,
+          [workspaceId, taskId, thread.id, userId, sealing.sealText(question, sealing.aad.aiRequest(workspaceId)), context.reuseKey,
             context.contextFingerprint, context.policyVersion,
-            JSON.stringify(context.contextSnapshot), existingMemory.id]
+            sealing.sealJsonText(context.contextSnapshot, sealing.aad.aiContext(workspaceId)), existingMemory.id]
         )).rows[0];
 
         if (taskId) {
@@ -354,10 +356,10 @@ function createWorkspaceAiService({ pool, generateAnswer }) {
         await db.query(
           `INSERT INTO workspace_ai_messages
              (workspace_id, thread_id, role, content, created_by, ai_run_id, memory_item_id)
-           VALUES ($1,$2,'user',$3,$4,$5),
+           VALUES ($1,$2,'user',$3,$4,$5,NULL),
                   ($1,$2,'assistant',$6,$4,$5,$7)`,
-          [workspaceId, thread.id, question, userId, run.id,
-            existingMemory.content_markdown, existingMemory.id]
+          [workspaceId, thread.id, sealing.sealText(question, sealing.aad.aiMessage(workspaceId, thread.id)), userId, run.id,
+            sealing.sealText(existingMemory.content_markdown, sealing.aad.aiMessage(workspaceId, thread.id)), existingMemory.id]
         );
         await db.query('UPDATE workspace_ai_threads SET updated_at = now() WHERE id = $1', [thread.id]);
         return { type: 'reused', response: memoryResponse(existingMemory, run, thread.id) };
@@ -404,16 +406,16 @@ function createWorkspaceAiService({ pool, generateAnswer }) {
            context_snapshot, started_at
          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'running',$9,now())
          RETURNING *`,
-        [workspaceId, taskId, thread.id, userId, question, context.reuseKey,
+        [workspaceId, taskId, thread.id, userId, sealing.sealText(question, sealing.aad.aiRequest(workspaceId)), context.reuseKey,
           context.contextFingerprint, context.policyVersion,
-          JSON.stringify(context.contextSnapshot)]
+          sealing.sealJsonText(context.contextSnapshot, sealing.aad.aiContext(workspaceId))]
       )).rows[0];
       const history = await loadThreadHistory(db, workspaceId, thread.id);
       await db.query(
         `INSERT INTO workspace_ai_messages
            (workspace_id, thread_id, role, content, created_by, ai_run_id)
          VALUES ($1,$2,'user',$3,$4,$5)`,
-        [workspaceId, thread.id, question, userId, run.id]
+        [workspaceId, thread.id, sealing.sealText(question, sealing.aad.aiMessage(workspaceId, thread.id)), userId, run.id]
       );
       return { type: 'generate', run, thread, context, history };
     });
@@ -509,7 +511,7 @@ function createWorkspaceAiService({ pool, generateAnswer }) {
                   input_tokens = $5,
                   output_tokens = $6,
                   estimated_cost_usd = $7,
-                  reused_memory_item_id = CASE WHEN $2 = 'reused' THEN $8 ELSE NULL END,
+                  reused_memory_item_id = CASE WHEN $2 = 'reused' THEN $8::uuid ELSE NULL END,
                   completed_at = now()
             WHERE id = $1 AND status = 'running'`,
           [prepared.run.id, wonGeneration ? 'succeeded' : 'reused',
@@ -524,7 +526,7 @@ function createWorkspaceAiService({ pool, generateAnswer }) {
           `INSERT INTO workspace_ai_messages
              (workspace_id, thread_id, role, content, created_by, ai_run_id, memory_item_id)
            VALUES ($1,$2,'assistant',$3,$4,$5,$6)`,
-          [workspaceId, prepared.thread.id, memory.content_markdown, userId, prepared.run.id, memory.id]
+          [workspaceId, prepared.thread.id, sealing.sealText(memory.content_markdown, sealing.aad.aiMessage(workspaceId, prepared.thread.id)), userId, prepared.run.id, memory.id]
         );
         await db.query('UPDATE workspace_ai_threads SET updated_at = now() WHERE id = $1', [prepared.thread.id]);
 

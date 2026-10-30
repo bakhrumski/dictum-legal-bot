@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kirish — JuristAI</title>
+<link rel="icon" href="/favicon.svg?v=2" type="image/svg+xml">
+<link rel="icon" href="/favicon-32.png?v=2" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2">
+<link rel="stylesheet" href="/app/fonts.css?v=1">
+<link rel="stylesheet" href="/app/app.css?v=1">
+<style>
+  .auth{min-height:100vh;min-height:100dvh;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .auth-l{display:flex;flex-direction:column;padding:28px clamp(20px,5vw,72px)}
+  .auth-top{display:flex;justify-content:space-between;align-items:center}
+  .auth-top a.brand{font-size:18px;letter-spacing:.17em}
+  .auth-f{flex:1;display:flex;flex-direction:column;justify-content:center;max-width:420px;width:100%;margin:0 auto;padding:40px 0}
+  .auth-f h1{font-size:clamp(30px,3.6vw,42px);letter-spacing:-.035em}
+  .auth-f .sub{color:var(--muted);margin:12px 0 28px}
+  .big{width:100%;height:52px;justify-content:center;font-size:15.5px;border-radius:14px}
+  .big svg{width:20px;height:20px}
+  .big+.big{margin-top:10px}
+  .or{display:flex;align-items:center;gap:12px;color:var(--faint);font-size:12.5px;margin:22px 0 14px}
+  .or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
+  .lnk{background:none;border:0;padding:0;color:var(--muted);text-decoration:underline;text-underline-offset:3px;cursor:pointer;font-size:14px}
+  .otp{display:flex;gap:8px;margin:18px 0 8px}
+  .otp input{width:100%;height:56px;border:1px solid var(--line);border-radius:12px;text-align:center;font-size:22px;background:var(--surface);outline:0}
+  .otp input:focus{border-color:var(--fg)}
+  .tg-steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px;font-size:14px;color:var(--muted)}
+  .tg-steps li{display:flex;gap:10px;align-items:flex-start}
+  .tg-steps b{width:22px;height:22px;flex:none;border-radius:50%;border:1px solid var(--line);display:grid;place-items:center;font-size:12px;font-weight:500;color:var(--fg)}
+  .tg-steps li.ok b{background:var(--cta);border-color:var(--cta);color:#fff}
+  .msg{font-size:13.5px;min-height:1.5em;margin-top:6px}
+  .msg.err{color:var(--bad)}
+  .auth-foot{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+  .auth-r{background:#0B0D12;color:#fff;display:flex;flex-direction:column;justify-content:flex-end;padding:clamp(28px,5vw,64px);position:relative;overflow:hidden}
+  .auth-r::before{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.05) 1px,transparent 1px);background-size:56px 56px;mask:linear-gradient(180deg,#000 0%,transparent 75%)}
+  .auth-r h2{position:relative;font-size:clamp(28px,3.2vw,44px);letter-spacing:-.035em;max-width:15ch}
+  .auth-r ul{position:relative;list-style:none;padding:0;margin:28px 0 0;display:flex;flex-direction:column;gap:12px;color:#B5B7BD}
+  .auth-r li{display:flex;gap:12px;align-items:center}
+  .auth-r li svg{color:#fff}
+  .pw .field{margin-bottom:10px}
+  .agree{font-size:12.5px;color:var(--faint);margin-top:4px}
+  .alt{display:flex;flex-direction:column;align-items:flex-start;gap:10px}
+  @media (max-width:900px){.auth{grid-template-columns:minmax(0,1fr)}.auth-r{display:none}}
+</style>
+</head>
+<body>
+<div class="auth">
+  <div class="auth-l">
+    <div class="auth-top"><a class="brand" href="/index.html">JURISTAI</a><span class="seg" id="langs"></span></div>
+    <div class="auth-f" id="form"></div>
+    <div class="auth-foot"><a href="/oferta.html" data-k="offer"></a><a href="/maxfiylik.html" data-k="privacy"></a><a href="/shartlar.html" data-k="terms"></a></div>
+  </div>
+  <div class="auth-r" aria-hidden="true">
+    <h2 data-k="side.t"></h2>
+    <ul><li data-i="0"></li><li data-i="1"></li><li data-i="2"></li></ul>
+  </div>
+</div>
+<script src="/app/kirish.js?v=3"></script>
+</body>
+</html>

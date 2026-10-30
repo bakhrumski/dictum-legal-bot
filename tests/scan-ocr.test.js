@@ -157,12 +157,13 @@ const fx = f => fs.readFileSync(path.join(__dirname, 'fixtures', f));
     const bodies = [];
     const paged = '=== PAGE 1 ===\nBIR\n=== PAGE 2 ===\nIKKI\n=== PAGE 3 ===\nUCH';
     let reply = { candidates: [{ finishReason: 'STOP', content: { parts: [{ text: '=== PAGE 1 ===\nthinking...', thought: true }, { text: paged }] } }], usageMetadata: { promptTokenCount: 5000, candidatesTokenCount: 10 } };
-    global.fetch = async (url, init) => { bodies.push({ url: String(url), body: JSON.parse(init.body) }); return { ok: true, json: async () => reply }; };
+    global.fetch = async (url, init) => { bodies.push({ url: String(url), body: JSON.parse(init.body), headers: init.headers || {} }); return { ok: true, json: async () => reply }; };
     try {
       const out = await callVisionOCR(fx('scan-3p.pdf'), 'application/pdf', 'uzb', { pages: 3 });
       assert.deepStrictEqual([out.text, out.provider, out.role], ['[Sahifa 1]\nBIR\n\n[Sahifa 2]\nIKKI\n\n[Sahifa 3]\nUCH', 'Gemini Vision', 'primary'], 'thought parts are never the text');
       const req = bodies[0];
-      assert.match(req.url, /^https:\/\/generativelanguage\.googleapis\.com\/v1beta\/models\/gemini-2\.5-flash:generateContent\?key=/u, 'the Developer API, not Vertex');
+      assert.strictEqual(req.url, 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', 'the Developer API, not Vertex; no key in the URL');
+      assert.ok(req.headers['x-goog-api-key'], 'the key goes in the x-goog-api-key header');
       const g = req.body.generationConfig;
       assert.deepStrictEqual(g.thinkingConfig, { thinkingBudget: 0 }, 'generationConfig.thinkingConfig.thinkingBudget = 0');
       assert.strictEqual(g.maxOutputTokens, 3 * 1536);

@@ -64,7 +64,11 @@ function transactionalPool(handler) {
   await test('only active Platinum accounts qualify', () => {
     assert.strictEqual(isActivePlatinum({ tariff_plan: 'platinum', tariff_expires_at: null }), true);
     assert.strictEqual(isActivePlatinum({ tariff_plan: 'PlAtInUm', tariff_expires_at: new Date(Date.now() + 60000) }), true);
-    assert.strictEqual(isActivePlatinum({ tariff_plan: 'gold', tariff_expires_at: null }), false);
+    // Since migration 025 every paid plan owns a Workspace (the name stays).
+    assert.strictEqual(isActivePlatinum({ tariff_plan: 'gold', tariff_expires_at: null }), true);
+    assert.strictEqual(isActivePlatinum({ tariff_plan: 'silver', tariff_expires_at: null }), true);
+    assert.strictEqual(isActivePlatinum({ tariff_plan: 'sinov', tariff_expires_at: null }), false);
+    assert.strictEqual(isActivePlatinum({ tariff_plan: '', tariff_expires_at: null }), false);
     assert.strictEqual(isActivePlatinum({ tariff_plan: 'platinum', tariff_expires_at: new Date(Date.now() - 1) }), false);
   });
 
@@ -74,7 +78,13 @@ function transactionalPool(handler) {
     assert.strictEqual(canCreateWorkspace({ ...activePlan, role: 'master' }), true);
     assert.strictEqual(canCreateWorkspace({ ...activePlan, role: 'lawyer' }), false);
     assert.strictEqual(canCreateWorkspace({ ...activePlan, role: 'student' }), false);
-    assert.strictEqual(canCreateWorkspace({ role: 'master', tariff_plan: 'gold', tariff_expires_at: null }), false);
+    assert.strictEqual(canCreateWorkspace({ role: 'master', tariff_plan: 'gold', tariff_expires_at: null }), true);
+    assert.strictEqual(canCreateWorkspace({ role: 'user', tariff_plan: 'silver', tariff_expires_at: null }), true);
+    assert.strictEqual(canCreateWorkspace({ role: 'user', tariff_plan: 'sinov', tariff_expires_at: null }), false);
+    // An internal workspace: master only, no plan needed.
+    assert.strictEqual(canCreateWorkspace({ role: 'master', tariff_plan: null }, { internal: true }), true);
+    assert.strictEqual(canCreateWorkspace({ role: 'user', tariff_plan: 'platinum', tariff_expires_at: null }, { internal: true }), false);
+    assert.strictEqual(canCreateWorkspace({ role: 'student', tariff_plan: null }, { internal: true }), false);
   });
 
   await test('invitation tokens are stored as one-way hashes', () => {
@@ -326,6 +336,26 @@ function transactionalPool(handler) {
       '20261006_014_test_budget_risk.sql',
       '20261006_015_document_scans.sql',
       '20261007_016_account_credentials.sql',
+      '20261021_017_one_time_credits.sql',
+      '20261022_018_playbooks.sql',
+      '20261028_019_matters.sql',
+      '20261028_020_agent_runs.sql',
+      '20261028_021_voice_glossary.sql',
+      '20261028_022_user_profile.sql',
+      '20261028_023_tg_alphabet.sql',
+      '20261028_024_sales_agents.sql',
+      '20261028_025_workspace_all_paid_plans.sql',
+      '20261028_026_client_type.sql',
+      '20261028_027_pilot_feedback.sql',
+      '20261028_028_interview_recordings.sql',
+      '20261029_029_document_library.sql',
+      '20261029_030_seal_e2b.sql',
+      '20261029_031_agent_invites.sql',
+      '20261029_032_seal_workspace.sql',
+      '20261029_033_request_text_index.sql',
+      '20261029_034_data_access_log.sql',
+      '20261030_035_voice_command_events.sql',
+      '20261030_036_doc_editor.sql',
     ]);
     assert.strictEqual(stripOuterTransaction('BEGIN;\nSELECT 1;\nCOMMIT;'), 'SELECT 1;');
   });
@@ -400,7 +430,7 @@ function transactionalPool(handler) {
     // Sending needs the same role the room chat needs; reading does not.
     assert.ok(routes.includes('await requireCounterpart(db, workspaceId, userId, memberId);'));
     // The sender is the session, never a field the caller supplies.
-    assert.ok(routes.includes('[workspaceId, userId, memberId, body]'));
+    assert.ok(routes.includes('[workspaceId, userId, memberId, sealing.sealText(body, sealing.aad.dm(workspaceId))]'), 'the body sealed (E5)');
     assert.ok(!routes.includes('req.body.senderId'));
     // Only the recipient's own rows are marked read.
     assert.ok(routes.includes('WHERE workspace_id=$1 AND recipient_id=$2 AND sender_id=$3'));

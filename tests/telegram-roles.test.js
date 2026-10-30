@@ -114,7 +114,8 @@ async function callback(chatId, data) {
   await flush();
 }
 const reset = () => { sent.length = 0; callbacks.length = 0; agentCalls.length = 0; agentReply = { handled: true, reply: 'Huquqiy javob', action: 'greeting' }; };
-const textsTo = (chatId) => sent.filter(s => s.chatId === chatId).map(s => s.text);
+// the bot writes the 2026 alphabet by default (src/bot/alphabet.js); the checks read the old one
+const textsTo = (chatId) => sent.filter(s => s.chatId === chatId).map(s => (typeof s.text === 'string' ? require('../public/js/uz-alphabet').toOld(s.text) : s.text));
 const ADMIN_NOTICE = /admin sifatida ulangansiz/u;
 
 const USER = 101, PLAIN = 102, LAWYER = 103, STUDENT = 104, MASTER = 105, ODD = 106, EMPTY = 107;
@@ -236,7 +237,7 @@ accounts.set(EMPTY, { id: 6, full_name: 'Bosh rol', username: 'bosh_rol', role: 
     assert.ok(textsTo(USER).some(t => /🔑 Foydalanuvchi[\s\S]*oddiy foydalanuvchi sifatida/u.test(t)), textsTo(USER).join(' | '));
     reset();
     await message({ chatId: LAWYER, text: '/me' });
-    assert.ok(textsTo(LAWYER).some(t => /🔑 Yurist[\s\S]*bildirishnomalar keladi/u.test(t)));
+    assert.ok(textsTo(LAWYER).some(t => /🔑 Ekspert[\s\S]*bildirishnomalar keladi/u.test(t)));
   });
 
   await test('an account linked by telegram_user_id only (registration / site) is recognised: master gets /testmode, a user stays a user', async () => {

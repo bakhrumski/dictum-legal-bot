@@ -1,7 +1,8 @@
 # JuristAI — notes for Claude Code
 
 JuristAI is an Uzbek legal assistant: a Telegram bot plus the juristai.uz web
-app. The repository is `bakhrumski/dictum-legal-bot` (the name predates the
+app (new app at `/app/`, master admin at `/app/#/boshqaruv`; the old
+`dashboard.html` is still served). The repository is `bakhrumski/dictum-legal-bot` (the name predates the
 brand). One Node process runs both: `index.js` loads `src/api/server.js`, which
 starts Express and the bot.
 
@@ -9,21 +10,46 @@ The owner writes in Uzbek; answer in Uzbek unless asked otherwise.
 
 ## Working agreement
 
+- **Branches and services (since 2026-10-20, owner's decision):**
+  - `staging` → Render service **"juristai-staging"**, which now serves
+    **juristai.uz** (the new design: landing + `/app/`). Database: Supabase
+    `juristai-staging-pro` (it started as a copy of production and is now the
+    live database). The Telegram bots run here too. **A push to `staging` is
+    a release** to juristai.uz.
+  - `main` → Render service **"JuristAI"** (the old design, no custom domain,
+    the old production database). It lags behind `staging` and is brought up
+    to date only by a `staging` → `main` PR. It must not run the same
+    Telegram bot token as "juristai-staging" (two pollers get 409 Conflict).
 - **After every push, check whether the branch has an open PR.** If it has
   none, open one and give the link. A push without a visible PR has been
   missed more than once; do not assume.
-- **Merging is split by what the change touches:**
+- **What may go live on `staging` is split by what the change touches:**
   - Frontend only (`public/**` — HTML, CSS, client JS, images, fonts, media):
-    merge the PR yourself once verified, then report the link.
+    push or merge to `staging` yourself once verified, then report it.
   - Anything else — `src/**`, `migrations/**`, `scripts/**`, auth, payments,
-    tariffs, database, `package.json`, config, tests, docs: open the PR and
-    **ask before merging**.
-- `main` deploys straight to production on Render. A merge is a release.
+    tariffs, database, `package.json`, config, tests, docs: work on a branch,
+    open a PR into `staging` and **ask before merging**. The answer pipeline
+    (`/api/legal-chat`) is not changed without the owner's consent.
+  - `staging` → `main` PRs: **ask before merging**.
+- The live database is read-only for Claude: queries only, no writes.
 - If the branch's PR has already been merged, restart the branch from
-  `origin/main` before new work; never stack commits on merged history.
+  `origin/staging` (or `origin/main` for a `main` PR) before new work; never
+  stack commits on merged history.
 - Verify visual work in a real browser at desktop and phone widths (~390px)
   before calling it done. Report what was checked, and say plainly what was
   not (e.g. no real iPhone available — Safari behaviour was simulated).
+- The owner's design rules for the new app: no coloured left-stripe cards;
+  a coloured text background only in light blue.
+- **Every change must make something easier for a real person** (owner,
+  2026-10-30, "har bir promptda inobatga olishing kerak"): a client, a
+  lawyer, an agent or the owner must get fewer steps, less time, less risk
+  or less to read. Before building, say who gains what and how; when a
+  request (or a stage of a design) would only add a link to what the person
+  can already reach, or a feature nobody will feel, say so plainly and
+  propose the version that removes the real step. Report the gain with
+  every change, not only what was built. (Lesson: V5 answered "hujjatlarimni
+  och" in Telegram with a link to the site - the person still had to leave
+  the bot; the useful version shows the documents in the bot itself.)
 
 ## Commands
 
@@ -47,6 +73,36 @@ Known state of the suites (Sept 2026):
   from the Workspace frontend, so a redesign that renames a class will fail
   it; update the assertion to the current design rather than reverting the
   code.
+
+## Roadmap
+
+- **Legora darajasi (2026-10-27, owner: "oxirgi bosqichga olib borishimiz
+  kerak"):** `docs/roadmap/legora-darajasi.md` is the single list of stages
+  and PRs. Tick it and add a journal line with every merge. The current
+  design is `docs/design/matter-va-agent-runs.md` (Matter, `agent_runs`, the
+  planner agent); no code starts until the owner answers its section 8.
+  Adaptive account and self-improvement (2026-10-28, owner): design
+  `docs/design/adaptiv-akkaunt.md` (draft) - personal adaptation (profile
+  from text-free signals, visible and editable, matter facts the person
+  confirmed) apart from platform improvement (only through a lawyer queue
+  and the reviewed evaluation set); sources and the claim guard never
+  adapt, no fine-tuning on user data. Accepted (#509); the owner's answers
+  are in its section 9. PR A1 (2026-10-28): migration 022 (`user_signals`,
+  `user_profile`), `src/adaptive/profile.js` - a signal is a code only
+  (area, lex.uz act id + title, script, lang, service, built-in playbook
+  key), never the text of a question, answer or document; recorded after a
+  web-chat reply is sent (`answerRecorder` on `/api/legal-chat`; the route
+  only sets `res.locals.answerTopic`), after a delivered Telegram answer to a
+  linked account, and when an agent run ends done; the profile is computed
+  with no AI (half-life 60 days, signals kept `USER_SIGNALS_DAYS` 180,
+  `manual` wins, `paused` records nothing, `ADAPTIVE=off`); account deletion
+  removes it. PR A2 (2026-10-28): `src/adaptive/routes.js` - GET/PUT
+  `/api/adaptive/profile` (`manual`: answerLength, script, hidden areas /
+  acts, partyRoles from a fixed role list - the side is only ever set by
+  the person), `POST .../pause`, `POST .../clear`, `GET /api/adaptive/signals`
+  (own codes, newest first); page `#/moslashish` (`public/app/adaptive.js`,
+  a tile on Hisob). `effectiveOf` drops hidden items and puts what the person
+  set on top. Nothing uses the profile yet (A3 UI, A6/A7 answer and search later).
 
 ## Layout
 
@@ -198,8 +254,81 @@ Known state of the suites (Sept 2026):
   found and names up to 4 missing acts as lex.uz terms (never a number
   alone, never another site), searched within `LEX_FOLLOWUP_MAX_MS`; any
   failure keeps round one.
-  Answer layout (2026-10-13, `src/rag/answer-structure.js`, no AI; the
-  sections stay Huquqiy asos / Tahlil / Xulosa): a `> «...»` quote of the
+  Every lex.uz round has a deadline (2026-10-22, after a Telegram answer
+  used ~29 s of AI calls and still reached the 120 s limit before its claim
+  check): the request's time (`AI_REQUEST_MAX_MS`) minus
+  `LEX_ANSWER_RESERVE_MS` (60 s) for the answer and its checks; no shorter
+  cap unless `LEX_LIVE_MAX_MS` is set (owner: answer quality before speed);
+  one page is waited for at most `LEX_FETCH_MAX_MS` (30 s); a search past
+  the deadline returns what it found. Other `searchLexUz` callers pass no
+  deadline and are unchanged.
+  Queries (2026-10-22: one question ran 18 searches, 13 found nothing):
+  lex.uz finds 2-3 words near each other in the law's word forms and lists
+  the newest acts first. The plan searches the question's terms three at a
+  time with negative/progressive verbs as verbal nouns (`nominalizeVerb`:
+  "bajarmadi" -> "bajarmaslik"), "<2 words> nizom", and codes / laws by
+  lex.uz's form filter (`actForm` code 3964 / law 3968, `code-search` +40 in
+  ranking); the planner is told the same rules; text searches are in-force
+  only (`status=Y`, <= 100 chars); a phrase that found nothing is searched
+  once more as its first and last two words, connectors dropped
+  (`relaxedQueries`). Live on 10 questions that day: 0 of 110 old
+  deterministic searches found acts, 110 of 128 new ones; the AI planner's
+  new prompt was not measured (no key here).
+  Memory (2026-10-24: with those queries finding acts, one question read 63
+  pages, ~60 MB of HTML, in parallel; locally 57 -> 515 MB, the 512 MB
+  Render instance went down and the answer never came): at most
+  `LEX_FETCH_CONCURRENCY` (2) pages are read at once, the cache keeps the
+  text without the page's HTML (`LEX_DOCUMENT_CACHE_LIMIT` 64), and one
+  round reads at most `LEX_ROUND_MAX_READS` (48) uncached pages (a shared
+  `readBudget`). Same question after: 16 documents kept, 233 MB peak with
+  `--max-old-space-size=320` (301 MB without: V8 collects late).
+  2026-10-26 (502 on juristai.uz: the log ended at "Downloaded 7665 KB", an
+  8 MB decree page with annexes, then npm start): one page at a time
+  (`LEX_FETCH_CONCURRENCY` 1), a page over `LEX_PAGE_MAX_KB` (7000: the Tax
+  Code is 6 MB) is not read - the download stops - and a plain search
+  result over `LEX_PAGE_MAX_KB_OTHER` (2000) neither; codes / laws found by
+  form, registry and pinned acts get the larger limit; the cache holds at
+  most `LEX_DOCUMENT_CACHE_MAX_CHARS` (8 M) of text. A 6 MB page read costs
+  ~100 MB outside the heap; the round's live heap fit in 128 MB.
+  Relevance (2026-10-24, owner: quality first; most kept acts only
+  mentioned a word): an act form's bonus and lex.uz's row rank count only for
+  an act whose title is about the question; an act whose title is not needs
+  5 of the question's words (a code or law found by its form, 2); roots meet
+  by their start; complaint words are not counted; then one cheap call
+  (`buildLexRelevancePrompt`, stage `source_relevance`) keeps the acts that
+  govern the question - an unreadable reply or a failure keeps the list,
+  `LEX_RELEVANCE_JUDGE=off` stops it. The judge was not measured here.
+  Lessons of 22-24 Oct 2026 (lex.uz behaviour, memory, time, reading the AI
+  requests table, Telegram/Render settings) with how each was measured:
+  `docs/lessons/2026-10-lexuz-va-javob-zanjiri.md` (Uzbek);
+  `scripts/lex-round-probe.js` replays one lex.uz round locally (live lex.uz,
+  no AI): time, event-loop block, peak memory, pages, documents kept.
+  Answer sections (2026-10-24, owner: "Huquqiy asos" repeated Tahlil and
+  Xulosa): two, **Tahlil** (opens with the deciding norm - name, number,
+  article, the quote - and applies it, each norm once) and **Xulosa** (1-2
+  sentences, the direct answer and next step, never repeating Tahlil), in
+  every legal-answer prompt (`buildTopicPrompt` for chat and Telegram, the
+  search prompt, the Gemini fallback, advanced RAG, playbook 1.5.0);
+  `tests/answer-layout.test.js`.
+  Exception first (2026-10-27, owner: an IT Park answer cited VMQ-589 band 5
+  and said no exemption exists; band 17 of its regulation grants one): an
+  act the server identified itself (pinned, or the number asked) opens its
+  excerpt with `SAVOLGA ENG YAQIN QATOR (<unit>)` - the line with the most
+  question roots (5-letter starts, common words out, the unit's heading
+  counted), +2 for an exception or a right (`findKeyLine`, no AI; not on
+  general questions, where it misled: a Labour Code strike line for unpaid
+  wages); every legal-answer prompt has `exceptionRule` - an exception or a
+  right in the sources comes first, "no exception" only after reading all
+  sources. `tests/answer-key-line.test.js`.
+  Answer polish (2026-10-27, owner): a citation with no known part is
+  "N-modda" alone, never "tegishli qism" (prompts, `citationLocatorLabel`;
+  a cached "..., tegishli qism" link still survives); a verified quote's link
+  names its act and unit (`quoteSourceLabel`: "VMQ-589, 17-band · lex.uz ↗");
+  the claim guard puts the sources holding an exception first for an
+  absence claim (VMQ-589 band 17 had fallen past the 14 000-character
+  evidence limit) and its notice names such a claim as a claim, still saying
+  "not found is not absent from the law" (`tests/claim-guard-exception.test.js`).
+  Answer layout (2026-10-13, `src/rag/answer-structure.js`, no AI): a `> «...»` quote of the
   law is kept only when its words are in a retrieved source word for word
   (spaces, case, apostrophe forms aside; "..." parts in order in one
   source), shown in the source's own words with a "lex.uz ↗" link that
@@ -210,6 +339,131 @@ Known state of the suites (Sept 2026):
   `src/rag/question-aspects.js` splits a question into deadline,
   compensation, evidence and remedy and runs a light corpus search for each
   (Telegram, web chat, Workspace).
+- `src/privacy/crypto.js` (2026-10-29, data protection stage 1 / E1,
+  `docs/design/shifrlash-1-bosqich.md`, accepted with all proposals): AES-256-GCM
+  at rest, key ring `DATA_KEYS` = {"v1":"<32 bytes base64>"} + `DATA_KEY_ACTIVE`
+  (env only; `scripts/data-key.js` makes one; the owner keeps an offline copy -
+  a lost key is lost data). `seal`/`open` (text `enc:<id>:…`), `sealJson`/`openJson`
+  ({"enc":…} for JSONB), `sealBytes`/`openBytes`; the AAD
+  `<table>.<column>:<row id>` binds a value to its place; plain values pass
+  through (columns switch row by row); a bad ring stops the server at start,
+  an unset one is a warning (stored unencrypted). E2a (2026-10-29): sealed now -
+  `document_scans.text` (AAD `document_scans.text:<admin>:<hash>`) and the
+  interview audio, transcripts, consent and summary; `scripts/seal-backfill.js`
+  seals older rows (dry run by default, `--apply` is the owner's). E2b
+  (2026-10-29, migration 030): `tg_conversations` turns / context (AAD by
+  chat), `matters.summary` and `matter_items.note` (a note's title is "Yozuv",
+  not its first words, while sealing is on), `agent_runs` input / plan / result
+  and `agent_run_steps.output` (the run store opens every row it returns;
+  answers, the Telegram target and row tags are read, opened, changed, sealed
+  and written back only while unchanged; `openResult` for the matter export),
+  `service_orders.intake_data` and `attorney_consultation_requests.case_summary`
+  (row first, then the sealed value, in one transaction; `openOrder` for the
+  master's list and the quote message), `answer_feedback` and `chat_messages`
+  (AAD by author), `agent_traces` (AAD by request and agent); `answer_cache`
+  since E4. Not sealed: the Workspace (E5). E3 (2026-10-29,
+  `src/privacy/redact.js`, no AI): before a text call leaves for a provider,
+  passport / JShShIR / STIR (next to its word) / phone / card (Luhn) / account /
+  email / car plate / the account holder's own full name and names after
+  "F.I.Sh." / "fuqaro" become `[PASPORT_1]`-style placeholders, put back in the
+  provider's answer (so word-for-word quote checks still see the original);
+  amounts, dates, articles and act codes are never touched; one map per
+  usage-ledger request (memory only), the call's ledger `detail.redacted` holds
+  counts. Hooked in `callOpenAI` (every provider behind it), `callGemini` and
+  the explanation router (`createWrapper`). E4 (2026-10-29): also
+  `callOpenAIStream` (each streamed piece restored, a placeholder split
+  across pieces held until whole: `createStreamRestorer`) and the hybrid
+  pipeline (`callWithFallback`, `content` messages); the legal-answer
+  pipeline (`/api/legal-chat`, `/api/rag/*`, the Telegram bot) is redacted
+  only with `REDACT_LEGAL_CHAT=on` (default off until the owner has read the
+  20-question before/after) or a database master's `X-JAI-Redact: on|off`
+  for one request (that request skips the answer cache). A name found after
+  "F.I.Sh." / "fuqaro" is hidden wherever else it is written. Before/after:
+  `scripts/redaction-eval.js` (dry: rules on `docs/quality/redaction-eval/cases.json`,
+  20 synthetic questions; live: each asked off / on through a running
+  server as a master, `REDACTION_EVAL_LIVE=yes`, `--approve <runSha>`,
+  `--out`; the comparison is mechanical - articles, acts, placeholders left,
+  length - a lawyer reads the pairs). `answer_cache.reply` is sealed (AAD
+  `answer_cache.reply:<key>`, in `seal-backfill.js`); `opinion_cache` is
+  created but never written, so nothing to seal. Not yet: embeddings /
+  rerank, images and audio. `REDACT_AI=off` stops it all.
+  E5 (2026-10-29, migration 032, `src/workspace/sealing.js`): Workspace task
+  comments, room chat, direct messages, Workspace AI questions / answers /
+  context snapshots and document version text / JSON are sealed (AAD by
+  Workspace and its task / thread / document; the 20 000 / 4 000 limits moved
+  to the routes); uploaded files are sealed before Storage (the row keeps the
+  original size and sha256) and downloaded through the server
+  (`GET /api/workspaces/:id/document-files/:fileId/content`, opened, checked
+  against the sha256; the page's `document-download-url` now returns that
+  path; without DATA_KEYS a Storage-signed URL as before); the members'
+  direct Storage INSERT policy is dropped. Realtime was already a signal
+  (both pages re-read through the API); its rows now carry sealed text.
+  `seal-backfill.js` covers the columns and, with `--files`, the Storage
+  files. Not sealed: task titles / descriptions and `workspace_memory_items`
+  (searched in SQL; §3.2 - the memory item's title is the question's first
+  240 characters and its body the answer). Fixed on the way: every new
+  Workspace AI answer failed at finalization (`reused_memory_item_id` got
+  text) and the memory-reuse path had uneven VALUES rows.
+  `tests/sealing-workspace.db.test.js`.
+  E6a (2026-10-29, migration 033, §3.2 and §9 answers 1 / 6): web chats
+  (`ai_chat_sessions.messages`, AAD by account, `src/privacy/chat-sessions.js`)
+  are sealed; the list reads the readable title - identifiers hidden by the
+  redaction rules - and a stored `message_count`, never the messages; the
+  bot's Telegram turn is appended by read-modify-write under FOR UPDATE. The
+  human queue's `requests.request_text` / `response_text` (AAD by request id;
+  the bot inserts the row, then writes the sealed text in the same
+  transaction) and `ai_analyses.request_text` (AAD by author) are sealed, with
+  a blind index `request_bidx` (`src/privacy/blind-index.js`: HMAC of
+  5-character word roots, both alphabets folded, key derived from DATA_KEYS
+  with HKDF - `DATA_BIDX_KEY_ID`, else the first id in sort order, so a
+  rotation does not move it) that the staff search uses with ILIKE for old
+  plain rows (whole roots, every word; never part of a word). Learning sets
+  (mentor feedback, verified QA, the legal dataset) are written with
+  identifiers hidden. `seal-backfill.js` covers them (index and count
+  included; `--tables` limits a run). `tests/sealing-e6.db.test.js`.
+  E6b (2026-10-29, migration 034, §5 / §6 / §9 answer 4): the access log
+  (`src/privacy/access-log.js`, table `data_access_log`) - a staff account
+  (master, lawyer, student) opening another person's sealed data leaves one
+  row per person: who, whose ('account' / 'telegram_user'), table, route,
+  rows seen, when - never the text; one's own data and ordinary accounts are
+  not logged; `ACCESS_LOG=off`. Hooked: the human queue (list, single,
+  export), the AI analysis archive, paid service orders, interview
+  recordings. Boshqaruv -> "Kirish jurnali" (`/app/#/boshqaruv/kirish`,
+  `GET /api/admin/access-log`, master only). "Not to DeepSeek"
+  (`src/privacy/provider-choice.js`): the Moslashish page's checkbox sets
+  `user_profile.manual.noDeepseek` (off by default, kept by "clear" and a
+  pause); while on, `tryDeepSeek`, the hybrid pipeline and the explanation
+  router skip DeepSeek for that account (the lane's GPT-6, then Gemini
+  answer); a Telegram request carries its linked account in
+  `shared.accountId` (the ledger's user is unchanged). The landing, the tariff
+  FAQ and the Moslashish page name the providers (DeepSeek - China; OpenAI,
+  Google - USA; VoiceLab - Uzbekistan) and the switch.
+  `tests/e6b-access-provider.db.test.js`.
+  E7 (2026-10-29, design §10): the landing's "Ma'lumotingiz qanday
+  himoyalanadi" (`#shifrlash`, inside `#xavfsizlik`) is hidden until
+  `GET /api/landing-config` says `privacy.encryptionAtRest` (DATA_KEYS) and
+  `privacy.redactAi` are on; its footnote names the services redaction covers
+  (`redactChat` only with `REDACT_LEGAL_CHAT=on`). Four steps in a loop - you
+  write (caret), personal data hidden (beam + `.slot.flip` to `[SHAXS_1]` /
+  `[PASPORT_1]` on light blue), stored encrypted (flip to an `enc:v1:` line +
+  `.stamp`), opened only for you (flip back) - with `mdot` / `barin` on the
+  rail; only the landing's existing keyframes; reduced motion or the footer
+  switch shows the final state still. The redaction rule also takes the 2026
+  alphabet's "F.I.Ş.". `tests/landing-privacy.test.js`.
+  `tests/privacy-crypto.test.js`, `tests/document-library.db.test.js`,
+  `tests/sealing-e2b.db.test.js`, `tests/privacy-redact.test.js`,
+  `tests/redaction-eval.test.js`.
+- "Hujjatlarim" (2026-10-29, owner: every uploaded document stays for later
+  actions until the person deletes it; migration 029): `document_scans` is the
+  person's library - a text Word/PDF read by `/api/analyze/extract` (it now
+  returns `docId`) and every OCR scan are kept (`library`, `expires_at`
+  'infinity', never shortened by matters, never purged; `DOC_LIBRARY_MAX` 500,
+  then the old 7-day cache with `libraryFull`); one row per account and file.
+  Services use a document by its id through `resolveScans` (`scanId(s)`; a
+  `text` kind is billed as text, not as a scan; `last_used_at`). The text never
+  goes back to the browser. `/api/documents` (list without text, rename,
+  delete for good), page `#/hujjatlarim` and the "Hujjatlarim" picker in the
+  composer's attach menu and on Hujjat tahlili (`public/app/library.js`).
 - `src/ai/model-pricing.js` — **single source of truth for model prices**;
   every spend path, hybrid-pipeline included, reads it. Each price carries
   its source and check date; VoiceLab credits convert at the owner's
@@ -282,6 +536,16 @@ Known state of the suites (Sept 2026):
   `openai/gpt-6-sol`; `OPINION_MODEL`, `OPINION_MODEL_<PLAN>` and
   `OPINION_FALLBACK_MODEL` pick the models. A provider error is scrubbed of
   the key before it is logged.
+  DeepSeek Search / Fetch (2026-10-27, owner: a Boshqaruv button; evaluation
+  only, nothing in the pipeline uses them): `/app/#/boshqaruv/sinov` ->
+  `POST /api/admin/deepseek-tools-eval` (master, `no-store`, one run at a
+  time, 503 without `DEEPSEEK_API_KEY`), `src/services/deepseek-tools-eval.js`:
+  5 questions with a known governing act - our lex.uz search pages (the
+  pipeline's plan: AI planner terms, code / law by form, relaxation; no act
+  downloaded) vs DeepSeek Search with `site:lex.uz` (place among 10) - and
+  Fetch of VMQ-589, the Civil and Tax Codes (whole? the deciding line?);
+  13 requests, each a ledger row (stage admin_test) priced per successful
+  request (`REQUEST_PRICES`, $0.75 / 1 000, billed from 2026-11-01).
   A master can try any of them on the platform with no env change: the
   dashboard's "🧪" picker (`public/js/test-model.js`) sends
   `X-JAI-Test-Model`, applied by `src/ai/test-model.js` only for a database
@@ -300,6 +564,48 @@ Known state of the suites (Sept 2026):
   linked customer (role `user`) or an unknown role is an ordinary user. An
   account counts as linked by `telegram_chat_id` (/link) or, in a private
   chat, by `telegram_user_id` (registration, the site's Telegram linking).
+  Account actions (2026-10-20, `src/agents/account-tools.js`): typed or
+  spoken (voice -> `src/ai/stt.js` -> the same agent), "limitim qancha?",
+  "tariflar", "oxirgi savollarim", "akkauntni ulash", "ilovani och", "nima
+  qila olasan?" are fixed read-only tools (intent `hisob_amal` + `action`;
+  phrase list first, then the intent model; an unknown action is answered as
+  a question): the caller's own balance, the catalogue, their last 5 bot
+  questions, links. No AI call, no quota; nothing is paid or granted - such
+  a step stays a link the person confirms on the site. "Akkauntni o'chir"
+  (`delete_account`) is never a legal question: the bot explains what is
+  removed, a button files one pending request per Telegram user
+  (`src/services/account-deletion.js`, table `account_deletion_requests`),
+  and a master carries it out or declines it with a reason in
+  `/app/#/boshqaruv/ochirish`: personal fields scrubbed, web chats deleted,
+  sessions revoked, bot texts replaced; tariff, usage and payment rows kept
+  without personal data; staff accounts refused.
+  A document order waits for its details 30 minutes (`DOC_INTAKE_TTL_MIN`,
+  `intakeAt` stamped by `setConversationState`; 2026-10-22: a legal question
+  asked 2.5 hours after choosing "Da'vo arizasi" was taken as the order's
+  details); after that, or on its "❌ Bekor qilish" (`docin_cancel`), the
+  next message is a new one. The intake texts name both ways (AI draft now,
+  lawyer priced by the lawyer, nothing paid until agreed).
+  Also since 2026-10-20 (landing promises): a linked account's bot Q&A is
+  appended to its web chats (`src/services/telegram-history.js`, topic
+  'telegram', one per Tashkent day); a paid document order in the bot can be
+  drafted by AI as .docx for 1 `draft` unit (button `tgdraft_ai`); Workspace
+  task status changes and due-today/tomorrow reminders go to linked members
+  by the bot (`src/workspace/telegram-notify.js`, hourly, deduplicated in
+  `workspace_telegram_reminders`, title/status/date only,
+  `WS_TELEGRAM_NOTIFY=off`); a voice recording's summary can be sent to the
+  user's own Telegram (`POST /api/voice/send-telegram`). Voice minutes are
+  not metered (`/api/voice/balance` says so; no "X minutes" anywhere).
+  Linking (2026-10-21 audit): `ulink_` refuses a Telegram held by another
+  account in either column (the way out is `/unlink` in that chat) and
+  detaches the account's old chat; `/unlink` clears both columns (private
+  chat only); `/link` is private-only with 5 tries / 15 min; the site's
+  link status reads the columns. A linked account gets the plan in the bot
+  when granted and 3 days / 1 day before it ends (`src/services/plan-notify.js`,
+  `tariff_expiry_notices`, `PLAN_NOTIFY=off`). Dictation: the chat's 🎙 button
+  -> `POST /api/voice/dictate` (<= 2 min, measured, not metered, rate-limited,
+  `VOICE_DICTATION=off`); the text lands in the box, never sent by itself.
+  Recordings transcribe only with `VOICE_NOTES_ENABLED=true` (customers also
+  `VOICE_NOTES_USERS=true`) and an STT engine; the page says which is missing.
   Account help (login/OTP/password) is matched only on unambiguous account
   words, never "hisob…" in a legal question ("hisoblash" once routed wage
   questions to password reset). `/testmode` (master only, in memory, auto-off after 12 h) lifts that for one
@@ -308,7 +614,10 @@ Known state of the suites (Sept 2026):
   like the test account below (`resolveMasterTestMode`): master role read
   from the database, own private chat, the 12 h session as the window, its
   own budget `TG_MASTER_TESTMODE_BUDGET_USD` ($5); `TG_MASTER_TESTMODE_UNLIMITED=off`
-  restores the limits.
+  restores the limits. Since 2026-10-22 (owner) that master also gets the AI
+  draft and the claim agent with no unit and no Stars (`masterDraftTest`):
+  nothing reserved or committed, the calls under the same test budget; a
+  spent budget falls back to the ordinary rules.
   Separately, one ordinary (role `user`) account can be a test account
   (`src/bot/test-account.js`, `TG_TEST_ACCOUNT_*`): by the Telegram user id
   linked in `admins.telegram_user_id`, never a username; no daily limit or
@@ -324,6 +633,28 @@ Known state of the suites (Sept 2026):
   rollover) and of the reserve / commit / release ledger (`tariff_usage` +
   `tariff_periods`, atomic per payer, idempotent by job key). Linked Telegram
   and web accounts share one allowance; Stars credits are a separate balance.
+  One-time services (2026-10-21, owner): `src/rag/one-time-products.js` -
+  5 questions 15 000, AI draft 29 000, analysis unit 39 000, opinion unit
+  49 000 so'm (to be changed with real demand); sold in the bot for Stars
+  until Click/Payme are connected (`src/bot/one-time-sales.js`: signed `jsv1`
+  invoice, Stars = so'm price at `STAR_PAYOUT_USD` 0.013, rounded up to 10,
+  `ONE_TIME_STARS_<KEY>` overrides). A purchase is a `service_credits` row
+  (unique charge id; migration 017): used only after the plan's own
+  allowance, through tariff_usage rows with no period (`meta.pool =
+  'one_time'`), never expires, shared by bot and site; a failed credit
+  refunds the Stars; the paid draft or analysis then runs at once. Offered
+  after the last Sinov answer, when a limit is spent (with the document the
+  last answer pointed to), and when a draft or analysis has no unit. The
+  1-Star / 4-answer pack is no longer offered (old invoices still honoured).
+  Lawyer services: the lawyer's price is `quoted_price_minor` (so'm); the
+  platform's share `LAWYER_COMMISSION_PCT` (0-50, unset = not recorded) is
+  written with the quote (`src/services/lawyer-commission.js`); the customer
+  gets the price in the bot when it is approved; payment is manual until a
+  provider is connected. A delivered AI draft can be sent for lawyer review.
+  Master view: `/app/#/boshqaruv/xaridlar` (`GET /api/admin/one-time-purchases`,
+  `src/services/one-time-report.js`, read only): purchases, who, Stars,
+  catalogue so'm price at the sale (not the Stars payout), units left per
+  person and service; refunds listed, never counted.
   Document jobs are sized in units: max(pages/10, chars/40 000), signed PDF
   page counts (`docTicket`), never silently cut. A paid period is granted only
   by `POST /api/admin/tariff/grant` (idempotent `paymentRef`), never by the
@@ -345,8 +676,12 @@ Known state of the suites (Sept 2026):
   (`settleSections`: a delivered analysis stays paid if the opinion fails).
   Workspace does not run full analysis/opinion: such a request is routed to
   the AI section with no AI call and no quota (`createWorkspaceServiceRouting`);
-  a clause question is one chat unit. Telegram runs no AI on files (lawyer queue, told plainly, no
-  quota, review not promised free). Individual discounts
+  a clause question is one chat unit. In Telegram a PDF/DOCX (<= 5 MB, text layer) is offered
+  for AI analysis for its document units, run only after the button that
+  names them (`src/bot/telegram-documents.js`: reserve 'analysis', the
+  website's own analysis, commit on delivery, release on failure); the other
+  button, and every scan, photo or video, is the lawyer queue (no AI, no
+  quota, told plainly, review not promised free). Individual discounts
   (`src/rag/tariff-pricing.js`, `tariff-offers.js`, table `tariff_offers`):
   master only, one user, one plan, one 30-day period, final price >=
   conservative cost / 0.80 (integers, min rounded up to 1 000, floors
@@ -383,7 +718,10 @@ Known state of the suites (Sept 2026):
   apart; legacy revenue and refunds are unknown, never 0. Rollback is code,
   not data: `docs/tariffs-v2-rollback.md`; the 013 down file is for an empty
   test database only. The pilot runs on a master-only test entitlement
-  (`grantTestEntitlement`, `tariff_periods.source = 'test'`: no price, no
+  (`grantTestEntitlement`, 1-336 h = up to 14 days since 2026-10-28, 48 h
+  default; quotas and budget cover the whole period; the 14-day CustDev
+  pilot's suggested grant is in `docs/tariffs-v2.md` §10;
+  `tariff_periods.source = 'test'`: no price, no
   paymentRef, no revenue, admins.tariff_* untouched, spend reported apart)
   with a total AI budget (`src/ai/test-budget.js`): each request holds its
   per-request limit before its first AI call, and inside it every provider
@@ -395,11 +733,383 @@ Known state of the suites (Sept 2026):
   Not a hard dollar guarantee: it holds only as far as the price table is
   right. Every `usageLedger.track()` call must pass `bound`. Rollback uses
   `MAINTENANCE_MODE=on` (503 on the API, bot notice) before the SQL.
-- `src/workspace/` — Platinum Workspace: routes, authz, Supabase
-  realtime/storage, Workspace AI.
+- `src/agents/harness.js` (2026-10-21) — the agentic harness: a workflow is a
+  fixed list of steps (tools); the harness enforces `maxSteps` / `maxMs`,
+  keeps a trace (label, status, ms, short note - never prompts or raw model
+  text), stops on a failed required step or a deliberate halt
+  (`needs_input`). First workflow: `src/agents/workflows/claim-draft.js`
+  (da'vo arizasi: intake no AI -> issues -> lex.uz retrieval -> basis whose
+  quotes must be in the source word for word, else dropped and counted ->
+  the drafting generator told to cite only that basis -> mechanical check:
+  articles outside the basis, figures not in the facts, missing claim parts;
+  warnings only). Route `POST /api/agent/claim-draft`
+  (`src/agents/agent-routes.js`): missing facts 422 before any charge or AI;
+  1 `draft` unit reserved, committed only when a draft came out. Page:
+  `/app/#/agent/dava` (`public/app/agent.js`). In the Telegram bot
+  (2026-10-22, `src/agents/telegram-claim.js`, `TG_CLAIM_AGENT=off` to
+  stop): a da'vo arizasi order's "AI loyiha" runs this workflow - one cheap
+  call reads the free text into the fields (only what it says), missing
+  facts are asked for with the unit released and the next message resumes;
+  the steps update one message; the .docx, then the basis with lex.uz links
+  and the warnings; the unit is committed on delivery. It does not touch
+  `/api/legal-chat`. Second workflow (2026-10-22):
+  `src/agents/workflows/tabular-review.js` - tabular review, up to 20
+  documents x 10 questions: per document the clauses matching the questions
+  (`selectExcerpt`, <= 20 000 chars, the row says when a long document was
+  read in parts), one AI call per document (4 at a time; a failed document
+  is a failed row), each cell's quote checked word for word in the document
+  (page from `[Sahifa n]`; unverified cells keep the answer, marked) - a found
+  quote proves the words are there, not that the answer is right. Route
+  `POST /api/agent/tabular-review`: one `chat` unit per document,
+  reserved together (`reserveMany`), committed per row read, released per
+  row failed. Page `/app/#/jadval` (`public/app/tabular.js`, CSV export);
+  a scan goes through the shared OCR step (`J.readFile` -> scan-quote ->
+  confirmed ocr-image, service `chat`: the OCR pages from the plan's pool)
+  and is sent as `scanId` (this account's only, from `document_scans`;
+  `=== PAGE n ===` marks give the page). Stage 2 (2026-10-28): up to 100
+  documents (`TABULAR_MAX_DOCS`, <= 200), 20 MB body; the run keeps the
+  columns and each document's excerpt only (`prepareInput`); extraction is
+  one checkpointed step per 10 documents; the run carries its own AI limits
+  (docs + 8 calls, $0.05 a document, min $1, `TABULAR_RUN_USD_PER_DOC`; 15 s
+  a document, <= 20 min); a run stopped by its limits or a cancel shows and
+  charges the rows it read and releases the rest (`verifyRows`); a `choice`
+  column (2-8 options, an answer outside them is "Topilmadi"); row tags in
+  the run's result (`PUT /api/agent/runs/:id/tags`); Excel `POST
+  /api/agent/tabular-review/export` (`tabular-export.js`, every cell text,
+  never a formula); the page reads files 3 at a time, sends more than 10
+  documents `async` and follows them at `#/jadval/<runId>`. Not yet run on
+  100 real documents with live AI. Third workflow (2026-10-22):
+  `src/agents/workflows/playbook-review.js` - a contract against a firm's
+  own rules (not the law): clauses matching the rules (`selectExcerpt`), one
+  AI call (mos / farq / yoq / noaniq, the clause's words, a note, a proposed
+  wording from the rule's preferred text), quotes checked word for word with
+  pages; "mos" with no quote found becomes "noaniq". Four built-in playbooks
+  (one side's negotiating preferences, never statements of law); own ones in
+  `playbooks` (migration 018, 30 per account, owner-only CRUD
+  `/api/playbooks`). `POST /api/agent/playbook-review`: analysis units by the
+  contract's size (docUnits, page marks not counted), committed on a
+  result; a scanned contract comes as `scanId` from the OCR step for
+  `analysis`, and the analysis units that step held are adopted
+  (`heldScanJob`) - never charged twice. Page `/app/#/playbook`
+  (`public/app/playbook.js`, editor, Word report). In the Word / Google
+  Docs pane (2026-10-28, `public/word/taskpane.js`, `shared.js`
+  `playbookItems`): the same review; farq / yoq / noaniq become comments
+  ("mos" only counted), a found "farq" clause's proposal goes in with Track
+  Changes, the rule is written "Qoida:", never "Asos:"; "Ishga saqlash"
+  links the run to a matter. The pane token opens `GET /api/playbooks`,
+  `POST /api/agent/playbook-review`, `GET /api/agent/runs/:id`,
+  `GET/POST /api/matters`, `POST /api/matters/:id/items` (`bearerAllowed`)
+  and passes `requireSameOrigin` (a browser never sends it by itself).
+- `src/matters/` (2026-10-28, PR-A of the roadmap) — Matters: one legal
+  matter and the links to its chats, scans and notes (migration 019,
+  `/api/matters`). A link is checked to be the caller's own; another
+  account's matter is 404. Attached to a Workspace, its members write and
+  viewers read. Paid plans keep 200 open matters, Sinov 1. A scan held by an
+  open matter does not expire; 30 days after the last one closes. Account
+  deletion removes matters and scans. No AI, no unit; `MATTERS=off`.
+- `src/agents/runs/` (2026-10-28, PR-B) — agent runs (migration 020): the
+  claim draft, tabular and playbook routes are a service each (`prepare` no
+  AI + reservation held with `meta.holdUntil` 45 min, `run` the harness,
+  `settle` commit / release and the reply). The route queues an
+  `agent_runs` row and waits for it (same reply + `runId`; 202 on
+  `async: true` or a long queue); `worker.js` in this process takes runs
+  under a 90 s lease (`FOR UPDATE SKIP LOCKED`, `AGENT_RUN_CONCURRENCY` 2,
+  one per person), checkpoints each step (`agent_run_steps`), resumes a run
+  whose worker died without re-running finished steps, fails and releases
+  after 3 attempts; each run is its own usage request (60 calls, 15 min,
+  $1, `AGENT_RUN_MAX_*`) and gets the pilot test budget. Input and step
+  outputs are emptied when the run ends; results kept 90 days or while a
+  matter links them. `/api/agent/runs[/:id[/events|/cancel]]` (own only,
+  404 otherwise). `AGENT_RUNS=off` runs in the request as before; the
+  Telegram claim agent is not a run yet (PR-F).
+- Planner agent (2026-10-28, PR-D): `src/agents/tools/index.js` (matter_context,
+  doc_excerpt, lex_search, answer, verify - wrappers of existing code),
+  `src/agents/planner.js` (one cheap call, not charged; the server checks the
+  plan with no AI: known tools and args, `after` only to earlier steps, <= 12
+  steps, <= 4 searches, one answer, verify last, documents only from the
+  matter; one retry, then a fixed plan), `src/agents/planner-routes.js`
+  (`POST /api/agent/plan` -> a run `awaiting_approval`, nothing reserved;
+  `POST /api/agent/runs/:id/approve` reserves the price and queues it; the
+  `planned` executor runs the steps; the chat unit is committed only with a
+  verified answer). `AGENT_PLANNER` master (default) / gold / all / off. UI:
+  the "Agent topshirig'i" card on a matter page (master only for now).
+  PR-E: steps with `after` run as a graph in the harness (<= 3 at once,
+  `AGENT_PLAN_PARALLEL`; a failure, halt, cancel or limit starts nothing new,
+  running steps finish and are recorded); the answer waits for every earlier
+  step, verify for all. `ask_user` (once, before the answer) stops the run
+  `needs_input` (units released, input and checkpoints kept);
+  `POST /api/agent/runs/:id/input` reserves again and requeues; unanswered
+  7 days -> cancelled.
+  PR-F (Telegram): the planner is a service (`createPlannerService`:
+  plan / approve / answer / cancel / attachTelegram) shared by the web
+  routes and the bot. "agent: <topshiriq>" (typed or a voice note) ->
+  `agent_task` -> the plan with `agp_y_` / `agp_n_` buttons; approving sends
+  one status message whose id goes into the run's input (`telegram`), the
+  worker reports steps and the end through `src/agents/runs/notify.js` (the
+  bot's notifier, `src/bot/agent-runs.js`): the answer in Telegram Markdown,
+  or the question - the chat's state `agent_answer` makes the next message
+  the answer ("yo'q" is an answer there; only "bekor" stops it). A staff
+  account reaches this only in /testmode (staff messages are not questions).
+  PR-G: `docs/quality/agent-eval.md` - 24 synthetic cases
+  (`docs/quality/agent-eval/cases.json`, all `reviewed: false` until a lawyer
+  reviews them; no article numbers guessed), a scorer with no AI
+  (`scripts/lib/agent-eval-score.js`: delivered, asked, acts, structure,
+  must_say, must_not_say, verification) and `scripts/agent-eval.js` (dry by
+  default; live only through a running server's API as a master session,
+  with `AGENT_EVAL_LIVE=yes` and `--approve <runSha>`). Only reviewed cases
+  speak for quality.
+- Matter commands by voice or text (2026-10-28, owner): `src/matters/commands.js`
+  - anchored uz / ru phrases (no AI, <= 300 chars: "ishlarim", "yangi ish och:
+  …", "<ish> ishiga yozuv: …", "<ish> ishini ko'rsat / yop / qayta och",
+  "мои дела", "новое дело: …"); a matter is found by its words, an unknown or
+  ambiguous name is asked about, never guessed; close / reopen need a
+  confirmation (a 10-minute token of that account, used once, in memory).
+  Telegram: `classifyDeterministicIntent` -> `ish_amal` (typed, or a voice
+  note after STT), the linked account of any role, buttons `mtc_y_` / `mtc_n_`
+  in bot.js. App: `POST /api/matters/command` and the command bar with 🎙
+  (dictation) on the Ishlar pages. No AI, no unit; `MATTERS=off` stops it.
+  `tests/matter-commands.test.js` scans every string in tests/ for false hits.
+  Export (2026-10-28, roadmap stage 2): `GET /api/matters/:id/export?format=
+  pptx|xlsx` (`src/matters/export.js`, deck written by `src/exports/pptx.js`
+  with jszip - pptxgenjs was not added, it depends on the npm package
+  "https"): built only from what the matter holds (summary, notes, chats,
+  the linked agent results via `store.results`, read with the matter's own
+  access), no AI, no unit; the deck ends with "AI material, not a final
+  opinion"; xlsx cells are text, never formulas.
+  Spoken commands are checked (2026-10-28, owner: "Pudratchi" was heard as
+  "Qudratxo'ja" and a matter opened under that name): the app's 🎙 puts the
+  text in the box and never runs it; in Telegram a spoken "yangi ish" /
+  "yozuv" is shown as heard with buttons (as heard / as the glossary
+  suggests `mtc_a_` / cancel), and the next short typed message (not a
+  question, not a command, 10 min) replaces the heard name or note
+  (`correctPending`). `src/voice/glossary.js`: no engine here takes a
+  vocabulary, so after STT a word that is not a known legal term (or a
+  suffixed form of one) but shares most of a term's stem is suggested -
+  never replaced (a real name stays as said); `/api/voice/dictate` returns
+  `suggestions`, the chat names them in a toast.
+  Per account (2026-10-28, owner; migration 021 `voice_glossary`,
+  `src/voice/user-glossary.js`): a `fix` (heard -> term) is learned when the
+  person picks a suggestion, corrects the heard words before running (same
+  word count, <= 3 words) or types a correction in the bot; a `word` when they
+  keep a heard word against a suggestion, or add a name by hand; their own
+  fix is suggested first, their own words are never flagged. "Lug'atim" on the
+  Ishlar command bar lists, adds and deletes (`/api/voice/glossary`); 500
+  rows an account (a learned row makes room, hand-made rows stay); account
+  deletion removes it. Still suggestions only - never a replacement.
+  Voice commands level 2 (2026-10-29, owner; design `docs/design/ovozli-buyruqlar-2.md`,
+  accepted with all proposals, §9): a spoken command in the
+  chat or the Ishlar command bar becomes a card with [Bajarish] [Savol
+  sifatida yuborish] [Bekor] - never run by speaking alone; one catalogue
+  with no AI (`src/voice/commands.js`, to come); payments, deletion and
+  sending to others are never voice commands. Level 1 (a mic in every field,
+  #520; the command bar's mic in the same place, #529) is live.
+  V1 (2026-10-29): `src/voice/commands.js` - the catalogue: `open` (pages:
+  Hujjatlarim, Ishlarim, Hujjat tahlili, da'vo arizasi / hujjat tayyorlash,
+  Jadvalli tahlil, Playbook, yangi / oxirgi suhbat, Suhbatlarim, Yozuvlar,
+  Jamoa, Advokatlar, limit / hisob, Tariflar, Moslashish), `matter` (the
+  matter commands passed through, run as spoken: writes wait for their own
+  confirmation) and `blocked` (account / document / chat deletion, paying,
+  sending to Telegram or a lawyer - only the page is offered); uz in both
+  alphabets and ru; in the chat only a spoken text counts (`voice: true`).
+  `POST /api/voice/command/parse` -> a command with a token (nothing runs),
+  `POST /api/voice/command/run` (the token: once, that account, 10 minutes)
+  (`src/voice/command-routes.js`, same-origin, no AI, no unit,
+  `VOICE_COMMANDS=off`). `tests/voice-commands.test.js` scans every string of
+  tests/ and both evaluation sets for false hits. The cards in the app are V2/V3.
+  V2 (#532): in the chat a spoken text that is a command becomes a card
+  (`J.voiceCard` in `public/app/chat.js`); typing closes it. V3 (#533): the
+  Ishlar command bar uses the same card. V4 (2026-10-30): `context` commands,
+  chat only and spoken only, a card only when there is something to act on -
+  copy the last answer, the last answer as Word, attach the chat to a matter
+  (the named open matter, `run` with `context.chatId`; no name, none or
+  several -> the page's matter picker) and "shu hujjatni tahlil qil" (the
+  composer's or the chat's last document opens Hujjat tahlili at the service
+  choice, the cost confirmation unchanged; "hujjatni tahlil qil" without
+  "shu" is still the page). After it (#536): a nameless "yangi ish och" asks
+  for the name - the Ishlar bar waits for it (spoken by its 🎙 or typed, then
+  Bajarish), the chat card shows its own name field with a mic (`.vc-name`).
+  V5 (2026-10-30, migration 035): in Telegram an open / blocked command,
+  typed or spoken, is answered with its link and one URL button (intent
+  `ilova_sahifa` after the matter and account actions, `appPath`; nothing is
+  done in the bot; MATTERS=off drops "Ishlarim" there too). Except
+  "hujjatlarim" (2026-10-30, owner: a link made the person leave the bot):
+  `src/bot/telegram-library.js` lists a linked account's library in the chat
+  (name, pages, date - never the text; 8 newest, the rest "on the site"),
+  a button a document (`tglo_<id>`) opens its card naming the analysis
+  units, `tgla_<id>` runs the bot's own paid analysis
+  (`telegram-documents.runAnalysis`, no lawyer-queue button for a library
+  document); another account's id is "not found"; a PDF / Word sent to the
+  bot by a linked account is saved to the same library (`saveToLibrary`).
+  `tests/telegram-library.test.js`.
+  `voice_command_events` (`src/voice/command-events.js`): place, kind,
+  action, outcome (shown / run / ask / as_question / cancel), voice or text,
+  lang, time - never the text, never the account; the card's [Bekor] and
+  [Savol sifatida] call `POST /api/voice/command/event`; a failed write never
+  stops a command; `VOICE_COMMAND_EVENTS=off`. Weekly view: Boshqaruv ->
+  "Ovozli buyruqlar" (`/app/#/boshqaruv/ovoz`, `GET /api/admin/voice-commands`,
+  master), with the question share (as_question / shown) as the
+  false-recognition signal.
+- `src/editor/` (2026-10-30, D1 of `docs/design/hujjat-muharriri.md`; owner:
+  every plan, sharing by link with any platform user later in D3, AI
+  spelling from the AI limit plus our own rule checker in D5): a document
+  edited in the app - an AI draft ("Muharrirda ochish" on the draft and
+  claim pages), a Word / PDF / .txt opened from Hujjatlarim ("Word / PDF
+  ochish", `POST /api/editor/import`: Word keeps headings, bold, lists,
+  tables, links and alignment - mammoth plus an alignment marker; headers /
+  footers, footnotes, comments, tracked changes and pictures are named in a
+  banner, a scan is refused), a library document (paragraphs) or blank.
+  Page `#/muharrir/<id>` (`public/app/editor.js`): an A4 sheet with page
+  lines, toolbar (block, font, size, B I U S, colour, highlight, alignment,
+  lists, table, undo / redo), autosave after 1.5 s, versions (auto every 10
+  minutes, named, restore keeps the current text first), Word export
+  (`html-to-docx.js` now writes colour, highlight, font and size) and PDF by
+  the browser's print dialog (print CSS shows the sheet only). The editor
+  is TipTap 3.31.4 built once into `public/vendor/editor/` (MIT, see its
+  README / LICENSES.txt), loaded only on that page. Storage (migration 036):
+  `doc_editor_documents` / `doc_editor_versions`, HTML cleaned by
+  `src/editor/sanitize.js` (the editor's own markup only; attribute values
+  are written raw, so a quote or space in an href or font name drops it) and
+  sealed (AAD by document / version); owner only (404 otherwise); a save
+  names its `revision` - a stale tab gets 409 and stops saving; 300
+  documents an account (`EDITOR_MAX_DOCS`), 2 MB each; account deletion
+  removes them; `EDITOR=off`. `tests/editor.test.js`, `tests/editor.db.test.js`.
+- `src/workspace/` — Workspace: routes, authz, Supabase
+  realtime/storage, Workspace AI. Since 2026-10-28 (owner, migration 025)
+  any active paid plan (Silver, Gold, Platinum) owns one (`PLAN_CATALOG`
+  `workspace.create`; `has_workspace_entitlement`); a member still needs
+  their own paid plan. `workspaces.internal`: a staff Workspace only a master
+  opens (`POST /workspaces` `internal: true`), active with no plan while the
+  owner is a master, members staff only (master / student / lawyer, enforced
+  by triggers and the invitation check), the flag never changes;
+  `tests/workspace-entitlement.db.test.js`.
 - `public/` — static pages: `index.html` (landing), `login.html`,
   `dashboard.html` (the app), `ai-dashboard.html` (the design reference the
   dashboard follows), plus tariff, attorneys, templates, legal pages.
+
+## CustDev pilot (2026-10-28, owner)
+
+14 days, 5 student lawyers ("agents"), 20 clients. Stage 1: test
+entitlements up to 336 h. Stage 2 (migration 024, `src/sales/`): a staff
+account (student / lawyer, no new role) gets a random `admins.sales_agent_code`
+only from a master (route `requireMasterAdmin` + the role read again in the
+database); offer links `/?ref=<code>` (the `jai_ref` httpOnly cookie, set
+before the static pages, the first link kept) and
+`t.me/<legal bot>?start=ref_<code>` (`referral_pending` until the account
+exists; `ref_` is its own prefix and never triggers the bare-start sign-in
+fallback); the FIRST agent is written once at registration
+(`telegram-auth-routes`, `telegram-login` -> `claimAtRegistration`), an
+unknown code is ignored; a referred client gets a pending `pilot_requests`
+row; a master approves it with one button (`PILOT_GRANT`: 336 h, silver,
+chat 120 / analysis 8 / opinion 4 / draft 6 / ocr 20, $10) or declines; the
+client hears it in the bot when linked. Demo: a master-made test account
+linked to an agent (`demo_for_agent_id`) with the same entitlement; its
+units are reported apart. An agent grants nothing and sees only their own
+clients - name, registered, pilot status, units used, paid - never a
+question or answer (`GET /api/sales/me`, page `#/mijozlarim`, a nav item for
+an agent only). Master: Boshqaruv -> "CustDev pilot" (`/api/admin/sales/*`):
+pending requests, agents, codes, links, demo, registered / piloted / paid.
+Agents list and invite links (2026-10-29, owner; migration 031,
+`src/sales/invites.js`): the list holds only accounts with a code (taking the
+code back - "Agentlikdan chiqarish" - takes the account off it); a new agent
+comes by "Agent qo'shish": a master's one-use, 7-day link
+`t.me/<legal bot>?start=agi_<token>` (only its sha256 kept, shown once,
+revocable, an optional note). In the bot the link shows what accepting does;
+the tap (token held at /start for that Telegram user, 15 min, never in the
+button) makes the Telegram's account a student with a code - made from the
+Telegram identity if there is none, a `user` promoted, a student / lawyer
+kept; a master or a referred / demo client refused, the link left unused.
+`tests/agent-invites.db.test.js`.
+Client type and the one-tap join (2026-10-28, owner; migration 026):
+`admins.client_type` lawyer / accountant / hr / business / user is what the
+client does - it adapts the platform (the home "Sohangiz" chips save it,
+`PUT /api/client-type`; `/api/user-info` returns `clientType`) and grants
+nothing: every client stays role `user` (a client lawyer is NOT role
+`lawyer`, which is staff and shown as "Ekspert"). Set by the person, their
+agent (`POST /api/sales/clients/:id/type`) or a master. The bot's ref_ link
+asks "kasbingiz?" (`src/bot/pilot-join.js`, buttons `pj_<type>`) and one tap
+makes the account from the Telegram identity (`joinFromTelegram`, no site, no
+code). Standing rule (owner's "b"): a professional type gets the pilot with
+no master's click (`maybeAutoApprove`, one at a time under an advisory lock;
+`grantTestEntitlement` `policy: 'custdev_pilot_auto'`, grantedBy null,
+`pilot_requests.auto`) while fewer than `PILOT_AUTO_TOTAL` (20) are approved
+in all and `PILOT_AUTO_PER_AGENT` (4) for that agent; "user" and anything
+past a cap waits for a master; `PILOT_AUTO=off` stops it.
+`tests/pilot-join.db.test.js`.
+Role views (2026-10-30, owner; #534 preview, #538 automatic, frontend only):
+the client type picks the app's view - a client account (role `user`) sees
+its field's sections and a lean home page by default (`J.ROLE_VIEWS` in
+`public/app/core.js`: Fuqaro, Tadbirkor, Yurist, Buxgalter, HR, Advokatlik
+firmasi; no type yet = Fuqaro with "Sohangizni tanlang" on the home page,
+one tap saves the type). "Barcha bo'limlar" (`#/rol/hammasi`, the last nav
+item) shows every section in this browser (`localStorage jai-role-full`),
+"Soddalashtirilgan ko'rinish" (`#/rol/sodda`) goes back; staff keep the
+full view; `#/rol/<rol>` previews a role in one tab (sessionStorage).
+Stage 3 (migration 027, `src/sales/pilot-workspace.js`, no AI): a master
+opens the pilot's internal Workspace once (Boshqaruv → CustDev pilot,
+`pilot_workspace`); agents with a code are members (also when a code is
+given later); a client is never a member. An approved pilot (button or
+standing rule) gets one task "Mijoz: <ism> — <tur>" with the sections
+Muammo / Hozirgi yechim / Demo / 7-kun / 14-kun / Narx javoblari, due at
+the pilot's end, assigned to the agent (`pilot_client_tasks`; the agent or a
+master can open it by hand). Feedback: the bot's "💬 Fikr bildirish" (on the
+pilot-open message) or `/fikr` puts an active pilot client's private chat in
+feedback mode (`src/bot/pilot-feedback.js`, 15 min) - only the NEXT text or
+voice note (after STT) is feedback, intercepted before the agent and the
+request queue; it becomes one sub-task (`workspace_task_links` subtask) per
+Telegram message (`pilot_feedback` unique chat + message). The agent tags it
+(xato / chalkash / yangi_imkoniyat / narx) and, once the sub-task is done,
+writes a short reply and confirms it - the bot sends it once (a failed
+delivery may be resent) with "🔕" to turn replies off
+(`admins.pilot_replies_off`). Tag and reply are also task comments. Weekly
+view by tag with distinct clients (`/api/sales/feedback/weekly`). Every
+Workspace write runs in the Workspace transaction as the acting staff
+account, so the triggers log it. Pages: "Mijozlarim" (feedback, tags,
+replies, open task) and Boshqaruv → CustDev pilot. `tests/pilot-feedback.db.test.js`.
+Stage 4 (migration 028, `src/interviews/`, page: the "Intervyu yozuvlari"
+card on a matter, `public/app/interviews.js`, staff only): an interview
+recording is stored only with its consent - who, when, how (said at the
+start of the recording / written) and the uploader's tick that the person
+was told it is transcribed and sent to AI providers (VoiceLab, DeepSeek) and
+the audio is deleted after `INTERVIEW_AUDIO_DAYS` (30); without it 422 and
+nothing stored. Only the uploader and a master see a recording (not other
+members of a Workspace the matter is attached to). STT (`src/ai/stt.js`, its
+ledger rows) runs in the background as its own usage request, in chunks of
+`INTERVIEW_CHUNK_SEC` (600, ffmpeg to Opus) up to `INTERVIEW_MAX_SEC` (2 h) /
+`INTERVIEW_MAX_MB` (50); the transcript is versioned
+(`interview_transcripts`: 1 = STT, then edits) and stays when the audio goes
+(the hourly retention sweep or by hand; `interview_events` logs every step).
+The optional AI summary (`callCheapAI`, ledger + bound) gives quotes,
+problem, current solution and price, confusing, missing, signal, price
+answers; a quote not in the transcript word for word is removed and counted;
+labelled "AI xulosasi, transkript bilan tekshiring". A client's account
+deletion removes the recordings made with them. `INTERVIEWS=off` stops it.
+`tests/interviews.db.test.js`.
+
+## The 2026 Latin alphabet (OʻRQ-1184 of 21.10.2026)
+
+Oʻ → Ö, Gʻ → Ğ, Sh → Ş, Ch → Ç (owner, 2026-10-28: the new alphabet by
+default, the old one on request, either one always available). Inside,
+everything stays in the OLD script: lex.uz, the corpus, prompts and every
+word-for-word quote check are written in it. `public/js/uz-alphabet.js`
+(UMD, used by the server too): `toOld` at the entry points (`/api/legal-chat`
+message, the Telegram question, matter commands), `fold` in search and
+document matching (`normalizeUzbekForSearch`, document-job `lower`), `toNew`
+only for display - the app and the landing convert their text nodes and
+placeholders (inputs, textareas, code, `[data-noalpha]` untouched; links,
+emails, `code`, mixed-case names like MChJ / JuristAI and act codes like
+OʻRQ-1184 kept; a U+200C keeps a sample of the old letters as it is), copy
+buttons copy what is shown, a one-time bar offers the old alphabet (no
+answer = new); an English interface (`html lang` en: the app sets it in the head
+from its `lang`, and `/en/`) is never converted and gets no offer (#536). The choice: `localStorage jai-alphabet` and, signed in,
+`user_profile.manual.alphabet` (the Moslashish page). The bot
+(`src/bot/alphabet.js`, migration 023 `tg_alphabet`): `sendMessage` /
+`editMessageText` and button labels in the chat's script, the old one
+offered once, `/alifbo` to switch; a linked account's site choice is used
+when the chat has none. Not converted yet: the Word pane, generated .docx,
+.pptx/.xlsx exports, the old dashboard. Golos Text's upstream Ğ/ğ had no
+breve (the composite held only G/g); `public/fonts/golos-text/*latin-ext*`
+were rebuilt with fontTools from the Google Fonts variable font with the
+breve added the way the font builds Ă (OFL, no reserved name).
 
 ## Frontend rules
 
@@ -407,7 +1117,12 @@ Known state of the suites (Sept 2026):
   `docs/design-handoff/` (`ANIMATIONS.md` lists which animations exist — do
   not invent new ones). Match the rendered canvas, not its inline declarations;
   the canvas runtime overrides some of them.
-- **Type: one face, Space Grotesk, everywhere** (owner's decision, Sept 2026;
+- **Type, new design (landing, `/app/`, Word/Google Docs panels): Golos
+  Text**, self-hosted from `public/fonts/golos-text/` through
+  `/app/fonts.css` (it has Cyrillic). Pages link that file - never Google
+  Fonts (2026-10-20 review replaced 21 Google Fonts links). The rule below
+  stays for the old dashboard and the pages that still use its styles.
+- **Type, old design: one face, Space Grotesk, everywhere** (owner's decision, Sept 2026;
   it overrides the dashboard canvas's Inter / Source Serif 4 / JetBrains Mono
   split). It is self-hosted: `public/css/fonts.css` declares it from
   `public/fonts/space-grotesk/` and sets every font role from `html:root`;

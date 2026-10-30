@@ -99,6 +99,40 @@ jobs:
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/usage-ledger.test.js
       - name: Telegram test account reservation and budget on real Postgres
         run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/telegram-test-account.test.js
+      - name: Matters (ownership, Workspace roles, held scans) on real Postgres
+        run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/matters.db.test.js
+      - name: Agent runs (queue, lease takeover, checkpoints, cancel, settle) on real Postgres
+        run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/agent-runs.db.test.js
+      - name: Adaptive profile (codes only, pause, sweep, deletion) on real Postgres
+        run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/adaptive-profile.db.test.js
+      - name: CustDev pilot agents (codes, referrals, pilot approval, isolation) on real Postgres
+        run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/sales-agents.db.test.js
+      - name: Workspace for every paid plan + internal workspace (db)
+        run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/workspace-entitlement.db.test.js
+      - name: Client type + one-tap pilot join (db)
+        run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/pilot-join.db.test.js
+      - name: CustDev agent invite links (db)
+        run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/agent-invites.db.test.js
+      - name: CustDev stage 3 - pilot tasks and feedback (db)
+        run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/pilot-feedback.db.test.js
+      - name: CustDev stage 4 - interview recordings with consent (db)
+        run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/interviews.db.test.js
+      - name: Document library + sealing at rest (db)
+        run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/document-library.db.test.js
+      - name: Sealing at rest E2b (db)
+        run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/sealing-e2b.db.test.js
+      - name: Data protection E5 - Workspace sealed at rest (db)
+        run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/sealing-workspace.db.test.js
+      - name: Data protection E6 - chats, the human queue, blind index (db)
+        run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/sealing-e6.db.test.js
+      - name: Data protection E6b - access log and provider choice (db)
+        run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/e6b-access-provider.db.test.js
+      - name: Speech glossary per account (learn, isolation, cap) on real Postgres
+        run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/voice-glossary.db.test.js
+      - name: Planner agent (master gate, approval, price, worker) on real Postgres
+        run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/agent-planner.db.test.js
+      - name: Document editor D1 (sealed, owner only, revisions, versions) on real Postgres
+        run: TEST_DATABASE_URL="$DATABASE_URL" PGSSL=disable node tests/editor.db.test.js
 
   audit:
     name: npm audit (report only)

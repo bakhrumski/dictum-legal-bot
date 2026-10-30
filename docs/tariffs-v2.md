@@ -18,8 +18,13 @@ almashtiriladi. Narx va limitlarning yagona manbasi —
 | AI yuridik xulosa (birlik) | 1 | 8 | 24 | 40 |
 | Draft yaratish | 0 | 10 | 30 | 50 |
 | Rasm/skan o'qish (sahifa) | 10 | 80 | 240 | 400 |
-| Workspace yaratish | Yo'q | Yo'q | Yo'q | Ha |
+| Workspace yaratish | Yo'q | Ha | Ha | Ha |
 | Workspace'ga qo'shilish | Yo'q | Ha | Ha | Ha |
+
+2026-10-28 dan (egasi, migratsiya 025) Workspace'ni har qanday faol pullik
+tarif egasi ochadi; a'zo bo'lish uchun ham o'z faol pullik tarifi kerak.
+Istisno - master ochgan ichki (xodimlar) Workspace: tarifsiz, a'zolari faqat
+xodimlar (CustDev pilot).
 
 Gold = 3 × Silver, Platinum = 5 × Silver: kodda Silver limitlaridan
 ko'paytuvchi bilan chiqariladi va test bilan tekshiriladi.
@@ -235,7 +240,7 @@ Pilot uchun test akkauntiga kvota tijoriy to'lov grant'i orqali berilmaydi. Buni
 
 | | |
 |---|---|
-| Berish | `POST /api/admin/tariff/test-entitlements { userId, reason, hours (≤ 168, 48 standart), plan (hujjat hajmi qoidasi), quotas, budgetUsd (5), unknownCallUsd (0.05), perRequestUsd }` |
+| Berish | `POST /api/admin/tariff/test-entitlements { userId, reason, hours (≤ 336 = 14 kun, 48 standart), plan (hujjat hajmi qoidasi), quotas, budgetUsd (5), unknownCallUsd (0.05), perRequestUsd }` |
 | Ko'rish | `GET /api/admin/tariff/test-entitlements` — kvota sarfi va budjet holati (spent, held) |
 | Tugatish | `POST /api/admin/tariff/test-entitlements/:userId/end` |
 
@@ -255,6 +260,20 @@ Pilot uchun test akkauntiga kvota tijoriy to'lov grant'i orqali berilmaydi. Buni
   - `estimated`: bunday chaqiruv Master yozgan taxmin va uning asosi bilan ishlaydi, alohida risk sifatida yoziladi;
   - so'rov limiti — production'niki (`AI_REQUEST_MAX_COST_USD`). Faqat shu akkaunt uchun `perRequestUsd` bilan o'zgartiriladi; global limit o'zgarmaydi.
   - Bu **qat'iy dollar kafolati emas**: kafolat narx jadvalining to'g'riligi bilan cheklangan. Cheklovlar va pilot rejasi — moliyaviy hisobot §7.
+
+**Muddat:** 1 soatdan 336 soatgacha (14 kun, 2026-10-28 dan; avval 168 soat edi). Standart 48 soat o'zgarmagan. Budjet va kvota muddatga bog'liq emas: ular **butun davr uchun** beriladi (kunlik yoki haftalik yangilanish yo'q).
+
+**14 kunlik CustDev pilot uchun tavsiya** (kodda standart emas; Master har berishda o'zi yozadi):
+
+```json
+{ "hours": 336, "plan": "silver",
+  "quotas": { "chat": 120, "analysis": 8, "opinion": 4, "draft": 6, "ocr": 20 },
+  "budgetUsd": 10 }
+```
+
+- Kvota **14 kunning hammasi uchun**: masalan, 120 ta savol butun pilot davomida, kuniga emas.
+- Hujjat hajmi qoidasi Silver bo'yicha (`plan`), lekin bu pullik Silver emas: tushum yo'q, `admins.tariff_*` o'zgarmaydi.
+- `budgetUsd` 10: 14 kunlik barcha AI sarfining yuqori chegarasi (maksimum 50).
 
 ## 8. Keyingi bosqichlar (alohida PR'lar, ushbu PR'da bajarilmagan)
 

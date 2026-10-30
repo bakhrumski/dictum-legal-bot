@@ -9,7 +9,8 @@
  *             1 opinion unit, 0 drafts
  *   Silver    199 000 so'm / 30 days: 150 chat, 8 + 8 units, 10 drafts
  *   Gold      599 000 so'm / 30 days: 3 x Silver
- *   Platinum  999 000 so'm / 30 days: 5 x Silver, can create a Workspace
+ *   Platinum  999 000 so'm / 30 days: 5 x Silver
+ *   Every paid plan (Silver, Gold, Platinum) can create a Workspace (2026-10-28)
  *
  * It extends what existed, it is not a second system: usage rows are the
  * same tariff_usage table (now with service, units, status, period, job key,
@@ -59,13 +60,13 @@ const PLAN_CATALOG = Object.freeze({
   silver: Object.freeze({
     label: 'Silver', priceUzs: 199000, periodDays: 30, oneTime: false,
     quotas: paidQuotas('silver'),
-    workspace: Object.freeze({ create: false, join: true }),
+    workspace: Object.freeze({ create: true, join: true }),
     job: Object.freeze({ maxUnits: 3, maxPages: 30, maxChars: 120000 }),
   }),
   gold: Object.freeze({
     label: 'Gold', priceUzs: 599000, periodDays: 30, oneTime: false,
     quotas: paidQuotas('gold'),
-    workspace: Object.freeze({ create: false, join: true }),
+    workspace: Object.freeze({ create: true, join: true }),
     job: Object.freeze({ maxUnits: 3, maxPages: 30, maxChars: 120000 }),
   }),
   platinum: Object.freeze({
@@ -403,16 +404,85 @@ async function usedUnits(db, periodIds, service) {
   return r.rows[0].n;
 }
 
+// ── One-time credits (2026-10-21, src/rag/one-time-products.js) ───────────
+// Units bought one at a time (service_credits: one row per payment). They are
+// spent only when the plan's own allowance for the service does not cover a
+// job, through ordinary tariff_usage rows with no period and
+// meta.pool = 'one_time', so reserve / commit / release and the idempotent job
+// key work the same; they never expire. A database without the table (the
+// migration not run yet) simply has none.
+let creditsTableKnown = null;
+async function hasCreditsTable(db) {
+  if (creditsTableKnown) return true;
+  const r = await db.query(`SELECT to_regclass('public.service_credits') IS NOT NULL AS ok`);
+  creditsTableKnown = !!(r.rows[0] && r.rows[0].ok) || null;
+  return !!creditsTableKnown;
+}
+
+async function oneTimeRemaining(db, subjects, service) {
+  if (!subjects || !subjects.length || !(await hasCreditsTable(db))) return 0;
+  const r = await db.query(
+    `SELECT COALESCE((SELECT SUM(units) FROM service_credits
+                       WHERE subject = ANY($1) AND service = $2 AND refunded_at IS NULL), 0)::int AS bought,
+            COALESCE((SELECT SUM(COALESCE(u.credits, 1)) FROM tariff_usage u
+                       WHERE u.subject = ANY($1) AND u.service = $2 AND u.period_id IS NULL
+                         AND u.meta->>'pool' = 'one_time' AND ${LIVE_USAGE_SQL}), 0)::int AS used`,
+    [subjects, service]);
+  const row = r.rows[0] || {};
+  return Math.max(0, Number(row.bought || 0) - Number(row.used || 0));
+}
+
+/**
+ * Record a one-time purchase (idempotent by paymentRef: a repeated payment
+ * notice returns the first row and adds nothing). identity is the payer;
+ * the units go to the linked account when there is one, so the website and
+ * the bot share them. Returns { credit, duplicate }.
+ */
+async function grantOneTimeCredit({ adminId = null, telegramUserId = null, service, units, product, priceUzs = null, stars = null,
+  provider, paymentRef, db = pool }) {
+  if (!SERVICES.includes(service)) throw new Error(`unknown service: ${service}`);
+  const n = Math.ceil(Number(units));
+  if (!Number.isInteger(n) || n < 1) throw new Error('units must be a positive integer');
+  if (!paymentRef || !provider) throw new Error('paymentRef and provider are required');
+  const subject = subjectsFor({ adminId, telegramUserId })[0];
+  if (!subject) throw new Error('no payer identity');
+  const ins = await db.query(
+    `INSERT INTO service_credits (subject, admin_id, telegram_user_id, service, units, product, price_uzs, stars, provider, payment_ref)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+     ON CONFLICT (payment_ref) DO NOTHING RETURNING *`,
+    [subject, adminId, telegramUserId, service, n, String(product).slice(0, 40), priceUzs, stars, String(provider).slice(0, 20), String(paymentRef).slice(0, 200)]);
+  if (ins.rows[0]) return { credit: ins.rows[0], duplicate: false };
+  const old = await db.query('SELECT * FROM service_credits WHERE payment_ref = $1', [String(paymentRef).slice(0, 200)]);
+  return { credit: old.rows[0] || null, duplicate: true };
+}
+
+/** A refunded purchase stops counting (its units already spent stay spent). */
+async function refundOneTimeCredit(paymentRef, { db = pool } = {}) {
+  const r = await db.query(`UPDATE service_credits SET refunded_at = now() WHERE payment_ref = $1 AND refunded_at IS NULL RETURNING id`, [paymentRef]);
+  return r.rowCount > 0;
+}
+
+async function insertOneTimeUsage(db, { adminId, actorId, workspaceId, channel, endpoint, service, units, subject, jobKey, meta, now, requestId }) {
+  await db.query(
+    `INSERT INTO tariff_usage
+       (admin_id, endpoint, credits, service, status, period_id, subject, job_key, actor_id, workspace_id, channel, meta, ts, request_id)
+     VALUES ($1, $2, $3, $4, 'reserved', NULL, $5, $6, $7, $8, $9, $10, $11, $12)`,
+    [adminId, endpoint ? String(endpoint).slice(0, 50) : null, units, service, subject, jobKey,
+      actorId != null ? actorId : adminId, workspaceId, channel, JSON.stringify({ ...(meta || {}), pool: 'one_time' }), now, requestId || null]);
+}
+
 /** Per-service limit, used and remaining for this person, read-only. */
 async function balance(identity, { db = pool, now = new Date() } = {}) {
   const ent = await resolveEntitlement(db, identity, { now, createTrial: false });
   if (ent.kind === 'staff') return { kind: 'staff', unlimited: true };
+  const oneTime = {};
+  for (const s of SERVICES) oneTime[s] = await oneTimeRemaining(db, ent.subjects || [], s);
   if (ent.kind === 'none') {
     // a person who never used the Sinov still has it: show it as available
-    return { kind: 'none', reason: ent.reason, trialAvailable: ent.reason === 'no_plan', trialQuotas: PLAN_CATALOG.sinov.quotas };
+    return { kind: 'none', reason: ent.reason, trialAvailable: ent.reason === 'no_plan', trialQuotas: PLAN_CATALOG.sinov.quotas, oneTime };
   }
   if (ent.kind === 'paid' && ent.rules === 'legacy_v1') {
-    return { kind: 'paid', plan: ent.plan, rules: 'legacy_v1', startsAt: ent.period.starts_at, endsAt: ent.period.ends_at, legacy: true };
+    return { kind: 'paid', plan: ent.plan, rules: 'legacy_v1', startsAt: ent.period.starts_at, endsAt: ent.period.ends_at, legacy: true, oneTime };
   }
   const limits = limitsOf(ent);
   const ids = periodIdsOf(ent);
@@ -428,6 +498,7 @@ async function balance(identity, { db = pool, now = new Date() } = {}) {
     endsAt: ent.period ? ent.period.ends_at : null,
     test: ent.kind === 'test' || undefined,
     services,
+    oneTime,
   };
 }
 
@@ -483,7 +554,15 @@ async function reserve({
     const periodId = ent.period ? ent.period.id : ent.periods[0].id;
     const base = { kind: ent.kind, plan: ent.plan, rules: ent.rules, periodId,
       endsAt: ent.period ? ent.period.ends_at : null, units: n, ...check };
-    if (!check.allowed) return { ...base, allowed: false, jobKey: key };
+    if (!check.allowed) {
+      // the plan does not cover it: units bought one at a time, if any
+      const left = await oneTimeRemaining(db, ent.subjects, service);
+      if (left >= n) {
+        await insertOneTimeUsage(db, { adminId, actorId, workspaceId, channel, endpoint, service, units: n, subject, jobKey: key, meta, now, requestId });
+        return { ...base, allowed: true, oneTime: true, periodId: null, jobKey: key, oneTimeRemaining: left - n, remaining: left - n };
+      }
+      return { ...base, allowed: false, jobKey: key, oneTimeRemaining: left };
+    }
 
     await db.query(
       `INSERT INTO tariff_usage
@@ -525,6 +604,7 @@ async function reserveMany({
     const periodId = ent.period ? ent.period.id : ent.periods[0].id;
     await releaseExpiredScanHolds(db, ent.subjects);
     const taken = {};
+    const takenOneTime = {};
     const checks = [];
     for (const j of list) {
       let check;
@@ -537,14 +617,26 @@ async function reserveMany({
         check = { allowed: used + j.units <= limit, limit, used, remaining: Math.max(0, limit - used), reason: limit === 0 ? 'not_in_plan' : 'limit_reached' };
       }
       if (!check.allowed) {
+        const left = (await oneTimeRemaining(db, ent.subjects, j.service)) - (takenOneTime[j.service] || 0);
+        if (left >= j.units) {
+          takenOneTime[j.service] = (takenOneTime[j.service] || 0) + j.units;
+          checks.push({ j, check: { ...check, remaining: left }, oneTime: true });
+          continue;
+        }
         return { kind: ent.kind, plan: ent.plan, rules: ent.rules, periodId, endsAt: ent.period ? ent.period.ends_at : null,
-          units: j.units, ...check, allowed: false, failed: j.service };
+          units: j.units, ...check, allowed: false, failed: j.service, oneTimeRemaining: Math.max(0, left) };
       }
       taken[j.service] = (taken[j.service] || 0) + j.units;
       checks.push({ j, check });
     }
     const out = [];
-    for (const { j, check } of checks) {
+    for (const { j, check, oneTime } of checks) {
+      if (oneTime) {
+        await insertOneTimeUsage(db, { adminId, actorId, workspaceId, channel, endpoint: j.endpoint, service: j.service, units: j.units,
+          subject: ent.subjects[0], jobKey: j.jobKey, meta: j.meta, now, requestId });
+        out.push({ service: j.service, units: j.units, jobKey: j.jobKey, oneTime: true, remaining: Math.max(0, check.remaining - j.units) });
+        continue;
+      }
       await db.query(
         `INSERT INTO tariff_usage
            (admin_id, endpoint, credits, service, status, period_id, subject, job_key, actor_id, workspace_id, channel, meta, ts, request_id)
@@ -813,7 +905,8 @@ async function grantPaidPeriodLocked({ adminId, plan, paymentRef, provider = 'ma
 // measuredServiceCost); its total AI budget is enforced by
 // src/ai/test-budget.js.
 const TEST_DEFAULT_QUOTAS = Object.freeze({ chat: 12, analysis: 8, opinion: 6, draft: 3, ocr: 10 });
-const TEST_MAX_HOURS = 168;
+// up to 14 days (2026-10-28, owner: the 14-day CustDev pilot); 48 h stays the default
+const TEST_MAX_HOURS = 336;
 
 function testQuotas(input) {
   const out = {};
@@ -832,8 +925,13 @@ function testQuotas(input) {
  * Refused while the account has a running paid period. Returns
  * { ok, period, duplicate } or { ok: false, reason }.
  */
+// Standing rules the owner decided, under which the server grants with no
+// master's click (grantedBy null). Only server code passes one; no route does.
+const TEST_GRANT_POLICIES = Object.freeze(['custdev_pilot_auto']);
+
 async function grantTestEntitlement({ adminId, grantedBy, reason = '', hours = 48, plan = 'silver', quotas = null,
-  budgetUsd = 5, unknownCallUsd = 0.05, perRequestUsd = null, budgetMode = 'strict', unboundedCallUsd = null, riskBasis = '', now = new Date() }) {
+  budgetUsd = 5, unknownCallUsd = 0.05, perRequestUsd = null, budgetMode = 'strict', unboundedCallUsd = null, riskBasis = '', policy = null, now = new Date() }) {
+  if (policy != null && (!TEST_GRANT_POLICIES.includes(policy) || grantedBy != null)) return { ok: false, reason: 'invalid_policy' };
   const why = String(reason || '').trim();
   if (why.length < 3 || why.length > 500) return { ok: false, reason: 'reason_required' };
   const h = Number(hours);
@@ -856,8 +954,10 @@ async function grantTestEntitlement({ adminId, grantedBy, reason = '', hours = 4
     return { ok: false, reason: 'estimated_mode_needs_estimate_and_basis' };
   }
   return withLock({ adminId }, async (db) => {
-    const m = await db.query('SELECT role FROM admins WHERE id = $1', [grantedBy]);
-    if (!m.rows[0] || m.rows[0].role !== 'master') return { ok: false, reason: 'master_only' };
+    if (!policy) {
+      const m = await db.query('SELECT role FROM admins WHERE id = $1', [grantedBy]);
+      if (!m.rows[0] || m.rows[0].role !== 'master') return { ok: false, reason: 'master_only' };
+    }
     const account = await accountRow(db, adminId);
     if (!account) return { ok: false, reason: 'unknown_user' };
     if (account.role !== 'user') return { ok: false, reason: 'not_an_ordinary_user' };
@@ -872,13 +972,13 @@ async function grantTestEntitlement({ adminId, grantedBy, reason = '', hours = 4
       [`a:${adminId}`, now]);
     if (paid.rows[0]) return { ok: false, reason: 'account_has_paid_period' };
     const ends = new Date(now.getTime() + Math.round(h * 3600e3));
-    const meta = { kind: 'test', reason: why, grantedBy: Number(grantedBy), grantedAt: now.toISOString(),
+    const meta = { kind: 'test', reason: why, grantedBy: policy ? null : Number(grantedBy), policy: policy || undefined, grantedAt: now.toISOString(),
       budgetUsd: budget, unknownCallUsd: unknown, perRequestUsd: perReq,
       budgetMode, unboundedCallUsd: budgetMode === 'estimated' ? unbounded : null, riskBasis: budgetMode === 'estimated' ? String(riskBasis).trim().slice(0, 500) : null };
     const ins = await db.query(
       `INSERT INTO tariff_periods (subject, admin_id, plan, rules, source, starts_at, ends_at, limits, economics, created_by)
        VALUES ($1, $2, $3, 'v2', 'test', $4, $5, $6, $7, $8) RETURNING *`,
-      [`a:${adminId}`, adminId, plan, now, ends, JSON.stringify(q), JSON.stringify(meta), grantedBy]);
+      [`a:${adminId}`, adminId, plan, now, ends, JSON.stringify(q), JSON.stringify(meta), policy ? null : grantedBy]);
     return { ok: true, period: ins.rows[0], duplicate: false };
   });
 }
@@ -993,11 +1093,13 @@ async function measuredServiceCost({ days = 30, db = pool, test = false } = {}) 
 }
 
 module.exports = {
+  TEST_MAX_HOURS,
   measuredServiceCost,
   SERVICES, PLAN_CATALOG, PAID_PLAN_ORDER, MULTIPLIER, SILVER_QUOTAS, OCR_PAGES_PER_ANALYSIS_UNIT,
   DOC_UNIT, DRAFT_UNIT, STANDARD_PAGE_CHARS, PLANNING, RESERVATION_TTL_MIN,
   docUnits, draftUnits, jobFits, planEconomics, maxOcrPages, planOcr, subjectsFor, lockKey,
   signDocTicket, readDocTicket, textHash, signScanTicket, readScanTicket, heldScanJob, SCAN_HOLD_MIN, SCAN_TICKET_MIN,
   setLegacyCheck, resolveEntitlement, balance, reserve, commit, release,
+  oneTimeRemaining, grantOneTimeCredit, refundOneTimeCredit,
   reserveMany, grantPaidPeriod, grantTestEntitlement, endTestEntitlement, listTestEntitlements, TEST_DEFAULT_QUOTAS, quotePlanChange, syncAccountPlan, usedUnits, periodValue, upgradeCredit, allocateCredit, withLock,
 };

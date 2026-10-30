@@ -29,6 +29,10 @@ function allowedHosts(req, env = process.env) {
 
 function requireSameOrigin(req, res, next) {
   if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
+  // a Word / Google Docs task-pane token (src/addin/word-addin.js) is sent by
+  // the pane itself, never by a browser on its own, so it cannot be forged
+  // cross-site; such a request comes from Word or a Google sandbox origin
+  if (req.addinTokenId) return next();
   const origin = req.get('origin');
   const referer = req.get('referer');
   const from = origin && origin !== 'null' ? hostOf(origin) : (referer ? hostOf(referer) : null);

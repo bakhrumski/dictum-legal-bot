@@ -226,10 +226,12 @@ function resolveIntakeCallback(data, currentContext = {}) {
       },
       message: [
         `Tanlangan hujjat: ${documentType.label}.`,
-        "Bu pullik xizmat; narx va bajarish muddati mas'ul yurist tekshiruvidan keyin tasdiqlanadi.",
+        "Ikki yo'l bor: 🤖 AI loyiha - darhol, Word faylda; 👨‍⚖️ yurist - narx va muddatni yurist belgilaydi, rozilik berguningizcha to'lov yo'q.",
         '',
         "Vaziyatni, tomonlarni, mavjud hujjatlarni va muddatni qisqacha yozing. Shaxsiy maxfiy ma'lumotlarni hozircha yubormang.",
+        "Buyurtma 30 daqiqa kutadi; savol bermoqchi bo'lsangiz, ❌ Bekor qilish.",
       ].join('\n'),
+      replyMarkup: { inline_keyboard: [[{ text: '❌ Bekor qilish', callback_data: 'docin_cancel' }]] },
     };
   }
 

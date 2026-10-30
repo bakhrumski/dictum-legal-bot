@@ -110,7 +110,8 @@ function workspaceRoutingReply(services = []) {
 
 // ── Excerpts ───────────────────────────────────────────────────────────────
 
-const lower = s => String(s || '').toLocaleLowerCase('uz-UZ').replace(/[‘’ʻʼ`']/gu, '');
+// the 2026 alphabet (ö ğ ş ç) matches the old (oʻ gʻ sh ch): a document and a question may use either
+const lower = s => String(s || '').toLocaleLowerCase('uz-UZ').replace(/[‘’ʻʼ`']/gu, '').replace(/ö/g, 'o').replace(/ğ/g, 'g').replace(/ş/g, 'sh').replace(/ç/g, 'ch');
 
 function terms(question) {
   return [...new Set(lower(question)
