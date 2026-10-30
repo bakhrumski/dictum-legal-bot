@@ -299,7 +299,7 @@
         return;
       }
       input.value = '';
-      if (d.needsTitle) { askName(d.reply); return; }
+      if (d.needsTitle) { awaitingTitle = true; askName(d.reply); return; }
       if (d.matterId) setCurrent(d.matterId);
       // a command that redraws the page says what it did in a toast (the bar is drawn again)
       if ((d.action === 'matter_created' || d.action === 'matter_shown') && d.matterId) { J.toast(d.reply, 5000); J.go('#/ishlar/' + d.matterId); return; }
