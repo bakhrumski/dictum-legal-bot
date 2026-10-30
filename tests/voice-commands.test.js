@@ -82,9 +82,39 @@ const V = { place: 'chat', voice: true };
     // strings that ARE commands on purpose elsewhere: the bot's account action "limitim qancha?" (account-tools
     // tests), and page names used as labels - saying a page's name opens it, which is the point
     const meant = new Set(['Limitim qancha?', 'limit ', 'Hujjat tahlili', 'Jadvalli tahlil']);
-    const hits = [...seen].filter(q => !meant.has(q) && vc.parse(q, { place: 'matters' }));
+    const hits = [...seen].filter(q => !meant.has(q) && (vc.parse(q, { place: 'matters' }) || vc.parse(q, { place: 'chat', voice: true })));
     assert.ok(seen.size > 1000, `strings scanned: ${seen.size}`);
     assert.deepStrictEqual(hits, []);
+  });
+
+  await test('V4: actions on the open chat - in the chat only, spoken only', () => {
+    const cases = [['javobni nusxala', 'copy_answer'], ['Javobni Word’ga yukla', 'word_answer'], ['javobni yuklab ol', 'word_answer'], ['скопируй ответ', 'copy_answer'],
+      ['shu suhbatni Ijara nizosi ishiga biriktir', 'attach_matter'], ["suhbatni ishga qo'sh", 'attach_matter'], ['прикрепи чат к делу аренда', 'attach_matter'],
+      ['shu hujjatni tahlil qil', 'analyze_doc'], ['проанализируй этот документ', 'analyze_doc']];
+    for (const [text, action] of cases) {
+      const c = vc.parse(text, V);
+      assert.ok(c && c.kind === 'context' && c.action === action, `${text} -> ${JSON.stringify(c)}`);
+    }
+    assert.strictEqual(vc.parse('shu suhbatni Ijara nizosi ishiga biriktir', V).matter, 'ijara nizosi');
+    assert.strictEqual(vc.parse('hujjatni tahlil qil', V).kind, 'open', 'without "shu" it is the page');
+    assert.strictEqual(vc.parse('javobni nusxala', { place: 'matters' }), null, 'not in the command bar');
+    assert.strictEqual(vc.parse('javobni nusxala', { place: 'chat', voice: false }), null, 'not typed');
+  });
+
+  await test('V4: attaching the chat writes only to the named open matter; otherwise the page picks', async () => {
+    const added = [];
+    const store = { list: async () => [{ id: 'a', title: 'Ijara nizosi', status: 'open', access: 'write' }, { id: 'b', title: 'Pudrat avansi', status: 'open', access: 'write' }, { id: 'c', title: 'Pudrat nizosi', status: 'open', access: 'write' }],
+      addItem: async (id, admin, item) => { added.push([id, admin, item]); return { id: 'i1' }; } };
+    let out = await vc.run(vc.issue(vc.parse('shu suhbatni Ijara nizosi ishiga biriktir', V), 7), { adminId: 7, store, context: { chatId: 42, title: 'Ijara savoli' } });
+    assert.deepStrictEqual([out.matterId, added[0]], ['a', ['a', 7, { kind: 'chat', ref: 42, title: 'Ijara savoli' }]]);
+    out = await vc.run(vc.issue(vc.parse('shu suhbatni pudrat ishiga biriktir', V), 7), { adminId: 7, store, context: { chatId: 42 } });
+    assert.ok(out.needsPick && out.many.length === 2, 'two matches: the page asks');
+    out = await vc.run(vc.issue(vc.parse("suhbatni ishga qo'sh", V), 7), { adminId: 7, store, context: { chatId: 42 } });
+    assert.ok(out.needsPick, 'no name: the page asks');
+    out = await vc.run(vc.issue(vc.parse('shu suhbatni Ijara nizosi ishiga biriktir', V), 7), { adminId: 7, store, context: {} });
+    assert.ok(out.needsPick, 'no saved chat yet: the page saves and asks');
+    assert.strictEqual(added.length, 1);
+    assert.deepStrictEqual(await vc.run(vc.issue(vc.parse('javobni nusxala', V), 7), { adminId: 7 }), { ok: true, kind: 'context', action: 'copy_answer' });
   });
 
   await test('a command runs only by its token: once, for that account, within 10 minutes', async () => {

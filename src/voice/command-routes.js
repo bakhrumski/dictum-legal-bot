@@ -5,9 +5,11 @@
  *
  *   POST /api/voice/command/parse { text, place: 'chat'|'matters', voice, lang }
  *        -> { command: null } | { command: { kind, action, label, route?, href?, token } }
- *   POST /api/voice/command/run   { token, lastMatterId }
+ *   POST /api/voice/command/run   { token, lastMatterId, context: { chatId, title } }
  *        -> open / blocked: { route | href } (the page goes there);
- *           matter: what src/matters/commands.js answers (its own confirmations stay)
+ *           matter: what src/matters/commands.js answers (its own confirmations stay);
+ *           context: copy / Word / analysis are done by the page; attaching the
+ *           chat to a named matter is written here (else the page's picker)
  *
  * Nothing is run by parse; run needs the token parse gave this account. No AI,
  * no tariff unit. VOICE_COMMANDS=off stops it (the app then treats the text as
@@ -40,7 +42,8 @@ function mountVoiceCommandRoutes(app, { requireAuth, requireSameOrigin, pool, ma
   app.post('/api/voice/command/run', requireSameOrigin, requireAuth, guard(async (req, res) => {
     const b = req.body || {};
     const store = matterStore || require('../matters/store').createMatterStore({ db: pool, resolveEntitlement: require('../rag/tariff-ledger').resolveEntitlement });
-    const out = await commands.run(b.token, { adminId: me(req), store, db: pool, lastMatterId: b.lastMatterId || null });
+    const ctx = b.context && typeof b.context === 'object' ? { chatId: b.context.chatId, title: b.context.title } : null;
+    const out = await commands.run(b.token, { adminId: me(req), store, db: pool, lastMatterId: b.lastMatterId || null, context: ctx });
     if (!out.ok) return res.status(out.status || 400).json({ error: out.error, message: out.message || null });
     const { ok, ...rest } = out;
     res.json(rest);

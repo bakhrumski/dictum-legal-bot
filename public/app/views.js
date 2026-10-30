@@ -231,7 +231,8 @@
       $('[data-a=again]', body).onclick = stepDrop;
       $('[data-a=word]', body).onclick = function () { J.exportWord(doc.name + ' — ' + t('an.s.opinion'), clean); };
     }
-    stepDrop();
+    // V4: "shu hujjatni tahlil qil" from the chat brings its document here
+    if (J.analyzePrefill) { doc = J.analyzePrefill; J.analyzePrefill = null; stepChoose(); } else stepDrop();
   };
 
   /* ================= HUJJAT TAYYORLASH ================= */

@@ -122,11 +122,14 @@
     $('[data-v=run]', card).onclick = async function () {
       var b = this; b.disabled = true;
       if (opts.beforeRun) opts.beforeRun();
-      var r = await J.api('/api/voice/command/run', { method: 'POST', body: { token: c.token, lastMatterId: opts.lastMatterId || null } });
+      // V4: an action on the open chat sends the chat it is about (saved first when it is new)
+      var ctx = c.kind === 'context' && opts.context ? await opts.context() : null;
+      var r = await J.api('/api/voice/command/run', { method: 'POST', body: { token: c.token, lastMatterId: opts.lastMatterId || null, context: ctx } });
       b.disabled = false;
       if (!r.ok) { J.toast(r.status === 410 ? t('vcmd.gone') : J.errMsg(r.data), 5000); close(); if (opts.onClose) opts.onClose(); return; }
       var d = r.data;
       if (d.kind === 'open' || d.kind === 'blocked') return go(d);
+      if (d.kind === 'context') { close(); if (opts.onDone) opts.onDone(d); if (opts.onContext) opts.onContext(d); return; }
       // a matter command: a write waits for its own confirmation (src/matters/commands.js)
       if (d.confirm && d.confirm.token) {
         var acts = $('.vc-acts', card);
@@ -266,8 +269,20 @@
       if (opts.voiceCommands === false) return;
       var c = await J.parseVoiceCommand(text, 'chat');
       if (!c || ta.value.trim() !== String(text).trim()) return;
+      // V4: an action on the open chat needs something to act on, else the text stays a question
+      var vx = opts.voiceContext || null, doc = null;
+      if (c.kind === 'context') {
+        doc = st.files.filter(function (f) { return f.status === 'ready'; }).pop() || (vx && vx.doc ? vx.doc() : null);
+        if (c.action === 'analyze_doc' ? !doc : !(vx && vx.has(c.action))) return;
+      }
       vcCard = J.voiceCard(el, c, text, {
         ask: true,
+        context: vx ? vx.context : null,
+        onContext: function (d) {
+          if (d.action === 'analyze_doc') { J.analyzePrefill = doc; J.go('#/tahlil'); return; }
+          if (d.action === 'attach_matter') { if (d.matterId) J.toast(t('vcmd.attached', { t: d.matterTitle || '' }), 5000); else vx.attachPick(); return; }
+          if (vx && vx[d.action]) vx[d.action]();
+        },
         onAsk: function () { vcCard = null; submit(); },
         onClose: function () { vcCard = null; ta.focus(); },
         onDone: function () { vcCard = null; ta.value = ''; grow(); sync(); },
@@ -348,7 +363,23 @@
       drawer.classList.add('open');
       if (focus) { var it = $('[data-n="' + focus + '"]', b); if (it) { it.scrollIntoView({ block: 'center' }); it.style.borderColor = 'var(--cta)'; } }
     }
+    // V4: what a spoken action on this chat acts on (src/voice/commands.js CONTEXT)
+    function lastAct(a) { var l = $$('.m-ai [data-a=' + a + ']', v); return l.length ? l[l.length - 1] : null; }
+    var voiceContext = {
+      has: function (action) {
+        if (action === 'copy_answer') return !!lastAct('copy');
+        if (action === 'word_answer') return !!lastAct('word');
+        if (action === 'attach_matter') return !!J.addToMatter && C.history.length > 0;
+        return false;
+      },
+      copy_answer: function () { var b = lastAct('copy'); if (b) b.click(); },
+      word_answer: function () { var b = lastAct('word'); if (b) b.click(); },
+      attachPick: function () { var b = lastAct('matter'); if (b) b.click(); },
+      doc: function () { return C.docs.length ? C.docs[C.docs.length - 1] : null; },
+      context: async function () { if (!C.id) await save(); return C.id ? { chatId: Number(C.id) || C.id, title: C.title || '' } : null; },
+    };
     var cmp = J.composer($('.dock', v), {
+      voiceContext: voiceContext,
       placeholder: t('cmp.ph2'),
       hasDocs: function () { return C.docs.length > 0; },
       onSend: function (p) {
