@@ -12076,6 +12076,13 @@ lifecycle.waitForDatabase(pool)
     const server = app.listen(PORT, () => {
       console.log(`[SERVER] Dashboard running on port ${PORT} | Node ${process.version}${WEBHOOK_DOMAIN ? ' | https://' + WEBHOOK_DOMAIN : ''}`);
     });
+    // the editor's live co-editing (D3): a WebSocket on this server, the app's own session and origin
+    try {
+      require('../editor/live').attachLive(server, {
+        sessionMiddleware, pool, store: require('../editor/store').createEditorStore({ db: pool }),
+        allowedOrigin: (req) => require('../auth/same-origin').isSameOrigin(req),
+      });
+    } catch (e) { console.log('[EDITOR-LIVE] not attached:', e.message); }
     lifecycle.installGracefulShutdown({
       server,
       pool,

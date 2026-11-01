@@ -13,6 +13,7 @@
 
 const crypto = require('crypto');
 const privacy = require('../privacy/crypto');
+const access = require('./access');
 
 const ID_RE = /^[0-9a-f-]{36}$/iu;
 const MAX_BODY = 4000;
@@ -24,10 +25,8 @@ const tidy = (s, n) => String(s || '').replace(/\r\n?/gu, '\n').trim().slice(0, 
 function err(status, code, message) { const e = new Error(message || code); e.status = status; e.code = code; return e; }
 
 function createCommentStore({ db }) {
-  async function ownDoc(docId, ownerId) {
-    if (!ID_RE.test(String(docId || ''))) return false;
-    return (await db.query('SELECT 1 FROM doc_editor_documents WHERE id = $1 AND owner_id = $2', [docId, ownerId])).rowCount > 0;
-  }
+  // D3: by role (src/editor/access.js): read to list, comment to add, resolve to resolve; null -> 404, too low -> 403
+  async function ownDoc(docId, adminId, need = 'read') { return !!(await access.load(db, docId, adminId, need)); }
   function shape(r) {
     return {
       id: r.id, parentId: r.parent_id, author: r.author_name || r.full_name || null, authorId: r.author_id, source: r.source,
@@ -57,7 +56,7 @@ function createCommentStore({ db }) {
 
   /** A new comment (or a reply with parentId) -> { id }. The page then marks the words with that id. */
   async function add(docId, ownerId, { body, quote = null, parentId = null }) {
-    if (!(await ownDoc(docId, ownerId))) throw err(404, 'NOT_FOUND');
+    if (!(await ownDoc(docId, ownerId, 'comment'))) throw err(404, 'NOT_FOUND');
     const b = tidy(body, MAX_BODY);
     if (!b) throw err(400, 'EMPTY', "Izoh bo'sh.");
     const n = (await db.query('SELECT count(*)::int AS n FROM doc_editor_comments WHERE document_id = $1', [docId])).rows[0].n;
@@ -83,6 +82,7 @@ function createCommentStore({ db }) {
     }
     if (resolved != null) {
       if (row.parent_id) throw err(400, 'REPLY', 'Javob emas, izohning o‘zi hal qilinadi.');
+      await ownDoc(docId, ownerId, 'resolve');
       await db.query(`UPDATE doc_editor_comments SET resolved_at = CASE WHEN $2 THEN now() END, resolved_by = CASE WHEN $2 THEN $3::int END, updated_at = now() WHERE id = $1`,
         [id, !!resolved, ownerId]);
     }
@@ -91,7 +91,12 @@ function createCommentStore({ db }) {
 
   /** Delete a comment (a thread goes with its replies). The page removes its anchor from the text. */
   async function remove(docId, ownerId, id) {
-    if (!(await ownDoc(docId, ownerId)) || !ID_RE.test(String(id || ''))) return false;
+    const doc = await access.load(db, docId, ownerId, 'read');
+    if (!doc || !ID_RE.test(String(id || ''))) return false;
+    // the author removes their own; the owner removes any
+    const row = (await db.query('SELECT author_id, source FROM doc_editor_comments WHERE id = $1 AND document_id = $2', [id, docId])).rows[0];
+    if (!row) return false;
+    if (doc.my_role !== 'owner' && !(row.author_id === Number(ownerId) && row.source !== 'word')) throw err(403, 'NOT_AUTHOR', "Faqat o'z izohingizni o'chirasiz.");
     return (await db.query('DELETE FROM doc_editor_comments WHERE id = $1 AND document_id = $2', [id, docId])).rowCount > 0;
   }
 

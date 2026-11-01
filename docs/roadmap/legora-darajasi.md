@@ -325,3 +325,8 @@ nima o'lchandi.
   (ochiq / hal qilingan, javob, tahrir, o'chirish), izohlangan so'z och-ko'k;
   Word fayldagi izohlar muallifi, sanasi, javoblari bilan ochiladi va Word'ga
   ochiq izohlar Word izohi bo'lib qaytadi. Jamoadosh izohlarni D3 da ko'radi.
+- 2026-11-01: #543 (muharrir D2, izohlar) merge. D3 PR: havola orqali
+  ulashish (tahrirlaydi / izoh qoldiradi / faqat o'qiydi), o'z serverimizdagi
+  WebSocket orqali real vaqtda birga tahrir (Yjs), boshqalarning kursori va
+  ismi, izohlar hammada darhol yangilanadi; muharrir sahifasida tarif tanlash
+  oynasi majburan chiqmaydi.

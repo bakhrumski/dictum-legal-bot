@@ -984,7 +984,32 @@ Known state of the suites (Sept 2026):
   comments (comments.xml + commentsExtended: author, date, replies, done) on
   the exact words (range markers through mammoth); the Word download writes
   the open threads as Word comments (replies as lines, resolved ones left
-  out). Owner only until sharing (D3).
+  out).
+  D3 (2026-11-01, migration 038; owner: any platform user by link, every
+  plan): sharing - `src/editor/access.js` (owner / editor / commenter /
+  viewer; anyone else 404, a member below the need 403; store, comments
+  and versions go through it), `src/editor/sharing.js` (a link per role,
+  commenter by default, only its sha256 kept, shown once, 7 days
+  `EDITOR_INVITE_DAYS`, revocable; `#/muharrir/taklif/<token>` shows owner,
+  title and role and joins on the button; a second link keeps the higher
+  role; the owner changes / removes, a member leaves; 50 a document). Live
+  co-editing - `src/editor/live.js`: our own WebSocket `/api/editor/live`
+  on the app's server (the session cookie through the same
+  express-session middleware, this site's Origin required -
+  `same-origin.isSameOrigin`), Yjs protocol (yjs, y-protocols, lib0, ws)
+  plus JSON control (init / seed / seeded / comments / title; close 4000
+  reload, 4003 access changed); an editor's updates applied, a reader's
+  dropped; one Y.Doc per open document in memory, saved sealed into
+  `doc_editor_documents.ystate` 2 s after a change and when the last
+  person leaves; no state -> the first editor seeds from the html; a
+  restore or a one-person save clears it. The page (`public/app/editor.js`)
+  waits 7 s for the session, else one-person mode (a member then reads
+  only); the html snapshot comes from an editor's page (`PUT` with
+  `live: true`, accepted only from an open editor socket); others' carets
+  with names (their selection light blue), who is here in the top bar,
+  comments refresh for everyone; a commenter comments by the words (no
+  mark, `findQuote`). The forced plan picker is not shown on editor pages.
+  `EDITOR_LIVE=off`. `tests/editor-live.db.test.js`.
 - `src/workspace/` — Workspace: routes, authz, Supabase
   realtime/storage, Workspace AI. Since 2026-10-28 (owner, migration 025)
   any active paid plan (Silver, Gold, Platinum) owns one (`PLAN_CATALOG`
