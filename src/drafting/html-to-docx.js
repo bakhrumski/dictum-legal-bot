@@ -49,7 +49,7 @@ function alignOf($el) {
 const BLOCK = new Set(['p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'table',
   'thead', 'tbody', 'tfoot', 'tr', 'td', 'th', 'blockquote', 'hr', 'pre', 'section', 'article', 'header', 'footer']);
 
-function createConverter() {
+function createConverter(comments = new Map()) {
   const numbering = []; // { numId, abstractId }
   let nextNumId = 1;
 
@@ -94,7 +94,11 @@ function createConverter() {
       if (font) f.font = font.split(',')[0].replace(/["']/g, '').trim().slice(0, 60);
       const size = /font-size\s*:\s*(\d+(?:\.\d+)?)(px|pt)/i.exec(style);
       if (size) f.sz = Math.max(2, Math.min(192, Math.round((size[2].toLowerCase() === 'px' ? Number(size[1]) * 0.75 : Number(size[1])) * 2)));
+      // an editor comment's anchor (D2): Word's range starts at its first piece and ends, with the reference, at its last
+      const cm = name === 'span' ? comments.get(String($n.attr('data-comment') || '')) : null;
+      if (cm && cm.first === node) out += `<w:commentRangeStart w:id="${cm.n}"/>`;
       out += runs($, $n.contents(), f);
+      if (cm && cm.last === node) out += `<w:commentRangeEnd w:id="${cm.n}"/><w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:commentReference w:id="${cm.n}"/></w:r>`;
     });
     return out;
   }
@@ -242,9 +246,31 @@ ${nums.map(n => `<w:num w:numId="${n.numId}"><w:abstractNumId w:val="${n.abstrac
  * @param {{title?: string, lang?: string}} opts
  * @returns {Promise<Buffer>} .docx bytes
  */
-async function htmlToDocx(bodyHtml, { title = 'Hujjat', lang = 'uz' } = {}) {
+/** Word comments part: one <w:comment> a thread, one paragraph a line of its text. */
+function commentsXml(list) {
+  const initials = a => String(a || 'J').split(/\s+/u).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || 'J';
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:comments ${NS}>${list.map(c => `<w:comment w:id="${c.n}" w:author="${xml(c.author || 'JuristAI')}" w:date="${new Date(c.date || Date.now()).toISOString().replace(/\.\d+Z$/, 'Z')}" w:initials="${xml(initials(c.author))}">${
+    String(c.text || '').split('\n').map(l => `<w:p><w:r><w:t xml:space="preserve">${xml(l)}</w:t></w:r></w:p>`).join('')}</w:comment>`).join('')}</w:comments>`;
+}
+
+/**
+ * opts.comments (the editor's open threads, src/editor/comments.js forExport):
+ * [{ id, author, date, text }] - each becomes a Word comment on the words its
+ * <span data-comment="id"> pieces mark; a comment with no anchor left is skipped.
+ */
+async function htmlToDocx(bodyHtml, { title = 'Hujjat', lang = 'uz', comments = [] } = {}) {
   const $ = cheerio.load(`<div id="__root">${String(bodyHtml || '')}</div>`, { decodeEntities: true });
-  const conv = createConverter();
+  const cmap = new Map();
+  const used = [];
+  for (const c of comments || []) {
+    const pieces = $('span[data-comment]').filter((_, el) => $(el).attr('data-comment') === c.id).toArray();
+    if (!pieces.length) continue;
+    const n = used.length;
+    cmap.set(c.id, { n, first: pieces[0], last: pieces[pieces.length - 1] });
+    used.push({ ...c, n });
+  }
+  const conv = createConverter(cmap);
   let body = conv.blocks($, $('#__root').contents());
   if (!body) body = '<w:p/>';
   const langTag = lang === 'ru' ? 'ru-RU' : 'uz-Latn-UZ';
@@ -253,14 +279,15 @@ async function htmlToDocx(bodyHtml, { title = 'Hujjat', lang = 'uz' } = {}) {
 
   const zip = new JSZip();
   zip.file('[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/></Types>`);
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>${used.length ? '<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/>' : ''}</Types>`);
   zip.file('_rels/.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/></Relationships>`);
   zip.file('word/_rels/document.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/></Relationships>`);
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>${used.length ? '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments" Target="comments.xml"/>' : ''}</Relationships>`);
   zip.file('word/document.xml', document);
   zip.file('word/styles.xml', stylesXml(langTag));
   zip.file('word/numbering.xml', numberingXml(conv.numbering));
+  if (used.length) zip.file('word/comments.xml', commentsXml(used));
   zip.file('docProps/core.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>${xml(title)}</dc:title><dc:creator>JuristAI</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">${new Date().toISOString().replace(/\.\d+Z$/, 'Z')}</dcterms:created></cp:coreProperties>`);
   return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });

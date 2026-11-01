@@ -1,6 +1,6 @@
 # Hujjat muharriri — platformaning o'zida Word kabi (dizayn, qoralama)
 
-Holati: **qabul qilingan** (2026-10-30, egasi takliflarni qabul qildi; javoblar 9-bo'limda). D1 — PR.
+Holati: **qabul qilingan** (2026-10-30, egasi takliflarni qabul qildi; javoblar 9-bo'limda). D1 — #542, D2 — PR.
 
 Egasi (2026-10-30, skrinshot: Word'ga o'xshash sahifa, yuqorida asboblar
 paneli, o'ngda izohlar): hujjat loyihasi platformaning o'zida Word kabi
@@ -127,8 +127,8 @@ ishlaydi, B esa AI'ga tayanadi.
 
 | PR | Nima | Kim yutadi | Tegadi |
 |---|---|---|---|
-| D1 (PR) | Muharrir bir kishi uchun: AI loyiha yoki yuklangan Word/PDF "Muharrirda ochish", A4 ko'rinish, asboblar, avtosaqlash va versiyalar, Word va PDF yuklab olish | Loyihani Word'ga o'tkazmasdan shu yerda tuzatadi | src, migrations, public, package (vendor) |
-| D2 | Izohlar paneli (belgilash, javob, hal qilindi), Word eksportda izohlar | Kimdan qanday izoh kelgani bitta joyda | src, public |
+| D1 (#542) | Muharrir bir kishi uchun: AI loyiha yoki yuklangan Word/PDF "Muharrirda ochish", A4 ko'rinish, asboblar, avtosaqlash va versiyalar, Word va PDF yuklab olish | Loyihani Word'ga o'tkazmasdan shu yerda tuzatadi | src, migrations, public, package (vendor) |
+| D2 (PR) | Izohlar paneli (belgilash, javob, hal qilindi), Word eksportda izohlar | Kimdan qanday izoh kelgani bitta joyda | src, public |
 | D3 | Ulashish va birgalikda tahrir: taklif havolasi, rollar, real vaqt, boshqa odam kursori, @eslatma Telegram'ga | Fayl borib-kelmaydi, ikkalasi bitta nusxada | src, migrations, public, package (`ws`) |
 | D4 | AI tahlil paneli hujjat ichida: band joyi belgilanadi, taklif "o'zgarish" sifatida kiritiladi | Tahlil va tuzatish bir oynada | src, public |
 | D5 | Tekshiruv: A (qoidalar, bepul) + B (AI imlo, taklif) | Texnik xatolar ko'z bilan qidirilmaydi | src, public |

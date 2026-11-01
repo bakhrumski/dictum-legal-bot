@@ -86,8 +86,35 @@ const user = async () => (await pool.query(`INSERT INTO admins (username, passwo
     assert.ok(raw.startsWith('enc:ed:'), 'versions sealed too');
   });
 
-  await test('account deletion removes the documents and their versions', async () => {
+  await test('D2 comments: sealed, owner only, replies one level deep, resolve, author-only edit, delete with replies, Word export skips resolved', async () => {
+    const { createCommentStore } = require('../src/editor/comments');
+    const cs = createCommentStore({ db: pool });
+    const c1 = (await cs.add(id, a, { body: 'Summani tekshiring', quote: 'ikkinchi' })).id;
+    const r1 = (await cs.add(id, a, { body: 'Tekshirdim', parentId: c1 })).id;
+    const r2 = (await cs.add(id, a, { body: 'Javobga javob', parentId: r1 })).id;
+    const raw = (await pool.query('SELECT body, quote FROM doc_editor_comments WHERE id = $1', [c1])).rows[0];
+    assert.ok(raw.body.startsWith('enc:ed:') && raw.quote.startsWith('enc:ed:'), 'sealed at rest');
+    const list = await cs.list(id, a);
+    assert.deepStrictEqual([list.length, list[0].body, list[0].quote, list[0].replies.map(x => x.id)], [1, 'Summani tekshiring', 'ikkinchi', [r1, r2]], 'a reply to a reply joins the thread');
+    assert.strictEqual(await cs.list(id, b), null, 'another account: not found');
+    await assert.rejects(cs.add(id, b, { body: 'x' }), e => e.status === 404);
+    await assert.rejects(cs.add(id, a, { body: '   ' }), e => e.status === 400);
+    await assert.rejects(cs.update(id, a, r1, { resolved: true }), e => e.status === 400, 'a reply is not resolved on its own');
+    await cs.importMany(id, a, [{ id: '00000000-0000-4000-8000-0000000000aa', author: 'Acer', date: '2026-10-07T12:06:00Z', text: 'Word izohi', quote: 'so‘z' }]);
+    const word = (await cs.list(id, a)).find(t => t.source === 'word');
+    assert.deepStrictEqual([word.author, word.authorId, new Date(word.createdAt).toISOString()], ['Acer', a, '2026-10-07T12:06:00.000Z']);
+    await cs.update(id, a, c1, { resolved: true, body: 'Summani qayta tekshiring' });
+    const exp = await cs.forExport(id, a);
+    assert.deepStrictEqual(exp.map(x => x.author), ['Acer'], 'a resolved thread is not exported');
+    assert.strictEqual((await cs.list(id, a)).find(t => t.id === c1).body, 'Summani qayta tekshiring');
+    assert.strictEqual(await cs.remove(id, b, c1), false);
+    assert.strictEqual(await cs.remove(id, a, c1), true);
+    assert.strictEqual((await pool.query('SELECT count(*)::int AS n FROM doc_editor_comments WHERE id = ANY($1)', [[c1, r1, r2]])).rows[0].n, 0, 'replies go with the thread');
+  });
+
+  await test('account deletion removes the documents, their versions and comments', async () => {
     await deleteAccountDocuments(pool, a);
+    assert.strictEqual((await pool.query('SELECT count(*)::int AS n FROM doc_editor_comments WHERE document_id = $1', [id])).rows[0].n, 0);
     assert.strictEqual((await pool.query('SELECT count(*)::int AS n FROM doc_editor_versions WHERE document_id = $1', [id])).rows[0].n, 0);
     assert.strictEqual((await store.list(a)).length, 0);
   });

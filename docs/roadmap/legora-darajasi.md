@@ -321,3 +321,7 @@ nima o'lchandi.
   ulashish, yangi paketlar, imlo — AI limitidan + o'z tuzatuvchimiz). D1 PR:
   bir kishilik muharrir — AI loyiha / Word / PDF / Hujjatlarim hujjati A4
   sahifada, asboblar paneli, avtosaqlash, versiyalar, Word va PDF.
+- 2026-11-01: #542 (muharrir D1) merge. D2 PR: hujjat izohlari — yon panel
+  (ochiq / hal qilingan, javob, tahrir, o'chirish), izohlangan so'z och-ko'k;
+  Word fayldagi izohlar muallifi, sanasi, javoblari bilan ochiladi va Word'ga
+  ochiq izohlar Word izohi bo'lib qaytadi. Jamoadosh izohlarni D3 da ko'radi.

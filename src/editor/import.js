@@ -11,6 +11,8 @@
  * first). Notes are codes; the page words them.
  */
 
+const crypto = require('crypto');
+const cheerio = require('cheerio');
 const JSZip = require('jszip');
 const { cleanHtml, textToHtml } = require('./sanitize');
 
@@ -32,6 +34,71 @@ function applyAlignment(html) {
   return String(html)
     .replace(/<(p|h[1-6]|li)>((?:<(?:strong|em|u|s|a)[^>]*>)*)\u2063JAIALIGN:(center|right|justify)\u2063/gu, '<$1 style="text-align: $3">$2')
     .replace(/\u2063JAIALIGN:[a-z]+\u2063/gu, '');
+}
+
+// Word comments (D2): each commentRangeStart / End becomes an invisible marker run before mammoth reads the file;
+// the markers then become <span data-comment="<new id>"> around every piece of text between them, and
+// comments.xml (+ commentsExtended.xml: replies and "done") gives the text, author and date.
+const unxml = s => String(s).replace(/&lt;/gu, '<').replace(/&gt;/gu, '>').replace(/&quot;/gu, '"').replace(/&apos;/gu, "'").replace(/&amp;/gu, '&');
+const attr = (tag, name) => { const m = new RegExp(`\\b${name}="([^"]*)"`, 'u').exec(tag); return m ? unxml(m[1]) : null; };
+
+async function wordComments(zip) {
+  const f = zip.file('word/comments.xml');
+  if (!f) return null;
+  const xmlText = await f.async('string');
+  const list = [];
+  for (const m of xmlText.matchAll(/<w:comment\b([^>]*)>([\s\S]*?)<\/w:comment>/gu)) {
+    const paras = [...m[2].matchAll(/<w:p\b([^>]*)>([\s\S]*?)<\/w:p>/gu)];
+    const text = paras.map(p => [...p[2].matchAll(/<w:t\b[^>]*>([\s\S]*?)<\/w:t>/gu)].map(t => unxml(t[1])).join('')).join('\n').trim();
+    const last = paras.length ? attr(paras[paras.length - 1][1], 'w14:paraId') : null;
+    list.push({ wid: attr(m[1], 'w:id'), author: attr(m[1], 'w:author'), date: attr(m[1], 'w:date'), text, paraId: last, id: crypto.randomUUID() });
+  }
+  const ext = new Map();
+  const e = zip.file('word/commentsExtended.xml');
+  if (e) for (const m of (await e.async('string')).matchAll(/<w15:commentEx\b([^>]*)\/>/gu)) ext.set(attr(m[1], 'w15:paraId'), { parent: attr(m[1], 'w15:paraIdParent'), done: attr(m[1], 'w15:done') === '1' });
+  const byPara = new Map(list.filter(c => c.paraId).map(c => [c.paraId, c]));
+  for (const c of list) {
+    const x = c.paraId ? ext.get(c.paraId) : null;
+    if (x && x.parent && byPara.get(x.parent)) c.parentId = byPara.get(x.parent).id;
+    c.resolved = !!(x && x.done);
+  }
+  return list;
+}
+
+function markCommentRanges(docXml) {
+  const run = (k, id) => `<w:r><w:t xml:space="preserve">\u2063JAIC${k}:${id}\u2063</w:t></w:r>`;
+  return docXml
+    .replace(/<w:commentRangeStart\b[^>]*?w:id="(\d+)"[^>]*\/>/gu, (_, id) => run('S', id))
+    .replace(/<w:commentRangeEnd\b[^>]*?w:id="(\d+)"[^>]*\/>/gu, (_, id) => run('E', id));
+}
+
+/** Markers -> anchors around every text piece in the range; each top-level comment gets its quote. */
+function applyCommentRanges(html, comments) {
+  const byWid = new Map(comments.filter(c => !c.parentId).map(c => [c.wid, c]));
+  const $ = cheerio.load(`<div id="__r">${html}</div>`, { decodeEntities: false });
+  const texts = [];
+  (function walk(node) { for (const ch of node.children || []) { if (ch.type === 'text') texts.push(ch); else walk(ch); } })($('#__r')[0]);
+  const active = [];
+  for (const t of texts) {
+    if (!/\u2063JAIC|\S/u.test(t.data) && !active.length) continue;
+    const parts = String(t.data).split(/\u2063JAIC([SE]):(\d+)\u2063/u);
+    let out = '';
+    for (let i = 0; i < parts.length; i += 3) {
+      const seg = parts[i];
+      if (seg) {
+        let piece = seg;
+        for (const c of [...active].reverse()) { piece = `<span data-comment="${c.id}">${piece}</span>`; c.quote = (c.quote || '') + seg; }
+        out += piece;
+      }
+      if (i + 1 < parts.length) {
+        const c = byWid.get(parts[i + 2]);
+        if (c && parts[i + 1] === 'S' && !active.includes(c)) active.push(c);
+        if (c && parts[i + 1] === 'E') active.splice(active.indexOf(c) >>> 0, active.includes(c) ? 1 : 0);
+      }
+    }
+    if (out !== t.data) $(t).replaceWith(out);
+  }
+  return $('#__r').html() || '';
 }
 
 /** What a .docx holds that the editor does not keep (codes). */
@@ -61,15 +128,30 @@ async function importFile(buf, { fileName = '', mimeType = '', extractFileText }
   if (isDocx) {
     if (buf.length < 4 || buf[0] !== 0x50 || buf[1] !== 0x4b) return { error: 'corrupt' };
     const mammoth = require('mammoth');
-    const r = await mammoth.convertToHtml({ buffer: buf }, {
+    // the file's comments, if any, ride along as markers (wordComments / applyCommentRanges)
+    let comments = null, input = buf;
+    try {
+      const zip = await JSZip.loadAsync(buf);
+      comments = await wordComments(zip);
+      if (comments && comments.length) {
+        zip.file('word/document.xml', markCommentRanges(await zip.file('word/document.xml').async('string')));
+        input = await zip.generateAsync({ type: 'nodebuffer' });
+      }
+    } catch (_) { comments = null; input = buf; }
+    const r = await mammoth.convertToHtml({ buffer: input }, {
       styleMap: ["p[style-name='Title'] => h1:fresh", "p[style-name='Subtitle'] => h2:fresh"],
       ignoreEmptyParagraphs: false,
       convertImage: mammoth.images.imgElement(() => ({ src: '' })), // pictures are not kept (named below)
       transformDocument: markAlignment,
     });
-    const html = cleanHtml(applyAlignment(r.value));
+    let body = applyAlignment(r.value);
+    if (comments && comments.length) body = applyCommentRanges(body, comments);
+    body = body.replace(/\u2063JAIC[SE]:\d+\u2063/gu, '');
+    const html = cleanHtml(body);
     if (!html.replace(/<[^>]+>/gu, '').trim()) return { error: 'scanned' };
-    return { kind: 'docx', html, notes: await docxNotes(buf) };
+    // imported comments are kept now (D2): "comments" is named only when they could not be read
+    const notes = (await docxNotes(buf)).filter(n => n !== 'comments' || !comments);
+    return { kind: 'docx', html, notes, comments: (comments || []).map(c => ({ id: c.id, parentId: c.parentId || null, author: c.author, date: c.date, text: c.text, quote: c.quote || null, resolved: c.resolved })) };
   }
   if (isPdf) {
     const read = await extractFileText(buf, { fileName, mimeType });
@@ -81,4 +163,4 @@ async function importFile(buf, { fileName = '', mimeType = '', extractFileText }
   return { error: 'type' };
 }
 
-module.exports = { importFile, docxNotes, DOCX_MIME };
+module.exports = { importFile, docxNotes, wordComments, markCommentRanges, applyCommentRanges, DOCX_MIME };
