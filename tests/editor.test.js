@@ -87,6 +87,34 @@ async function test(name, fn) {
     assert.match(x, /<w:shd w:val="clear" w:color="auto" w:fill="FFEB3B"\/>/u);
   });
 
+  await test('D2: Word comments round-trip - exported on their words, imported back with author, date, text, the words and replies flattened', async () => {
+    const A = '00000000-0000-4000-8000-00000000000a', B = '00000000-0000-4000-8000-00000000000b';
+    assert.strictEqual(cleanHtml(`<p><span data-comment="${A}" class="ed-cm">x</span><span data-comment="x onclick">y</span></p>`), `<p><span data-comment="${A}">x</span><span>y</span></p>`);
+    const buf = await htmlToDocx(`<p>Ijara haqi <span data-comment="${A}">oyiga <strong>5 000 000</strong> so‘m</span> bo‘ladi.</p><p><span data-comment="${B}">Muddat</span> 12 oy.</p><p>Bog‘lanmagan</p>`,
+      { comments: [{ id: A, author: 'Aziz Karimov', date: '2026-10-07T17:06:00Z', text: 'Kolvirda o‘zgartirish kerak\n— Mijoz: rozimiz' }, { id: B, author: 'Acer', date: '2026-10-07T17:23:00Z', text: 'Muddatni ko‘rib chiqish' },
+        { id: '00000000-0000-4000-8000-00000000000c', author: 'X', text: 'langarsiz' }] });
+    const zip = await JSZip.loadAsync(buf);
+    const doc = await zip.file('word/document.xml').async('string');
+    assert.strictEqual((doc.match(/<w:commentRangeStart w:id="\d+"\/>/gu) || []).length, 2, 'one range per comment, even across bold');
+    assert.match(await zip.file('word/comments.xml').async('string'), /<w:comment w:id="0" w:author="Aziz Karimov" w:date="2026-10-07T17:06:00Z" w:initials="AK"><w:p><w:r><w:t xml:space="preserve">Kolvirda o‘zgartirish kerak<\/w:t><\/w:r><\/w:p><w:p><w:r><w:t xml:space="preserve">— Mijoz: rozimiz/u);
+    assert.match(await zip.file('[Content_Types].xml').async('string'), /word\/comments\.xml/u);
+    const r = await importFile(buf, { fileName: 'x.docx' });
+    assert.deepStrictEqual(r.comments.map(c => [c.author, c.quote, c.resolved]), [['Aziz Karimov', 'oyiga 5 000 000 so‘m', false], ['Acer', 'Muddat', false]]);
+    assert.ok(!r.notes.includes('comments'), 'comments are kept now, not named as lost');
+    const id0 = r.comments[0].id;
+    assert.strictEqual((r.html.match(new RegExp(`data-comment="${id0}"`, 'gu')) || []).length, 3, 'every piece of the range is marked');
+    assert.ok(!/\u2063|JAIC/u.test(r.html), 'no marker left');
+    // a reply and a resolved comment in Word's own parts
+    const w = await JSZip.loadAsync(buf);
+    w.file('word/comments.xml', (await w.file('word/comments.xml').async('string'))
+      .replace('<w:p><w:r><w:t xml:space="preserve">Muddatni', '<w:p w14:paraId="P2"><w:r><w:t xml:space="preserve">Muddatni')
+      .replace('</w:comments>', '<w:comment w:id="9" w:author="Javobchi"><w:p w14:paraId="P9"><w:r><w:t>roziman</w:t></w:r></w:p></w:comment></w:comments>'));
+    w.file('word/commentsExtended.xml', '<w15:commentsEx><w15:commentEx w15:paraId="P2" w15:done="1"/><w15:commentEx w15:paraId="P9" w15:paraIdParent="P2" w15:done="0"/></w15:commentsEx>');
+    const r2 = await importFile(await w.generateAsync({ type: 'nodebuffer' }), { fileName: 'x.docx' });
+    const muddat = r2.comments.find(c => c.author === 'Acer'), reply = r2.comments.find(c => c.author === 'Javobchi');
+    assert.deepStrictEqual([muddat.resolved, reply.parentId === muddat.id, reply.text], [true, true, 'roziman']);
+  });
+
   await test('wiring: routes, the editor bundle (MIT, versioned), entry points from drafts and Hujjatlarim, PDF by print', () => {
     const routes = fs.readFileSync(path.join(__dirname, '../src/editor/routes.js'), 'utf8');
     for (const r of ["'/api/editor/docs'", "'/api/editor/import'", "'/api/editor/docs/:id/export.docx'", "'/api/editor/docs/:id/versions/:n/restore'"]) assert.ok(routes.includes(r), r);

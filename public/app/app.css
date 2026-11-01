@@ -764,3 +764,37 @@ textarea.inp{height:auto;min-height:96px;padding:10px 13px;resize:vertical;line-
   body.ed-on .ed-paper{width:auto;max-width:none;box-shadow:none;border-radius:0;background-image:none;min-height:0}
   body.ed-on .ed-doc{padding:25mm 20mm;min-height:0}
 }
+
+/* ---------- Muharrir izohlari (D2): matndagi belgi och-ko'k (egasining qoidasi), yon panel ---------- */
+.ed-main{flex:1;min-height:0;display:flex}
+.ed-main .ed-scroll{flex:1;min-width:0}
+.ed-doc .ed-cm{background:#DCE8FD;border-bottom:1.5px solid #8FB0F7;border-radius:2px;cursor:pointer}
+.ed-side{width:320px;flex:none;border-left:1px solid var(--line-2);background:var(--surface);overflow:auto;padding:12px 14px 20px}
+.ed-sh{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.ed-sh b{font-size:15px}
+.ed-x{border:0;background:none;font-size:20px;line-height:1;color:var(--muted);cursor:pointer;padding:2px 6px}
+.ed-tabs{margin-bottom:10px}
+.ed-tabs button{font-size:12.5px}
+.ed-add{width:100%;justify-content:center;margin-bottom:10px}
+.ed-card{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:10px;background:var(--surface);cursor:pointer}
+.ed-card.on{border-color:var(--cta);box-shadow:0 0 0 2px var(--accent-soft)}
+.ed-ch{display:flex;gap:8px;align-items:center}
+.ed-av{width:26px;height:26px;border-radius:50%;background:var(--accent-soft);color:var(--cta-dark);display:grid;place-items:center;font-size:11px;font-weight:600;flex:none}
+.ed-who{display:flex;flex-direction:column;min-width:0;font-size:13px;line-height:1.25}
+.ed-who small{font-size:11.5px}
+.ed-src{display:inline;color:var(--cta-dark);font-size:11px}
+.ed-q{font-size:12.5px;color:var(--muted);font-style:italic;margin:6px 0 2px;overflow-wrap:anywhere}
+.ed-gone{font-size:12px;color:var(--warn);margin:2px 0}
+.ed-body{font-size:13.5px;margin:6px 0 4px;white-space:pre-wrap;overflow-wrap:anywhere}
+.ed-reply{border-top:1px solid var(--line-2);margin-top:8px;padding-top:8px}
+.ed-ca{display:flex;gap:12px;flex-wrap:wrap;margin-top:6px;align-items:center}
+.ed-ca .link{background:none;border:0;padding:0;font:inherit;font-size:12.5px;color:var(--cta);cursor:pointer}
+.ed-ca .ed-dl2{color:var(--muted)}
+.ed-rbox{margin-top:8px}
+.ed-new textarea,.ed-rbox textarea,.ed-card textarea{width:100%;box-sizing:border-box;font:inherit;font-size:13.5px}
+.ed-empty{font-size:13px}
+.ed-chint{font-size:11.5px;margin-top:12px}
+@media (max-width:1099px){
+  .ed-side{position:fixed;right:0;top:0;bottom:0;z-index:60;width:min(360px,100vw);box-shadow:var(--shadow)}
+}
+@media print{ body.ed-on .ed-side{display:none!important} body.ed-on .ed-doc .ed-cm{background:none!important;border:0!important} }

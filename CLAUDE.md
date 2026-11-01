@@ -973,6 +973,18 @@ Known state of the suites (Sept 2026):
   names its `revision` - a stale tab gets 409 and stops saving; 300
   documents an account (`EDITOR_MAX_DOCS`), 2 MB each; account deletion
   removes them; `EDITOR=off`. `tests/editor.test.js`, `tests/editor.db.test.js`.
+  D2 (2026-11-01, migration 037, `src/editor/comments.js`): comments - the
+  anchor is a `comment` mark in the document (`<span data-comment="<id>">`,
+  added to the vendored bundle; light blue, the owner's rule), the row holds
+  author (an account, or a Word author's name), text and the commented words
+  (sealed, AAD by comment), replies one level deep and resolution; a side
+  panel (Ochiq / Hal qilingan, reply, resolve, edit own, delete - its anchor
+  goes too; the cursor on commented words opens its card, a card selects its
+  words; a comment whose words were deleted says so). Word files bring their
+  comments (comments.xml + commentsExtended: author, date, replies, done) on
+  the exact words (range markers through mammoth); the Word download writes
+  the open threads as Word comments (replies as lines, resolved ones left
+  out). Owner only until sharing (D3).
 - `src/workspace/` — Workspace: routes, authz, Supabase
   realtime/storage, Workspace AI. Since 2026-10-28 (owner, migration 025)
   any active paid plan (Silver, Gold, Platinum) owns one (`PLAN_CATALOG`

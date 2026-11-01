@@ -14,13 +14,18 @@
  *   DELETE /api/editor/docs/:id
  *   GET    /api/editor/docs/:id/versions            | GET .../versions/:n  (its html)
  *   POST   /api/editor/docs/:id/versions { label }  | POST .../versions/:n/restore
- *   GET    /api/editor/docs/:id/export.docx         a real .docx (src/drafting/html-to-docx.js)
+ *   GET    /api/editor/docs/:id/export.docx         a real .docx (src/drafting/html-to-docx.js), open comments as Word comments
+ *   GET    /api/editor/docs/:id/comments            threads (D2, src/editor/comments.js)
+ *   POST   /api/editor/docs/:id/comments { body, quote, parentId }  -> { id } (the page marks the words with it)
+ *   PATCH  /api/editor/docs/:id/comments/:cid { body?, resolved? }
+ *   DELETE /api/editor/docs/:id/comments/:cid
  */
 
 const os = require('os');
 const fs = require('fs');
 const multer = require('multer');
 const { createEditorStore } = require('./store');
+const { createCommentStore } = require('./comments');
 const { importFile } = require('./import');
 const { textToHtml } = require('./sanitize');
 
@@ -41,6 +46,7 @@ const IMPORT_ERRORS = {
 
 function mountEditorRoutes(app, { pool, requireAuth, requireSameOrigin, extractFileText, logAudit = () => {} }) {
   const store = createEditorStore({ db: pool });
+  const comments = createCommentStore({ db: pool });
   const me = req => req.session.adminId;
   const off = () => String(process.env.EDITOR || '').toLowerCase() === 'off';
   const guard = fn => async (req, res) => {
@@ -80,7 +86,9 @@ function mountEditorRoutes(app, { pool, requireAuth, requireSameOrigin, extractF
     if (r.error) return res.status(422).json({ error: r.error, message: IMPORT_ERRORS[r.error] || IMPORT_ERRORS.type });
     const name = String(req.file.originalname || 'Hujjat').replace(/\.(docx|pdf|txt)$/iu, '');
     const out = await store.create(me(req), { title: name, html: r.html, source: 'upload', importNotes: r.notes });
-    res.status(201).json({ ...out, notes: r.notes });
+    // the file's own Word comments come with it, under their Word authors' names
+    if (r.comments && r.comments.length) await comments.importMany(out.id, me(req), r.comments);
+    res.status(201).json({ ...out, notes: r.notes, comments: (r.comments || []).length });
   }));
 
   app.get('/api/editor/docs/:id', requireAuth, guard(async (req, res) => {
@@ -116,11 +124,28 @@ function mountEditorRoutes(app, { pool, requireAuth, requireSameOrigin, extractF
     r ? res.json(r) : notFound(res);
   }));
 
+  app.get('/api/editor/docs/:id/comments', requireAuth, guard(async (req, res) => {
+    const list = await comments.list(req.params.id, me(req));
+    list ? res.json({ threads: list }) : notFound(res);
+  }));
+  app.post('/api/editor/docs/:id/comments', requireSameOrigin, requireAuth, guard(async (req, res) => {
+    const b = req.body || {};
+    res.status(201).json(await comments.add(req.params.id, me(req), { body: b.body, quote: b.quote, parentId: b.parentId || null }));
+  }));
+  app.patch('/api/editor/docs/:id/comments/:cid', requireSameOrigin, requireAuth, guard(async (req, res) => {
+    const b = req.body || {};
+    res.json(await comments.update(req.params.id, me(req), req.params.cid, { body: typeof b.body === 'string' ? b.body : null, resolved: typeof b.resolved === 'boolean' ? b.resolved : null }));
+  }));
+  app.delete('/api/editor/docs/:id/comments/:cid', requireSameOrigin, requireAuth, guard(async (req, res) => {
+    (await comments.remove(req.params.id, me(req), req.params.cid)) ? res.json({ ok: true }) : notFound(res);
+  }));
+
   app.get('/api/editor/docs/:id/export.docx', requireAuth, guard(async (req, res) => {
     const d = await store.get(req.params.id, me(req));
     if (!d) return notFound(res);
     const { htmlToDocx, DOCX_MIME } = require('../drafting/html-to-docx');
-    const buf = await htmlToDocx(d.html, { title: d.title, lang: /[Ѐ-ӿ]/u.test(d.html) && !/[A-Za-z]{4}/u.test(d.html.replace(/<[^>]+>/gu, '')) ? 'ru' : 'uz' });
+    const open = await comments.forExport(d.id, me(req));
+    const buf = await htmlToDocx(d.html, { title: d.title, comments: open, lang: /[Ѐ-ӿ]/u.test(d.html) && !/[A-Za-z]{4}/u.test(d.html.replace(/<[^>]+>/gu, '')) ? 'ru' : 'uz' });
     const file = `${d.title.replace(/[\\/:*?"<>|]+/gu, ' ').trim().slice(0, 120) || 'hujjat'}.docx`;
     res.set('Content-Type', DOCX_MIME);
     res.set('Content-Disposition', `attachment; filename="hujjat.docx"; filename*=UTF-8''${encodeURIComponent(file)}`);

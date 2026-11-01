@@ -62,6 +62,8 @@ function cleanHtml(html, { maxChars = 2000000 } = {}) {
       for (const a of ['colspan', 'rowspan']) if (/^\d{1,2}$/u.test(String(el.attribs[a] || ''))) keep[a] = el.attribs[a];
     }
     if (name === 'mark' && el.attribs && COLOR.test(String(el.attribs['data-color'] || ''))) keep['data-color'] = el.attribs['data-color'];
+    // a comment's anchor (D2, src/editor/comments.js): the comment's id only
+    if (name === 'span' && el.attribs && /^[0-9a-f-]{36}$/iu.test(String(el.attribs['data-comment'] || ''))) keep['data-comment'] = el.attribs['data-comment'];
     if (name === 'ol' && el.attribs && /^\d{1,4}$/u.test(String(el.attribs.start || ''))) keep.start = el.attribs.start;
     el.attribs = keep;
   });

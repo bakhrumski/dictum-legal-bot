@@ -6,7 +6,7 @@
 (function (G) {
   'use strict';
   var J = G.JAI, $ = J.$, $$ = J.$$, esc = J.esc;
-  var BUNDLE = '/vendor/editor/editor-3.31.4.js';
+  var BUNDLE = '/vendor/editor/editor-3.31.4.js?b=2'; // b=2: D2 comment mark
   var S = {
     uz: { title: 'Muharrir', docs: 'Muharrirdagi hujjatlar', none: 'Hali hujjat yo‘q. Bo‘sh hujjat oching yoki Word / PDF faylni yuklang.',
       blank: 'Bo‘sh hujjat', open: 'Word / PDF ochish', openHint: 'Word (.docx) formatlash bilan ochiladi; PDF — matn sifatida.',
@@ -14,6 +14,10 @@
       stale: 'Bu hujjat boshqa oynada o‘zgartirilgan. Yo‘qotmaslik uchun saqlash to‘xtatildi.', reload: 'Qayta yuklash',
       download: 'Yuklab olish', word: 'Word (.docx)', pdf: 'PDF (chop etish oynasi)', versions: 'Versiyalar', saveVer: 'Versiyani saqlash', verLabel: 'Versiya nomi (ixtiyoriy)',
       restore: 'Tiklash', view: 'Ko‘rish', restoreQ: 'Shu versiya tiklansinmi? Hozirgi matn ham versiya bo‘lib saqlanadi.', restored: 'Versiya tiklandi',
+      cm: { title: 'Izohlar', add: 'Izoh qo‘shish', open: 'Ochiq', done: 'Hal qilingan', ph: 'Izoh yozing…', save: 'Saqlash', cancel: 'Bekor', reply: 'Javob', replyPh: 'Javob yozing…',
+        resolve: 'Hal qilindi', reopen: 'Qayta ochish', del: 'O‘chirish', edit: 'Tahrirlash', delQ: 'Izoh (javoblari bilan) o‘chirilsinmi?', pick: 'Avval izoh qilinadigan so‘zlarni belgilang.',
+        none: 'Izoh yo‘q. Matndan so‘z belgilab, «Izoh qo‘shish»ni bosing.', noneDone: 'Hal qilingan izoh yo‘q.', gone: 'Izohlangan matn o‘chirilgan', word: 'Word', me: 'Siz',
+        hint: 'Word faylidagi izohlar shu yerda ochiladi; Word’ga yuklaganda ochiq izohlar Word izohi bo‘lib boradi.' },
       kinds: { auto: 'avto', named: 'nomli', restore: 'tiklashdan oldin' }, noVer: 'Hali versiya yo‘q — birinchisi 10 daqiqada o‘zi saqlanadi.',
       del: 'O‘chirish', delQ: 'Hujjat va uning barcha versiyalari butunlay o‘chiriladi. Davom etasizmi?', back: 'Hujjatlarim',
       page: 'Sahifa {n} / {m}', chars: '{n} belgi', loading: 'Muharrir yuklanmoqda…', loadFail: 'Muharrirni yuklab bo‘lmadi. Sahifani yangilang.',
@@ -28,6 +32,10 @@
       stale: 'Документ изменён в другой вкладке. Сохранение остановлено, чтобы ничего не потерять.', reload: 'Обновить',
       download: 'Скачать', word: 'Word (.docx)', pdf: 'PDF (окно печати)', versions: 'Версии', saveVer: 'Сохранить версию', verLabel: 'Название версии (необязательно)',
       restore: 'Восстановить', view: 'Просмотр', restoreQ: 'Восстановить эту версию? Текущий текст тоже сохранится как версия.', restored: 'Версия восстановлена',
+      cm: { title: 'Комментарии', add: 'Добавить комментарий', open: 'Открытые', done: 'Решённые', ph: 'Напишите комментарий…', save: 'Сохранить', cancel: 'Отмена', reply: 'Ответить', replyPh: 'Напишите ответ…',
+        resolve: 'Решено', reopen: 'Открыть снова', del: 'Удалить', edit: 'Изменить', delQ: 'Удалить комментарий (с ответами)?', pick: 'Сначала выделите слова для комментария.',
+        none: 'Комментариев нет. Выделите слова в тексте и нажмите «Добавить комментарий».', noneDone: 'Решённых комментариев нет.', gone: 'Текст комментария удалён', word: 'Word', me: 'Вы',
+        hint: 'Комментарии из файла Word открываются здесь; при скачивании в Word открытые комментарии сохраняются как примечания Word.' },
       kinds: { auto: 'авто', named: 'именная', restore: 'перед восстановлением' }, noVer: 'Версий пока нет — первая сохранится сама через 10 минут.',
       del: 'Удалить', delQ: 'Документ и все его версии будут удалены. Продолжить?', back: 'Мои документы',
       page: 'Стр. {n} / {m}', chars: '{n} знаков', loading: 'Загрузка редактора…', loadFail: 'Не удалось загрузить редактор. Обновите страницу.',
@@ -107,10 +115,11 @@
     J.setTitle(s('title'));
     var v = J.mount('<div class="ed-wrap"><div class="ed-top"><a class="ed-back" href="#/hujjatlarim">' + J.icon('back') + '<span>' + esc(s('back')) + '</span></a>' +
       '<input class="ed-title" maxlength="200" aria-label="' + esc(s('title')) + '"><span class="ed-st muted"></span><span class="ed-sp"></span>' +
+      '<button class="pill sm ghost" type="button" data-a="cm">' + J.icon('chat') + '<span class="ed-cmn">' + esc(s('cm').title) + '</span></button>' +
       '<button class="pill sm ghost" type="button" data-a="ver">' + esc(s('versions')) + '</button>' +
       '<div class="ed-dl"><button class="pill sm" type="button" data-a="dl">' + J.icon('up') + esc(s('download')) + '</button><div class="ed-menu" hidden><button type="button" data-a="docx">' + J.icon('word') + esc(s('word')) + '</button><button type="button" data-a="pdf">' + J.icon('doc') + esc(s('pdf')) + '</button><button type="button" data-a="del" class="ed-del">' + J.icon('trash') + esc(s('del')) + '</button></div></div></div>' +
       '<div class="ed-bar" role="toolbar"></div><div class="ed-banner" hidden></div>' +
-      '<div class="ed-scroll"><div class="ed-paper"><div class="ed-loading muted">' + esc(s('loading')) + '</div></div></div><div class="ed-foot muted"><span class="ed-pg"></span><span class="ed-cc"></span></div></div>');
+      '<div class="ed-main"><div class="ed-scroll"><div class="ed-paper"><div class="ed-loading muted">' + esc(s('loading')) + '</div></div></div><aside class="ed-side" hidden></aside></div><div class="ed-foot muted"><span class="ed-pg"></span><span class="ed-cc"></span></div></div>');
     document.body.classList.add('ed-on');
     var r = await J.api('/api/editor/docs/' + encodeURIComponent(id));
     if (!r.ok) { $('.ed-paper', v).innerHTML = '<div class="empty-state">' + esc(r.status === 404 ? J.t('err.notFound') || 'Topilmadi' : J.errMsg(r.data)) + '</div>'; return; }
@@ -128,7 +137,8 @@
     var ed = new kit.Editor({ element: paper, extensions: kit.extensions({ placeholder: s('ph') }), content: doc.html || '<p></p>',
       editorProps: { attributes: { class: 'ed-doc', spellcheck: 'false', 'data-noalpha': '' } },
       onUpdate: function () { dirty = true; status('saving'); schedule(); counts(); },
-      onSelectionUpdate: function () { syncBar(); } });
+      onSelectionUpdate: function () { syncBar(); if (CM) CM.follow(); } });
+    var CM = null;
     var st = $('.ed-st', v);
     function status(k) { st.textContent = k ? s(k) : ''; st.dataset.k = k || ''; }
     status('saved');
@@ -180,14 +190,15 @@
       '<label class="ed-b ed-col" title="' + esc(s('hl')) + '"><span class="ed-hl">ab</span><input type="color" data-c="hl" value="#fff59d" aria-label="' + esc(s('hl')) + '"></label><span class="ed-sep"></span>' +
       btn('left', '<span class="ed-al l"></span>', s('left')) + btn('center', '<span class="ed-al c"></span>', s('center')) + btn('right', '<span class="ed-al r"></span>', s('right')) + btn('justify', '<span class="ed-al j"></span>', s('justify')) + '<span class="ed-sep"></span>' +
       btn('bullet', '•≡', s('bullet')) + btn('ordered', '1≡', s('ordered')) + btn('table', '▦', s('table')) + '<span class="ed-sep"></span>' +
-      btn('undo', '↶', s('undo')) + btn('redo', '↷', s('redo'));
+      btn('undo', '↶', s('undo')) + btn('redo', '↷', s('redo')) + '<span class="ed-sep"></span>' + btn('comment', '💬', s('cm').add);
     var C = function () { return ed.chain().focus(); };
     var ACT = {
       bold: function () { C().toggleBold().run(); }, italic: function () { C().toggleItalic().run(); }, underline: function () { C().toggleUnderline().run(); }, strike: function () { C().toggleStrike().run(); },
       left: function () { C().setTextAlign('left').run(); }, center: function () { C().setTextAlign('center').run(); }, right: function () { C().setTextAlign('right').run(); }, justify: function () { C().setTextAlign('justify').run(); },
       bullet: function () { C().toggleBulletList().run(); }, ordered: function () { C().toggleOrderedList().run(); },
       table: function () { C().insertTable({ rows: 3, cols: 3, withHeaderRow: false }).run(); },
-      undo: function () { C().undo().run(); }, redo: function () { C().redo().run(); }
+      undo: function () { C().undo().run(); }, redo: function () { C().redo().run(); },
+      comment: function () { CM.compose(); }
     };
     $$('[data-c]', bar).forEach(function (b) {
       if (b.tagName === 'BUTTON') { b.addEventListener('mousedown', function (e) { e.preventDefault(); }); b.onclick = function () { ACT[b.dataset.c](); syncBar(); }; }
@@ -270,8 +281,158 @@
       };
       load();
     };
+    CM = comments(v, ed, id, function () { dirty = true; status('saving'); schedule(); });
     ed.commands.focus('start');
   };
+
+  /* ---------- izohlar (D2): yon panel; belgi matnning o'zida (<span data-comment>), izoh serverda ---------- */
+  function comments(v, ed, docId, changed) {
+    var T = s('cm'), side = $('.ed-side', v), tab = 'open', threads = [], active = null, draft = null, me = (J.S.user && (J.S.user.adminId || J.S.user.id)) || null;
+    var base = '/api/editor/docs/' + encodeURIComponent(docId) + '/comments';
+    var style = document.createElement('style'); v.appendChild(style);
+    var wide = G.matchMedia('(min-width: 1100px)');
+    function ranges(cid) {
+      var out = [];
+      ed.state.doc.descendants(function (node, pos) {
+        if (node.isText && node.marks.some(function (m) { return m.type.name === 'comment' && m.attrs.id === cid; })) out.push({ from: pos, to: pos + node.nodeSize });
+      });
+      return out;
+    }
+    function unanchor(cid) {
+      var type = ed.schema.marks.comment, tr = ed.state.tr;
+      ranges(cid).forEach(function (r) { tr.removeMark(r.from, r.to, type.create({ id: cid })); });
+      if (tr.docChanged) { ed.view.dispatch(tr); changed(); }
+    }
+    function paint() {
+      // resolved threads lose their highlight; the active one is stronger
+      style.textContent = threads.filter(function (t) { return t.resolved; }).map(function (t) { return '.ed-doc [data-comment="' + t.id + '"]{background:none;border-bottom:0}'; }).join('') +
+        (active ? '.ed-doc [data-comment="' + active + '"]{background:#BFD4FB}' : '');
+      var n = threads.filter(function (t) { return !t.resolved; }).length;
+      $('.ed-cmn', v).textContent = T.title + (n ? ' (' + n + ')' : '');
+    }
+    function who(c) { return c.authorId && c.authorId === me && c.source !== 'word' ? T.me : (c.author || 'JuristAI'); }
+    function when(d) { var x = new Date(d); return J.fmtDate(d) + ' ' + String(x.getHours()).padStart(2, '0') + ':' + String(x.getMinutes()).padStart(2, '0'); }
+    function draw() {
+      paint();
+      var list = threads.filter(function (t) { return tab === 'open' ? !t.resolved : t.resolved; });
+      var nOpen = threads.filter(function (t) { return !t.resolved; }).length;
+      side.innerHTML = '<div class="ed-sh"><b>' + esc(T.title) + '</b><button type="button" class="ed-x" data-a="close" aria-label="×">×</button></div>' +
+        '<div class="seg ed-tabs"><button type="button" data-t="open" class="' + (tab === 'open' ? 'on' : '') + '">' + esc(T.open) + ' (' + nOpen + ')</button><button type="button" data-t="done" class="' + (tab === 'done' ? 'on' : '') + '">' + esc(T.done) + ' (' + (threads.length - nOpen) + ')</button></div>' +
+        '<button type="button" class="pill sm ghost ed-add" data-a="add">+ ' + esc(T.add) + '</button>' +
+        (draft ? '<div class="ed-card ed-new"><p class="ed-q"></p><textarea class="inp" rows="3" placeholder="' + esc(T.ph) + '"></textarea><div class="ed-ca"><button type="button" class="pill sm" data-a="dsave">' + esc(T.save) + '</button><button type="button" class="pill sm ghost" data-a="dno">' + esc(T.cancel) + '</button></div></div>' : '') +
+        '<div class="ed-cl">' + (list.length ? '' : '<p class="muted ed-empty">' + esc(tab === 'open' ? T.none : T.noneDone) + '</p>') + '</div><p class="muted ed-chint">' + esc(T.hint) + '</p>';
+      if (draft) { $('.ed-new .ed-q', side).textContent = '«' + draft.quote + '»'; var ta = $('.ed-new textarea', side); setTimeout(function () { ta.focus(); }, 0); }
+      var cl = $('.ed-cl', side);
+      list.forEach(function (t) {
+        var card = J.h('<div class="ed-card" data-c="' + esc(t.id) + '"></div>');
+        var anchored = ranges(t.id).length > 0;
+        card.innerHTML = head(t) + (t.quote ? '<p class="ed-q"></p>' : '') + (anchored || !t.quote ? '' : '<p class="ed-gone">' + esc(T.gone) + '</p>') + '<p class="ed-body"></p>' +
+          '<div class="ed-rp"></div><div class="ed-ca"><button type="button" class="link" data-a="reply">' + esc(T.reply) + '</button>' +
+          '<button type="button" class="link" data-a="res">' + esc(t.resolved ? T.reopen : T.resolve) + '</button>' +
+          (t.authorId === me && t.source !== 'word' ? '<button type="button" class="link" data-a="edit">' + esc(T.edit) + '</button>' : '') +
+          '<button type="button" class="link ed-dl2" data-a="del">' + esc(T.del) + '</button></div>';
+        if (t.quote) $('.ed-q', card).textContent = '«' + t.quote + '»';
+        $('.ed-body', card).textContent = t.body;
+        var rp = $('.ed-rp', card);
+        t.replies.forEach(function (r) { var el = J.h('<div class="ed-reply">' + head(r) + '<p class="ed-body"></p></div>'); $('.ed-body', el).textContent = r.body; rp.appendChild(el); });
+        card.classList.toggle('on', t.id === active);
+        card.onclick = function (e) { if (e.target.closest('button, textarea')) return; focusThread(t.id, true); };
+        $('[data-a=reply]', card).onclick = function () {
+          if ($('textarea', card)) return;
+          var box = J.h('<div class="ed-rbox"><textarea class="inp" rows="2" placeholder="' + esc(T.replyPh) + '"></textarea><div class="ed-ca"><button type="button" class="pill sm" data-a="rs">' + esc(T.save) + '</button><button type="button" class="pill sm ghost" data-a="rn">' + esc(T.cancel) + '</button></div></div>');
+          card.appendChild(box); $('textarea', box).focus();
+          $('[data-a=rn]', box).onclick = function () { box.remove(); };
+          $('[data-a=rs]', box).onclick = async function () {
+            var b = $('textarea', box).value.trim(); if (!b) return;
+            var r = await J.api(base, { method: 'POST', body: { body: b, parentId: t.id } });
+            if (!r.ok) { J.toast(J.errMsg(r.data)); return; }
+            load(t.id);
+          };
+        };
+        $('[data-a=res]', card).onclick = async function () {
+          var r = await J.api(base + '/' + t.id, { method: 'PATCH', body: { resolved: !t.resolved } });
+          if (!r.ok) { J.toast(J.errMsg(r.data)); return; }
+          load();
+        };
+        var eb = $('[data-a=edit]', card);
+        if (eb) eb.onclick = function () {
+          var body = $('.ed-body', card), ta2 = J.h('<textarea class="inp" rows="3"></textarea>'); ta2.value = t.body; body.replaceWith(ta2); ta2.focus();
+          eb.textContent = T.save;
+          eb.onclick = async function () { var r = await J.api(base + '/' + t.id, { method: 'PATCH', body: { body: ta2.value } }); if (!r.ok) { J.toast(J.errMsg(r.data)); return; } load(t.id); };
+        };
+        $('[data-a=del]', card).onclick = async function () {
+          if (!(await J.confirm(T.delQ, T.del))) return;
+          var r = await J.api(base + '/' + t.id, { method: 'DELETE' });
+          if (!r.ok) { J.toast(J.errMsg(r.data)); return; }
+          unanchor(t.id); if (active === t.id) active = null; load();
+        };
+        cl.appendChild(card);
+      });
+      $('[data-a=close]', side).onclick = function () { side.hidden = true; };
+      $$('[data-t]', side).forEach(function (b) { b.onclick = function () { tab = b.dataset.t; draw(); }; });
+      $('[data-a=add]', side).onclick = compose;
+      if (draft) {
+        $('[data-a=dno]', side).onclick = function () { draft = null; draw(); };
+        $('[data-a=dsave]', side).onclick = async function () {
+          var body = $('.ed-new textarea', side).value.trim(); if (!body) return;
+          var d = draft, r = await J.api(base, { method: 'POST', body: { body: body, quote: d.quote } });
+          if (!r.ok) { J.toast(J.errMsg(r.data)); return; }
+          // the words are marked with the new comment's id; the document then saves itself
+          ed.chain().setTextSelection({ from: d.from, to: d.to }).setMark('comment', { id: r.data.id }).run();
+          changed(); draft = null; tab = 'open'; load(r.data.id);
+        };
+      }
+    }
+    function head(c) {
+      var name = who(c);
+      return '<div class="ed-ch"><span class="ed-av">' + esc(J.initials(name)) + '</span><span class="ed-who"><b>' + esc(name) + '</b>' + (c.source === 'word' ? ' <small class="ed-src">' + esc(T.word) + '</small>' : '') +
+        '<small class="muted">' + esc(when(c.createdAt)) + '</small></span></div>';
+    }
+    function focusThread(cid, scroll) {
+      active = cid; paint();
+      $$('.ed-card', side).forEach(function (c) { c.classList.toggle('on', c.dataset.c === cid); });
+      var r = ranges(cid);
+      if (scroll && r.length) {
+        ed.chain().focus().setTextSelection({ from: r[0].from, to: r[r.length - 1].to }).run();
+        var dom = ed.view.domAtPos(r[0].from); var el = dom.node.nodeType === 1 ? dom.node : dom.node.parentElement;
+        if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
+    }
+    function compose() {
+      var sel = ed.state.selection;
+      if (sel.empty) { J.toast(T.pick); return; }
+      draft = { from: sel.from, to: sel.to, quote: ed.state.doc.textBetween(sel.from, sel.to, ' ').slice(0, 500) };
+      side.hidden = false; tab = 'open'; draw();
+    }
+    async function load(focus) {
+      var r = await J.api(base);
+      if (!r.ok) { if (r.status !== 503) J.toast(J.errMsg(r.data)); return; }
+      threads = r.data.threads || [];
+      if (threads.length && wide.matches && side.hidden && focus === undefined && !load.done) side.hidden = false;
+      load.done = true;
+      draw();
+      if (focus) { var c = $('.ed-card[data-c="' + focus + '"]', side); if (c) { c.classList.add('on'); c.scrollIntoView({ block: 'nearest' }); } active = focus; paint(); }
+    }
+    $('[data-a=cm]', v).onclick = function () { side.hidden = !side.hidden; if (!side.hidden) draw(); };
+    if (wide.matches) side.hidden = false;
+    load();
+    return {
+      compose: compose,
+      // the cursor on commented words opens that comment in the panel
+      follow: function () {
+        var marks = ed.state.selection.$from.marks().filter(function (m) { return m.type.name === 'comment'; });
+        if (!marks.length) return;
+        var cid = marks[marks.length - 1].attrs.id;
+        if (cid === active) return;
+        var t = threads.filter(function (x) { return x.id === cid; })[0];
+        if (!t) return;
+        if (t.resolved !== (tab === 'done')) { tab = t.resolved ? 'done' : 'open'; }
+        if (side.hidden) side.hidden = false;
+        active = cid; draw(); focusThread(cid, false);
+        var c = $('.ed-card[data-c="' + cid + '"]', side); if (c) c.scrollIntoView({ block: 'nearest' });
+      }
+    };
+  }
 
   J.route(/^\/muharrir\/([0-9a-f-]{36})$/, function (id) { J.viewEditor(id); });
 })(window);
