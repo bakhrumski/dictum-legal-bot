@@ -72,7 +72,7 @@
       '<button class="mi" data-a="theme">' + J.icon('moon') + '<span class="mi-t">' + esc(t('me.theme')) + '</span><span class="tag">' + (J.theme === 'dark' ? '●' : '○') + '</span></button>' +
       '<a class="mi" href="/index.html">' + J.icon('globe') + '<span class="mi-t">' + esc(t('me.site')) + '</span></a>' +
       (J.isMaster && J.isMaster() ? '<a class="mi" href="#/boshqaruv">' + J.icon('shield') + '<span class="mi-t">' + esc(t('nav.admin')) + '</span></a>' : '') +
-      '<a class="mi" href="/dashboard.html">' + J.icon('layers') + '<span class="mi-t">' + esc(t('me.old')) + '</span></a>' +
+      (J.isMaster && J.isMaster() ? '<a class="mi" href="/dashboard.html">' + J.icon('layers') + '<span class="mi-t">' + esc(t('me.old')) + '</span></a>' : '') +
       '<button class="mi" data-a="out">' + J.icon('out') + '<span class="mi-t">' + esc(t('me.logout')) + '</span></button></div>');
     pop.style.left = (r.left) + 'px'; pop.style.bottom = (innerHeight - r.top + 6) + 'px'; pop.style.position = 'fixed'; pop.style.width = Math.max(280, r.width) + 'px';
     document.body.appendChild(pop);

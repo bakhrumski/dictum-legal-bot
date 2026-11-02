@@ -180,7 +180,7 @@ function md(t){
   const u = await r.json();
   isMaster = u.role === 'master';
   // Enterprise (English-law) lane is master-only for now (R&D). Redirect others.
-  if(!isMaster){ window.location.href='/dashboard.html'; return; }
+  if(!isMaster){ window.location.href='/app/'; return; }
   document.getElementById('ingestFab').style.display='block';
   loadStats();
 })();
