@@ -148,7 +148,9 @@
     document.body.classList.remove('booting');
     J.render();
     J.loadSessions();
-    if (J.needsPlan()) J.openPlans({ forced: true });
+    // the editor is on every plan (D3): someone opening a shared document or its invite link is not stopped by the plan picker
+    var editorPage = /^#\/muharrir\//.test(location.hash || '');
+    if (J.needsPlan() && !editorPage) J.openPlans({ forced: true });
     else if (J.trialEnded()) {
       var seen = null; try { seen = sessionStorage.getItem('jai-ended-shown'); } catch (e) {}
       if (!seen) { try { sessionStorage.setItem('jai-ended-shown', '1'); } catch (e) {} J.openPlans({ ended: true }); }
