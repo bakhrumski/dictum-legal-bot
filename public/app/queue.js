@@ -16,6 +16,10 @@
       leadMaster: 'Botga kelgan barcha murojaatlar. Biriktiring, yozilgan javobni tasdiqlang yoki o‘zingiz javob bering.',
       f: { open: 'Ochiq', review: 'Tasdiq kutmoqda', rejected: 'Qayta yozish', unassigned: 'Biriktirilmagan', answered_today: 'Bugun javob berilgan', all: 'Barchasi' },
       search: 'Matn yoki mijoz bo‘yicha qidirish…', none: 'Bu ro‘yxatda murojaat yo‘q.', more: 'Yana ko‘rsatish',
+      sortL: 'Tartib', sorts: { newest: 'Eng yangi', oldest: 'Eng eski', priority: 'Shoshilinch avval' }, late: '⏰ Kechikkan', urgent: '🔥 Shoshilinch',
+      whoL: 'Kimda', whoAll: 'Hammasi', whoNone: 'Biriktirilmagan', reset: 'Filtrlarni tozalash', noneFiltered: 'Bu filtrlar bo‘yicha murojaat yo‘q.',
+      g: { today: 'Bugun', yesterday: 'Kecha', week: 'Shu hafta' },
+      months: ['Yanvar', 'Fevral', 'Mart', 'Aprel', 'May', 'Iyun', 'Iyul', 'Avgust', 'Sentyabr', 'Oktyabr', 'Noyabr', 'Dekabr'],
       st: { pending: 'Yangi', assigned: 'Biriktirilgan', student_responded: 'Tasdiq kutmoqda', lawyer_approved: 'Tasdiq kutmoqda', answered: 'Javob berilgan', ai_answered: 'AI javob bergan', rejected: 'Qayta yozish kerak' },
       urg: { critical: 'Juda shoshilinch', high: 'Shoshilinch', medium: '', low: '' },
       type: { voice: 'Ovozli xabar', audio: 'Audio', photo: 'Rasm', video: 'Video', video_note: 'Video', document: 'Hujjat' },
@@ -36,6 +40,10 @@
       leadMaster: 'Все обращения в бот. Назначайте, подтверждайте написанные ответы или отвечайте сами.',
       f: { open: 'Открытые', review: 'Ждут подтверждения', rejected: 'На доработке', unassigned: 'Не назначены', answered_today: 'Отвечены сегодня', all: 'Все' },
       search: 'Поиск по тексту или клиенту…', none: 'В этом списке обращений нет.', more: 'Показать ещё',
+      sortL: 'Порядок', sorts: { newest: 'Сначала новые', oldest: 'Сначала старые', priority: 'Сначала срочные' }, late: '⏰ Просроченные', urgent: '🔥 Срочные',
+      whoL: 'У кого', whoAll: 'Все', whoNone: 'Не назначены', reset: 'Сбросить фильтры', noneFiltered: 'По этим фильтрам обращений нет.',
+      g: { today: 'Сегодня', yesterday: 'Вчера', week: 'На этой неделе' },
+      months: ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'],
       st: { pending: 'Новое', assigned: 'Назначено', student_responded: 'Ждёт подтверждения', lawyer_approved: 'Ждёт подтверждения', answered: 'Отвечено', ai_answered: 'Ответил ИИ', rejected: 'На доработке' },
       urg: { critical: 'Очень срочно', high: 'Срочно', medium: '', low: '' },
       type: { voice: 'Голосовое', audio: 'Аудио', photo: 'Фото', video: 'Видео', video_note: 'Видео', document: 'Документ' },
@@ -100,9 +108,10 @@
   };
 
   /* ---------- list ---------- */
-  var FILTERS = function () { return isMaster() ? ['open', 'review', 'unassigned', 'answered_today', 'all'] : ['open', 'rejected', 'review', 'all']; };
+  // the status tabs; who has it is its own picker now (the master's "Biriktirilmagan" moved there)
+  var FILTERS = function () { return isMaster() ? ['open', 'review', 'answered_today', 'all'] : ['open', 'rejected', 'review', 'all']; };
+  var SORTS = ['newest', 'oldest', 'priority'];
   function query(f) {
-    if (f === 'unassigned') return 'status=open&assigned=unassigned';
     if (f === 'rejected') return 'status=rejected';
     if (f === 'all') return '';
     return 'status=' + f;
@@ -119,42 +128,103 @@
     var cls = OPEN.indexOf(r.status) > -1 ? (r.status === 'rejected' ? 'q-st q-st-warn' : 'q-st q-st-new') : (REVIEW.indexOf(r.status) > -1 ? 'q-st q-st-rev' : 'q-st q-st-done');
     return '<span class="' + cls + '">' + esc(s('st')[r.status] || r.status) + '</span>';
   }
+  /** "Bugun", "Kecha", "Shu hafta", else the month and year - the list's date groups. */
+  function dayGroup(d) {
+    var x = new Date(d); if (isNaN(x)) return '';
+    var today = new Date(); today.setHours(0, 0, 0, 0);
+    var day = new Date(x); day.setHours(0, 0, 0, 0);
+    var diff = Math.round((today - day) / 864e5);
+    if (diff <= 0) return s('g').today;
+    if (diff === 1) return s('g').yesterday;
+    if (diff < 7) return s('g').week;
+    return s('months')[x.getMonth()] + ' ' + x.getFullYear();
+  }
+  var store = {
+    get: function (k, d) { try { var v = localStorage.getItem('jai-q-' + k); return v == null ? d : v; } catch (e) { return d; } },
+    set: function (k, v) { try { localStorage.setItem('jai-q-' + k, v); } catch (e) { /* this browser only */ } },
+  };
+  // "[Ovozli xabar]" and the like are the bot's placeholders for a file, not the client's words
+  var placeholder = function (t) { return /^\[[^\]]{2,40}\]$/.test(String(t || '').trim()); };
+  var uselessCategory = function (c) { return !c || /^bo[sş]h?qa$/i.test(String(c).trim()) || /^прочее$/i.test(String(c).trim()); };
 
-  var state = { f: 'open', q: '', page: 1 };
+  var state = { f: 'open', q: '', page: 1, sort: null, late: false, urgent: false, who: '' };
   J.viewQueue = function () {
     if (!J.isStaff || !J.isStaff()) { J.go('#/'); return; }
     J.setTitle(s('title'));
-    var v = J.mount('<div class="wrap"><div class="vh"><div><h2>' + esc(s('title')) + '</h2><p>' + esc(isMaster() ? s('leadMaster') : s('leadStaff')) + '</p></div></div>' +
-      '<div class="q-bar"><div class="q-chips"></div><input class="inp q-search" type="search" maxlength="200"></div><div class="q-list"><div class="skel" style="width:60%;margin:14px 0"></div></div></div>');
+    if (!state.sort) state.sort = SORTS.indexOf(store.get('sort', 'newest')) > -1 ? store.get('sort', 'newest') : 'newest';
+    var master = isMaster();
+    var v = J.mount('<div class="wrap"><div class="vh"><div><h2>' + esc(s('title')) + '</h2><p>' + esc(master ? s('leadMaster') : s('leadStaff')) + '</p></div></div>' +
+      '<div class="q-bar"><div class="q-chips"></div><input class="inp q-search" type="search" maxlength="200"></div>' +
+      '<div class="q-tools"><label class="q-sel"><span>' + esc(s('sortL')) + '</span><select class="q-sort">' + SORTS.map(function (k) { return '<option value="' + k + '">' + esc(s('sorts')[k]) + '</option>'; }).join('') + '</select></label>' +
+      '<button class="chip q-tog" type="button" data-t="late">' + esc(s('late')) + '</button><button class="chip q-tog" type="button" data-t="urgent">' + esc(s('urgent')) + '</button>' +
+      (master ? '<label class="q-sel"><span>' + esc(s('whoL')) + '</span><select class="q-who"><option value="">' + esc(s('whoAll')) + '</option><option value="none">' + esc(s('whoNone')) + '</option></select></label>' : '') +
+      '<button class="link q-reset" type="button" hidden>' + esc(s('reset')) + '</button></div>' +
+      '<div class="q-list"><div class="skel" style="width:60%;margin:14px 0"></div></div></div>');
+    if (state.f === 'unassigned') { state.f = 'open'; state.who = 'none'; }
     if (FILTERS().indexOf(state.f) < 0) state.f = 'open';
     var srch = $('.q-search', v); srch.placeholder = s('search'); srch.value = state.q;
     var t; srch.oninput = function () { clearTimeout(t); t = setTimeout(function () { state.q = srch.value.trim(); state.page = 1; load(); }, 350); };
-    function chips(stats) {
-      var c = { open: stats && (+stats.pending || 0) + (+stats.awaiting_review || 0), review: stats && stats.awaiting_review, unassigned: stats && stats.unassigned, rejected: stats && stats.rejected, answered_today: stats && stats.answered_today };
+    var stats = null;
+    function chips() {
+      var c = { open: stats && (+stats.pending || 0) + (+stats.awaiting_review || 0), review: stats && stats.awaiting_review, rejected: stats && stats.rejected, answered_today: stats && stats.answered_today };
       $('.q-chips', v).innerHTML = FILTERS().map(function (f) {
         var n = c[f]; return '<button class="chip' + (state.f === f ? ' on' : '') + '" type="button" data-f="' + f + '">' + esc(s('f')[f]) + (n ? ' <b>' + esc(String(n)) + '</b>' : '') + '</button>';
       }).join('');
-      $$('[data-f]', v).forEach(function (b) { b.onclick = function () { state.f = b.dataset.f; state.page = 1; chips(stats); load(); }; });
+      $$('[data-f]', v).forEach(function (b) { b.onclick = function () { state.f = b.dataset.f; state.page = 1; chips(); load(); }; });
+      // the toggles show how many each would leave
+      var late = $('[data-t=late]', v); late.innerHTML = esc(s('late')) + (stats && +stats.overdue ? ' <b>' + esc(String(stats.overdue)) + '</b>' : '');
+      $$('.q-tog', v).forEach(function (b) { b.classList.toggle('on', !!state[b.dataset.t]); });
+      var wn = $('.q-who option[value=none]', v); if (wn) wn.textContent = s('whoNone') + (stats && +stats.unassigned ? ' (' + stats.unassigned + ')' : '');
+      $('.q-reset', v).hidden = !(state.late || state.urgent || state.who || state.q);
     }
-    chips(null);
-    J.api('/api/stats').then(function (r) { if (r.ok) { chips(r.data); J.queueCount = needsMe(r.data); } });
+    chips();
+    J.api('/api/stats').then(function (r) { if (r.ok) { stats = r.data; chips(); J.queueCount = needsMe(r.data); } });
+    var sortSel = $('.q-sort', v); sortSel.value = state.sort;
+    sortSel.onchange = function () { state.sort = sortSel.value; store.set('sort', state.sort); state.page = 1; load(); };
+    $$('.q-tog', v).forEach(function (b) { b.onclick = function () { state[b.dataset.t] = !state[b.dataset.t]; state.page = 1; chips(); load(); }; });
+    var whoSel = $('.q-who', v);
+    if (whoSel) {
+      J.api('/api/admins').then(function (a) {
+        if (!a.ok) return;
+        (a.data || []).filter(function (p) { return p.role === 'lawyer' || p.role === 'student'; }).forEach(function (p) {
+          var o = document.createElement('option'); o.value = String(p.id); o.textContent = (p.full_name || p.username) + ' — ' + s(p.role); whoSel.appendChild(o);
+        });
+        whoSel.value = state.who;
+      });
+      whoSel.value = state.who;
+      whoSel.onchange = function () { state.who = whoSel.value; state.page = 1; chips(); load(); };
+    }
+    $('.q-reset', v).onclick = function () { state.late = state.urgent = false; state.who = ''; state.q = ''; srch.value = ''; if (whoSel) whoSel.value = ''; state.page = 1; chips(); load(); };
     var list = $('.q-list', v), items = [];
+    function row(x) {
+      var urg = (s('urg')[x.urgency] || '');
+      var kind = x.file_id ? (s('type')[x.request_type] || s('file')) : '';
+      var raw = String(x.request_text || '').replace(/\s+/g, ' ').trim();
+      var text = kind && placeholder(raw) ? '' : raw.slice(0, 220);
+      var meta = [uselessCategory(x.category) ? '' : x.category, master ? x.assigned_lawyer_name : ''].filter(Boolean).join(' · ');
+      return '<a class="q-row" href="#/navbat/' + esc(String(x.id)) + '"><div class="q-row-h"><b>#' + esc(String(x.id)) + '</b><span class="q-name">' + esc(x.first_name || '') + '</span>' + statusTag(x) +
+        (urg ? '<span class="q-urg">' + esc(urg) + '</span>' : '') + '<span class="q-ago">' + esc(ago(x.created_at)) + '</span></div>' +
+        '<div class="q-row-t">' + (kind ? '<span class="q-kind">' + J.icon(x.request_type === 'voice' || x.request_type === 'audio' ? 'mic' : 'clip') + esc(kind) + '</span>' : '') + esc(text || (kind ? '' : '—')) + '</div>' +
+        (meta ? '<div class="q-row-c">' + esc(meta) + '</div>' : '') + '</a>';
+    }
     async function load(append) {
-      var qs = query(state.f), url = '/api/requests?limit=30&page=' + state.page + (qs ? '&' + qs : '') + (state.q ? '&search=' + encodeURIComponent(state.q) : '') + (state.f === 'all' || state.f === 'answered_today' ? '&sort=newest' : '');
+      var qs = [query(state.f), 'sort=' + state.sort, state.late ? 'overdue=1' : '', state.urgent ? 'urgency=high' : '',
+        state.who === 'none' ? 'assigned=unassigned' : (state.who ? 'assignee=' + encodeURIComponent(state.who) : ''),
+        state.q ? 'search=' + encodeURIComponent(state.q) : ''].filter(Boolean).join('&');
       if (!append) list.innerHTML = '<div class="skel" style="width:60%;margin:14px 0"></div>';
-      var r = await J.api(url);
+      var r = await J.api('/api/requests?limit=30&page=' + state.page + '&' + qs);
       if (!r.ok) { list.innerHTML = '<div class="empty-state">' + esc(J.errMsg(r.data)) + '</div>'; return; }
       items = append ? items.concat(r.data.items || []) : (r.data.items || []);
       var pg = r.data.pagination || {};
-      list.innerHTML = items.length ? items.map(function (x) {
-        var urg = (s('urg')[x.urgency] || '');
-        var kind = x.file_id ? (s('type')[x.request_type] || s('file')) : '';
-        var text = String(x.request_text || '').replace(/\s+/g, ' ').slice(0, 220);
-        return '<a class="q-row" href="#/navbat/' + esc(String(x.id)) + '"><div class="q-row-h"><b>#' + esc(String(x.id)) + '</b><span>' + esc(x.first_name || '') + '</span>' + statusTag(x) +
-          (urg ? '<span class="q-urg">' + esc(urg) + '</span>' : '') + '<span class="q-ago">' + esc(ago(x.created_at)) + '</span></div>' +
-          '<div class="q-row-t">' + (kind ? '<span class="q-kind">' + J.icon(x.request_type === 'voice' || x.request_type === 'audio' ? 'mic' : 'clip') + esc(kind) + '</span>' : '') + esc(text || (kind ? '' : '—')) + '</div>' +
-          (x.category ? '<div class="q-row-c">' + esc(x.category) + (isMaster() && x.assigned_lawyer_name ? ' · ' + esc(x.assigned_lawyer_name) : '') + '</div>' : '') + '</a>';
-      }).join('') + (pg.page < pg.pages ? '<button class="pill ghost q-more" type="button">' + esc(s('more')) + '</button>' : '') : '<div class="empty-state">' + esc(s('none')) + '</div>';
+      // date groups when the list goes by time; "Shoshilinch avval" is one list
+      var html = '', last = null, grouped = state.sort !== 'priority';
+      items.forEach(function (x) {
+        var g = grouped ? dayGroup(x.created_at) : null;
+        if (g && g !== last) { html += '<div class="q-day">' + esc(g) + '</div>'; last = g; }
+        html += row(x);
+      });
+      list.innerHTML = items.length ? html + (pg.page < pg.pages ? '<button class="pill ghost q-more" type="button">' + esc(s('more')) + ' (' + (pg.total - items.length) + ')</button>' : '')
+        : '<div class="empty-state">' + esc(state.late || state.urgent || state.who || state.q ? s('noneFiltered') : s('none')) + '</div>';
       var more = $('.q-more', list); if (more) more.onclick = function () { state.page++; load(true); };
     }
     load();

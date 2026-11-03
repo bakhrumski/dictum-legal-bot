@@ -900,3 +900,16 @@ textarea.inp{height:auto;min-height:96px;padding:10px 13px;resize:vertical;line-
 .ed-chk-d{line-height:1.6}
 .ed-chk-old{color:var(--muted)}
 .ed-chk-new{background:var(--accent-soft);border-radius:3px;padding:0 2px}
+
+/* Navbat: tartib, tezkor filtrlar va sana guruhlari (queue.js) */
+.q-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:-6px 0 16px}
+.q-sel{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
+.q-sel select{height:30px;border:1px solid var(--line);border-radius:99px;padding:0 10px;background:var(--surface);color:var(--fg);font:inherit;font-size:13px;max-width:220px}
+.q-tog.on{background:var(--accent-soft);border-color:transparent;color:var(--cta)}
+.q-tog b{margin-left:2px}
+.q-reset{font-size:13px;margin-left:4px}
+.q-day{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;margin:10px 2px 0}
+.q-day:first-child{margin-top:0}
+.q-list,.q-row,.q-row-h{min-width:0;max-width:100%}
+.q-name{min-width:0;overflow-wrap:anywhere}
+@media (max-width:600px){.q-sel select{max-width:150px}}
