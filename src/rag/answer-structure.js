@@ -34,6 +34,18 @@ const FOLLOWUP_RULE_RU = `- В конце ответа, после вывода,
 const EXCEPTION_RULE_UZ = `- Istisno birinchi: KONTEKSTda savoldagi talabdan istisno, ozod qilish yoki maxsus huquq bo'lsa ("...olmasdan", "...talab qilinmaydi", "ozod etiladi", "...huquqiga ega"), Tahlilni o'sha normadan boshlang va Xulosani unga asoslang; umumiy talabni undan keyin keltiring. "SAVOLGA ENG YAQIN QATOR" belgisi server so'zlar bo'yicha tanlagan qator - uni albatta o'qing, lekin matn bilan tekshirmasdan asos qilmang. "Istisno yo'q" deb faqat KONTEKSTdagi barcha manbalarni o'qib, bunday norma topilmaganda yozing.`;
 const EXCEPTION_RULE_RU = `- Сначала исключение: если в КОНТЕКСТе есть исключение, освобождение или особое право относительно требования из вопроса ("...без получения", "не требуется", "освобождается", "вправе"), начните анализ с этой нормы и основывайте вывод на ней; общее требование - после. Метка "SAVOLGA ENG YAQIN QATOR" - строка, выбранная сервером по словам: прочтите её, но не делайте основанием без сверки с текстом. "Исключения нет" пишите только прочитав все источники КОНТЕКСТа.`;
 
+// S2 (2026-11-03, owner consented; docs/design/sud-amaliyoti.md): a Plenum
+// band chosen by the server (same article of the same code) is one line in
+// Tahlil after the norm it explains - never a section, never a substitute for
+// the law, never "the Plenum said nothing".
+const PLENUM_RULE_UZ = `- Sud amaliyoti: KONTEKSTda "SUD AMALIYOTI — PLENUM TUSHUNTIRISHI" bloki bo'lsa va undagi band savolga bevosita tegishli bo'lsa, Tahlilda o'sha norma keltirilgan joydan keyin BITTA qator yozing: "<blokdagi qaror nomi>, <N>-bandida tushuntirilishicha: ..." va kerak bo'lsa bandning aynan so'zlarini "> «...»" qatorida keltiring. Plenum qonun emas, normani almashtirmaydi; asos qonun normasi bo'lib qoladi. Band tegishli bo'lmasa, Plenum haqida umuman yozmang; "Plenum tushuntirish bermagan" deb hech qachon yozmang.`;
+const PLENUM_RULE_RU = `- Судебная практика: если в КОНТЕКСТе есть блок "СУДЕБНАЯ ПРАКТИКА — РАЗЪЯСНЕНИЕ ПЛЕНУМА" и пункт прямо относится к вопросу, в анализе после соответствующей нормы напишите ОДНУ строку: "Согласно пункту <N> <постановления из блока>: ..." и при необходимости приведите точные слова пункта строкой "> «...»". Пленум не закон и не заменяет норму; основанием остаётся норма закона. Если пункт не относится к вопросу, о Пленуме не пишите вовсе; никогда не пишите "Пленум не давал разъяснений".`;
+
+/** The Plenum line rule alone (S2). */
+function plenumRule(lang = 'uz') {
+  return lang === 'ru' ? PLENUM_RULE_RU : PLENUM_RULE_UZ;
+}
+
 /** The exception-first rule alone, for prompts that do not take promptRules. */
 function exceptionRule(lang = 'uz') {
   return lang === 'ru' ? EXCEPTION_RULE_RU : EXCEPTION_RULE_UZ;
@@ -41,8 +53,8 @@ function exceptionRule(lang = 'uz') {
 
 function promptRules(lang = 'uz') {
   return lang === 'ru'
-    ? `${QUOTE_RULE_RU}\n${EXCEPTION_RULE_RU}\n${FOLLOWUP_RULE_RU}`
-    : `${QUOTE_RULE_UZ}\n${EXCEPTION_RULE_UZ}\n${FOLLOWUP_RULE_UZ}`;
+    ? `${QUOTE_RULE_RU}\n${EXCEPTION_RULE_RU}\n${PLENUM_RULE_RU}\n${FOLLOWUP_RULE_RU}`
+    : `${QUOTE_RULE_UZ}\n${EXCEPTION_RULE_UZ}\n${PLENUM_RULE_UZ}\n${FOLLOWUP_RULE_UZ}`;
 }
 
 const FOLLOWUP_HEAD = /^[ \t]*(?:#{1,6}[ \t]*)?\**[ \t]*(?:keyingi\s+savollar|следующие\s+вопросы)[ \t]*\**[ \t]*:?[ \t]*\**[ \t]*$/imu;
@@ -198,6 +210,6 @@ function restoreQuotes(text = '', held = [], chunks = [], linkFor = () => '') {
 }
 
 module.exports = {
-  exceptionRule,
+  exceptionRule, plenumRule,
   QUOTE_LINK_LABEL, quoteSourceLabel, promptRules, extractFollowUpQuestions, findQuote, quoteWords, protectQuotes, restoreQuotes,
 };

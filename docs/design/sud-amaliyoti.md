@@ -44,8 +44,11 @@ esa bunday tushuntirish borligini umuman bilmaydi.
     bo'lmadi: bu birikma hech narsa qaytarmadi. S1 ro'yxatni filtr bo'yicha
     sahifalab oladi, matn qidiruvi kerak emas.
   - "Sud amaliyoti" akt turi (`form_id=16389`) qidiruvda bo'sh chiqdi.
-- **Litsenziya.** Qonun hujjatlari va sud hujjatlari rasmiy hujjat; mualliflik
-  huquqi odatda ularga tatbiq etilmaydi. Biz Plenum matnini allaqachon
+- **Litsenziya.** Qonun hujjatlari va sud hujjatlari rasmiy hujjat;
+  "Mualliflik huquqi va turdosh huquqlar to'g'risida"gi Qonunning 8-moddasi
+  (lex.uz/docs/-1022944, 2026-11-03 da o'qildi): "rasmiy hujjatlar (qonunlar,
+  qarorlar, to'xtamlar va shu kabilar), shuningdek ularning rasmiy
+  tarjimalari" mualliflik huquqi obyektlari bo'lmaydi. Biz Plenum matnini allaqachon
   lex.uz'dan olayotgan qonunlar bilan bir xil yo'l bilan olamiz: manba
   ko'rsatiladi, lex.uz havolasi beriladi, matn o'zgartirilmaydi. **Buni yurist
   tasdiqlashi kerak** (9-bo'lim, 1-savol). Sud qarorlarida (S5) shaxsiy
@@ -109,6 +112,31 @@ o'lchangan sonlar:
 - Bu qism `/api/legal-chat` va Telegram javobini o'zgartiradi. Kod faqat
   egasi rozi bo'lgandan keyin yoziladi (CLAUDE.md qoidasi).
 
+**Qanday qilindi (2026-11-03, `src/plenum/answer.js`, `acts.js`).** Qidiruvdan
+keyin topilgan manbalarning (kodeks, modda) juftlari olinadi: kodeks nomi
+qanday yozilganidan qat'i nazar bitta kalitga keltiriladi (FK, ФК, ГК,
+"Fuqarolik kodeksi", "Гражданский кодекс"; qisqartma tahrir tili bo'yicha
+o'qiladi - o'zbekcha kirillda ЖК Jinoyat, ruschada Uy-joy kodeksi); kodeks
+bo'lmagan akt (qonun, VMQ) hozircha juftga kirmaydi. Shu kodeksning shu
+moddasini tilga olgan, amaldagi, o'zgartirish kiritmaydigan qarorning bandi
+(muqaddima emas) nomzod. Faqat modda yetmaydi: band savol bilan so'z ildizi
+bo'lishishi kerak, va ildizning og'irligi tahrirdagi barcha bandlar bo'yicha
+olinadi (log(bandlar / shu ildizli bandlar)): kamida bitta kam uchraydigan
+ildiz (<= 3 % bandda) va jami og'irlik >= 6. Ko'pi bilan 2 band, ikki xil
+qarordan, har biri <= 1 500 belgi (oxirgi to'liq gapda kesiladi). Tahrir:
+ruscha javob - ruscha, kirillcha savol - kirillcha, qolgani lotincha. Bandlar
+KONTEKSTga qonun matnidan keyin "SUD AMALIYOTI — PLENUM TUSHUNTIRISHI (qonun
+emas...)" bloki bo'lib va iqtibos manbalariga (`citationChunks`) qo'shiladi:
+so'zma-so'z tekshiruv, lex.uz havolasi ("Oliy sud Plenumining 26-son qarori
+(20.11.2023), 24-band · lex.uz ↗") va claim guard ularni boshqa manba kabi
+o'qiydi; "24-band" qonun moddasiga bog'lanmaydi (`article_numbers` bo'sh).
+Prompt qoidasi (`plenumRule`): band bevosita tegishli bo'lsa, Tahlilda normadan
+keyin bitta qator; Plenum qonun emas; tegishli bo'lmasa umuman yozilmaydi.
+`meta.plenum` faqat id va juftlarni yozadi, matnni emas. `PLENUM_ANSWERS=off`
+to'xtatadi; jadval bo'sh bo'lsa hech narsa qo'shilmaydi. Ildiz sanog'i har
+tahrir uchun bir marta o'qiladi (lokal: ~330 ms, 3 000 band), 6 soat saqlanadi.
+Tanlov mexanik: bandning savolga mosligini model (prompt) va yurist hal qiladi.
+
 ### S3. Citator: "bu akt hozir amaldami?"
 
 - Javobda keltirilgan har bir akt uchun: amaldami, oxirgi tahrir sanasi,
@@ -149,8 +177,10 @@ qaysi sudlar, qanday anonimlashtirish, qanday qidiruv va nima uchun kerakligi.
 - S1 da AI chaqiruvi yo'q. Faqat bandlarning embeddinglari olinadi; narxini
   quruq sinov hisoblaydi va siz ko'rasiz.
 - S2 qo'shimcha AI chaqiruvi qo'shmaydi: Plenum bandi mavjud qidiruv
-  natijasiga qo'shiladi. Ammo javobga beriladigan kontekst biroz uzayadi;
-  buning narxi S2 PR'ida o'lchanadi.
+  natijasiga qo'shiladi. Kontekst ko'pi bilan ~3 300 belgiga (~1 100 token)
+  uzayadi: DeepSeek flash'da (kirish $0,30 / 1M) javobiga ~$0,0003, GPT-6
+  Sol zaxirasida (~$2 / 1M) ~$0,002; band tanlanmagan savolga $0. Tanlov
+  lokal o'lchovda 16-46 ms (birinchi chaqiruv ildiz sanog'i bilan ~400 ms).
 - S3 va S4 AI'siz ishlaydi; lex.uz'dan sahifa o'qiydi, xotira cheklovlari
   o'zgarmaydi.
 
@@ -186,7 +216,8 @@ Javoblar (2026-11-03, egasi: "takliflaringni qabul qilaman"):
 1. Litsenziya: taklif qabul qilindi — Plenum qarorlari rasmiy hujjat sifatida
    lex.uz'dan, manba va havola bilan, matni o'zgartirilmay olinadi (qonun
    hujjatlari va sud hujjatlari mualliflik huquqi obyekti hisoblanmaydi;
-   aniq moddasini S2 PR'ida keltiraman, yurist ko'rib chiqishi tavsiya etiladi).
+   asos: "Mualliflik huquqi va turdosh huquqlar to'g'risida"gi Qonun, 8-modda;
+   yurist ko'rib chiqishi tavsiya etiladi).
 2. S2 ga rozilik berildi (Tahlil ichida bitta qator, so'zma-so'z iqtibos).
 3. Tartib S1 → S2 → S3 → S4.
 4. Uchala tahrir saqlanadi.
