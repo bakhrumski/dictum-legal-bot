@@ -1028,6 +1028,23 @@ Known state of the suites (Sept 2026):
   comments refresh for everyone; a commenter comments by the words (no
   mark, `findQuote`). The forced plan picker is not shown on editor pages.
   `EDITOR_LIVE=off`. `tests/editor-live.db.test.js`.
+  D4 (2026-11-03, migration 039, `src/editor/analysis.js`, page
+  `public/app/editor-ai.js`): the "AI tahlil" side panel - the website's
+  own analysis (`analyzeDocumentText` with `forEditor`: each risk also gets
+  the `replacement` of its excerpt, each missing clause its `text`;
+  `/api/analyze` keeps its prompt) on the text the server keeps (the page
+  saves first), analysis units by size: `.../analysis/quote`, then
+  `POST .../analysis` with `confirmed` (meterDocument, refunded on failure),
+  commenter or above to run, any member reads the latest run
+  (`doc_editor_analyses`, result sealed). An excerpt is found word for word
+  (spaces, case, apostrophe / quote forms aside) or shown "joyi topilmadi",
+  never guessed; a proposal shows old (struck) and new (light blue) and goes
+  in only on "Qabul qilish" as plain text (a missing clause at the last
+  cursor place), a version "AI taklifidan oldin" kept first; accepted /
+  rejected marks are per browser, and a proposal whose words already stand
+  in the text reads "Kiritildi". One side panel at a time; on a phone
+  "Joyini ko'rsatish" steps the panel aside. `EDITOR_ANALYSIS=off`.
+  `tests/editor-analysis.test.js`.
 - `src/workspace/` — Workspace: routes, authz, Supabase
   realtime/storage, Workspace AI. Since 2026-10-28 (owner, migration 025)
   any active paid plan (Silver, Gold, Platinum) owns one (`PLAN_CATALOG`
