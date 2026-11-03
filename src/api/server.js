@@ -3331,6 +3331,8 @@ app.get('/api/monte-carlo', requireStaff, async (req, res) => {
 
 // Assign request to lawyer
 // Court practice S1: the Plenum decisions corpus from lex.uz, no AI (src/plenum/, Boshqaruv -> Sud amaliyoti)
+// S3: every lex.uz act page the server reads leaves its status and changes (no AI, no extra request)
+require('../rag/fetch-lex').setPageObserver(require('../citator/store').createRecorder(pool));
 require('../plenum/routes').mountPlenumRoutes(app, { pool, requireMasterAdmin, requireSameOrigin: require('../auth/same-origin').requireSameOrigin, logAudit });
 
 // The queue's actions on many requests at once: close / reopen / assign (src/queue/bulk.js, master only)
@@ -4804,6 +4806,11 @@ try {
     crossCheckLegalAnswer,
     hydrateMentionedOfficialActChunks,
     hydrateLexAnchors,
+    // S3: the citator's warnings under a Telegram answer (no AI)
+    citatorNote: async (text, chunks, lang) => {
+      const C = require('../citator/answer');
+      return C.telegramNote(await C.citatorFor(pool, { reply: text, chunks, lang }), lang);
+    },
     // The Telegram answer model can differ from the web chat's, so the bot can
     // be trialled on its own, e.g. MODEL_TELEGRAM=voicelab/aisha-comet with
     // LLM_PROVIDER off keeps the website on its current model.
@@ -7436,6 +7443,8 @@ app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, t
             rag: c.rows[0].rag,
             qaBank: qaMatchInfo,
             cached: true,
+            // the citator as it stood when the answer was cached (its checkedAt says when)
+            citator: (c.rows[0].rag && Array.isArray(c.rows[0].rag.citator)) ? c.rows[0].rag.citator : [],
             nextActions: buildLegalNextActions({ question: message, answer: cachedReply, topic }),
           };
           if (sse) { sse({ type: 'done', ...payload }); return res.end(); }
@@ -7775,6 +7784,10 @@ app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, t
     // An act that is no longer in force is named to the user, with its
     // replacement when known (superseded-acts.js).
     displayReply = appendRepealedNotice(displayReply, { repealed: mentionedActs.repealed }, citationLanguage);
+    // The citator (S3): for each act the answer links, lex.uz's status, the
+    // cited articles' changes, whether our copy predates them, Plenum - no AI.
+    const citator = await require('../citator/answer').citatorFor(pool, { reply: displayReply, chunks: ragChunks, lang: citationLanguage });
+    if (citator.length) ragMeta = Object.assign({}, ragMeta || {}, { citator });
 
     // Enrichment: suggest the laws the AI cited that aren't yet in the corpus
     // (Master-Admin reviews → one-click ingest). Fire-and-forget; never blocks.
@@ -7793,6 +7806,7 @@ app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, t
       qaBank: qaMatchInfo,
       nextActions: buildLegalNextActions({ question: message, answer: displayReply, topic }),
       followUpQuestions,
+      citator,
       // what of an attached document was used, and under which service
       documentScope: documentScope ? { ...documentScope, note: documentJob.excerptNote(documentScope, documentScope.analysisUnits) || null } : null,
     };

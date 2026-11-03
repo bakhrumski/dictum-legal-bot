@@ -774,10 +774,19 @@ TELEGRAM FORMATI (majburiy):
 
   if (D.hydrateLexAnchors) await D.hydrateLexAnchors(chunks, text);
 
+  let finalText = appendRepealedNotice(
+    normalizeLegalAnswerCitations(text, chunks, lang),
+    { repealed: repealedActs }, lang);
+  // S3: an act not in force, a copy older than a change, a recent change of a cited article
+  if (D.citatorNote) {
+    try {
+      const note = await D.citatorNote(finalText, chunks, lang);
+      if (note) finalText = `${finalText}\n\n${note}`;
+    } catch (e) { console.warn('[TG-AGENT] citator:', e.message); }
+  }
+
   return {
-    text: appendRepealedNotice(
-      normalizeLegalAnswerCitations(text, chunks, lang),
-      { repealed: repealedActs }, lang),
+    text: finalText,
     confidence,
     sources: '',
     // false when withholding the unverified claims left no legal content

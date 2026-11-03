@@ -423,6 +423,33 @@
       var b = J.h('<div class="m-user">' + (chipsHtml ? '<div class="cmp-chips">' + chipsHtml + '</div>' : '') + '<span></span></div>');
       $('span:last-child', b).textContent = text; thread.appendChild(b); return b;
     }
+    /* S3, citator: the act's status on lex.uz, its cited articles' changes, our copy's date, Plenum - from the server, no AI */
+    var CT = {
+      uz: { inForce: 'Amalda', lost: 'Kuchini yo‘qotgan', unchecked: 'Holati hali tekshirilmagan', last: 'oxirgi o‘zgarish', changed: 'o‘zgargan', stale: 'Bizdagi matn {d} holatida, lex.uz’da keyin o‘zgargan — havoladan tekshiring', plenum: 'Plenum', band: 'band', more: 'yana {n}', checked: 'lex.uz {d} da o‘qilgan' },
+      ru: { inForce: 'Действует', lost: 'Утратил силу', unchecked: 'Статус ещё не проверен', last: 'последнее изменение', changed: 'изменена', stale: 'Наш текст от {d}, на lex.uz позже изменён — сверьте по ссылке', plenum: 'Пленум', band: 'п.', more: 'ещё {n}', checked: 'lex.uz прочитан {d}' },
+      en: { inForce: 'In force', lost: 'No longer in force', unchecked: 'Status not checked yet', last: 'last amended', changed: 'amended', stale: 'Our text is as of {d}; lex.uz changed it later — check the link', plenum: 'Plenum', band: 'band', more: '{n} more', checked: 'lex.uz read {d}' },
+    };
+    function lexId(u) { var m = /lex\.uz\/(?:uz\/|ru\/|oz\/)?docs\/(-?\d+)/i.exec(String(u || '')); return m ? Math.abs(+m[1]) : 0; }
+    function dmy(d) { return d ? d.slice(8, 10) + '.' + d.slice(5, 7) + '.' + d.slice(0, 4) : ''; }
+    function citeLine(list, url) {
+      var id = lexId(url); if (!id || !Array.isArray(list)) return '';
+      var c = list.filter(function (x) { return x.lexId === id; })[0]; if (!c) return '';
+      var L = CT[J.lang] || CT.uz, ru = J.lang === 'ru', parts = [];
+      var tip = c.checkedAt ? ' title="' + esc(L.checked.replace('{d}', dmy(c.checkedAt))) + '"' : '';
+      parts.push(c.status === 'not_in_force' ? '<span class="ct-w"' + tip + '>⚠ ' + esc(c.statusLabel || L.lost) + '</span>'
+        : c.status === 'in_force' ? '<span class="ct-ok"' + tip + '>' + esc(L.inForce) + '</span>' : '<span>' + esc(L.unchecked) + '</span>');
+      if (c.lastChange) parts.push(esc(L.last) + ' ' + dmy(c.lastChange));
+      (c.units || []).forEach(function (u) {
+        var unit = ru ? (u.kind === 'band' ? 'п. ' : 'ст. ') + u.n : u.n + '-' + u.kind;
+        if (u.changed) parts.push('<span' + (c.copy && c.copy.stale ? ' class="ct-w"' : u.recent ? ' class="ct-r"' : '') + '><span class="u">' + esc(unit) + '</span>: ' + esc(L.changed) + ' ' + dmy(u.changed) + (u.by ? ' (<span class="u">' + esc(u.by) + '</span>)' : '') + '</span>');
+        if (u.plenum && u.plenum.count) {
+          var p = u.plenum.top[0];
+          parts.push(esc(L.plenum) + ' (<span class="u">' + esc(unit) + '</span>): <a href="' + esc(p.url) + '" target="_blank" rel="noopener">' + esc(p.name) + (p.bands && p.bands.length ? ', ' + esc(p.bands.join(', ')) + (ru ? '' : '-') + esc(L.band) : '') + '</a>' + (u.plenum.count > 1 ? ' · ' + esc(L.more.replace('{n}', u.plenum.count - 1)) : ''));
+        }
+      });
+      var stale = c.copy && c.copy.stale ? '<div class="ct-w">⚠ ' + esc(L.stale.replace('{d}', dmy(c.copy.date))) + '</div>' : '';
+      return '<div class="srcs-c">' + parts.join(' · ') + stale + '</div>';
+    }
     function aiBox() { var a = J.h('<div class="m-ai"></div>'); thread.appendChild(a); return a; }
     function finishAi(a, data, question) {
       var r = J.md(data.reply || '', { answer: true }); a._sources = r.sources; a._raw = data.reply || '';
@@ -432,7 +459,7 @@
         // tartibli ro'yxat: raqam, akt va qism, lex.uz havolasi (bir xil nom J.md'da bitta raqam)
         var rows = r.sources;
         html += '<div class="srcs"><div class="srcs-h">' + esc(t('act.sources')) + '</div><ol class="srcs-l">' + rows.slice(0, 8).map(function (s) {
-          return '<li><span class="n">' + s.n + '</span><a class="srcs-t" href="#" data-s="' + s.n + '" title="' + esc(s.title) + '">' + esc(s.title) + '</a><a class="srcs-go" href="' + esc(s.url) + '" target="_blank" rel="noopener">lex.uz ↗</a></li>';
+          return '<li><span class="n">' + s.n + '</span><div class="srcs-b"><a class="srcs-t" href="#" data-s="' + s.n + '" title="' + esc(s.title) + '">' + esc(s.title) + '</a>' + citeLine(data.citator, s.url) + '</div><a class="srcs-go" href="' + esc(s.url) + '" target="_blank" rel="noopener">lex.uz ↗</a></li>';
         }).join('') + '</ol>' + (rows.length > 8 ? '<button class="srcs-more" data-a="src">+' + (rows.length - 8) + '</button>' : '') + '</div>';
       }
       if (data.nextActions && data.nextActions.length) html += '<div class="next">' + data.nextActions.slice(0, 3).map(function (x, i) { return '<button class="chip" data-nx="' + i + '">' + J.icon('arrow') + esc(x.label || t('next.title')) + '</button>'; }).join('') + '</div>';
@@ -558,7 +585,7 @@
       if (err && err.quotaRefunded) a.appendChild(J.h('<p class="muted" style="font-size:13px">↺</p>'));
     }
     function afterReply(d) {
-      C.history.push({ role: 'model', text: d.reply || '', nextActions: d.nextActions || [] });
+      C.history.push({ role: 'model', text: d.reply || '', nextActions: d.nextActions || [], citator: d.citator || [] });
       save(); J.refreshTariff();
     }
     function costCard(a, d, msg, shown) {
@@ -597,11 +624,11 @@
         var r = await J.api('/api/ai-chat-sessions/' + encodeURIComponent(id));
         thread.innerHTML = '';
         if (!r.ok) { thread.appendChild(J.h('<p class="muted">' + esc(J.errMsg(r.data)) + '</p>')); return; }
-        C.title = r.data.title || ''; C.history = (r.data.messages || []).map(function (m) { return { role: m.role === 'user' ? 'user' : 'model', text: m.text || '', nextActions: m.nextActions || [] }; });
+        C.title = r.data.title || ''; C.history = (r.data.messages || []).map(function (m) { return { role: m.role === 'user' ? 'user' : 'model', text: m.text || '', nextActions: m.nextActions || [], citator: m.citator || [] }; });
       }
       J.setTitle(C.title);
       var lastQ = '';
-      C.history.forEach(function (m) { if (m.role === 'user') { lastQ = m.text; userBubble(m.text); } else finishAi(aiBox(), { reply: m.text, nextActions: m.nextActions }, lastQ); });
+      C.history.forEach(function (m) { if (m.role === 'user') { lastQ = m.text; userBubble(m.text); } else finishAi(aiBox(), { reply: m.text, nextActions: m.nextActions, citator: m.citator }, lastQ); });
       scroll();
     } else {
       J.setTitle(t('new'));
