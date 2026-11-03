@@ -148,6 +148,32 @@ Tanlov mexanik: bandning savolga mosligini model (prompt) va yurist hal qiladi.
   odamga ko'rinadigan qiladi.
 - Plenum shu moddaga tayangan bo'lsa, "Plenum: N-son qaror" havolasi chiqadi.
 
+**Qanday qilindi (2026-11-03, `src/citator/`, migratsiya 042).** Javob vaqtida
+lex.uz'ga qo'shimcha so'rov yo'q, AI yo'q:
+- Server lex.uz sahifasini har o'qiganda (jonli qidiruv, iqtibos aniqlash,
+  korpusning haftalik yangilik tekshiruvi - hammasi `fetchLexDocument`
+  orqali) shu sahifadan bitta qator yoziladi (`act_citator`): lex.uz
+  ko'rsatgan holat (kuchini yo'qotgan banneri), `PUBLICATION_ORIGIN`dagi
+  oxirgi o'zgartirish e'lon qilingan sana va har modda / band ostidagi
+  `CHANGES_ORIGINS` izohidan oxirgi o'zgarish sanasi va o'zgartirgan akt
+  (O'RQ-1180). Sahifa saqlanmaydi; tarixiy tahrir (`?ONDATE=`, "... sanasi
+  holatiga") yozilmaydi; bir sahifa 30 daqiqada bir marta. Bo'limi o'qilmagan
+  izoh sanaladi, taxmin qilinmaydi. Mehnat kodeksi (3,3 MB) 8 ms da o'qildi:
+  69 modda, 1 izoh o'qilmadi.
+- Javobdagi lex.uz havolasi bor har akt uchun (`citatorFor`): holati (qator
+  yo'q bo'lsa "hali tekshirilmagan" - hech qachon "amalda" emas), oxirgi
+  o'zgarish, javob tilga olgan moddalarning o'zgarishi, bizdagi nusxa
+  (korpus matni o'zgarishdan oldin o'qilgan bo'lsa `stale`; jonli o'qilgan
+  sahifa - amaldagi matn) va shu kodeksning shu moddasini tilga olgan
+  amaldagi Plenum qarorlari (S1 jadvallari).
+- Saytda: "Manbalar" ro'yxatida har akt ostida bitta qator ("Amalda · oxirgi
+  o'zgarish 15.10.2026 · 161-modda: o'zgargan 15.10.2026 (O'RQ-1180) ·
+  Plenum: 26-son qaror, 24-band"); ⚠ faqat kuchini yo'qotgan akt va eskirgan
+  nusxa uchun. Telegram'da faqat shular (⚠) va 180 kun ichida o'zgargan
+  keltirilgan modda (ℹ), ko'pi bilan 4 qator.
+- Sanalar lex.uz'dagi e'lon sanasi, o'zgarish kuchga kirgan kun emas (u
+  sahifada yo'q). `CITATOR=off` to'xtatadi.
+
 ### S4. Monitoring (yo'l xaritasidagi keyingi band)
 
 - Haftalik yangilash (S1) va citator (S3) yangi yoki o'zgargan aktlarni

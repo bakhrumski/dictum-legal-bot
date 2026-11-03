@@ -525,6 +525,24 @@ Known state of the suites (Sept 2026):
   `PLENUM_ANSWERS=off`. Selection is mechanical (`scripts/plenum-pick.js` on
   `docs/quality/plenum-eval/cases.json`, 20 synthetic, `reviewed: false`).
   `tests/plenum-answer.test.js`.
+  S3 citator (2026-11-03, `src/citator/`, migration 042 `act_citator`, no AI,
+  no extra request): `fetch-lex.setPageObserver` (set in server.js) gets every
+  page `fetchLexDocument` reads (live search, hydration, the weekly corpus
+  freshness run) and `store.createRecorder` writes one row in the background
+  (abs lex id; lex.uz's status banner as `in_force`; `PUBLICATION_ORIGIN`'s
+  latest date `last_change`; each unit's latest `CHANGES_ORIGINS` note - date
+  and amending act - in `units`, unreadable notes counted); not for a
+  historical edition, once per page per 30 min, the page not kept.
+  `answer.citatorFor` for each act the final answer links: status (no row =
+  `unchecked`, never in force), last change, the cited units' changes, our
+  copy (`legal_chunks` last read; live = current; `stale` when lex.uz changed
+  a cited unit, else the act, after it), Plenum decisions naming that article
+  of that code. Web chat: `citator` in the reply (and `rag.citator` for the
+  cache), one line under each source in "Manbalar" (`citeLine` in chat.js; ⚠
+  only for not in force / stale). Telegram: `D.citatorNote` appends only
+  ⚠ not in force / stale and ℹ a cited unit changed within
+  `CITATOR_RECENT_DAYS` (180), <= 4 lines. Dates are lex.uz's publication
+  dates, not the day a change took effect. `CITATOR=off`. `tests/citator.test.js`.
 - `src/ai/model-pricing.js` — **single source of truth for model prices**;
   every spend path, hybrid-pipeline included, reads it. Each price carries
   its source and check date; VoiceLab credits convert at the owner's

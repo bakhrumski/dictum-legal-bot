@@ -236,4 +236,4 @@ function metaOf(bands = []) {
   return { bands: bands.map(b => ({ decision: b.decisionId, n: b.n, lang: b.lang, pairs: b.pairs, score: b.score })), chars: bands.reduce((n, b) => n + b.text.length, 0) };
 }
 
-module.exports = { findPlenumBands, rootStats, _clearStats: () => statsCache.clear(), contextBlock, citationChunks, metaOf, normsOf, artKey, roots, editionFor, decisionName, MAX_BANDS, MAX_CHARS };
+module.exports = { findPlenumBands, rootStats, _clearStats: () => statsCache.clear(), contextBlock, citationChunks, metaOf, normsOf, artKey, roots, editionFor, decisionName, urlOf, MAX_BANDS, MAX_CHARS };

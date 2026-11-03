@@ -113,6 +113,15 @@ function httpGet(url, maxRedirects = 5, signal = null, maxBytes = 0) {
  * @param {string} urlOrId - full URL or numeric doc ID (e.g. "145261" or "https://lex.uz/docs/145261")
  * @returns {Promise<{ title: string, body: string, metadata: object }>}
  */
+// The citator (S3, src/citator/store.js) learns an act's status and changes
+// from every page read here; the server sets it, scripts read without it.
+let pageObserver = null;
+function setPageObserver(fn) { pageObserver = typeof fn === 'function' ? fn : null; }
+function observePage(url, html, parsed) {
+  if (!pageObserver) return;
+  try { pageObserver(url, html, parsed); } catch (e) { console.warn('[FETCH-LEX] page observer:', e.message); }
+}
+
 async function fetchLexDocument(urlOrId, opts = {}) {
   const { signal, maxBytes = 0 } = opts;
   const url = urlOrId.startsWith('http')
@@ -125,6 +134,7 @@ async function fetchLexDocument(urlOrId, opts = {}) {
   console.log(`[FETCH-LEX] Downloaded ${(html.length / 1024).toFixed(0)} KB`);
 
   const parsed = parseLexHtml(html, url);
+  observePage(url, html, parsed);
 
   // ── Auto-follow to current version if lex.uz is showing a date-locked snapshot ──
   // lex.uz shows "Hujjat DD.MM.YYYY sanasi holatiga" banner with
@@ -136,6 +146,7 @@ async function fetchLexDocument(urlOrId, opts = {}) {
     try {
       const currentHtml = await httpGet(currentUrl, 5, signal, maxBytes);
       const currentParsed = parseLexHtml(currentHtml, currentUrl);
+      observePage(currentUrl, currentHtml, currentParsed);
       return { ...currentParsed, rawHtml: currentHtml };
     } catch (err) {
       console.warn(`[FETCH-LEX] Could not fetch current version (${err.message}), using historical`);
@@ -547,4 +558,4 @@ function formatForIngestion(doc, opts = {}) {
   return `${header}\n\n${doc.body}`;
 }
 
-module.exports = { fetchLexDocument, parseLexHtml, formatForIngestion, extractTitleMetadata, httpGet, inferDocLanguage };
+module.exports = { fetchLexDocument, parseLexHtml, formatForIngestion, extractTitleMetadata, httpGet, inferDocLanguage, setPageObserver };

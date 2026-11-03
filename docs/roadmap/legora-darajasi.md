@@ -98,9 +98,10 @@ Tartib va PR bo'linishi dizayn hujjatining 9-bo'limida.
   "Oliy sudi" organi va "Qaror" turi bilan topiladi; S1 korpus, S2 javobda,
   S3 citator, S4 monitoring). Qabul qilingan (#553). S1 (Plenum korpusi,
   migratsiya 041, Boshqaruv -> "Sud amaliyoti") merge (#554). S2 (javobda
-  Plenum bandi, Tahlil ichida bitta qator, AI'siz tanlov) PR'da.
-- [ ] Citator: akt amaldami, qachon o'zgargan, qaysi Plenum qarori unga
-  tayangan. Javobda "o'zgargan" belgisi chiqadi.
+  Plenum bandi, Tahlil ichida bitta qator, AI'siz tanlov) merge (#555).
+- [~] Citator: akt amaldami, qachon o'zgargan, qaysi Plenum qarori unga
+  tayangan. Javobda "o'zgargan" belgisi chiqadi. S3 (migratsiya 042,
+  `src/citator/`, AI'siz) PR'da.
 - [ ] Monitoring: lex.uz'dagi yangi va o'zgargan aktlar; foydalanuvchi
   ishlariga tegishlisi Telegram'ga yuboriladi (kuniga bitta yig'ma xabar).
 - [ ] Firma bilim bazasi: firmaning shablonlari va avvalgi hujjatlari, qidiruv
@@ -355,3 +356,6 @@ nima o'lchandi.
 - 2026-11-03: #554 (S1) merge. S2 PR: javobda Plenum bandi (sayt va Telegram),
   (kodeks, modda) juftlari va kam uchraydigan so'z ildizlari bo'yicha, AI'siz;
   20 sintetik savolning 11 tasiga band tanlandi (yurist ko'rmagan).
+- 2026-11-03: #555 (S2) merge. S3 PR: citator - "Manbalar" ostida akt
+  holati, keltirilgan moddaning o'zgarish sanasi va akti, bizdagi nusxa
+  eskirganmi, Plenum; Telegram'da faqat ogohlantirishlar.
