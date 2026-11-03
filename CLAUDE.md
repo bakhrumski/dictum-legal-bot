@@ -1045,9 +1045,15 @@ Known state of the suites (Sept 2026):
   before the static files; role read again from the database, `no-store`):
   anyone else goes to `/app/` (`?tab=jamoa` -> `/app/#/jamoa`), a visitor to
   sign-in. `APP_HOME` defaults to `/app/`; the free-access survey moved into
-  the app (`J.surveyForm`). The human queue (lawyer / student answers) has no
-  view in the new app yet, so staff other than the master cannot answer it
-  until it is ported. `tests/old-dashboard-gate.test.js`.
+  the app (`J.surveyForm`). `tests/old-dashboard-gate.test.js`.
+  The human queue moved to the app (#547, `public/app/queue.js`, frontend
+  only, the old dashboard's routes): `#/navbat` for staff - a lawyer /
+  student sees their own requests (client name hidden by the server), plays
+  / opens the file, writes the answer for approval, gets a returned one back
+  with the reason; the master assigns, grades and approves (sent in
+  Telegram), returns with a reason or answers directly; a nav count and a
+  home card show what waits. Status chips are `.q-st-*` (`.new` is the
+  sidebar button).
 
 ## CustDev pilot (2026-10-28, owner)
 
