@@ -6158,17 +6158,36 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
       : `\nАКТЫ ПО ЮРИДИЧЕСКОЙ СИЛЕ (сверху вниз):\n${forceOrder.map(f => f.line).join('\n')}\n`)
     : '';
 
+  // ── Court practice (S2, docs/design/sud-amaliyoti.md): Plenum bands on the
+  // same article of the same code as the retrieved norms, no AI. They follow
+  // the law's text, marked as an explanation (not a law), and join the
+  // citation chunks so the quote check, its link and the claim guard read them.
+  let plenumBlock = '';
+  try {
+    const plenumAnswer = require('../plenum/answer');
+    const bands = await plenumAnswer.findPlenumBands(pool, {
+      chunks: citationChunks, question: originalQuestion, language: isUz ? 'uz' : 'ru', getRefs: getChunkArticleRefs,
+    });
+    if (bands.length) {
+      plenumBlock = plenumAnswer.contextBlock(bands, isUz ? 'uz' : 'ru');
+      citationChunks.push(...plenumAnswer.citationChunks(bands));
+      meta.plenum = plenumAnswer.metaOf(bands);
+    }
+  } catch (e) {
+    console.warn('[PLENUM] answer:', e.message);
+  }
+
   // ── Build clean data-only context (no instructions, no box-drawings) ──
   let context;
   if (isUz) {
     context = `\nQONUNCHILIK KONTEKSTI (${citationChunks.length} natija):\n`
       + sourceBlock + forceBlock
-      + `\n` + chunksText + webText + lexLiveText
+      + `\n` + chunksText + plenumBlock + webText + lexLiveText
       + `\n\n--- JAVOB SHU YERDAN BOSHLANSIN ---`;
   } else {
     context = `\nКОНТЕКСТ ИЗ ЗАКОНОДАТЕЛЬСТВА (${citationChunks.length} результатов):\n`
       + sourceBlock + forceBlock
-      + `\n` + chunksText + webText + lexLiveText
+      + `\n` + chunksText + plenumBlock + webText + lexLiveText
       + `\n\n--- ОТВЕТ НАЧИНАЕТСЯ ЗДЕСЬ ---`;
   }
 

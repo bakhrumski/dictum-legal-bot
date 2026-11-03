@@ -506,6 +506,25 @@ Known state of the suites (Sept 2026):
   a shell. `PLENUM_SYNC=weekly` refreshes after the first apply (Sunday
   night, Tashkent); `PLENUM=off`. Measured locally on live lex.uz: 217
   decisions, 0 unread, 196 s, 11 284 bands, 14 MB. `tests/plenum.test.js`.
+  S2 (2026-11-03, `src/plenum/answer.js`, `acts.js`, no AI): after retrieval
+  `retrieveLegalContext` (web chat and Telegram) takes the (code, article)
+  pairs of the retrieved chunks (`actKey`: one key per code in any script or
+  abbreviation, the abbreviation read by the edition - uz ЖК Criminal, ru ЖК
+  Housing; a non-code act is no pair) and picks Plenum bands (in force, not
+  amending, not the preamble) naming the same article of the same code that
+  share a rare question root (<= 3 % of the edition's bands; weight
+  log(bands / bands with it) >= 6; the counts read once per edition, kept 6 h,
+  text not kept); <= 2 bands from different decisions, <= 1 500 chars; the
+  edition: ru answer ru, Cyrillic question uz, else lat. They go after the
+  law's text as "SUD AMALIYOTI — PLENUM TUSHUNTIRISHI (qonun emas...)" and
+  into `citationChunks` (`doc_type 'plenum'`, no `article_numbers`), so the
+  quote check, its link ("Oliy sud Plenumining 26-son qarori (20.11.2023),
+  24-band · lex.uz ↗") and the claim guard read them; `plenumRule` in
+  `promptRules`: one line in Tahlil after the norm, only when it applies,
+  never "the Plenum said nothing". `meta.plenum` ids and pairs only;
+  `PLENUM_ANSWERS=off`. Selection is mechanical (`scripts/plenum-pick.js` on
+  `docs/quality/plenum-eval/cases.json`, 20 synthetic, `reviewed: false`).
+  `tests/plenum-answer.test.js`.
 - `src/ai/model-pricing.js` — **single source of truth for model prices**;
   every spend path, hybrid-pipeline included, reads it. Each price carries
   its source and check date; VoiceLab credits convert at the owner's
