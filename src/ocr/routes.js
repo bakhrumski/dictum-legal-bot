@@ -414,16 +414,27 @@ async function extractFileText(buf, { fileName = '', mimeType = '' } = {}) {
  * /api/analyze), for callers that metered the job themselves: { analysis }
  * or { raw, parseError }. callAI and digestLongDocument are the server's.
  */
-async function analyzeDocumentText(text, { callAI, digestLongDocument = null, adminId = null, langHint = null } = {}) {
+// D4 (the document editor's analysis panel, src/editor/analysis.js): the same
+// analysis, plus the wording a person can put into the document - each risk's
+// replacement for its own excerpt and each missing clause's text. Proposals
+// only: the page inserts nothing until the person accepts it.
+const EDITOR_ADDENDUM = `
+
+EDITOR MODE - two more fields (the person may insert them into the document; nothing is inserted without their acceptance):
+- every riskItems entry also has "replacement": the full corrected wording that would REPLACE its "excerpt" word for word, in the document's language and script, keeping the excerpt's figures, names and dates unless the issue is about them; "" when the fix is not a rewording of that excerpt.
+- every missingClauses entry also has "text": the clause's proposed wording, ready to insert, in the document's language and script; "" if you cannot write it without facts the document does not give.
+- "excerpt" must be copied from the document character for character (it is searched for in the document); never shorten it with "..." inside.`;
+
+async function analyzeDocumentText(text, { callAI, digestLongDocument = null, adminId = null, langHint = null, forEditor = false, endpoint = '/api/analyze' } = {}) {
   const full = String(text || '').trim();
   const body = full.length > MAX_ANALYSIS_CHARS && typeof digestLongDocument === 'function'
     ? await digestLongDocument(full, adminId)
     : full.slice(0, MAX_ANALYSIS_CHARS);
   const langNote = langHint === 'ru' ? '\n(Document language: Russian)' : langHint === 'uz' ? '\n(Document language: Uzbek)' : '';
   const result = await callAI([
-    { role: 'system', text: SYSTEM_PROMPT },
+    { role: 'system', text: forEditor ? SYSTEM_PROMPT + EDITOR_ADDENDUM : SYSTEM_PROMPT },
     { role: 'user', text: `Analyze this legal document:${langNote}\n\n---\n${body}\n---` },
-  ], { temperature: 0.15, maxTokens: 4096, endpoint: '/api/analyze' });
+  ], { temperature: 0.15, maxTokens: forEditor ? 6144 : 4096, endpoint });
   let analysis = salvageJson(result.text);
   if (analysis && typeof analysis === 'object' && !analysis.summary && !analysis.docType) analysis = null;
   if (!analysis) return { raw: result.text, parseError: true, provider: result.provider };

@@ -862,3 +862,29 @@ textarea.inp{height:auto;min-height:96px;padding:10px 13px;resize:vertical;line-
 .q-home-n{font-size:26px;font-weight:600;color:var(--cta);min-width:34px}
 .q-home-t{flex:1;font-size:14.5px}
 @media (max-width:600px){.q-search{max-width:none}.q-home{flex-wrap:wrap}}
+
+/* Muharrir D4: AI tahlil paneli (editor-ai.js). Taklif: eski matn chizilgan, yangisi och ko'k fonda (egasining qoidasi). */
+.ed-ai-p{font-size:13.5px;line-height:1.55;margin:10px 0}
+.ed-ai-q{margin:12px 0}
+.ed-ai-cost p{font-size:13.5px;margin:0 0 10px}
+.ed-ai-run{display:flex;gap:10px;align-items:center;font-size:13.5px;margin-top:12px}
+.ed-ai-sum{margin:6px 0 4px}
+.ed-ai-score{display:flex;align-items:baseline;gap:6px;margin-bottom:6px}
+.ed-ai-score b{font-size:28px;font-weight:600}
+.ed-ai-score small{color:var(--muted);font-size:12.5px}
+.ed-ai-by{font-size:12px;margin:2px 0}
+.ed-ai-h{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:16px 0 8px;font-weight:600}
+.ed-ai-list{display:flex;flex-direction:column;gap:8px}
+.ed-ai-c{font-size:13.5px}
+.ed-ai-c p{margin:6px 0;line-height:1.5;overflow-wrap:anywhere}
+.ed-ai-ch{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.ed-ai-cl{font-weight:600;font-size:13.5px}
+.ed-ai-st{margin-left:auto;font-size:12px;color:var(--muted)}
+.ed-ai-sg{color:var(--muted)}
+.ed-ai-done{opacity:.6}
+.ed-ai-prop{border-top:1px solid var(--line);margin-top:8px;padding-top:8px}
+.ed-ai-prop .kicker{margin:6px 0 4px}
+.ed-ai-was{text-decoration:line-through;color:var(--muted);white-space:pre-wrap}
+.ed-ai-new{background:var(--accent-soft);border-radius:8px;padding:6px 8px;white-space:pre-wrap}
+.ed-ai-str{margin:0;padding-left:18px;font-size:13.5px;line-height:1.55}
+.ed-ai-disc{font-size:12px;margin:14px 0 6px}

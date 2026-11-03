@@ -130,6 +130,7 @@
     var v = J.mount('<div class="ed-wrap"><div class="ed-top"><a class="ed-back" href="#/hujjatlarim">' + J.icon('back') + '<span>' + esc(s('back')) + '</span></a>' +
       '<input class="ed-title" maxlength="200" aria-label="' + esc(s('title')) + '"><span class="ed-st muted"></span><span class="ed-ppl"></span><span class="ed-sp"></span>' +
       '<button class="pill sm ghost" type="button" data-a="share">' + J.icon('team') + '<span class="ed-shn">' + esc(s('sh').share) + '</span></button>' +
+      (J.editorAi ? '<button class="pill sm ghost" type="button" data-a="ai">' + J.icon('spark') + '<span class="ed-ain">' + esc(J.editorAiLabel()) + '</span></button>' : '') +
       '<button class="pill sm ghost" type="button" data-a="cm">' + J.icon('chat') + '<span class="ed-cmn">' + esc(s('cm').title) + '</span></button>' +
       '<button class="pill sm ghost" type="button" data-a="ver">' + esc(s('versions')) + '</button>' +
       '<div class="ed-dl"><button class="pill sm" type="button" data-a="dl">' + J.icon('up') + esc(s('download')) + '</button><div class="ed-menu" hidden><button type="button" data-a="docx">' + J.icon('word') + esc(s('word')) + '</button><button type="button" data-a="pdf">' + J.icon('doc') + esc(s('pdf')) + '</button><button type="button" data-a="del" class="ed-del">' + J.icon('trash') + esc(s('del')) + '</button></div></div></div>' +
@@ -366,6 +367,14 @@
     ready = true;
     if (live && init.seed) seedIfEmpty();
     CM = comments(v, ed, id, function () { if (canWrite) { dirty = true; status('saving'); schedule(); } }, { canMark: canWrite, canComment: canComment, canResolve: canWrite, isOwner: role === 'owner' });
+    /* D4: the AI analysis panel (editor-ai.js) - one side panel at a time */
+    if (J.editorAi) {
+      var AI = J.editorAi(v, ed, { id: id, canWrite: canWrite, canRun: canComment, flush: function () { return canWrite ? flush() : Promise.resolve(); },
+        changed: function () { if (canWrite) { dirty = true; status('saving'); schedule(); } }, revision: function () { return rev; } });
+      var cmSide = $('.ed-side', v);
+      $('[data-a=ai]', v).onclick = function () { if (AI.el.hidden) { cmSide.hidden = true; AI.open(); } else AI.hide(); };
+      $('[data-a=cm]', v).addEventListener('click', function () { if (!cmSide.hidden) AI.hide(); });
+    }
     /* toolbar by role: a reader keeps only the comment button (a commenter) or nothing */
     if (!canWrite) $$('[data-c]', bar).forEach(function (b) { if (b.dataset.c !== 'comment' || !canComment) b.hidden = true; });
     if (!canWrite) $$('.ed-sep', bar).forEach(function (x) { x.hidden = true; });

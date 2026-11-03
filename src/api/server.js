@@ -10175,6 +10175,11 @@ require('../documents/routes').mountDocumentRoutes(app, { pool, requireAuth, req
 // The document editor (docs/design/hujjat-muharriri.md, D1): Word-like editing in the app, versions, Word export
 require('../editor/routes').mountEditorRoutes(app, { pool, requireAuth, requireSameOrigin: require('../auth/same-origin').requireSameOrigin,
   extractFileText: (buf, o) => require('../ocr/routes').extractFileText(buf, o), logAudit });
+// D4: the editor's AI analysis panel - the website's own analysis, paid in analysis units (src/editor/analysis.js)
+require('../editor/analysis').mountEditorAnalysis(app, { pool, requireAuth, requireSameOrigin: require('../auth/same-origin').requireSameOrigin,
+  requireServiceConfirm: require('../ai/ai-trigger').requireServiceConfirm, tariffModule,
+  analyze: (text, { adminId = null, langHint = null } = {}) => require('../ocr/routes').analyzeDocumentText(text, {
+    callAI, digestLongDocument, adminId, langHint, forEditor: true, endpoint: '/api/editor/analysis' }) });
 
 // CustDev stage 4: interview recordings on a Matter, with consent (src/interviews/)
 require('../interviews/routes').mountInterviewRoutes(app, { pool, requireAuth, requireSameOrigin: require('../auth/same-origin').requireSameOrigin,
