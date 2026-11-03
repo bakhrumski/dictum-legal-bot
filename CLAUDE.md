@@ -464,6 +464,24 @@ Known state of the suites (Sept 2026):
   goes back to the browser. `/api/documents` (list without text, rename,
   delete for good), page `#/hujjatlarim` and the "Hujjatlarim" picker in the
   composer's attach menu and on Hujjat tahlili (`public/app/library.js`).
+- Drafted documents (2026-11-03, owner: a filled "Olib qo'yish bayonnomasi"
+  mixed Cyrillic template text with Latin values, was not justified and had
+  every "(imzo)" / "(kun, oy)" a line below its place):
+  `src/drafting/doc-layout.js`, no AI. `/api/draft/export` renders a
+  template with `renderOrderly` - an Uzbek document in the script the values
+  were typed in (Latin when none; a Russian document, quoted names and
+  brand-like words untouched; o‘ g‘ / ’ in one form), a date field as "2026
+  yil 30 sentyabr", values trimmed, the template's own words right before /
+  after a value dropped from it. Every draft export (`sendExport`, template
+  and AI draft) runs `layoutCaptions`: a caption-only line goes under its
+  blank in a borderless `table.jai-sign` row (date / place pairs side by
+  side, "1. ____ Name" lines), a signer is one row role / (imzo) / name; and
+  the Word file is `legal: true` - body paragraphs justified with a 1 cm
+  first-line indent (`html-to-docx` `bodyPara`; headings, lists, tables and
+  centred / right lines keep theirs; the editor's export is unchanged).
+  The template importer's prompt asks for one field a blank, one date field,
+  values without the template's words and captions as their own lines.
+  `tests/doc-layout.test.js`.
 - `src/ai/model-pricing.js` — **single source of truth for model prices**;
   every spend path, hybrid-pipeline included, reads it. Each price carries
   its source and check date; VoiceLab credits convert at the owner's
@@ -1027,9 +1045,15 @@ Known state of the suites (Sept 2026):
   before the static files; role read again from the database, `no-store`):
   anyone else goes to `/app/` (`?tab=jamoa` -> `/app/#/jamoa`), a visitor to
   sign-in. `APP_HOME` defaults to `/app/`; the free-access survey moved into
-  the app (`J.surveyForm`). The human queue (lawyer / student answers) has no
-  view in the new app yet, so staff other than the master cannot answer it
-  until it is ported. `tests/old-dashboard-gate.test.js`.
+  the app (`J.surveyForm`). `tests/old-dashboard-gate.test.js`.
+  The human queue moved to the app (#547, `public/app/queue.js`, frontend
+  only, the old dashboard's routes): `#/navbat` for staff - a lawyer /
+  student sees their own requests (client name hidden by the server), plays
+  / opens the file, writes the answer for approval, gets a returned one back
+  with the reason; the master assigns, grades and approves (sent in
+  Telegram), returns with a reason or answers directly; a nav count and a
+  home card show what waits. Status chips are `.q-st-*` (`.new` is the
+  sidebar button).
 
 ## CustDev pilot (2026-10-28, owner)
 

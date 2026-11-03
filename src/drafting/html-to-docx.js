@@ -118,12 +118,13 @@ function createConverter(comments = new Map()) {
     return `<w:r>${rPr ? `<w:rPr>${rPr}</w:rPr>` : ''}<w:t xml:space="preserve">${xml(text)}</w:t></w:r>`;
   }
 
-  function paragraph(inner, { style, jc, num, ind, borderBottom } = {}) {
+  function paragraph(inner, { style, jc, num, ind, firstLine, borderBottom, tight } = {}) {
     let pPr = '';
     if (style) pPr += `<w:pStyle w:val="${style}"/>`;
     if (num) pPr += `<w:numPr><w:ilvl w:val="${num.lvl}"/><w:numId w:val="${num.id}"/></w:numPr>`;
     if (borderBottom) pPr += '<w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="auto"/></w:pBdr>';
-    if (ind) pPr += `<w:ind w:left="${ind}"/>`;
+    if (tight) pPr += '<w:spacing w:after="0"/>';
+    if (ind || firstLine) pPr += `<w:ind${ind ? ` w:left="${ind}"` : ''}${firstLine ? ` w:firstLine="${firstLine}"` : ''}/>`;
     if (jc) pPr += `<w:jc w:val="${jc}"/>`;
     return `<w:p>${pPr ? `<w:pPr>${pPr}</w:pPr>` : ''}${inner}</w:p>`;
   }
@@ -135,6 +136,17 @@ function createConverter(comments = new Map()) {
     return found;
   }
 
+  /**
+   * A body paragraph. In a legal document (ctx.legal, src/drafting/doc-layout.js)
+   * one with no alignment or left is justified with a 1 cm first-line indent;
+   * a centred or right one keeps its alignment. A table cell is tight.
+   */
+  function bodyPara(jc, ctx) {
+    if (ctx.cell) return { jc, ind: ctx.ind, tight: true };
+    if (ctx.legal && !ctx.ind && (!jc || jc === 'left' || jc === 'both')) return { jc: 'both', firstLine: 567 };
+    return { jc, ind: ctx.ind };
+  }
+
   /** Block content -> paragraphs and tables. */
   function blocks($, nodes, ctx = {}) {
     let out = '';
@@ -142,7 +154,7 @@ function createConverter(comments = new Map()) {
     const flush = () => {
       if (!inline.length) return;
       const r = runs($, $(inline));
-      if (r.replace(/<[^>]+>/g, '').trim() || /<w:br\/>/.test(r)) out += paragraph(r, { jc: ctx.jc, ind: ctx.ind });
+      if (r.replace(/<[^>]+>/g, '').trim() || /<w:br\/>/.test(r)) out += paragraph(r, bodyPara(ctx.jc, ctx));
       inline = [];
     };
     nodes.each((_, node) => {
@@ -177,7 +189,7 @@ function createConverter(comments = new Map()) {
         out += blocks($, $n.contents(), Object.assign({}, ctx, { jc }));
       } else {
         const r = runs($, $n.contents());
-        out += paragraph(r, { jc, ind: ctx.ind });
+        out += paragraph(r, bodyPara(alignOf($n) || ctx.jc, ctx));
       }
     });
     flush();
@@ -194,24 +206,42 @@ function createConverter(comments = new Map()) {
     });
     if (!cols) return '';
     const usable = A4.w - MARGIN.left - MARGIN.right;
+    // a signature / date row (src/drafting/doc-layout.js): no borders, the widths its cells name
+    const sign = /(^|\s)jai-sign(\s|$)/.test(String($table.attr('class') || ''));
+    const pct = [];
+    if (sign) {
+      const first = rows.first().children('td,th');
+      first.each((_, td) => { const m = /width\s*:\s*(\d+(?:\.\d+)?)%/.exec(String($(td).attr('style') || '')); pct.push(m ? Number(m[1]) : null); });
+    }
+    const known = pct.filter(v => v != null).reduce((a, b) => a + b, 0);
+    const free = pct.filter(v => v == null).length;
+    const widths = Array.from({ length: cols }, (_, j) => {
+      if (!sign || pct.length !== cols) return Math.floor(usable / cols);
+      const p = pct[j] != null ? pct[j] : Math.max(0, 100 - known) / Math.max(1, free);
+      return Math.floor(usable * p / 100);
+    });
     const colW = Math.floor(usable / cols);
+    const border = sign ? 'none' : 'single';
     let out = '<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="pct"/><w:tblBorders>'
-      + ['top', 'left', 'bottom', 'right', 'insideH', 'insideV'].map(s => `<w:${s} w:val="single" w:sz="4" w:space="0" w:color="auto"/>`).join('')
+      + ['top', 'left', 'bottom', 'right', 'insideH', 'insideV'].map(s => `<w:${s} w:val="${border}" w:sz="4" w:space="0" w:color="auto"/>`).join('')
       + '</w:tblBorders><w:tblLayout w:type="fixed"/><w:tblCellMar><w:left w:w="80" w:type="dxa"/><w:right w:w="80" w:type="dxa"/></w:tblCellMar></w:tblPr>'
-      + `<w:tblGrid>${`<w:gridCol w:w="${colW}"/>`.repeat(cols)}</w:tblGrid>`;
+      + `<w:tblGrid>${widths.map(w => `<w:gridCol w:w="${w}"/>`).join('')}</w:tblGrid>`;
     rows.each((_, tr) => {
       out += '<w:tr>';
+      let col = 0;
       $(tr).children('td,th').each((__, td) => {
         const $td = $(td);
         const span = Math.max(1, Number($td.attr('colspan')) || 1);
-        let inner = blocks($, $td.contents(), { jc: alignOf($td) });
+        const w = widths.slice(col, col + span).reduce((a, b) => a + b, 0) || colW * span;
+        col += span;
+        let inner = blocks($, $td.contents(), { jc: alignOf($td), cell: sign });
         if ($td[0].name.toLowerCase() === 'th') inner = inner.replace(/<w:r>(<w:rPr>)?/g, (m, p) => (p ? '<w:r><w:rPr><w:b/>' : '<w:r><w:rPr><w:b/></w:rPr>'));
         if (!inner) inner = '<w:p/>';
-        out += `<w:tc><w:tcPr><w:tcW w:w="${colW * span}" w:type="dxa"/>${span > 1 ? `<w:gridSpan w:val="${span}"/>` : ''}</w:tcPr>${inner}</w:tc>`;
+        out += `<w:tc><w:tcPr><w:tcW w:w="${w}" w:type="dxa"/>${span > 1 ? `<w:gridSpan w:val="${span}"/>` : ''}</w:tcPr>${inner}</w:tc>`;
       });
       out += '</w:tr>';
     });
-    return out + '</w:tbl><w:p/>';
+    return out + (sign ? '</w:tbl><w:p><w:pPr><w:spacing w:after="0"/></w:pPr></w:p>' : '</w:tbl><w:p/>');
   }
 
   return { blocks, numbering };
@@ -259,7 +289,7 @@ function commentsXml(list) {
  * [{ id, author, date, text }] - each becomes a Word comment on the words its
  * <span data-comment="id"> pieces mark; a comment with no anchor left is skipped.
  */
-async function htmlToDocx(bodyHtml, { title = 'Hujjat', lang = 'uz', comments = [] } = {}) {
+async function htmlToDocx(bodyHtml, { title = 'Hujjat', lang = 'uz', comments = [], legal = false } = {}) {
   const $ = cheerio.load(`<div id="__root">${String(bodyHtml || '')}</div>`, { decodeEntities: true });
   const cmap = new Map();
   const used = [];
@@ -271,7 +301,7 @@ async function htmlToDocx(bodyHtml, { title = 'Hujjat', lang = 'uz', comments = 
     used.push({ ...c, n });
   }
   const conv = createConverter(cmap);
-  let body = conv.blocks($, $('#__root').contents());
+  let body = conv.blocks($, $('#__root').contents(), { legal: !!legal });
   if (!body) body = '<w:p/>';
   const langTag = lang === 'ru' ? 'ru-RU' : 'uz-Latn-UZ';
   const sect = `<w:sectPr><w:pgSz w:w="${A4.w}" w:h="${A4.h}"/><w:pgMar w:top="${MARGIN.top}" w:right="${MARGIN.right}" w:bottom="${MARGIN.bottom}" w:left="${MARGIN.left}" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr>`;

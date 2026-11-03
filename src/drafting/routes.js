@@ -7,6 +7,7 @@ const { initTemplatesTable, dbListTemplates, dbListTemplatesAll, dbGetTemplate, 
         dbCountOwnedTemplates, dbCreateTemplate, dbUpdateTemplate,
         dbDeleteTemplate, dbDeleteOwnedTemplate } = require('./db');
 const { renderTemplate } = require('./templates');
+const docLayout = require('./doc-layout');
 const { buildCoreLegalPolicyPrefix } = require('../rag/legal-prompt-policy');
 
 const CORE_LEGAL_POLICY_PREFIX = buildCoreLegalPolicyPrefix();
@@ -50,6 +51,10 @@ Output ONLY a single valid JSON object with this exact structure:
 Rules:
 - Identify every blank, underline, or fill-in spot as a field with a descriptive key.
 - Keep the document structure faithful to the original.
+- Keep the body in the original's language and script (Uzbek Cyrillic stays Cyrillic, Uzbek Latin stays Latin); never mix scripts inside the body. The platform writes the filled document in one script itself.
+- One blank is one field. A date blank ("____ йил ______", "«__» ____ 20__ й.", "__.__.20__") is ONE field of type "date" - not separate day / month / year fields, and no extra place field next to it.
+- A field holds only what changes. The fixed words around a blank stay in the body ("IMEI рақами {{imei}}"); the label says exactly what to type ("IMEI raqami (faqat raqam)"), so a person does not type the template's words again.
+- A caption printed under a blank - (имзо), (imzo), (кун, ой), (ҳудуд), (Ф.И.Ш.) - is its own <p> right after the <p> with that blank. A signer is three <p> in this order: the role ("Холислар:"), the caption ("(имзо)"), the name ("{{xolis_1}}"); a second signer of the same role is the caption and the name only. Do not put captions anywhere else.
 - name and description must be in both Uzbek and Russian.
 - Output ONLY the JSON — no markdown fences, no explanation.`);
 
@@ -69,7 +74,7 @@ function stripEmbeddedFonts(html) {
     });
 }
 
-function wrapDocumentHtml(title, bodyHtml, lang) {
+function wrapDocumentHtml(title, bodyHtml, lang, { legal = false } = {}) {
   const normalizedBody = stripEmbeddedFonts(bodyHtml);
   return `<!DOCTYPE html>
 <html lang="${lang || 'uz'}" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">
@@ -97,7 +102,7 @@ function wrapDocumentHtml(title, bodyHtml, lang) {
   body { color: #111; font-size: 12pt; line-height: 1.5; margin: 0; mso-ansi-language: UZ-LATIN; mso-fareast-language: EN-US; }
   .MsoNormal, p.MsoNormal, li.MsoNormal, div.MsoNormal { margin: 0; font-size: 12pt; font-family: Calibri, Arial, sans-serif !important; mso-fareast-font-family: Calibri; }
   h1 { font-size: 14pt; } h2 { font-size: 13pt; font-weight: bold; } h3 { font-size: 12pt; font-weight: bold; }
-  table { border-collapse: collapse; } td { padding: 0; } p { margin: 0 0 10pt; }
+  table { border-collapse: collapse; } td { padding: 0; } p { margin: 0 0 10pt; }${legal ? docLayout.LEGAL_CSS : ''}
 </style>
 </head>
 <body>
@@ -341,15 +346,20 @@ function mountDraftingRoutes(app, deps) {
 
   // Shared Word / PDF sender. Word is a real .docx (Astra audit D4); it used
   // to be HTML saved as .doc, which our own importer then refused.
-  async function sendExport(res, baseName, { title, body, lang }, format) {
+  // A drafted document (a template filled, an AI draft) is laid out as a
+  // legal document: captions on their line, justified paragraphs with a 1 cm
+  // indent (src/drafting/doc-layout.js).
+  async function sendExport(res, baseName, { title, body: rawBody, lang }, format) {
+    let body = rawBody;
+    try { body = docLayout.layoutCaptions(rawBody); } catch (e) { console.warn('[DRAFT] layout skipped:', e.message); }
     if (format === 'docx' || format === 'doc') {
       const { htmlToDocx, DOCX_MIME } = require('./html-to-docx');
-      const docx = await htmlToDocx(stripEmbeddedFonts(body), { title, lang });
+      const docx = await htmlToDocx(stripEmbeddedFonts(body), { title, lang, legal: true });
       res.setHeader('Content-Type', DOCX_MIME);
       res.setHeader('Content-Disposition', `attachment; filename="${baseName}.docx"`);
       return res.end(docx);
     }
-    const html = wrapDocumentHtml(title, body, lang);
+    const html = wrapDocumentHtml(title, body, lang, { legal: true });
     // PDF: try Puppeteer, fall back to client-print
     let puppeteer = null;
     try { puppeteer = require('puppeteer'); } catch (_) {}
@@ -382,7 +392,8 @@ function mountDraftingRoutes(app, deps) {
       if (!tpl) return res.status(404).json({ error: 'Shablon topilmadi' });
 
       const lang = tpl.lang === 'ru' ? 'ru' : 'uz';
-      const body = renderTemplate({ body: tpl.body, fields: tpl.fields }, values);
+      // one script, dates written out, values without the template's own words
+      const body = docLayout.renderOrderly({ body: tpl.body, fields: tpl.fields, lang: tpl.lang }, values);
       const title = (tpl.name && (tpl.name[lang] || tpl.name.uz)) || 'Hujjat';
       const baseName = (tpl.slug || 'hujjat').replace(/[^a-z0-9-]/gi, '_');
       return await sendExport(res, baseName, { title, body, lang: tpl.lang }, format);
