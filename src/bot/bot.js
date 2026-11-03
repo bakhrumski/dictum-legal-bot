@@ -10,7 +10,7 @@ const https = require('https');
 const path = require('path');
 const crypto = require('crypto');
 const telegramEconomy = require('../services/telegram-economy');
-const { isStaffRole, isMasterRole, roleLabel, getLinkedAccount, privateSenderId, chatRoute, dashboardUrl } = require('./telegram-roles');
+const { isStaffRole, isMasterRole, roleLabel, getLinkedAccount, privateSenderId, chatRoute, dashboardUrl, appUrl, queueUrl } = require('./telegram-roles');
 const usageLedger = require('../ai/usage-ledger');
 const testAccounts = require('./test-account');
 const tariffTexts = require('./tariff-texts');
@@ -1935,7 +1935,7 @@ async function handleTelegramMessage(msg) {
           );
           const req = reqInfo.rows[0] && require('../privacy/request-text').openRequest(reqInfo.rows[0], pending.requestId);
 
-          const masterNotification = `📝 Student javob berdi!\n\n👨‍🎓 Student: ${pending.fullName}\n📋 Murojaat #${pending.requestId}\n👤 Murojatchi: ${req?.first_name || ''} (@${req?.username || ''})\n\n📝 Student javobi:\n${responseText.substring(0, 200)}${responseText.length > 200 ? '...' : ''}\n\nDashboard: ${dashboardUrl()}\nTasdiqlash uchun dashboardga kiring!`;
+          const masterNotification = `📝 Student javob berdi!\n\n👨‍🎓 Student: ${pending.fullName}\n📋 Murojaat #${pending.requestId}\n👤 Murojatchi: ${req?.first_name || ''} (@${req?.username || ''})\n\n📝 Student javobi:\n${responseText.substring(0, 200)}${responseText.length > 200 ? '...' : ''}\n\n✅ Tasdiqlash: ${queueUrl(pending.requestId)}`;
 
           // Notify via ADMIN_TELEGRAM_ID
           await bot.sendMessage(process.env.ADMIN_TELEGRAM_ID, masterNotification);
@@ -1996,7 +1996,7 @@ async function handleTelegramMessage(msg) {
   try {
     const account = await getLinkedAccount(pool, chatId, privateSenderId(msg));
     if (chatRoute(account, { testMode: inAdminTestMode(chatId) }) === 'staff') {
-      bot.sendMessage(chatId, `👋 ${account.full_name}, siz admin sifatida ulangansiz.\n\nBildirishnomalarni shu yerda olasiz.\n\n📋 Dashboard: ${dashboardUrl()}\n/me - Hisob holati\n/unlink - Uzish${isMasterRole(account.role) ? '\n/testmode - Botni oddiy foydalanuvchi sifatida sinash' : ''}`);
+      bot.sendMessage(chatId, `👋 ${account.full_name}, siz admin sifatida ulangansiz.\n\nBildirishnomalarni shu yerda olasiz.\n\n📋 Murojaatlar navbati: ${queueUrl()}\n/me - Hisob holati\n/unlink - Uzish${isMasterRole(account.role) ? '\n/testmode - Botni oddiy foydalanuvchi sifatida sinash' : ''}`);
       return;
     }
   } catch (error) {
@@ -2437,7 +2437,8 @@ async function handleTelegramMessage(msg) {
       } else if (!agentDelivered && tariffTexts.FILE_TYPES.has(requestData.request_type)) {
         // a file: the lawyer queue, not AI - said plainly, with the way to
         // the AI document services on the website
-        const keyboard = tariffTexts.fileQueuedKeyboard(dashboardUrl());
+        // the client's way to the AI document services: the app's analysis page itself
+        const keyboard = tariffTexts.fileQueuedKeyboard(appUrl('#/tahlil'));
         bot.sendMessage(chatId, tariffTexts.fileQueuedText({ typeLabel: getRequestTypeLabel(requestData.request_type) }),
           keyboard ? { reply_markup: keyboard } : {}).catch(() => {});
       } else if (!agentDelivered) {
@@ -2459,7 +2460,7 @@ ${agentDelivered ? '🤖 Agent foydalanuvchiga dastlabki javob berdi' : ''}
 
 ${requestData.request_type === 'text' ? `Murojaat: ${requestData.request_text}` : ''}
 
-Dashboard: ${dashboardUrl()}
+📋 Ochish: ${queueUrl(result.requestId)}
           `;
           await bot.sendMessage(process.env.ADMIN_TELEGRAM_ID, adminNotification);
         } catch (error) {

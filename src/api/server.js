@@ -2690,8 +2690,7 @@ ${request_text.substring(0, 100)}...
 📝 Student javobi:
 ${responseText.substring(0, 100)}...
 
-Dashboard: ${process.env.DASHBOARD_URL || 'http://localhost:3000'}
-Tasdiqlash uchun dashboardga kiring!
+✅ Tasdiqlash: ${require('../bot/telegram-roles').queueUrl(requestId)}
         `;
         
         await bot.sendMessage(process.env.ADMIN_TELEGRAM_ID, masterNotification);
@@ -3365,7 +3364,8 @@ app.post('/api/assign-request', requireMasterAdmin, async (req, res) => {
             const req = reqSeal.openRequest(reqResult.rows[0]);
             const typeLabels = { text: 'Matn', voice: 'Ovozli xabar', video: 'Video', video_note: 'Video xabar', document: 'Fayl', photo: 'Rasm' };
             const typeLabel = typeLabels[req.request_type] || req.request_type;
-            const dashboardUrl = process.env.DASHBOARD_URL || 'http://localhost:3000';
+            // the request itself in the app's queue: one tap to answer it
+            const openUrl = require('../bot/telegram-roles').queueUrl(requestId);
 
             let notifText = `📋 Yangi murojaat tayinlandi!\n\n👤 Murojaatchi: Murojaatchi ${anonId(req.user_id, req.created_at, req.user_request_seq)}`;
             notifText += `\n📝 Turi: ${typeLabel}`;
@@ -3380,7 +3380,7 @@ app.post('/api/assign-request', requireMasterAdmin, async (req, res) => {
             const keyboard = {
               inline_keyboard: [[
                 { text: '✏️ Javob berish', callback_data: `respond_${requestId}` },
-                { text: '📊 Dashboard', url: dashboardUrl }
+                { text: '📋 Navbatda ochish', url: openUrl }
               ]]
             };
 
@@ -3486,12 +3486,14 @@ app.post('/api/assign-student', requireMasterAdmin, async (req, res) => {
           if (reqResult.rows.length > 0) {
             const r = reqSeal.openRequest(reqResult.rows[0]);
             const preview = (r.request_text || '').substring(0, 100);
+            const openUrl = require('../bot/telegram-roles').queueUrl(r.id);
             await bot.sendMessage(student.telegram_chat_id,
               `📋 Sizga yangi murojaat tayinlandi!\n\n` +
               `🆔 Murojaat #${r.id}\n` +
               `📂 ${r.category || 'Boshqa'}\n` +
               `📝 ${preview}${preview.length >= 100 ? '...' : ''}\n\n` +
-              `Dashboard orqali javob bering.`
+              `Javob berish: ${openUrl}`,
+              { reply_markup: { inline_keyboard: [[{ text: '📋 Navbatda ochish', url: openUrl }]] } }
             );
           }
         } catch (e) {

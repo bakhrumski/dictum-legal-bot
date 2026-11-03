@@ -52,7 +52,7 @@ const FREE = /bepul|tekin|tarifga kiritilgan|tarifingizga kiradi|бесплат�
 
   await test('the bot sends that text, with the button, for documents, photos and videos', () => {
     assert.deepStrictEqual([...texts.FILE_TYPES].sort(), ['document', 'photo', 'video', 'video_note']);
-    assert.match(bot, /else if \(!agentDelivered && tariffTexts\.FILE_TYPES\.has\(requestData\.request_type\)\) \{[\s\S]*?tariffTexts\.fileQueuedKeyboard\(dashboardUrl\(\)\)[\s\S]*?tariffTexts\.fileQueuedText\(/u);
+    assert.match(bot, /else if \(!agentDelivered && tariffTexts\.FILE_TYPES\.has\(requestData\.request_type\)\) \{[\s\S]*?tariffTexts\.fileQueuedKeyboard\(appUrl\('#\/tahlil'\)\)[\s\S]*?tariffTexts\.fileQueuedText\(/u);
   });
 
   await test('the user is told before describing the file, and in /start', () => {

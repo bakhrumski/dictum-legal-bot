@@ -149,6 +149,23 @@ accounts.set(EMPTY, { id: 6, full_name: 'Bosh rol', username: 'bosh_rol', role: 
     assert.strictEqual(roles.dashboardUrl({}), 'http://localhost:3000/dashboard.html', 'development keeps the local server');
   });
 
+  await test('staff links open the request itself in the app queue (2026-11-03)', () => {
+    const prod = { NODE_ENV: 'production' };
+    assert.strictEqual(roles.queueUrl(42, prod), 'https://juristai.uz/app/#/navbat/42');
+    assert.strictEqual(roles.queueUrl(null, prod), 'https://juristai.uz/app/#/navbat');
+    assert.strictEqual(roles.queueUrl('x1', prod), 'https://juristai.uz/app/#/navbat', 'not an id -> the queue');
+    assert.strictEqual(roles.queueUrl(7, { DASHBOARD_URL: 'https://juristai.uz/dashboard.html' }), 'https://juristai.uz/app/#/navbat/7');
+    assert.strictEqual(roles.queueUrl(7, { RENDER: 'true', DASHBOARD_URL: 'http://localhost:3000' }), 'https://juristai.uz/app/#/navbat/7');
+    assert.strictEqual(roles.appUrl('#/tahlil', prod), 'https://juristai.uz/app/#/tahlil');
+    const fs = require('fs'), path = require('path');
+    const bot = fs.readFileSync(path.join(__dirname, '../src/bot/bot.js'), 'utf8');
+    const server = fs.readFileSync(path.join(__dirname, '../src/api/server.js'), 'utf8');
+    assert.ok(bot.includes('Tasdiqlash: ${queueUrl(pending.requestId)}'));
+    assert.ok(bot.includes('📋 Ochish: ${queueUrl(result.requestId)}'));
+    assert.ok(server.includes("{ text: '📋 Navbatda ochish', url: openUrl }"));
+    assert.ok(!/dashboardga kiring|Dashboard orqali javob|📊 Dashboard/.test(bot + server), 'no staff message sends people to the old dashboard');
+  });
+
   await test('1. a linked customer\'s legal question goes to the agent, which owns the daily quota', async () => {
     reset();
     await message({ chatId: USER, text: 'Ishdan asossiz bo\'shatishdi, nima qilay?' });
