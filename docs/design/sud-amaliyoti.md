@@ -1,6 +1,6 @@
 # Sud amaliyoti: Plenum qarorlari, citator, monitoring (dizayn)
 
-Holat: **qoralama**. Egasi 9-bo'limdagi savollarga javob bermaguncha kod yozilmaydi.
+Holat: **qabul qilingan** (egasi, 2026-11-03: "takliflaringni qabul qilaman, S1 ni boshla"). Javoblar 9-bo'limda.
 Yo'l xaritasi: `docs/roadmap/legora-darajasi.md`, 3-bosqich ("Raqobat ustunligi").
 Egasining topshirig'i (2026-11-03): "Keyingi bosqichni boshla!"
 
@@ -58,6 +58,26 @@ uchun. Plenum qarorlari korpusi umuman yo'q.
 ## 3. Qismlar
 
 ### S1. Plenum korpusi (AI'siz, javobga hali tegmaydi)
+
+**Bajarildi (2026-11-03, `src/plenum/`, migratsiya 041).** Dizayndan farqi va
+o'lchangan sonlar:
+- Ro'yxat organ filtri bilan emas, `query=plenumining` + `body_id` (2328 Oliy
+  sud, 2342 Oliy xo'jalik sudi) bilan olinadi: organ filtrining o'zi sud
+  qarorlarini ham qaytaradi. Sahifalash lex.uz'ning "Keyingisi" postback'i bilan.
+- Korpus `legal_chunks`'dan alohida jadvallarda (`plenum_decisions`,
+  `plenum_bands`, `plenum_sync_runs`): S2 gacha javoblar ularni ko'rmaydi.
+  **Embedding yo'q** — S2 bandni modda havolasi bilan topadi; embedding kerak
+  bo'lsa, S2 da narxi bilan qo'shiladi.
+- Uchala tahrir: kiril (lex.uz id), lotin (`-id`, lex.uz'ning o'z tahriri),
+  rus (alohida id). Bir nechta qarorda lex.uz'ning o'zi "matn faqat o'zbek
+  tilida" deydi — hisobotda shunday nomlanadi.
+- Lokal sinov bazasida, jonli lex.uz bilan to'liq yuklash: 217 qaror (Oliy sud
+  172, Oliy xo'jalik sudi 36, qo'shma 9; o'zgartirish qarorlari 61), 0
+  o'qilmagan, 196 soniya, uchala tahrirda 11 284 band, 13,1 mln belgi
+  (`plenum_bands` 14 MB), 20 356 modda havolasi, ulardan 12% aktsiz (asosan
+  o'zgartirish qarorlaridagi eski matn iqtiboslari va "shu Kodeks"). Qarorlar
+  1991-12-20 dan 2026-07-03 gacha. O'zgarmagan qaror qayta tekshiruvda bitta
+  sahifa (20 qaror — 19 soniya).
 
 - Ro'yxat lex.uz'dan olinadi: `body_id=2328`, `form_id=3972`, `status=Y`,
   sahifalab. Faqat sarlavhasida yoki rekvizitida "Plenum" so'zi turgan
@@ -161,6 +181,18 @@ qaysi sudlar, qanday anonimlashtirish, qanday qidiruv va nima uchun kerakligi.
   S3 qarorning sanasini va o'zgarganini ko'rsatadi; javob avval normaga tayanadi.
 
 ## 9. Egasiga savollar
+
+Javoblar (2026-11-03, egasi: "takliflaringni qabul qilaman"):
+1. Litsenziya: taklif qabul qilindi — Plenum qarorlari rasmiy hujjat sifatida
+   lex.uz'dan, manba va havola bilan, matni o'zgartirilmay olinadi (qonun
+   hujjatlari va sud hujjatlari mualliflik huquqi obyekti hisoblanmaydi;
+   aniq moddasini S2 PR'ida keltiraman, yurist ko'rib chiqishi tavsiya etiladi).
+2. S2 ga rozilik berildi (Tahlil ichida bitta qator, so'zma-so'z iqtibos).
+3. Tartib S1 → S2 → S3 → S4.
+4. Uchala tahrir saqlanadi.
+5. S5 (sud qarorlari) hozircha qoldiriladi.
+
+Savollar (asl matn):
 
 1. **Litsenziya:** Plenum qarorlarini qonunlar kabi lex.uz'dan olib, manba va
    havola bilan ko'rsatish — yurist bilan tekshirasizmi, yoki men kerakli

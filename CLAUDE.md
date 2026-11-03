@@ -482,6 +482,30 @@ Known state of the suites (Sept 2026):
   The template importer's prompt asks for one field a blank, one date field,
   values without the template's words and captions as their own lines.
   `tests/doc-layout.test.js`.
+- Court practice (2026-11-03, owner; design `docs/design/sud-amaliyoti.md`,
+  accepted: S1 Plenum corpus -> S2 Plenum lines in the answer's Tahlil (the
+  owner consented) -> S3 citator -> S4 monitoring; S5 court decisions later).
+  S1 (`src/plenum/`, migration 041, no AI, no embeddings): the Supreme Court
+  and former Higher Economic Court Plenum decisions in force, listed by
+  lex.uz's own search (`query=plenumining`, `body_id` 2328 / 2342, the
+  "Keyingisi" post-back, one page at a time with `PLENUM_PAUSE_MS`), each
+  read in three editions (Cyrillic id, Latin `-id`, Russian id; "Текст акта
+  приводится на узбекском языке" is named, not a failure), split into bands
+  (`splitBands`: 0 the preamble, a list inside a band stays in it) with the
+  abbreviations the decision defines and the articles each band names
+  (`articleRefs`: an abbreviation, the code / named law before the number,
+  ranges, primes, "va"; an unknown act stays null). Kept apart from
+  `legal_chunks` (`plenum_decisions`, `plenum_bands`, `plenum_sync_runs`) -
+  no answer uses them until S2. A run is `dry` (writes only its report) or
+  `apply` (new / changed by the Uzbek edition's sha256; unchanged = one
+  page; not listed any more -> `in_force = false` only when both lists were
+  read whole); one at a time (advisory lock). Boshqaruv -> "Sud amaliyoti"
+  (`/app/#/boshqaruv/plenum`, `/api/admin/plenum*`, master with the role read
+  again): counts, runs with the unread ones, the stored decisions, one
+  decision's bands in each edition; `scripts/plenum-ingest.js` the same from
+  a shell. `PLENUM_SYNC=weekly` refreshes after the first apply (Sunday
+  night, Tashkent); `PLENUM=off`. Measured locally on live lex.uz: 217
+  decisions, 0 unread, 196 s, 11 284 bands, 14 MB. `tests/plenum.test.js`.
 - `src/ai/model-pricing.js` — **single source of truth for model prices**;
   every spend path, hybrid-pipeline included, reads it. Each price carries
   its source and check date; VoiceLab credits convert at the owner's

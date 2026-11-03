@@ -3330,6 +3330,9 @@ app.get('/api/monte-carlo', requireStaff, async (req, res) => {
 });
 
 // Assign request to lawyer
+// Court practice S1: the Plenum decisions corpus from lex.uz, no AI (src/plenum/, Boshqaruv -> Sud amaliyoti)
+require('../plenum/routes').mountPlenumRoutes(app, { pool, requireMasterAdmin, requireSameOrigin: require('../auth/same-origin').requireSameOrigin, logAudit });
+
 // The queue's actions on many requests at once: close / reopen / assign (src/queue/bulk.js, master only)
 require('../queue/bulk').mountQueueBulk(app, { pool, requireMasterAdmin, requireSameOrigin: require('../auth/same-origin').requireSameOrigin, logAudit,
   notify: (who, ids) => {

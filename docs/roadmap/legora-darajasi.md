@@ -96,7 +96,8 @@ Tartib va PR bo'linishi dizayn hujjatining 9-bo'limida.
   qarorlari. Manba va litsenziya avval tekshiriladi. Dizayn (2026-11-03):
   `docs/design/sud-amaliyoti.md` (qoralama; Plenum qarorlari lex.uz'da
   "Oliy sudi" organi va "Qaror" turi bilan topiladi; S1 korpus, S2 javobda,
-  S3 citator, S4 monitoring). Egasining javobini kutadi.
+  S3 citator, S4 monitoring). Qabul qilingan (#553). S1 (Plenum korpusi,
+  migratsiya 041, Boshqaruv -> "Sud amaliyoti") PR'da.
 - [ ] Citator: akt amaldami, qachon o'zgargan, qaysi Plenum qarori unga
   tayangan. Javobda "o'zgargan" belgisi chiqadi.
 - [ ] Monitoring: lex.uz'dagi yangi va o'zgargan aktlar; foydalanuvchi
@@ -347,3 +348,6 @@ nima o'lchandi.
   dizaynining D1–D5 bosqichlari tugadi.
 - 2026-11-03: 3-bosqich boshlandi: sud amaliyoti dizayni
   (`docs/design/sud-amaliyoti.md`, qoralama).
+- 2026-11-03: #553 (sud amaliyoti dizayni) merge; egasi takliflarni qabul
+  qildi (S2 ga rozilik, S1 → S4, uchala tahrir, S5 keyin). S1 PR: Plenum
+  qarorlari korpusi lex.uz'dan, AI'siz (lokal sinovda 217 qaror, 0 o'qilmagan).
