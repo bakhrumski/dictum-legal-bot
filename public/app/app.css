@@ -913,3 +913,15 @@ textarea.inp{height:auto;min-height:96px;padding:10px 13px;resize:vertical;line-
 .q-list,.q-row,.q-row-h{min-width:0;max-width:100%}
 .q-name{min-width:0;overflow-wrap:anywhere}
 @media (max-width:600px){.q-sel select{max-width:150px}}
+
+/* Navbat: belgilash va ommaviy amallar (queue.js, master) */
+.q-rw{display:flex;gap:8px;align-items:stretch;min-width:0}
+.q-rw>.q-row{flex:1;min-width:0}
+.q-chk{display:flex;align-items:flex-start;padding-top:15px;cursor:pointer}
+.q-chk input{width:17px;height:17px;accent-color:var(--cta);cursor:pointer}
+.q-bulk{position:sticky;top:8px;z-index:5;display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:8px 12px;margin:0 0 12px;box-shadow:var(--shadow-sm)}
+.q-bulk-n{font-weight:600;font-size:13.5px;margin-right:4px}
+.q-bulk select{height:32px;border:1px solid var(--line);border-radius:99px;padding:0 10px;background:var(--surface);color:var(--fg);font:inherit;font-size:13px;max-width:220px}
+.q-bulk .link{font-size:13px}
+.q-bulk .link,.q-tools .link{border:0;background:none;padding:0;color:var(--cta);cursor:pointer;font:inherit;font-size:13px}
+.q-bulk .link:hover,.q-tools .link:hover{text-decoration:underline}

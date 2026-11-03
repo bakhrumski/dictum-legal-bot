@@ -359,6 +359,7 @@ function transactionalPool(handler) {
       '20261101_037_doc_editor_comments.sql',
       '20261101_038_doc_editor_sharing.sql',
       '20261103_039_doc_editor_analyses.sql',
+      '20261103_040_request_close.sql',
     ]);
     assert.strictEqual(stripOuterTransaction('BEGIN;\nSELECT 1;\nCOMMIT;'), 'SELECT 1;');
   });

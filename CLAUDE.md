@@ -1099,6 +1099,19 @@ Known state of the suites (Sept 2026):
   sign-in page returns there): a new request for the master, an assignment
   (button "📋 Navbatda ochish"), a student's answer to approve, the staff
   /link greeting; a client's file notice links `appUrl('#/tahlil')`.
+  The list (#551, 2026-11-03): Tartib Eng yangi (default, kept in
+  `localStorage jai-q-sort`) / Eng eski / Shoshilinch avval, date groups
+  (Bugun / Kecha / Shu hafta / month), toggles Kechikkan (`overdue=1`) and
+  Shoshilinch, Turi (`type=text|voice|file`, `TYPE_GROUPS` in server.js),
+  the master's Kimda picker (`assigned=unassigned` / `assignee=<id>`).
+  Bulk (2026-11-03, migration 040, `src/queue/bulk.js`, master only, role
+  read again from the database, <= 200 ids, the client is sent nothing):
+  rows are ticked, then `POST /api/requests/assign-bulk` (open requests to
+  a lawyer / student, ONE Telegram message with the count and the queue
+  link, never a client's text), `/api/requests/close` (open -> 'closed',
+  `closed_at` / `closed_by` / `close_reason`) and `/api/requests/reopen`
+  ('closed' -> 'pending'); the "Yopilgan" tab, a closed request shows who /
+  when / why with "Qayta ochish". `tests/queue-bulk.test.js`.
 
 ## CustDev pilot (2026-10-28, owner)
 
