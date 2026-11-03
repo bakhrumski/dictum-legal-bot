@@ -1053,7 +1053,11 @@ Known state of the suites (Sept 2026):
   with the reason; the master assigns, grades and approves (sent in
   Telegram), returns with a reason or answers directly; a nav count and a
   home card show what waits. Status chips are `.q-st-*` (`.new` is the
-  sidebar button).
+  sidebar button). Staff messages in Telegram link to the request itself
+  (`telegram-roles.queueUrl(id)` -> `/app/#/navbat/<id>`; signed out, the
+  sign-in page returns there): a new request for the master, an assignment
+  (button "📋 Navbatda ochish"), a student's answer to approve, the staff
+  /link greeting; a client's file notice links `appUrl('#/tahlil')`.
 
 ## CustDev pilot (2026-10-28, owner)
 
