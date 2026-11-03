@@ -10180,6 +10180,9 @@ require('../editor/analysis').mountEditorAnalysis(app, { pool, requireAuth, requ
   requireServiceConfirm: require('../ai/ai-trigger').requireServiceConfirm, tariffModule,
   analyze: (text, { adminId = null, langHint = null } = {}) => require('../ocr/routes').analyzeDocumentText(text, {
     callAI, digestLongDocument, adminId, langHint, forEditor: true, endpoint: '/api/editor/analysis' }) });
+// D5 part B: AI spelling fixes as proposals, paid in chat units (src/editor/spell.js); part A runs in the page
+require('../editor/spell').mountEditorSpell(app, { pool, requireAuth, requireSameOrigin: require('../auth/same-origin').requireSameOrigin,
+  requireServiceConfirm: require('../ai/ai-trigger').requireServiceConfirm, tariffModule, callCheapAI });
 
 // CustDev stage 4: interview recordings on a Matter, with consent (src/interviews/)
 require('../interviews/routes').mountInterviewRoutes(app, { pool, requireAuth, requireSameOrigin: require('../auth/same-origin').requireSameOrigin,
