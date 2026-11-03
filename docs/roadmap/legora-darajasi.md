@@ -101,9 +101,11 @@ Tartib va PR bo'linishi dizayn hujjatining 9-bo'limida.
   Plenum bandi, Tahlil ichida bitta qator, AI'siz tanlov) merge (#555).
 - [~] Citator: akt amaldami, qachon o'zgargan, qaysi Plenum qarori unga
   tayangan. Javobda "o'zgargan" belgisi chiqadi. S3 (migratsiya 042,
-  `src/citator/`, AI'siz) PR'da.
-- [ ] Monitoring: lex.uz'dagi yangi va o'zgargan aktlar; foydalanuvchi
+  `src/citator/`, AI'siz) merge (#556).
+- [~] Monitoring: lex.uz'dagi yangi va o'zgargan aktlar; foydalanuvchi
   ishlariga tegishlisi Telegram'ga yuboriladi (kuniga bitta yig'ma xabar).
+  S4 (migratsiya 043, `src/monitor/`, AI'siz): ishlardagi aktlar har kuni
+  tekshiriladi, kuniga bitta Telegram xabar; PR'da.
 - [ ] Firma bilim bazasi: firmaning shablonlari va avvalgi hujjatlari, qidiruv
   bilan (Workspace xotirasidan kengaytiriladi); jamoaviy prompt va ko'nikma
   kutubxonasi.
@@ -359,3 +361,6 @@ nima o'lchandi.
 - 2026-11-03: #555 (S2) merge. S3 PR: citator - "Manbalar" ostida akt
   holati, keltirilgan moddaning o'zgarish sanasi va akti, bizdagi nusxa
   eskirganmi, Plenum; Telegram'da faqat ogohlantirishlar.
+- 2026-11-03: #556 (S3) merge. S4 PR: monitoring - ochiq ishlardagi aktlar
+  har kuni lex.uz bilan solishtiriladi; o'zgarish bo'lsa, kuniga bitta
+  Telegram xabar (ish nomi, akt, nima o'zgardi, havola), o'z kaliti bilan.

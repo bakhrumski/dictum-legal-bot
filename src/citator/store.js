@@ -90,4 +90,17 @@ async function rowsFor(db, ids = []) {
   }
 }
 
-module.exports = { createRecorder, rowOf, rowsFor, writeRow, lexIdOf, _forget: () => recent.clear() };
+/** Rows for any number of ids (the monitor's daily run), 500 at a time. */
+async function rowsForAll(db, ids = []) {
+  const list = [...new Set(ids.filter(Boolean))];
+  const out = new Map();
+  for (let i = 0; i < list.length; i += 500) {
+    try {
+      const r = await db.query('SELECT * FROM act_citator WHERE lex_id = ANY($1::int[])', [list.slice(i, i + 500)]);
+      r.rows.forEach(x => out.set(x.lex_id, x));
+    } catch (e) { if (!/does not exist/u.test(String(e && e.message))) console.warn('[CITATOR] read:', e.message); }
+  }
+  return out;
+}
+
+module.exports = { createRecorder, rowOf, rowsFor, rowsForAll, writeRow, lexIdOf, _forget: () => recent.clear() };

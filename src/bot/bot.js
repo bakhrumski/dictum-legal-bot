@@ -1055,6 +1055,24 @@ async function handleCallbackQuery(callbackQuery) {
     return;
   }
 
+  // S4: the monitoring digest's "🔕" (and "🔔" to turn it back on) - the linked account's own switch
+  if (data === 'lxm_off' || data === 'lxm_on') {
+    try {
+      const account = await require('./telegram-roles').getLinkedAccount(pool, chatId, require('./telegram-roles').privateSenderId(callbackQuery));
+      if (!account) throw new Error('not linked');
+      const turnOff = data === 'lxm_off';
+      await require('../monitor').createMonitor({ db: pool, send: null }).setOff(account.id, turnOff);
+      await bot.answerCallbackQuery(callbackQuery.id, { text: turnOff ? "O'chirildi" : 'Yoqildi' }).catch(() => {});
+      await bot.sendMessage(chatId, turnOff
+        ? "🔕 Ishlaringizdagi qonunchilik o'zgarishlari haqidagi xabarlar o'chirildi. Qayta yoqish: pastdagi tugma yoki saytda «Moslashish» sahifasi."
+        : "🔔 Xabarlar yoqildi. Ertadan boshlab o'zgarish bo'lsa, kuniga bitta xabar keladi.",
+      { reply_markup: { inline_keyboard: [[turnOff ? { text: '🔔 Qayta yoqish', callback_data: 'lxm_on' } : { text: "🔕 O'chirish", callback_data: 'lxm_off' }]] } }).catch(() => {});
+    } catch (error) {
+      await bot.answerCallbackQuery(callbackQuery.id, { text: "Akkaunt ulanmagan yoki bajarib bo'lmadi", show_alert: true }).catch(() => {});
+    }
+    return;
+  }
+
   if (data.startsWith('mtc_y_') || data.startsWith('mtc_n_') || data.startsWith('mtc_a_')) {
     const commands = require('../matters/commands');
     const token = data.slice(6);

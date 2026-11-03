@@ -12,6 +12,7 @@
       know: 'JuristAI siz haqingizda nima biladi', areas: 'Ko‘p so‘raydigan sohalaringiz', acts: 'Ko‘p keltirilgan aktlar', none: 'Hali yetarli ma’lumot yo‘q.',
       script: 'Yozuv', latn: 'Lotin', cyrl: 'Kirill', alpha: 'Lotin alifbosi', alphaNew: 'Yangi: Ö ö, Ğ ğ, Ş ş, Ç ç', alphaOld: 'Eski: Oʻ oʻ, Gʻ gʻ, Sh sh, Ch ch', auto: 'Avtomatik', services: 'Ko‘p ishlatadigan xizmatlar', hide: 'Olib tashlash', hidden: 'Olib tashlangan', restore: 'Qaytarish',
       where: 'Ma’lumotlaringiz qayerga boradi', whereLead: 'Javob tayyorlash uchun savol va hujjat matni AI provayderlariga yuboriladi: asosan DeepSeek (Xitoy), zaxira sifatida OpenAI va Google (AQSh). Ovoz VoiceLab’ga (O‘zbekiston), skan qilingan hujjat (OCR) Google Gemini yoki VoiceLab’ga boradi.',
+      mon: 'Ishlarimdagi o‘zgarishlar', monLabel: 'Ishlarimga ulangan aktlar o‘zgarsa, Telegram’ga kuniga bitta xabar', monLead: 'Ochiq ishlaringizdagi suhbatlar va agent natijalari keltirgan lex.uz aktlari har kuni tekshiriladi. Xabarda ish nomi, akt, nima o‘zgargani va havola bo‘ladi — ishning matni emas.', monNoTg: 'Telegram ulanmagan — xabar yuborib bo‘lmaydi. Ulash: Hisob sahifasi.',
       noDs: 'Savollarim va hujjatlarim DeepSeek’ka yuborilmasin', noDsNote: 'Yoqilsa, javobni OpenAI yoki Google tayyorlaydi — sifat va tezlik biroz farq qilishi mumkin. Bu tanlov «Hammasini tozalash»da ham saqlanadi.',
       prefs: 'Sizning sozlamalaringiz', length: 'Javob uzunligi', len: { qisqa: 'Qisqa', orta: 'O‘rtacha', batafsil: 'Batafsil' },
       sides: 'Sizning tarafingiz', sidesLead: 'Faqat siz tanlaysiz — JuristAI tarafni o‘zi taxmin qilmaydi.', area: 'Soha', role: 'Taraf', add: 'Qo‘shish', saved: 'Saqlandi',
@@ -27,6 +28,7 @@
       know: 'Что JuristAI знает о вас', areas: 'Частые области', acts: 'Часто цитируемые акты', none: 'Пока недостаточно данных.',
       script: 'Письмо', latn: 'Латиница', cyrl: 'Кириллица', alpha: 'Узбекская латиница', alphaNew: 'Новая: Ö ö, Ğ ğ, Ş ş, Ç ç', alphaOld: 'Старая: Oʻ oʻ, Gʻ gʻ, Sh sh, Ch ch', auto: 'Автоматически', services: 'Частые сервисы', hide: 'Убрать', hidden: 'Убрано', restore: 'Вернуть',
       where: 'Куда уходят ваши данные', whereLead: 'Для ответа текст вопроса и документа отправляется AI-провайдерам: в основном DeepSeek (Китай), запасные — OpenAI и Google (США). Голос — в VoiceLab (Узбекистан), скан документа (OCR) — в Google Gemini или VoiceLab.',
+      mon: 'Изменения по моим делам', monLabel: 'Если акты в моих делах изменятся — одно сообщение в день в Telegram', monLead: 'Акты lex.uz из чатов и результатов агентов в открытых делах проверяются каждый день. В сообщении — название дела, акт, что изменилось и ссылка, но не текст дела.', monNoTg: 'Telegram не подключён — сообщения не отправить. Подключить: страница «Аккаунт».',
       noDs: 'Не отправлять мои вопросы и документы в DeepSeek', noDsNote: 'Если включено, ответ готовят OpenAI или Google — качество и скорость могут немного отличаться. Выбор сохраняется и при «Очистить всё».',
       prefs: 'Ваши настройки', length: 'Длина ответа', len: { qisqa: 'Коротко', orta: 'Средне', batafsil: 'Подробно' },
       sides: 'Ваша сторона', sidesLead: 'Выбираете только вы — JuristAI не угадывает сторону.', area: 'Область', role: 'Сторона', add: 'Добавить', saved: 'Сохранено',
@@ -110,6 +112,7 @@
         '<div class="card"><h4>' + esc(s('where')) + '</h4><p class="muted" style="font-size:13px">' + esc(s('whereLead')) + '</p>' +
           '<label class="ad-check"><input type="checkbox" class="ad-nods"' + (m.noDeepseek ? ' checked' : '') + '> <span>' + esc(s('noDs')) + '</span></label>' +
           '<p class="muted" style="font-size:12.5px;margin-top:6px">' + esc(s('noDsNote')) + '</p></div>' +
+        '<div class="card ad-mon"><h4>' + esc(s('mon')) + '</h4><p class="muted" style="font-size:13px">' + esc(s('monLead')) + '</p><div class="ad-mon-b"><div class="skel" style="width:60%"></div></div></div>' +
         '<div class="card"><h4>' + esc(s('signals')) + '</h4><p class="muted" style="font-size:13px">' + esc(s('signalsLead', { d: 180 })) + '</p><div class="ad-sig"><div class="skel" style="width:50%"></div></div></div>' +
         '<div style="margin-top:14px"><button class="pill sm ghost" data-a="clear" type="button">' + J.icon('trash') + esc(s('clear')) + '</button></div>';
 
@@ -127,6 +130,20 @@
         };
       });
       $$('[data-m]', body).forEach(function (sel) { sel.onchange = function () { var mm = manual(); if (sel.value) mm[sel.dataset.m] = sel.value; else delete mm[sel.dataset.m]; save(mm); }; });
+      // S4: the person's own monitoring switch (GET / PUT /api/lex-monitor)
+      (async function () {
+        var box = $('.ad-mon-b', body); if (!box) return;
+        var r = await J.api('/api/lex-monitor');
+        if (!r.ok || !r.data || r.data.enabled === false) { var card = $('.ad-mon', body); if (card) card.remove(); return; }
+        box.innerHTML = '<label class="ad-check"><input type="checkbox" class="ad-mon-c"' + (r.data.off ? '' : ' checked') + (r.data.telegram ? '' : ' disabled') + '> <span>' + esc(s('monLabel')) + '</span></label>' +
+          (r.data.telegram ? '' : '<p class="muted" style="font-size:12.5px;margin-top:6px">' + esc(s('monNoTg')) + '</p>');
+        var c = $('.ad-mon-c', box);
+        if (c) c.onchange = async function () {
+          var w = await J.api('/api/lex-monitor', { method: 'PUT', body: { off: !c.checked } });
+          if (!w.ok) { c.checked = !c.checked; J.toast(J.errMsg(w.data), 5000); return; }
+          J.toast(J.lang === 'ru' ? 'Сохранено' : 'Saqlandi');
+        };
+      })();
       var nods = $('.ad-nods', body);
       if (nods) nods.onchange = function () { var mm = manual(); if (nods.checked) mm.noDeepseek = true; else delete mm.noDeepseek; save(mm); };
       var al = $('.ad-alpha', body);
