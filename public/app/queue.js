@@ -14,13 +14,18 @@
       nav: 'Navbat', title: 'Murojaatlar navbati',
       leadStaff: 'Sizga biriktirilgan murojaatlar: savol, fayl yoki ovozli xabar. Javobingiz master tasdiqlagach mijozga Telegram’da yuboriladi.',
       leadMaster: 'Botga kelgan barcha murojaatlar. Biriktiring, yozilgan javobni tasdiqlang yoki o‘zingiz javob bering.',
-      f: { open: 'Ochiq', review: 'Tasdiq kutmoqda', rejected: 'Qayta yozish', unassigned: 'Biriktirilmagan', answered_today: 'Bugun javob berilgan', all: 'Barchasi' },
+      f: { open: 'Ochiq', review: 'Tasdiq kutmoqda', rejected: 'Qayta yozish', unassigned: 'Biriktirilmagan', answered_today: 'Bugun javob berilgan', closed: 'Yopilgan', all: 'Barchasi' },
       search: 'Matn yoki mijoz bo‘yicha qidirish…', none: 'Bu ro‘yxatda murojaat yo‘q.', more: 'Yana ko‘rsatish',
       sortL: 'Tartib', sorts: { newest: 'Eng yangi', oldest: 'Eng eski', priority: 'Shoshilinch avval' }, late: '⏰ Kechikkan', urgent: '🔥 Shoshilinch',
+      typeL: 'Turi', types: { '': 'Hammasi', text: 'Matn', voice: 'Ovozli', file: 'Fayl' },
+      sel: '{n} ta tanlandi', selAll: 'Sahifadagilarni tanlash', selNone: 'Bekor', toWho: 'Kimga…', doAssign: 'Biriktirish', doClose: 'Yopish', doReopen: 'Qayta ochish',
+      closeQ: '{n} ta murojaat yopilsinmi? Ular ochiq ro‘yxatdan chiqadi, mijozga hech narsa yuborilmaydi. «Yopilgan» bo‘limidan qayta ochish mumkin.', closeWhy: 'Sabab (ixtiyoriy): masalan, eskirgan, takror, spam',
+      closedN: '{n} ta yopildi.', reopenedN: '{n} ta qayta ochildi.', assignedN: '{n} ta biriktirildi ({w}).', skippedN: '{n} tasi o‘zgarmadi (javob berilgan, yopilgan yoki allaqachon biriktirilgan).',
+      closedBy: 'Yopilgan: {d}{w}', reasonL: 'Sabab',
       whoL: 'Kimda', whoAll: 'Hammasi', whoNone: 'Biriktirilmagan', reset: 'Filtrlarni tozalash', noneFiltered: 'Bu filtrlar bo‘yicha murojaat yo‘q.',
       g: { today: 'Bugun', yesterday: 'Kecha', week: 'Shu hafta' },
       months: ['Yanvar', 'Fevral', 'Mart', 'Aprel', 'May', 'Iyun', 'Iyul', 'Avgust', 'Sentyabr', 'Oktyabr', 'Noyabr', 'Dekabr'],
-      st: { pending: 'Yangi', assigned: 'Biriktirilgan', student_responded: 'Tasdiq kutmoqda', lawyer_approved: 'Tasdiq kutmoqda', answered: 'Javob berilgan', ai_answered: 'AI javob bergan', rejected: 'Qayta yozish kerak' },
+      st: { pending: 'Yangi', assigned: 'Biriktirilgan', student_responded: 'Tasdiq kutmoqda', lawyer_approved: 'Tasdiq kutmoqda', answered: 'Javob berilgan', ai_answered: 'AI javob bergan', rejected: 'Qayta yozish kerak', closed: 'Yopilgan' },
       urg: { critical: 'Juda shoshilinch', high: 'Shoshilinch', medium: '', low: '' },
       type: { voice: 'Ovozli xabar', audio: 'Audio', photo: 'Rasm', video: 'Video', video_note: 'Video', document: 'Hujjat' },
       back: 'Navbat', question: 'Murojaat', noText: 'Matn yo‘q — faylni oching.', file: 'Fayl', open: 'Ochish', save: 'Yuklab olish',
@@ -38,13 +43,18 @@
       nav: 'Очередь', title: 'Очередь обращений',
       leadStaff: 'Обращения, назначенные вам: вопрос, файл или голосовое сообщение. Ответ уходит клиенту в Telegram после подтверждения мастером.',
       leadMaster: 'Все обращения в бот. Назначайте, подтверждайте написанные ответы или отвечайте сами.',
-      f: { open: 'Открытые', review: 'Ждут подтверждения', rejected: 'На доработке', unassigned: 'Не назначены', answered_today: 'Отвечены сегодня', all: 'Все' },
+      f: { open: 'Открытые', review: 'Ждут подтверждения', rejected: 'На доработке', unassigned: 'Не назначены', answered_today: 'Отвечены сегодня', closed: 'Закрытые', all: 'Все' },
       search: 'Поиск по тексту или клиенту…', none: 'В этом списке обращений нет.', more: 'Показать ещё',
       sortL: 'Порядок', sorts: { newest: 'Сначала новые', oldest: 'Сначала старые', priority: 'Сначала срочные' }, late: '⏰ Просроченные', urgent: '🔥 Срочные',
+      typeL: 'Тип', types: { '': 'Все', text: 'Текст', voice: 'Голос', file: 'Файл' },
+      sel: 'Выбрано: {n}', selAll: 'Выбрать на странице', selNone: 'Отмена', toWho: 'Кому…', doAssign: 'Назначить', doClose: 'Закрыть', doReopen: 'Открыть снова',
+      closeQ: 'Закрыть обращения ({n})? Они уйдут из открытых, клиенту ничего не отправляется. Открыть снова можно в разделе «Закрытые».', closeWhy: 'Причина (необязательно): устарело, дубль, спам',
+      closedN: 'Закрыто: {n}', reopenedN: 'Открыто снова: {n}', assignedN: 'Назначено: {n} ({w}).', skippedN: 'Не изменено: {n} (отвечены, закрыты или уже назначены).',
+      closedBy: 'Закрыто: {d}{w}', reasonL: 'Причина',
       whoL: 'У кого', whoAll: 'Все', whoNone: 'Не назначены', reset: 'Сбросить фильтры', noneFiltered: 'По этим фильтрам обращений нет.',
       g: { today: 'Сегодня', yesterday: 'Вчера', week: 'На этой неделе' },
       months: ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'],
-      st: { pending: 'Новое', assigned: 'Назначено', student_responded: 'Ждёт подтверждения', lawyer_approved: 'Ждёт подтверждения', answered: 'Отвечено', ai_answered: 'Ответил ИИ', rejected: 'На доработке' },
+      st: { pending: 'Новое', assigned: 'Назначено', student_responded: 'Ждёт подтверждения', lawyer_approved: 'Ждёт подтверждения', answered: 'Отвечено', ai_answered: 'Ответил ИИ', rejected: 'На доработке', closed: 'Закрыто' },
       urg: { critical: 'Очень срочно', high: 'Срочно', medium: '', low: '' },
       type: { voice: 'Голосовое', audio: 'Аудио', photo: 'Фото', video: 'Видео', video_note: 'Видео', document: 'Документ' },
       back: 'Очередь', question: 'Обращение', noText: 'Текста нет — откройте файл.', file: 'Файл', open: 'Открыть', save: 'Скачать',
@@ -59,7 +69,11 @@
       empty: 'Текст ответа пуст.', homeCard: 'Обращения в очереди ждут ответа', homeOpen: 'Открыть очередь',
     },
   };
-  function s(k) { var d = S[J.lang] || S.uz; return d[k] !== undefined ? d[k] : S.uz[k]; }
+  function s(k, v) {
+    var d = S[J.lang] || S.uz, x = d[k] !== undefined ? d[k] : S.uz[k];
+    if (typeof x === 'string' && v) Object.keys(v).forEach(function (n) { x = x.split('{' + n + '}').join(v[n] == null ? '' : v[n]); });
+    return x;
+  }
   if (G.JAI_I18N) ['uz', 'ru', 'en'].forEach(function (l) { var d = G.JAI_I18N[l] = G.JAI_I18N[l] || {}; if (d['nav.queue'] === undefined) d['nav.queue'] = l === 'ru' ? S.ru.nav : (l === 'en' ? 'Queue' : S.uz.nav); });
 
   var isMaster = function () { return J.isMaster && J.isMaster(); };
@@ -109,7 +123,7 @@
 
   /* ---------- list ---------- */
   // the status tabs; who has it is its own picker now (the master's "Biriktirilmagan" moved there)
-  var FILTERS = function () { return isMaster() ? ['open', 'review', 'answered_today', 'all'] : ['open', 'rejected', 'review', 'all']; };
+  var FILTERS = function () { return isMaster() ? ['open', 'review', 'answered_today', 'closed', 'all'] : ['open', 'rejected', 'review', 'all']; };
   var SORTS = ['newest', 'oldest', 'priority'];
   function query(f) {
     if (f === 'rejected') return 'status=rejected';
@@ -125,7 +139,7 @@
   }
   function statusTag(r) {
     // own class names: ".new" is the sidebar's "Yangi suhbat" button
-    var cls = OPEN.indexOf(r.status) > -1 ? (r.status === 'rejected' ? 'q-st q-st-warn' : 'q-st q-st-new') : (REVIEW.indexOf(r.status) > -1 ? 'q-st q-st-rev' : 'q-st q-st-done');
+    var cls = r.status === 'closed' ? 'q-st' : OPEN.indexOf(r.status) > -1 ? (r.status === 'rejected' ? 'q-st q-st-warn' : 'q-st q-st-new') : (REVIEW.indexOf(r.status) > -1 ? 'q-st q-st-rev' : 'q-st q-st-done');
     return '<span class="' + cls + '">' + esc(s('st')[r.status] || r.status) + '</span>';
   }
   /** "Bugun", "Kecha", "Shu hafta", else the month and year - the list's date groups. */
@@ -147,7 +161,7 @@
   var placeholder = function (t) { return /^\[[^\]]{2,40}\]$/.test(String(t || '').trim()); };
   var uselessCategory = function (c) { return !c || /^bo[sş]h?qa$/i.test(String(c).trim()) || /^прочее$/i.test(String(c).trim()); };
 
-  var state = { f: 'open', q: '', page: 1, sort: null, late: false, urgent: false, who: '' };
+  var state = { f: 'open', q: '', page: 1, sort: null, late: false, urgent: false, who: '', type: '' };
   J.viewQueue = function () {
     if (!J.isStaff || !J.isStaff()) { J.go('#/'); return; }
     J.setTitle(s('title'));
@@ -156,9 +170,11 @@
     var v = J.mount('<div class="wrap"><div class="vh"><div><h2>' + esc(s('title')) + '</h2><p>' + esc(master ? s('leadMaster') : s('leadStaff')) + '</p></div></div>' +
       '<div class="q-bar"><div class="q-chips"></div><input class="inp q-search" type="search" maxlength="200"></div>' +
       '<div class="q-tools"><label class="q-sel"><span>' + esc(s('sortL')) + '</span><select class="q-sort">' + SORTS.map(function (k) { return '<option value="' + k + '">' + esc(s('sorts')[k]) + '</option>'; }).join('') + '</select></label>' +
+      '<label class="q-sel"><span>' + esc(s('typeL')) + '</span><select class="q-type">' + ['', 'text', 'voice', 'file'].map(function (k) { return '<option value="' + k + '">' + esc(s('types')[k]) + '</option>'; }).join('') + '</select></label>' +
       '<button class="chip q-tog" type="button" data-t="late">' + esc(s('late')) + '</button><button class="chip q-tog" type="button" data-t="urgent">' + esc(s('urgent')) + '</button>' +
       (master ? '<label class="q-sel"><span>' + esc(s('whoL')) + '</span><select class="q-who"><option value="">' + esc(s('whoAll')) + '</option><option value="none">' + esc(s('whoNone')) + '</option></select></label>' : '') +
       '<button class="link q-reset" type="button" hidden>' + esc(s('reset')) + '</button></div>' +
+      (master ? '<div class="q-bulk" hidden><span class="q-bulk-n"></span><button class="link" type="button" data-b="all"></button><select class="q-bulk-who"></select><button class="pill sm" type="button" data-b="assign"></button><button class="pill sm ghost" type="button" data-b="close"></button><button class="pill sm ghost" type="button" data-b="reopen"></button><button class="link" type="button" data-b="none"></button></div>' : '') +
       '<div class="q-list"><div class="skel" style="width:60%;margin:14px 0"></div></div></div>');
     if (state.f === 'unassigned') { state.f = 'open'; state.who = 'none'; }
     if (FILTERS().indexOf(state.f) < 0) state.f = 'open';
@@ -175,7 +191,7 @@
       var late = $('[data-t=late]', v); late.innerHTML = esc(s('late')) + (stats && +stats.overdue ? ' <b>' + esc(String(stats.overdue)) + '</b>' : '');
       $$('.q-tog', v).forEach(function (b) { b.classList.toggle('on', !!state[b.dataset.t]); });
       var wn = $('.q-who option[value=none]', v); if (wn) wn.textContent = s('whoNone') + (stats && +stats.unassigned ? ' (' + stats.unassigned + ')' : '');
-      $('.q-reset', v).hidden = !(state.late || state.urgent || state.who || state.q);
+      $('.q-reset', v).hidden = !(state.late || state.urgent || state.who || state.q || state.type);
     }
     chips();
     J.api('/api/stats').then(function (r) { if (r.ok) { stats = r.data; chips(); J.queueCount = needsMe(r.data); } });
@@ -194,7 +210,59 @@
       whoSel.value = state.who;
       whoSel.onchange = function () { state.who = whoSel.value; state.page = 1; chips(); load(); };
     }
-    $('.q-reset', v).onclick = function () { state.late = state.urgent = false; state.who = ''; state.q = ''; srch.value = ''; if (whoSel) whoSel.value = ''; state.page = 1; chips(); load(); };
+    var typeSel = $('.q-type', v); typeSel.value = state.type;
+    typeSel.onchange = function () { state.type = typeSel.value; state.page = 1; chips(); load(); };
+    $('.q-reset', v).onclick = function () { state.late = state.urgent = false; state.who = ''; state.type = ''; state.q = ''; srch.value = ''; typeSel.value = ''; if (whoSel) whoSel.value = ''; state.page = 1; chips(); load(); };
+    /* the master's actions on many requests: tick rows, then assign / close / reopen in one go */
+    var picked = {}, bulk = $('.q-bulk', v), people = [];
+    function drawBulk() {
+      if (!bulk) return;
+      var n = Object.keys(picked).length;
+      bulk.hidden = !n;
+      if (!n) return;
+      var closedTab = state.f === 'closed';
+      $('.q-bulk-n', bulk).textContent = s('sel', { n: n });
+      $('[data-b=all]', bulk).textContent = s('selAll'); $('[data-b=none]', bulk).textContent = s('selNone');
+      $('[data-b=assign]', bulk).textContent = s('doAssign'); $('[data-b=close]', bulk).textContent = s('doClose'); $('[data-b=reopen]', bulk).textContent = s('doReopen');
+      $('.q-bulk-who', bulk).hidden = closedTab; $('[data-b=assign]', bulk).hidden = closedTab; $('[data-b=close]', bulk).hidden = closedTab; $('[data-b=reopen]', bulk).hidden = !closedTab;
+    }
+    if (bulk) {
+      J.api('/api/admins').then(function (a) {
+        people = a.ok ? (a.data || []).filter(function (p) { return p.role === 'lawyer' || p.role === 'student'; }) : [];
+        $('.q-bulk-who', bulk).innerHTML = '<option value="">' + esc(s('toWho')) + '</option>' + people.map(function (p) { return '<option value="' + esc(String(p.id)) + '">' + esc((p.full_name || p.username) + ' — ' + s(p.role)) + '</option>'; }).join('');
+      });
+      var done = function (r, key) {
+        if (!r.ok) { J.toast(J.errMsg(r.data), 6000); return; }
+        var d = r.data, n = d.closed != null ? d.closed : d.reopened != null ? d.reopened : d.assigned;
+        J.toast(s(key, { n: n, w: d.name || '' }) + (d.skipped ? ' ' + s('skippedN', { n: d.skipped }) : ''), 6000);
+        picked = {}; drawBulk(); refreshCount(); load();
+        J.api('/api/stats').then(function (x) { if (x.ok) { stats = x.data; chips(); } });
+      };
+      $('[data-b=none]', bulk).onclick = function () { picked = {}; $$('.q-pick', list).forEach(function (c) { c.checked = false; }); drawBulk(); };
+      $('[data-b=all]', bulk).onclick = function () { $$('.q-pick', list).forEach(function (c) { c.checked = true; picked[c.value] = 1; }); drawBulk(); };
+      $('[data-b=assign]', bulk).onclick = async function () {
+        var who = $('.q-bulk-who', bulk).value; if (!who) { $('.q-bulk-who', bulk).focus(); return; }
+        this.disabled = true;
+        var r = await J.api('/api/requests/assign-bulk', { method: 'POST', body: { requestIds: Object.keys(picked).map(Number), assigneeId: +who } });
+        this.disabled = false; done(r, 'assignedN');
+      };
+      $('[data-b=close]', bulk).onclick = function () {
+        var n = Object.keys(picked).length;
+        var m = J.modal({ cls: 'sm', html: '<h2>' + esc(s('doClose')) + '</h2><p class="muted" style="font-size:14px;margin:8px 0 12px"></p><input class="inp" maxlength="300"><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="pill ghost" type="button" data-a="c">' + esc(J.t('cancel')) + '</button><button class="pill" type="button" data-a="ok">' + esc(s('doClose')) + '</button></div>' });
+        $('p', m.body).textContent = s('closeQ', { n: n }); var why = $('input', m.body); why.placeholder = s('closeWhy');
+        $('[data-a=c]', m.body).onclick = function () { m.close(); };
+        $('[data-a=ok]', m.body).onclick = async function () {
+          this.disabled = true;
+          var r = await J.api('/api/requests/close', { method: 'POST', body: { requestIds: Object.keys(picked).map(Number), reason: why.value.trim() } });
+          m.close(); done(r, 'closedN');
+        };
+      };
+      $('[data-b=reopen]', bulk).onclick = async function () {
+        this.disabled = true;
+        var r = await J.api('/api/requests/reopen', { method: 'POST', body: { requestIds: Object.keys(picked).map(Number) } });
+        this.disabled = false; done(r, 'reopenedN');
+      };
+    }
     var list = $('.q-list', v), items = [];
     function row(x) {
       var urg = (s('urg')[x.urgency] || '');
@@ -202,15 +270,18 @@
       var raw = String(x.request_text || '').replace(/\s+/g, ' ').trim();
       var text = kind && placeholder(raw) ? '' : raw.slice(0, 220);
       var meta = [uselessCategory(x.category) ? '' : x.category, master ? x.assigned_lawyer_name : ''].filter(Boolean).join(' · ');
-      return '<a class="q-row" href="#/navbat/' + esc(String(x.id)) + '"><div class="q-row-h"><b>#' + esc(String(x.id)) + '</b><span class="q-name">' + esc(x.first_name || '') + '</span>' + statusTag(x) +
+      var box = master ? '<label class="q-chk" title="' + esc(s('sel', { n: '' }).trim()) + '"><input type="checkbox" class="q-pick" value="' + esc(String(x.id)) + '"' + (picked[x.id] ? ' checked' : '') + '></label>' : '';
+      return '<div class="q-rw">' + box + '<a class="q-row" href="#/navbat/' + esc(String(x.id)) + '"><div class="q-row-h"><b>#' + esc(String(x.id)) + '</b><span class="q-name">' + esc(x.first_name || '') + '</span>' + statusTag(x) +
         (urg ? '<span class="q-urg">' + esc(urg) + '</span>' : '') + '<span class="q-ago">' + esc(ago(x.created_at)) + '</span></div>' +
         '<div class="q-row-t">' + (kind ? '<span class="q-kind">' + J.icon(x.request_type === 'voice' || x.request_type === 'audio' ? 'mic' : 'clip') + esc(kind) + '</span>' : '') + esc(text || (kind ? '' : '—')) + '</div>' +
-        (meta ? '<div class="q-row-c">' + esc(meta) + '</div>' : '') + '</a>';
+        (meta ? '<div class="q-row-c">' + esc(meta) + '</div>' : '') + '</a></div>';
     }
     async function load(append) {
       var qs = [query(state.f), 'sort=' + state.sort, state.late ? 'overdue=1' : '', state.urgent ? 'urgency=high' : '',
         state.who === 'none' ? 'assigned=unassigned' : (state.who ? 'assignee=' + encodeURIComponent(state.who) : ''),
+        state.type ? 'type=' + encodeURIComponent(state.type) : '',
         state.q ? 'search=' + encodeURIComponent(state.q) : ''].filter(Boolean).join('&');
+      if (!append) { picked = {}; drawBulk(); }
       if (!append) list.innerHTML = '<div class="skel" style="width:60%;margin:14px 0"></div>';
       var r = await J.api('/api/requests?limit=30&page=' + state.page + '&' + qs);
       if (!r.ok) { list.innerHTML = '<div class="empty-state">' + esc(J.errMsg(r.data)) + '</div>'; return; }
@@ -224,8 +295,9 @@
         html += row(x);
       });
       list.innerHTML = items.length ? html + (pg.page < pg.pages ? '<button class="pill ghost q-more" type="button">' + esc(s('more')) + ' (' + (pg.total - items.length) + ')</button>' : '')
-        : '<div class="empty-state">' + esc(state.late || state.urgent || state.who || state.q ? s('noneFiltered') : s('none')) + '</div>';
+        : '<div class="empty-state">' + esc(state.late || state.urgent || state.who || state.q || state.type ? s('noneFiltered') : s('none')) + '</div>';
       var more = $('.q-more', list); if (more) more.onclick = function () { state.page++; load(true); };
+      $$('.q-pick', list).forEach(function (c) { c.onchange = function () { if (c.checked) picked[c.value] = 1; else delete picked[c.value]; drawBulk(); }; });
     }
     load();
   };
@@ -307,6 +379,19 @@
 
     /* actions */
     var act = $('.q-act', box);
+    // a closed request: who closed it and why; the master can reopen it
+    if (x.status === 'closed') {
+      act.innerHTML = '<div class="card q-note"><div class="kicker">' + esc(s('closedBy', { d: J.fmtDate(x.closed_at), w: x.closed_by_name ? ' · ' + x.closed_by_name : '' })) + '</div>' +
+        (x.close_reason ? '<p class="q-text q-cr"></p>' : '') + (master ? '<div class="q-btns"><button class="pill sm" type="button" data-a="reopen">' + esc(s('doReopen')) + '</button></div>' : '') + '</div>';
+      if (x.close_reason) $('.q-cr', act).textContent = s('reasonL') + ': ' + x.close_reason;
+      var ro = $('[data-a=reopen]', act);
+      if (ro) ro.onclick = async function () {
+        var u = await J.api('/api/requests/reopen', { method: 'POST', body: { requestIds: [x.id] } });
+        if (!u.ok) { J.toast(J.errMsg(u.data)); return; }
+        J.toast(s('reopenedN', { n: 1 })); refreshCount(); J.viewQueueItem(id);
+      };
+      return;
+    }
     if (!master) {
       if (OPEN.indexOf(x.status) > -1) {
         act.innerHTML = (rej.reason ? '<div class="card q-note"><div class="kicker">' + esc(s('reason')) + '</div><div class="q-text q-reason"></div></div>' : '') +

@@ -1941,6 +1941,9 @@ app.get('/api/requests', requireStaff, async (req, res) => {
     }
     if (req.query.urgency) where.push(`COALESCE(r.urgency, r.triage_result->>'urgency', 'medium') = ${addParam(String(req.query.urgency).slice(0, 20))}`);
     if (req.query.source) where.push(`r.source_channel = ${addParam(String(req.query.source).slice(0, 30))}`);
+    // what came in: a typed question, a voice note, or a file (photo, video, document)
+    const TYPE_GROUPS = { text: ['text'], voice: ['voice', 'audio'], file: ['photo', 'video', 'video_note', 'document'] };
+    if (TYPE_GROUPS[req.query.type]) where.push(`COALESCE(r.request_type, 'text') = ANY(${addParam(TYPE_GROUPS[req.query.type])}::text[])`);
 
     const status = String(req.query.status || '').trim();
     if (status === 'open') {
@@ -2519,6 +2522,9 @@ app.get('/api/requests/:id', requireStaff, async (req, res) => {
         r.agent_intent,
         r.agent_action,
         r.requires_lawyer_review,
+        r.closed_at,
+        r.close_reason,
+        (SELECT full_name FROM admins WHERE id = r.closed_by) AS closed_by_name,
         u.telegram_id,
         u.username,
         u.first_name,
@@ -3324,6 +3330,14 @@ app.get('/api/monte-carlo', requireStaff, async (req, res) => {
 });
 
 // Assign request to lawyer
+// The queue's actions on many requests at once: close / reopen / assign (src/queue/bulk.js, master only)
+require('../queue/bulk').mountQueueBulk(app, { pool, requireMasterAdmin, requireSameOrigin: require('../auth/same-origin').requireSameOrigin, logAudit,
+  notify: (who, ids) => {
+    const url = require('../bot/telegram-roles').queueUrl();
+    return bot.sendMessage(who.telegram_chat_id, `📋 Sizga ${ids.length} ta murojaat tayinlandi (#${ids.slice(0, 10).join(', #')}${ids.length > 10 ? ', …' : ''}).\n\nJavob berish: ${url}`,
+      { disable_web_page_preview: true, reply_markup: { inline_keyboard: [[{ text: '📋 Navbatni ochish', url }]] } });
+  } });
+
 app.post('/api/assign-request', requireMasterAdmin, async (req, res) => {
   try {
     const { requestId, lawyerId } = req.body;
