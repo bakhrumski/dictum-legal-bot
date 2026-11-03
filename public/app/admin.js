@@ -37,6 +37,15 @@
       'adm.acc.note': 'Har bir qator: xodim (master, yurist, shogird) boshqa odamning shifrlangan ma\'lumotini ochgan. Matn yozilmaydi — faqat fakt. O\'z ma\'lumotini ko\'rish yozilmaydi.',
       'adm.acc.viewer': 'Kim ochdi', 'adm.acc.owner': 'Kimning', 'adm.acc.table': 'Qayerda', 'adm.acc.route': "So'rov", 'adm.acc.rows': 'Qator', 'adm.acc.none': 'Bu davrda yozuv yo\'q.',
       'adm.acc.kind.account': 'akkaunt', 'adm.acc.kind.telegram_user': 'Telegram mijoz',
+      'adm.plenum': 'Sud amaliyoti', 'adm.plenum.d': 'Oliy sud Plenumi qarorlari lex.uz\'dan: soni, oxirgi yangilanish, o\'qilmaganlar',
+      'adm.plenum.note': 'Amaldagi Plenum qarorlari lex.uz\'dan AI\'siz olinadi: uchala tahrir (kiril, lotin, rus), bandlar va har bandda tilga olingan moddalar. Javoblar ularni hali ishlatmaydi (S2). «Quruq sinov» hech narsa yozmaydi, faqat hisobot beradi; «Yuklash» yangi va o\'zgarganlarni yozadi.',
+      'adm.plenum.c.in_force': 'Amaldagi qarorlar', 'adm.plenum.c.oliy': 'Oliy sud', 'adm.plenum.c.xojalik': 'Oliy xo‘jalik sudi', 'adm.plenum.c.qoshma': 'Qo‘shma', 'adm.plenum.c.amendments': 'O‘zgartirish qarorlari', 'adm.plenum.c.bands': 'Bandlar', 'adm.plenum.c.checked': 'Oxirgi tekshiruv',
+      'adm.plenum.dry20': 'Quruq sinov (20 ta)', 'adm.plenum.dry': 'Quruq sinov (hammasi)', 'adm.plenum.apply': 'Yuklash', 'adm.plenum.applyQ': 'Barcha amaldagi Plenum qarorlari lex.uz\'dan o\'qilib, bazaga yoziladi (taxminan 15 daqiqa). Davom etilsinmi?',
+      'adm.plenum.running': 'Ishlamoqda… sahifa o‘zi yangilanadi.', 'adm.plenum.started': 'Boshlandi', 'adm.plenum.weekly': 'Haftalik yangilash: yoqilgan (PLENUM_SYNC=weekly)', 'adm.plenum.weeklyOff': 'Haftalik yangilash o‘chiq (PLENUM_SYNC=weekly bilan yoqiladi, birinchi «Yuklash»dan keyin)',
+      'adm.plenum.runs': 'Ishga tushirishlar', 'adm.plenum.r.mode': 'Rejim', 'adm.plenum.r.status': 'Holat', 'adm.plenum.r.by': 'Kim', 'adm.plenum.r.when': 'Qachon', 'adm.plenum.r.listed': 'Ro‘yxatda', 'adm.plenum.r.nc': 'Yangi / o‘zgargan / o‘zgarmagan', 'adm.plenum.r.failed': 'O‘qilmadi', 'adm.plenum.r.time': 'Vaqt',
+      'adm.plenum.mode.dry': 'quruq', 'adm.plenum.mode.apply': 'yuklash', 'adm.plenum.st.running': 'ishlamoqda', 'adm.plenum.st.done': 'tugadi', 'adm.plenum.st.failed': 'xato', 'adm.plenum.auto': 'skript yoki avtomatik',
+      'adm.plenum.list': 'Saqlangan qarorlar', 'adm.plenum.search': 'Sarlavha yoki raqam…', 'adm.plenum.court.oliy': 'Oliy sud', 'adm.plenum.court.xojalik': 'Oliy xo‘jalik sudi', 'adm.plenum.court.qoshma': 'Qo‘shma',
+      'adm.plenum.amend': 'o‘zgartirish', 'adm.plenum.none': 'Hali qaror yo‘q — «Yuklash»ni bosing.', 'adm.plenum.preamble': 'Muqaddima', 'adm.plenum.refs': 'Moddalar', 'adm.plenum.failedList': 'O‘qilmagan qarorlar', 'adm.plenum.partial': 'Ro‘yxat to‘liq o‘qilmadi',
       'adm.vc': 'Ovozli buyruqlar', 'adm.vc.d': 'Qaysi buyruq ishlatiladi, qanchasi savol bo‘lib chiqdi (faqat kodlar, matnsiz)',
       'adm.vc.note': 'Har bir qator — bitta buyruq va joy. Matn ham, akkaunt ham yozilmaydi. «Savol sifatida» — karta chiqqan, lekin odam uni savol qilib yuborgan: buyruq noto‘g‘ri tanilgan belgisi.',
       'adm.vc.place': 'Joy', 'adm.vc.action': 'Buyruq', 'adm.vc.shown': 'Chiqdi', 'adm.vc.voice': 'ovoz / matn', 'adm.vc.run': 'Bajarildi', 'adm.vc.ask': 'Qayta so‘radi',
@@ -82,6 +91,15 @@
       'adm.req': "So'rov", 'adm.calls.t': 'Chaqiruvlar', 'adm.close': 'Yopish', 'adm.done': 'Bajarildi', 'adm.err': 'Xato'
     },
     ru: {
+      'adm.plenum': 'Судебная практика', 'adm.plenum.d': 'Постановления Пленума Верховного суда с lex.uz: число, последнее обновление, непрочитанные',
+      'adm.plenum.note': 'Действующие постановления Пленума загружаются с lex.uz без ИИ: три редакции (кириллица, латиница, русский), пункты и статьи, названные в каждом пункте. Ответы их пока не используют (S2). «Пробный прогон» ничего не записывает; «Загрузить» записывает новые и изменённые.',
+      'adm.plenum.c.in_force': 'Действующие', 'adm.plenum.c.oliy': 'Верховный суд', 'adm.plenum.c.xojalik': 'Высший хозяйственный суд', 'adm.plenum.c.qoshma': 'Совместные', 'adm.plenum.c.amendments': 'Изменяющие', 'adm.plenum.c.bands': 'Пункты', 'adm.plenum.c.checked': 'Последняя проверка',
+      'adm.plenum.dry20': 'Пробный прогон (20)', 'adm.plenum.dry': 'Пробный прогон (все)', 'adm.plenum.apply': 'Загрузить', 'adm.plenum.applyQ': 'Все действующие постановления Пленума будут прочитаны с lex.uz и записаны (около 15 минут). Продолжить?',
+      'adm.plenum.running': 'Идёт… страница обновится сама.', 'adm.plenum.started': 'Запущено', 'adm.plenum.weekly': 'Еженедельное обновление: включено', 'adm.plenum.weeklyOff': 'Еженедельное обновление выключено (PLENUM_SYNC=weekly, после первой загрузки)',
+      'adm.plenum.runs': 'Запуски', 'adm.plenum.r.mode': 'Режим', 'adm.plenum.r.status': 'Статус', 'adm.plenum.r.by': 'Кто', 'adm.plenum.r.when': 'Когда', 'adm.plenum.r.listed': 'В списке', 'adm.plenum.r.nc': 'Новые / изменённые / без изменений', 'adm.plenum.r.failed': 'Не прочитано', 'adm.plenum.r.time': 'Время',
+      'adm.plenum.mode.dry': 'пробный', 'adm.plenum.mode.apply': 'загрузка', 'adm.plenum.st.running': 'идёт', 'adm.plenum.st.done': 'готово', 'adm.plenum.st.failed': 'ошибка', 'adm.plenum.auto': 'скрипт или авто',
+      'adm.plenum.list': 'Сохранённые постановления', 'adm.plenum.search': 'Название или номер…', 'adm.plenum.court.oliy': 'Верховный суд', 'adm.plenum.court.xojalik': 'Высший хозяйственный суд', 'adm.plenum.court.qoshma': 'Совместное',
+      'adm.plenum.amend': 'изменяющее', 'adm.plenum.none': 'Постановлений пока нет — нажмите «Загрузить».', 'adm.plenum.preamble': 'Преамбула', 'adm.plenum.refs': 'Статьи', 'adm.plenum.failedList': 'Не прочитаны', 'adm.plenum.partial': 'Список прочитан не полностью',
       'nav.admin': 'Управление', 'adm.sub': 'Управление платформой: запросы, расходы, корпус, пользователи.',
       'adm.back': 'Управление', 'adm.old': 'Открыть в старом дашборде', 'adm.refresh': 'Обновить', 'adm.empty': 'Нет данных',
       'adm.ai': 'AI-запросы', 'adm.ai.d': 'Каждый запрос: модели, usage, стоимость',
@@ -173,7 +191,7 @@
     ['qabul', 'user', 'adm.reg', 'daily'], ['pilot', 'spark', 'adm.pilot', 'daily'], ['xizmatlar', 'doc', 'adm.svc', 'daily'], ['ochirish', 'trash', 'adm.del', 'daily'],
     ['sifat', 'flag', 'adm.fb', 'daily'], ['telegram', 'tg', 'adm.tg', 'daily'],
     ['xaridlar', 'tg', 'adm.buy', 'money'], ['chegirmalar', 'spark', 'adm.offers', 'money'], ['ai', 'chat', 'adm.ai', 'money'],
-    ['advokatlar', 'scale', 'adm.att', 'catalog'], ['manbalar', 'book', 'adm.src', 'catalog'],
+    ['advokatlar', 'scale', 'adm.att', 'catalog'], ['manbalar', 'book', 'adm.src', 'catalog'], ['plenum', 'scale', 'adm.plenum', 'catalog'],
     ['korpus', 'search', 'adm.cov', 'tech'], ['audit', 'shield', 'adm.audit', 'tech'], ['kirish', 'lock', 'adm.acc', 'tech'], ['ovoz', 'mic', 'adm.vc', 'tech'], ['landing', 'globe', 'adm.landing', 'tech'], ['sinov', 'spark', 'adm.lab', 'tech']
   ];
   var GROUPS = [['daily', 'adm.g.daily'], ['money', 'adm.g.money'], ['catalog', 'adm.g.catalog'], ['tech', 'adm.g.tech']];
@@ -919,7 +937,97 @@
     });
   }
 
-  var VIEWS = { ovoz: viewVc, kirish: viewAcc, pilot: viewPilot, sinov: viewLab, ai: viewAi, xaridlar: viewBuy, qabul: viewReg, sifat: viewFb, manbalar: viewSrc, korpus: viewCov, audit: viewAudit, landing: viewLanding, chegirmalar: viewOffers, telegram: viewTg, advokatlar: viewAtt, xizmatlar: viewSvc, ochirish: viewDel };
+
+  /* ---------- Sud amaliyoti: Plenum qarorlari (src/plenum/, S1 of docs/design/sud-amaliyoti.md) ---------- */
+  var plTimer = null, plQ = '';
+  function viewPlenum() {
+    shell('plenum', function (body, again) {
+      clearTimeout(plTimer);
+      body.innerHTML = '<p class="muted" style="font-size:13px;margin-bottom:14px">' + esc(t('adm.plenum.note')) + '</p><div class="pl-top">' + skel() + '</div>' +
+        '<h3 style="margin:22px 0 10px;font-size:16px">' + esc(t('adm.plenum.list')) + '</h3><input class="inp pl-q" type="search" maxlength="100" style="max-width:360px;margin-bottom:12px"><div class="pl-list">' + skel() + '</div>';
+      var top = $('.pl-top', body);
+      J.api('/api/admin/plenum').then(function (r) {
+        if (!r.ok) { top.innerHTML = errBox(r); return; }
+        var c = r.data.counts || {};
+        var when = function (d) { return d ? J.fmtDate(d) + ' ' + new Date(d).toTimeString().slice(0, 5) : '—'; };
+        var html = kv([[t('adm.plenum.c.in_force'), n0(c.in_force)], [t('adm.plenum.c.oliy'), n0(c.oliy)], [t('adm.plenum.c.xojalik'), n0(c.xojalik)], [t('adm.plenum.c.qoshma'), n0(c.qoshma)],
+          [t('adm.plenum.c.amendments'), n0(c.amendments)], [t('adm.plenum.c.bands'), n0(c.bands)], [t('adm.plenum.c.checked'), esc(when(c.checked_at))]]) +
+          '<div class="btns" style="margin:14px 0 6px">' + (r.data.running ? '<span class="muted"><span class="spin"></span> ' + esc(t('adm.plenum.running')) + '</span>'
+            : '<button class="pill ghost sm" type="button" data-m="dry20">' + esc(t('adm.plenum.dry20')) + '</button><button class="pill ghost sm" type="button" data-m="dry">' + esc(t('adm.plenum.dry')) + '</button><button class="pill sm" type="button" data-m="apply">' + esc(t('adm.plenum.apply')) + '</button>') +
+          '</div><p class="muted" style="font-size:12.5px">' + esc(r.data.weekly ? t('adm.plenum.weekly') : t('adm.plenum.weeklyOff')) + '</p>';
+        var runs = r.data.runs || [];
+        if (runs.length) {
+          html += '<h3 style="margin:18px 0 10px;font-size:16px">' + esc(t('adm.plenum.runs')) + '</h3>' + table([t('adm.plenum.r.when'), t('adm.plenum.r.mode'), t('adm.plenum.r.status'), t('adm.plenum.r.by'), t('adm.plenum.r.listed'), t('adm.plenum.r.nc'), t('adm.plenum.r.failed'), t('adm.plenum.r.time')],
+            runs.map(function (x) {
+              var rp = x.report || {}, f = (rp.failed || []).length;
+              var partial = rp.lists && Object.keys(rp.lists).some(function (k) { return rp.lists[k].partial; });
+              return '<tr>' + td(when(x.started_at)) + td(t('adm.plenum.mode.' + x.mode)) + td(t('adm.plenum.st.' + x.status) + (rp.error ? ' — ' + rp.error : '') + (partial ? ' · ' + t('adm.plenum.partial') : '')) + td(x.by || t('adm.plenum.auto')) +
+                td(rp.listed != null ? n0(rp.listed) : '—') + td(rp.listed != null ? n0(rp.new) + ' / ' + n0(rp.changed) + ' / ' + n0(rp.unchanged) : '—') +
+                td(f ? '<button type="button" class="link" data-f="' + x.id + '">' + n0(f) + '</button>' : '0', true) + td(rp.ms ? Math.round(rp.ms / 1000) + ' s' : '—') + '</tr>';
+            }));
+        }
+        top.innerHTML = html;
+        $$('[data-f]', top).forEach(function (b) {
+          b.onclick = function () {
+            var x = runs.filter(function (y) { return String(y.id) === b.dataset.f; })[0]; if (!x) return;
+            var m = J.modal({ html: '<h2>' + esc(t('adm.plenum.failedList')) + '</h2><div class="pl-fail"></div>' });
+            $('.pl-fail', m.body).innerHTML = table(['lex.uz', t('adm.plenum.r.failed')], (x.report.failed || []).map(function (f) { return '<tr>' + td('<a target="_blank" rel="noopener" href="https://lex.uz/uz/docs/' + esc(String(f.id)) + '">' + esc(String(f.id)) + '</a> ' + esc(f.title || ''), true) + td(f.why) + '</tr>'; }));
+          };
+        });
+        $$('[data-m]', top).forEach(function (b) {
+          b.onclick = async function () {
+            var mode = b.dataset.m === 'apply' ? 'apply' : 'dry';
+            if (mode === 'apply' && !(await J.confirm(t('adm.plenum.applyQ'), t('adm.plenum.apply')))) return;
+            busy(b, true);
+            var x = await J.api('/api/admin/plenum/sync', { method: 'POST', body: { mode: mode, limit: b.dataset.m === 'dry20' ? 20 : null } });
+            busy(b, false);
+            if (!x.ok) { J.toast(J.errMsg(x.data), 6000); return; }
+            J.toast(t('adm.plenum.started')); again();
+          };
+        });
+        // a run goes on in the background: look again until it is over
+        if (r.data.running) plTimer = setTimeout(function () { if (location.hash === '#/boshqaruv/plenum') again(); }, 5000);
+      });
+      var q = $('.pl-q', body); q.placeholder = t('adm.plenum.search'); q.value = plQ;
+      var qt; q.oninput = function () { clearTimeout(qt); qt = setTimeout(function () { plQ = q.value.trim(); list(); }, 350); };
+      function list() {
+        var box = $('.pl-list', body);
+        J.api('/api/admin/plenum/decisions?q=' + encodeURIComponent(plQ)).then(function (r) {
+          if (!r.ok) { box.innerHTML = errBox(r); return; }
+          var ds = r.data.decisions || [];
+          if (!ds.length) { box.innerHTML = '<p class="muted">' + esc(t('adm.plenum.none')) + '</p>'; return; }
+          box.innerHTML = table(['№', t('adm.plenum.r.when'), '', t('adm.plenum.c.bands')], ds.map(function (d) {
+            return '<tr>' + td(d.number || '—') + td(d.adopted_on ? J.fmtDate(d.adopted_on) : '—') +
+              td('<button type="button" class="link pl-open" data-id="' + esc(String(d.lex_id)) + '"></button><br><small class="muted">' + esc(t('adm.plenum.court.' + d.court)) + (d.is_amendment ? ' · ' + esc(t('adm.plenum.amend')) : '') + '</small>', true) + td(n0(d.bands)) + '</tr>';
+          }));
+          $$('.pl-open', box).forEach(function (b, i) { b.textContent = ds[i].title_lat || ds[i].title_uz || ds[i].title_ru || ('#' + ds[i].lex_id); b.onclick = function () { openDecision(ds[i].lex_id, 'lat'); }; });
+        });
+      }
+      list();
+    });
+  }
+  async function openDecision(id, lang) {
+    var r = await J.api('/api/admin/plenum/decisions/' + encodeURIComponent(id) + '?lang=' + lang);
+    if (!r.ok) { J.toast(J.errMsg(r.data)); return; }
+    var d = r.data.decision, lexId = lang === 'lat' ? d.lat_lex_id : lang === 'ru' ? d.ru_lex_id : d.lex_id;
+    var m = J.modal({ html: '<h2 class="pl-h"></h2><p class="muted pl-m" style="font-size:13px"></p><div class="seg pl-lang" style="margin:10px 0">' +
+      ['lat', 'uz', 'ru'].filter(function (l) { return r.data.langs.indexOf(l) > -1; }).map(function (l) { return '<button type="button" data-l="' + l + '" class="' + (l === lang ? 'on' : '') + '">' + { lat: 'O‘zb', uz: 'Ўзб', ru: 'Рус' }[l] + '</button>'; }).join('') +
+      '</div><div class="pl-bands"></div>' });
+    $('.pl-h', m.body).textContent = (lang === 'ru' ? d.title_ru : lang === 'uz' ? d.title_uz : d.title_lat) || d.title_lat || '';
+    $('.pl-m', m.body).innerHTML = esc(t('adm.plenum.court.' + d.court) + ' · № ' + (d.number || '—') + ' · ' + (d.adopted_on ? J.fmtDate(d.adopted_on) : '—')) + (lexId ? ' · <a target="_blank" rel="noopener" href="https://lex.uz/uz/docs/' + esc(String(lexId)) + '">lex.uz ↗</a>' : '');
+    var host = $('.pl-bands', m.body);
+    r.data.bands.forEach(function (b) {
+      var el = J.h('<div class="pl-band"><div class="kicker"></div><p></p><div class="pl-refs"></div></div>');
+      $('.kicker', el).textContent = b.n ? b.n + '-band' : t('adm.plenum.preamble');
+      $('p', el).textContent = b.text.replace(/^\d{1,3}\.\s+/, '');
+      var refs = b.article_refs || [];
+      if (refs.length) $('.pl-refs', el).innerHTML = '<small class="muted">' + esc(t('adm.plenum.refs')) + ':</small> ' + refs.map(function (x) { return '<span class="chip pl-ref">' + esc((x.act ? x.act + ' ' : '') + x.n) + '</span>'; }).join(' ');
+      host.appendChild(el);
+    });
+    $$('[data-l]', m.body).forEach(function (b) { b.onclick = function () { m.close(); openDecision(id, b.dataset.l); }; });
+  }
+
+  var VIEWS = { plenum: viewPlenum, ovoz: viewVc, kirish: viewAcc, pilot: viewPilot, sinov: viewLab, ai: viewAi, xaridlar: viewBuy, qabul: viewReg, sifat: viewFb, manbalar: viewSrc, korpus: viewCov, audit: viewAudit, landing: viewLanding, chegirmalar: viewOffers, telegram: viewTg, advokatlar: viewAtt, xizmatlar: viewSvc, ochirish: viewDel };
   function guard(fn) { return function () { if (!J.isMaster()) { J.go('#/'); return; } fn.apply(null, arguments); }; }
   J.route(/^\/boshqaruv$/, guard(function () { J.viewAdmin(); }));
   J.route(/^\/boshqaruv\/([a-z]+)$/, guard(function (k) { (VIEWS[k] || J.viewAdmin)(); }));
