@@ -888,3 +888,15 @@ textarea.inp{height:auto;min-height:96px;padding:10px 13px;resize:vertical;line-
 .ed-ai-new{background:var(--accent-soft);border-radius:8px;padding:6px 8px;white-space:pre-wrap}
 .ed-ai-str{margin:0;padding-left:18px;font-size:13.5px;line-height:1.55}
 .ed-ai-disc{font-size:12px;margin:14px 0 6px}
+
+/* Muharrir D5: Tekshiruv paneli (editor-check.js). Belgilash faqat och ko'k (egasining qoidasi). */
+.ed-chk-grp{margin-bottom:12px}
+.ed-chk-gh{display:flex;gap:6px;align-items:baseline;flex-wrap:wrap;font-size:13px;margin:4px 0 6px}
+.ed-chk-gh .link{margin-left:auto;font-size:12.5px}
+.ed-chk-c{font-size:13px;cursor:default}
+.ed-chk-c p{margin:4px 0;line-height:1.5;overflow-wrap:anywhere}
+.ed-chk-s{color:var(--muted)}
+.ed-chk-hit{background:var(--accent-soft);color:var(--fg);border-radius:3px;padding:0 1px}
+.ed-chk-d{line-height:1.6}
+.ed-chk-old{color:var(--muted)}
+.ed-chk-new{background:var(--accent-soft);border-radius:3px;padding:0 2px}

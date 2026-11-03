@@ -1045,6 +1045,30 @@ Known state of the suites (Sept 2026):
   in the text reads "Kiritildi". One side panel at a time; on a phone
   "Joyini ko'rsatish" steps the panel aside. `EDITOR_ANALYSIS=off`.
   `tests/editor-analysis.test.js`.
+  D5 (2026-11-03, design §6; owner: AI spelling from the AI limit plus our
+  own checker): the "Tekshiruv" side panel (`public/app/editor-check.js`).
+  A - free, no AI, in the page as you type (`public/js/doc-check.js`, UMD,
+  also used by the server): a word with Latin and Cyrillic letters (only
+  lookalike letters swapped), old and new Latin alphabet mixed (the fewer
+  side moved), double spaces, a space before punctuation, unpaired quotes /
+  brackets (enumerators "1)" "a)" skipped; flag only), a paragraph
+  numbering break (the run renumbered in one fix), a repeated word, mixed
+  date formats (to the main one; a glued suffix gets "yil"), an amount whose
+  words differ from its digits (words rewritten from the digits,
+  `uzWords`), a defined term ("keyingi o'rinlarda «X»") written in another
+  case. Each is shown in its words; a fix is exact edits applied with the
+  text's own marks, refused when the paragraph changed since the check;
+  "Hammasini tuzatish" for the safe kinds. B - `src/editor/spell.js`:
+  `.../spell/quote`, then `POST .../spell` with `confirmed` (editors only;
+  chat units, one per `SPELL_CHARS_PER_UNIT` 4 000 chars, at most
+  `SPELL_MAX_CHARS` 60 000, refunded when nothing could be read): the
+  paragraphs in 5 000-char batches to `callCheapAI`; a fix that changes a
+  word with a digit or a capital or anything in quotes, or the length by
+  more than a fifth, is dropped and counted (`vet`); the page shows the
+  changed words (old struck, new light blue) and applies them on accept
+  where the paragraph still reads as checked, a version "Imlo
+  tuzatishidan oldin" kept first. `EDITOR_SPELL=off`.
+  `tests/doc-check.test.js`.
 - `src/workspace/` — Workspace: routes, authz, Supabase
   realtime/storage, Workspace AI. Since 2026-10-28 (owner, migration 025)
   any active paid plan (Silver, Gold, Platinum) owns one (`PLAN_CATALOG`

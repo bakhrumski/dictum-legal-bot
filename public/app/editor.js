@@ -130,6 +130,7 @@
     var v = J.mount('<div class="ed-wrap"><div class="ed-top"><a class="ed-back" href="#/hujjatlarim">' + J.icon('back') + '<span>' + esc(s('back')) + '</span></a>' +
       '<input class="ed-title" maxlength="200" aria-label="' + esc(s('title')) + '"><span class="ed-st muted"></span><span class="ed-ppl"></span><span class="ed-sp"></span>' +
       '<button class="pill sm ghost" type="button" data-a="share">' + J.icon('team') + '<span class="ed-shn">' + esc(s('sh').share) + '</span></button>' +
+      (J.editorCheck ? '<button class="pill sm ghost" type="button" data-a="chk">' + J.icon('check') + '<span class="ed-chkn">' + esc(J.editorCheckLabel()) + '</span></button>' : '') +
       (J.editorAi ? '<button class="pill sm ghost" type="button" data-a="ai">' + J.icon('spark') + '<span class="ed-ain">' + esc(J.editorAiLabel()) + '</span></button>' : '') +
       '<button class="pill sm ghost" type="button" data-a="cm">' + J.icon('chat') + '<span class="ed-cmn">' + esc(s('cm').title) + '</span></button>' +
       '<button class="pill sm ghost" type="button" data-a="ver">' + esc(s('versions')) + '</button>' +
@@ -371,10 +372,16 @@
     if (J.editorAi) {
       var AI = J.editorAi(v, ed, { id: id, canWrite: canWrite, canRun: canComment, flush: function () { return canWrite ? flush() : Promise.resolve(); },
         changed: function () { if (canWrite) { dirty = true; status('saving'); schedule(); } }, revision: function () { return rev; } });
-      var cmSide = $('.ed-side', v);
-      $('[data-a=ai]', v).onclick = function () { if (AI.el.hidden) { cmSide.hidden = true; AI.open(); } else AI.hide(); };
-      $('[data-a=cm]', v).addEventListener('click', function () { if (!cmSide.hidden) AI.hide(); });
     }
+    /* D5: the check panel (editor-check.js): free rules at once, AI spelling as proposals */
+    var CHK = J.editorCheck ? J.editorCheck(v, ed, { id: id, canWrite: canWrite, flush: function () { return canWrite ? flush() : Promise.resolve(); },
+      changed: function () { if (canWrite) { dirty = true; status('saving'); schedule(); } } }) : null;
+    /* one side panel at a time: comments, AI analysis, check */
+    var cmSide = $('.ed-side', v), panels = [AI || null, CHK].filter(Boolean);
+    var only = function (keep) { if (keep !== 'cm') cmSide.hidden = true; panels.forEach(function (p) { if (p !== keep) p.hide(); }); };
+    if (AI) $('[data-a=ai]', v).onclick = function () { if (AI.el.hidden) { only(AI); AI.open(); } else AI.hide(); };
+    if (CHK) $('[data-a=chk]', v).onclick = function () { if (CHK.el.hidden) { only(CHK); CHK.open(); } else CHK.hide(); };
+    $('[data-a=cm]', v).addEventListener('click', function () { if (!cmSide.hidden) only('cm'); });
     /* toolbar by role: a reader keeps only the comment button (a commenter) or nothing */
     if (!canWrite) $$('[data-c]', bar).forEach(function (b) { if (b.dataset.c !== 'comment' || !canComment) b.hidden = true; });
     if (!canWrite) $$('.ed-sep', bar).forEach(function (x) { x.hidden = true; });
