@@ -581,7 +581,7 @@
                     try { localStorage.setItem('jai-login-method', 'password'); } catch (_) {}
                     if (data.twofa) { show2faStep(data.token); return; }
                     // keep ?redirect= and workspace invites, as the Telegram flow does
-                    window.location.href = (typeof postAuthDestination === 'function') ? postAuthDestination('/dashboard.html') : '/dashboard.html';
+                    window.location.href = (typeof postAuthDestination === 'function') ? postAuthDestination('/app/') : '/app/';
                 } else {
                     errorDiv.textContent = data.error || 'Kirish xato';
                     if (data.botUrl) {
@@ -630,7 +630,7 @@
                         body: JSON.stringify({ token: token, code: code })
                     });
                     var d = await r.json();
-                    if (r.ok && d.success) { window.location.href = (typeof postAuthDestination === 'function') ? postAuthDestination('/dashboard.html') : '/dashboard.html'; return; }
+                    if (r.ok && d.success) { window.location.href = (typeof postAuthDestination === 'function') ? postAuthDestination('/app/') : '/app/'; return; }
                     if (d.expired) { location.reload(); return; }
                     document.getElementById('twofaErr').textContent = d.error || 'Kod noto\'g\'ri';
                     btn.disabled = false; btn.textContent = 'Tasdiqlash';
@@ -1019,7 +1019,7 @@
                 });
                 const data = await resp.json();
                 if (resp.ok) {
-                    window.location.href = postAuthDestination(data.redirect || '/dashboard.html');
+                    window.location.href = postAuthDestination(data.redirect || '/app/');
                 } else {
                     otpError.textContent = data.error || 'Xatolik yuz berdi';
                     otpError.style.display = 'block';
@@ -1099,7 +1099,7 @@
                 });
                 const data = await resp.json();
                 if (resp.ok) {
-                    window.location.href = postAuthDestination(data.redirect || '/dashboard.html');
+                    window.location.href = postAuthDestination(data.redirect || '/app/');
                 } else {
                     otpError.textContent = data.error === 'sinov_used'
                         ? 'Bu qurilmada yoki Telegram hisobda Sinov tarifi allaqachon ishlatilgan.'

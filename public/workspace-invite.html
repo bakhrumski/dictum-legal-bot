@@ -54,7 +54,7 @@
         accountMeta.textContent=(account.username?'@'+account.username+' · ':'')+role;
         accountBox.classList.add('visible');
       }
-      function openWorkspace(){location.replace('/dashboard.html?tab=jamoa');}
+      function openWorkspace(){location.replace('/app/#/jamoa');}
       function switchAccount(){
         Array.prototype.forEach.call(actions.querySelectorAll('button'),function(button){button.disabled=true;});
         request('/api/logout',{method:'POST'}).catch(function(){return null;}).then(function(){location.replace(loginUrl());});
@@ -84,10 +84,10 @@
           request('/api/workspace-invitations/'+encodeURIComponent(token)+'/accept',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:'{}'}).then(function(){
           sessionStorage.removeItem('juristai-workspace-invite');localStorage.removeItem('juristai-pending-workspace-invite');
           show('Taklif qabul qilindi. Workspace ochilmoqda…','success');
-          setTimeout(function(){location.replace('/dashboard.html?tab=jamoa');},650);
+          setTimeout(function(){location.replace('/app/#/jamoa');},650);
           }).catch(function(error){
             if(error.status===401){show('Hisobingizga yo‘naltirilmoqda…');setTimeout(function(){location.replace(loginUrl());},300);return;}
-            if(error.status===402){savePending(invitation,error.details);show('Taklif saqlandi. Workspace’ga qo‘shilish uchun Silver yoki undan yuqori tarif kerak. Dashboard ochilmoqda…');setTimeout(function(){location.replace('/dashboard.html?tab=jamoa&workspaceInvite=pending');},750);return;}
+            if(error.status===402){savePending(invitation,error.details);show('Taklif saqlandi. Workspace’ga qo‘shilish uchun Silver yoki undan yuqori tarif kerak. Dashboard ochilmoqda…');setTimeout(function(){location.replace('/app/#/jamoa');},750);return;}
             if(error.status===409&&error.code==='workspace_already_member'){show(error.message,'', '<button class="btn primary" id="openWorkspace" type="button">Workspace’ni ochish</button><button class="btn" id="switchAccount" type="button">Boshqa hisob bilan kirish</button>');bindAction('openWorkspace',openWorkspace);bindAction('switchAccount',switchAccount);return;}
             show(error.message||'Taklifni qabul qilib bo‘lmadi.','error','<button class="btn" id="switchAccount" type="button">Boshqa hisob bilan kirish</button>');bindAction('switchAccount',switchAccount);
           });

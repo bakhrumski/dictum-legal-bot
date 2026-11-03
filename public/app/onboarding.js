@@ -156,15 +156,45 @@
     return false;
   };
 
+  /** So'rovnoma (bepul foydalanish sharti) shu oynaning o'zida - eski dashboard'ga o'tmasdan. */
+  J.surveyForm = async function (box, m) {
+    var r = await J.api('/api/free-access/survey-questions');
+    var qs = (r.ok && r.data.questions) || [];
+    if (!r.ok) { box.textContent = t('err.generic') || 'Xatolik'; return; }
+    if (!qs.length) { m.close(); return; }
+    box.innerHTML = qs.map(function (q, i) {
+      var opts = q.options || [];
+      return '<div class="sv-q" style="margin:0 0 14px"><div style="font-weight:600;margin:0 0 6px">' + (i + 1) + '. ' + esc(q.question_text) + '</div>' +
+        (opts.length ? opts.map(function (o) { return '<label style="display:flex;gap:8px;align-items:center;padding:4px 0"><input type="radio" name="sq_' + q.id + '" value="' + esc(o) + '"> ' + esc(o) + '</label>'; }).join('')
+          : '<textarea class="input" data-q="' + q.id + '" rows="2" style="width:100%"></textarea>') + '</div>';
+    }).join('') + '<button class="pill" data-a="svs">' + esc(t('gate.survey.send')) + '</button><p class="sub" data-a="svst" style="margin-top:8px"></p>';
+    var st = J.$('[data-a=svst]', box);
+    J.$('[data-a=svs]', box).onclick = async function () {
+      var answers = [];
+      for (var i = 0; i < qs.length; i++) {
+        var q = qs[i], val = '';
+        if ((q.options || []).length) { var sel = box.querySelector('input[name="sq_' + q.id + '"]:checked'); val = sel ? sel.value : ''; }
+        else { var ta = box.querySelector('textarea[data-q="' + q.id + '"]'); val = ta ? ta.value.trim() : ''; }
+        if (!val && /ixtiyoriy/i.test(q.question_text || '')) continue;
+        if (!val) { st.textContent = t('gate.survey.need'); return; }
+        answers.push({ questionId: q.id, answer: val });
+      }
+      st.textContent = '…';
+      var s = await J.api('/api/free-access/survey-submit', { method: 'POST', body: { answers: answers } });
+      if (s.ok) { m.close(); J.toast('✓'); } else st.textContent = t('gate.survey.fail');
+    };
+  };
+
   /** Bepul foydalanish sharti: kanalga obuna yoki so'rovnoma. */
   J.openGate = async function () {
     var r = await J.api('/api/free-access/status'); var st = r.ok ? r.data : {};
     var survey = st.state === 'survey_required';
     var m = J.modal({ cls: 'sm', html: '<h2>' + esc(t('limit.title')) + '</h2><p class="sub">' + esc(survey ? t('gate.survey') : t('gate.channel')) + '</p>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:20px">' +
-      (survey ? '<a class="pill" href="/dashboard.html#ai">' + esc(t('gate.survey.btn')) + '</a>'
+      (survey ? '<div class="sv-box" style="width:100%">' + esc(t('loading') || '…') + '</div>'
               : '<a class="pill" target="_blank" rel="noopener" href="' + esc(st.channelUrl || contact()) + '">' + esc(t('gate.open')) + '</a><button class="pill ghost" data-a="chk">' + esc(t('gate.check')) + '</button>') +
       '</div>' });
+    if (survey) J.surveyForm(J.$('.sv-box', m.body), m);
     var c = J.$('[data-a=chk]', m.body);
     if (c) c.onclick = async function () { var s = await J.api('/api/free-access/status'); if (s.ok && s.data.state !== 'channel_required') { m.close(); J.toast('✓'); } else J.toast(t('gate.channel')); };
   };

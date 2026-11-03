@@ -1022,6 +1022,14 @@ Known state of the suites (Sept 2026):
 - `public/` — static pages: `index.html` (landing), `login.html`,
   `dashboard.html` (the app), `ai-dashboard.html` (the design reference the
   dashboard follows), plus tariff, attorneys, templates, legal pages.
+  Since 2026-11-02 (owner) `dashboard.html`, `/dashboard` and
+  `ai-dashboard.html` are the master's only (`src/auth/old-dashboard-gate.js`,
+  before the static files; role read again from the database, `no-store`):
+  anyone else goes to `/app/` (`?tab=jamoa` -> `/app/#/jamoa`), a visitor to
+  sign-in. `APP_HOME` defaults to `/app/`; the free-access survey moved into
+  the app (`J.surveyForm`). The human queue (lawyer / student answers) has no
+  view in the new app yet, so staff other than the master cannot answer it
+  until it is ported. `tests/old-dashboard-gate.test.js`.
 
 ## CustDev pilot (2026-10-28, owner)
 

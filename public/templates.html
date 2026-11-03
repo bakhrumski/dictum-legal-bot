@@ -325,7 +325,7 @@ async function init(){
   const u = await fetch('/api/user-info',{credentials:'same-origin'});
   if(!u.ok){ window.location.href='/login.html'; return; }
   const user = await u.json();
-  if(user.role !== 'master'){ window.location.href='/dashboard.html'; return; }
+  if(user.role !== 'master'){ window.location.href='/app/'; return; }
   await loadList();
 }
 

@@ -632,7 +632,7 @@
                     const data = await r.json();
                     if (r.ok) {
                         toast('Sinov boshlandi. Dashboardga o\'tilmoqda...');
-                        setTimeout(() => { window.location.href = '/dashboard.html'; }, 1200);
+                        setTimeout(() => { window.location.href = '/app/'; }, 1200);
                     } else {
                         toast(data.message || data.error || 'Xatolik');
                     }

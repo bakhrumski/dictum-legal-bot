@@ -407,6 +407,12 @@ app.use(['/api/legal-chat', '/api/analyze', '/api/draft', '/api/ai-chat', '/api/
 const LANDING_VIDEO_BASE = String(process.env.LANDING_VIDEO_BASE_URL || '').trim().replace(/\/+$/, '');
 // an offer link's ?ref=<code> is kept for the registration (src/sales/routes.js), before the landing page is served
 app.use(require('../sales/routes').refCookieMiddleware);
+// The old dashboard is the master's only (src/auth/old-dashboard-gate.js): the
+// session is read for those paths alone, and everyone else goes to /app/.
+app.use(require('../auth/old-dashboard-gate').createOldDashboardGate({
+  getSession: () => sessionMiddleware,
+  verifyMaster: require('../rag/document-explain-route').createVerifyMaster(pool),
+}));
 app.use(express.static('public'));
 if (/^https:\/\//.test(LANDING_VIDEO_BASE)) {
   app.get(/^\/videos\/([A-Za-z0-9._-]+\.(?:mp4|webm|webp|jpg|png))$/, (req, res) => {
@@ -1833,9 +1839,10 @@ app.post('/api/free-access/survey-submit', requireAuth, async (req, res) => {
   }
 });
 
-// Where a signed-in user lands. APP_HOME=/app/ switches to the new app shell
-// (public/app/); unset keeps the old dashboard, so the switch is an env change.
-const APP_HOME = /^\/[\w\-./]*$/u.test(process.env.APP_HOME || '') ? process.env.APP_HOME : '/dashboard.html';
+// Where a signed-in user lands: the new app (public/app/). APP_HOME overrides
+// it; the old dashboard is the master's only (src/auth/old-dashboard-gate.js),
+// so pointing APP_HOME there sends everyone else on to /app/.
+const APP_HOME = /^\/[\w\-./]*$/u.test(process.env.APP_HOME || '') ? process.env.APP_HOME : '/app/';
 
 // Redirect root
 app.get('/', (req, res) => {
