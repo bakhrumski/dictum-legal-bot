@@ -92,8 +92,11 @@ Tartib va PR bo'linishi dizayn hujjatining 9-bo'limida.
 
 ## 3-bosqich. Raqobat ustunligi
 
-- [ ] Sud amaliyoti korpusi: Oliy sud Plenumi qarorlari, keyin ochiq sud
-  qarorlari. Manba va litsenziya avval tekshiriladi.
+- [~] Sud amaliyoti korpusi: Oliy sud Plenumi qarorlari, keyin ochiq sud
+  qarorlari. Manba va litsenziya avval tekshiriladi. Dizayn (2026-11-03):
+  `docs/design/sud-amaliyoti.md` (qoralama; Plenum qarorlari lex.uz'da
+  "Oliy sudi" organi va "Qaror" turi bilan topiladi; S1 korpus, S2 javobda,
+  S3 citator, S4 monitoring). Egasining javobini kutadi.
 - [ ] Citator: akt amaldami, qachon o'zgargan, qaysi Plenum qarori unga
   tayangan. Javobda "o'zgargan" belgisi chiqadi.
 - [ ] Monitoring: lex.uz'dagi yangi va o'zgargan aktlar; foydalanuvchi
@@ -330,3 +333,17 @@ nima o'lchandi.
   WebSocket orqali real vaqtda birga tahrir (Yjs), boshqalarning kursori va
   ismi, izohlar hammada darhol yangilanadi; muharrir sahifasida tarif tanlash
   oynasi majburan chiqmaydi.
+- 2026-11-01: #544 (muharrir D3: havola orqali ulashish, jonli birga tahrir)
+  merge.
+- 2026-11-02: #545 (eski dashboard faqat master uchun; bepul foydalanish
+  so'rovnomasi ilovaga ko'chdi) merge.
+- 2026-11-03: #546 (to'ldirilgan hujjat bitta yozuvda, kenglik bo'yicha tekis,
+  1 sm chekinish, imzo va sana o'z qatorida), #547 (inson navbati ilovada:
+  `#/navbat`), #548 (xodimlarga Telegram havolasi murojaatning o'zini
+  ochadi), #549 (muharrir D4: AI tahlil paneli), #550 (muharrir D5:
+  tekshiruv — bepul qoidalar va AI imlo), #551 (navbat: tartib, tezkor
+  filtrlar, sana guruhlari), #552 (navbat: ko'pini birdan biriktirish,
+  yopish, qayta ochish, "Turi" filtri; migratsiya 040) merge. Muharrir
+  dizaynining D1–D5 bosqichlari tugadi.
+- 2026-11-03: 3-bosqich boshlandi: sud amaliyoti dizayni
+  (`docs/design/sud-amaliyoti.md`, qoralama).
