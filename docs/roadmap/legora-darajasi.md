@@ -109,9 +109,10 @@ Tartib va PR bo'linishi dizayn hujjatining 9-bo'limida.
 - [ ] Firma bilim bazasi: firmaning shablonlari va avvalgi hujjatlari, qidiruv
   bilan (Workspace xotirasidan kengaytiriladi); jamoaviy prompt va ko'nikma
   kutubxonasi. Dizayn (2026-11-04): `docs/design/firma-bilim-bazasi.md`
-  (qoralama; firma = Workspace; K1 kutubxona va serverdagi ko'nikmalar, K2
-  shifrlangan hujjatlar va blind index qidiruvi, K3 Workspace AI, K4 chat,
-  K5 embedding keyin).
+  (qabul qilingan, #558; firma = Workspace; K1 kutubxona va serverdagi
+  ko'nikmalar, K2 shifrlangan hujjatlar va blind index qidiruvi, K3 Workspace
+  AI, K4 chat, K5 embedding keyin). K1a (ko'nikmalar serverda, migratsiya
+  044) PR'da.
 - [~] Adaptiv akkaunt va platformaning o'zini yaxshilashi (egasi, 2026-10-28):
   dizayn `docs/design/adaptiv-akkaunt.md` (#509, qabul qilingan), PR A1-A8.
   Birinchi qismi: shaxsiy ovoz glossariysi (#507). A1 (signallar va profil)
@@ -370,3 +371,6 @@ nima o'lchandi.
 - 2026-11-04: #557 (S4 monitoring) merge; sud amaliyoti dizaynining S1-S4
   bosqichlari tugadi (S5 keyinga). Keyingi band: firma bilim bazasi dizayni
   (`docs/design/firma-bilim-bazasi.md`, qoralama).
+- 2026-11-04: #558 (firma bilim bazasi dizayni) merge; egasi takliflarni qabul
+  qildi (firma = Workspace, K3 ga rozilik, 2 000 hujjat / 2 GB, K1a birinchi).
+  K1a PR: chat ko'nikmalari serverda, hamma qurilmada.

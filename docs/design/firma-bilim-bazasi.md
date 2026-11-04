@@ -1,6 +1,6 @@
 # Firma bilim bazasi: shablonlar, avvalgi hujjatlar, jamoa ko'nikmalari (dizayn)
 
-Holat: **qoralama** — egasining javoblari (9-bo'lim) kutilmoqda; javobgacha kod yozilmaydi.
+Holat: **qabul qilingan** (egasi, 2026-11-04: "takliflaringni qabul qilaman, K1a ni boshla"). Javoblar 9-bo'limda.
 Yo'l xaritasi: `docs/roadmap/legora-darajasi.md`, 3-bosqich ("Firma bilim bazasi").
 Egasining topshirig'i (2026-11-04): "Keyingi bosqichni boshla!"
 
@@ -171,6 +171,23 @@ ko'rgandan keyin, egasi va firma rozi bo'lsa, alohida dizayn bilan qilinadi.
   Shaxsiy nusxasi o'zida qoladi.
 
 ## 9. Egasiga savollar
+
+Javoblar (2026-11-04, egasi: "558 ni merge qil, takliflaringni qabul qilaman"):
+1. Firma = Workspace.
+2. Owner va member qo'shadi va tahrirlaydi, viewer o'qiydi va ishlatadi.
+3. Qidiruv avval so'z ildizlari bo'yicha (K2), embedding (K5) keyin, o'lchovdan so'ng.
+4. K3 ga rozilik berildi (Workspace AI firma hujjatlarini "qonun emas" belgisi bilan ko'radi). K4 alohida so'raladi.
+5. Cheklov: hammaga bir xil, Workspace'da 2 000 hujjat / 2 GB.
+6. Tartib K1a → K1b → K2a → K2b → K3.
+
+K1a (2026-11-04, migratsiya 044, `src/skills/routes.js`): ko'nikmalar
+`user_skills` jadvalida (matni shifrlangan, AAD `user_skills.ins:<id>`), har
+odamga 40 ta (`SKILLS_MAX`), faqat o'ziniki (boshqaniki 404); brauzerdagi
+ro'yxat birinchi kirishda bir marta ko'chiriladi (`/api/skills/import`,
+brauzer id'si `client_id` sifatida saqlanadi, takrorlansa hech narsa
+qo'shilmaydi); server bo'lmasa (`SKILLS=off`) brauzerdagi ro'yxat avvalgidek.
+
+Dastlabki savollar:
 
 1. **Firma = Workspace** (yangi "tashkilot" tushunchasisiz) bo'lsinmi?
    Taklif: ha.

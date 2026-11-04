@@ -363,6 +363,7 @@ function transactionalPool(handler) {
       '20261103_041_plenum.sql',
       '20261103_042_act_citator.sql',
       '20261103_043_lex_monitor.sql',
+      '20261104_044_user_skills.sql',
     ]);
     assert.strictEqual(stripOuterTransaction('BEGIN;\nSELECT 1;\nCOMMIT;'), 'SELECT 1;');
   });

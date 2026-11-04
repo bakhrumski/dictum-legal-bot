@@ -418,19 +418,32 @@
     }
     function editor(existing) {
       var sk = existing || { id: Date.now().toString(36), name: '', ins: '', scope: 'p' };
-      var m = J.modal({ cls: 'sm', html: '<h2>' + esc(existing ? existing.name : t('sk.new')) + '</h2><p class="sub" style="margin-bottom:16px">' + esc(t('sk.local')) + '</p>' +
+      var m = J.modal({ cls: 'sm', html: '<h2>' + esc(existing ? existing.name : t('sk.new')) + '</h2><p class="sub" style="margin-bottom:16px">' + esc(t(J.skills.onServer() ? 'sk.server' : 'sk.local')) + '</p>' +
         '<div class="field"><label>' + esc(t('sk.form.name')) + '</label><input class="inp" data-f="n" maxlength="60"></div>' +
         '<div class="field"><label>' + esc(t('sk.form.ins')) + '</label><textarea class="inp" data-f="i" maxlength="600" placeholder="' + esc(t('sk.form.ins.ph')) + '"></textarea></div>' +
         '<div class="field"><label>' + esc(t('sk.form.scope')) + '</label><div class="seg"><button class="on" type="button">' + esc(t('sk.scope.p')) + '</button><button type="button" disabled title="' + esc(t('sk.scope.soon')) + '">' + esc(t('sk.scope.t')) + '</button><button type="button" disabled title="' + esc(t('sk.scope.soon')) + '">' + esc(t('sk.scope.o')) + '</button></div></div>' +
         '<div style="display:flex;justify-content:space-between;gap:8px;margin-top:18px">' + (existing ? '<button class="pill ghost" data-a="del">' + J.icon('trash') + esc(t('sk.form.del')) + '</button>' : '<span></span>') + '<button class="pill" data-a="save">' + esc(t('sk.form.save')) + '</button></div>' });
       $('[data-f=n]', m.body).value = sk.name; $('[data-f=i]', m.body).value = sk.ins;
-      $('[data-a=save]', m.body).onclick = function () {
+      var saveBtn = $('[data-a=save]', m.body);
+      saveBtn.onclick = async function () {
         var n = $('[data-f=n]', m.body).value.trim(), i = $('[data-f=i]', m.body).value.trim(); if (!n || !i) return;
-        var list = J.skills.mine().filter(function (x) { return x.id !== sk.id; }); list.unshift({ id: sk.id, name: n, ins: i, scope: 'p' }); J.skills.saveMine(list); m.close(); draw();
+        saveBtn.disabled = true;
+        var r = await J.skills.save({ id: existing ? sk.id : null, name: n, ins: i });
+        saveBtn.disabled = false;
+        if (!r.ok) { J.toast(J.errMsg(r.data), 5000); return; }
+        m.close(); draw();
       };
-      var del = $('[data-a=del]', m.body); if (del) del.onclick = function () { J.skills.saveMine(J.skills.mine().filter(function (x) { return x.id !== sk.id; })); m.close(); draw(); };
+      var del = $('[data-a=del]', m.body); if (del) del.onclick = async function () {
+        del.disabled = true;
+        var r = await J.skills.remove(sk.id);
+        del.disabled = false;
+        if (!r.ok && r.status !== 404) { J.toast(J.errMsg(r.data), 5000); return; }
+        m.close(); draw();
+      };
     }
     $('[data-a=new]', v).onclick = function () { editor(null); };
+    // the server's list arrives after the page: draw again when it does
+    J.on('skills', function () { if (document.body.contains(v)) draw(); });
     $$('[data-tab]', v).forEach(function (b) { b.onclick = function () { tab = b.dataset.tab; $$('[data-tab]', v).forEach(function (x) { x.classList.toggle('on', x === b); }); draw(); }; });
     draw();
   };

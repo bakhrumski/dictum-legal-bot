@@ -561,6 +561,22 @@ Known state of the suites (Sept 2026):
   (`GET / PUT /api/lex-monitor`); on again = a new baseline, no backlog.
   Master: `POST /api/admin/lex-monitor/run`. Owner only, not Workspace
   members. `LEX_MONITOR=off`. `tests/lex-monitor.db.test.js`.
+- Firm knowledge base (2026-11-04, owner; design `docs/design/firma-bilim-bazasi.md`,
+  accepted: firm = Workspace, owner / member write and viewer reads; K1a
+  skills on the server -> K1b firm library of templates / playbooks / skills
+  -> K2a firm documents sealed, split into bands with a blind index -> K2b
+  search page and the editor's "Firma bandlari" -> K3 Workspace AI with them
+  (the owner consented); K4 chat later with its own consent, K5 embeddings
+  later; 2 000 documents / 2 GB a Workspace). K1a (migration 044,
+  `src/skills/routes.js`): a person's chat skills in `user_skills` (name, the
+  instructions sealed AAD `user_skills.ins:<id>`), own only (404 otherwise),
+  `SKILLS_MAX` 40 under an advisory lock, `/api/skills` GET / POST / PUT /
+  DELETE and `POST /api/skills/import` (the browser's `localStorage
+  jai-skills` moved up once at sign-in by `J.skills.load` in `J.loadMe`; the
+  browser id kept as `client_id`, so a second move adds nothing; a list that
+  did not fit stays in the browser); writes same-origin; account deletion
+  removes them; `SKILLS=off` -> the app uses the browser list as before.
+  `tests/user-skills.db.test.js`.
 - `src/ai/model-pricing.js` — **single source of truth for model prices**;
   every spend path, hybrid-pipeline included, reads it. Each price carries
   its source and check date; VoiceLab credits convert at the owner's
