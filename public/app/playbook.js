@@ -1,5 +1,6 @@
 /* Playbook (2026-10-22): shartnomani firmaning o'z qoidalari bilan solishtirish — qonun bilan emas.
    Server: GET/POST/PUT/DELETE /api/playbooks, POST /api/agent/playbook-review (src/agents/agent-routes.js),
+   the firm's playbooks through J.firm (GET /api/library, src/workspace/library.js),
    POST /api/analyze/extract (shartnoma matni). */
 (function (G) {
   'use strict';
@@ -40,21 +41,26 @@
     J.setTitle(s('title'));
     var v = J.mount('<div class="wrap narrow"><div class="vh"><div><div class="kicker">AI · Playbook</div><h2>' + esc(s('title')) + '</h2><p>' + esc(s('sub')) + '</p></div></div><div class="pb-body"></div></div>');
     var body = $('.pb-body', v);
-    var data = { builtin: [], mine: [] }, chosen = null, doc = null;
+    var data = { builtin: [], mine: [], firm: [] }, chosen = null, doc = null;
 
     async function load() {
       var r = await J.api('/api/playbooks');
       data = r.ok ? r.data : { builtin: [], mine: [] };
+      // the firm's playbooks (K1b): used by their rules, changed by owner / member
+      data.firm = J.firm ? (await J.firm.load(true)).filter(function (x) { return x.kind === 'playbook'; }).map(function (x) { return { id: x.id, name: x.name, description: x.data.description || '', rules: x.data.rules || [], item: x }; }) : [];
       setup();
     }
     function card(p, kind) {
       var on = chosen && chosen.kind === kind && String(chosen.id) === String(kind === 'b' ? p.key : p.id);
+      var acts = kind === 'b' ? '<button type="button" class="chip" data-a="copy">' + esc(s('copy')) + '</button>'
+        : kind === 'f' ? (J.firm.canWrite(p.item) ? '<button type="button" class="chip" data-a="edit">' + esc(s('edit')) + '</button><button type="button" class="chip" data-a="del">' + esc(J.firm.text('arch')) + '</button>' : '<button type="button" class="chip" data-a="copy">' + esc(s('copy')) + '</button>')
+        : '<button type="button" class="chip" data-a="edit">' + esc(s('edit')) + '</button>' + (J.firm ? '<button type="button" class="chip" data-a="share">' + esc(J.firm.text('share')) + '</button>' : '') + '<button type="button" class="chip" data-a="del">' + esc(s('del')) + '</button>';
       return '<div class="pb-card' + (on ? ' on' : '') + '" data-k="' + kind + '" data-id="' + esc(kind === 'b' ? p.key : p.id) + '"><b>' + esc(p.name) + '</b><small>' + esc(p.description || '') + '</small>' +
-        '<span class="pb-meta">' + (p.rules || []).length + ' ' + esc(s('rules')) + '</span><span class="pb-acts">' +
-        (kind === 'b' ? '<button type="button" class="chip" data-a="copy">' + esc(s('copy')) + '</button>' : '<button type="button" class="chip" data-a="edit">' + esc(s('edit')) + '</button><button type="button" class="chip" data-a="del">' + esc(s('del')) + '</button>') + '</span></div>';
+        '<span class="pb-meta">' + (p.rules || []).length + ' ' + esc(s('rules')) + (kind === 'f' && p.item.workspaceName ? ' · ' + esc(p.item.workspaceName) : '') + '</span><span class="pb-acts">' + acts + '</span></div>';
     }
     function setup() {
       body.innerHTML = '<div class="card" style="margin-bottom:18px"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px"><h4 style="margin:0">' + esc(s('pick')) + '</h4><button class="pill sm ghost" data-a="new" type="button">+ ' + esc(s('newPb')) + '</button></div>' +
+        (data.firm.length ? '<p class="muted pb-gh">' + esc(J.firm.text('firm')) + '</p><div class="pb-grid">' + data.firm.map(function (p) { return card(p, 'f'); }).join('') + '</div>' : '') +
         (data.mine.length ? '<p class="muted pb-gh">' + esc(s('mine')) + '</p><div class="pb-grid">' + data.mine.map(function (p) { return card(p, 'm'); }).join('') + '</div>' : '') +
         '<p class="muted pb-gh">' + esc(s('builtin')) + '</p><div class="pb-grid">' + data.builtin.map(function (p) { return card(p, 'b'); }).join('') + '</div></div>' +
         '<div class="card"><h4>' + esc(s('doc')) + '</h4><div class="pb-doc" style="margin:10px 0 14px"></div><label class="pill ghost sm" style="cursor:pointer">' + J.icon('up') + esc(s('upload')) + '<input type="file" hidden accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,.heic,image/*"></label></div>' +
@@ -63,11 +69,13 @@
       $$('.pb-card', body).forEach(function (c) {
         c.onclick = function (e) {
           var a = e.target.closest('[data-a]'), kind = c.dataset.k, id = c.dataset.id;
-          var p = kind === 'b' ? data.builtin.filter(function (x) { return x.key === id; })[0] : data.mine.filter(function (x) { return String(x.id) === id; })[0];
+          var p = kind === 'b' ? data.builtin.filter(function (x) { return x.key === id; })[0] : (kind === 'f' ? data.firm : data.mine).filter(function (x) { return String(x.id) === id; })[0];
           if (a && a.dataset.a === 'copy') { editor({ name: p.name, description: p.description, rules: p.rules }); return; }
-          if (a && a.dataset.a === 'edit') { editor(p); return; }
+          if (a && a.dataset.a === 'edit') { editor(kind === 'f' ? Object.assign({ firm: p.item }, p) : p); return; }
+          if (a && a.dataset.a === 'share') { a.disabled = true; J.firm.share('playbook', p.id).then(function (x) { a.disabled = false; if (x) load(); }); return; }
+          if (a && a.dataset.a === 'del' && kind === 'f') { J.firm.archive(p.item).then(function (ok) { if (ok) { if (chosen && chosen.kind === 'f' && String(chosen.id) === id) chosen = null; load(); } }); return; }
           if (a && a.dataset.a === 'del') { J.confirm(s('delQ'), s('del')).then(function (ok) { if (ok) J.api('/api/playbooks/' + p.id, { method: 'DELETE' }).then(function () { if (chosen && chosen.kind === 'm' && String(chosen.id) === id) chosen = null; load(); }); }); return; }
-          chosen = { kind: kind, id: id, name: p.name }; setup();
+          chosen = { kind: kind, id: id, name: p.name, rules: p.rules }; setup();
         };
       });
       $('[data-a=new]', body).onclick = function () { editor({ name: '', description: '', rules: [{ title: '', requirement: '', severity: 'medium', preferred: '' }] }); };
@@ -125,17 +133,20 @@
         read();
         var payload = { name: $('.pe-name', m.body).value.trim(), description: $('.pe-desc', m.body).value.trim(), rules: rules };
         this.disabled = true;
-        var r = await J.api(p.id ? '/api/playbooks/' + p.id : '/api/playbooks', { method: p.id ? 'PUT' : 'POST', body: payload });
+        var r = p.firm ? await J.firm.update(p.firm, payload.name, { description: payload.description, rules: payload.rules })
+          : await J.api(p.id ? '/api/playbooks/' + p.id : '/api/playbooks', { method: p.id ? 'PUT' : 'POST', body: payload });
         this.disabled = false;
         if (!r.ok) { J.toast(J.errMsg(r.data), 5000); return; }
-        m.close(); chosen = { kind: 'm', id: String(r.data.id), name: r.data.name }; load();
+        m.close(); chosen = p.firm ? { kind: 'f', id: String(p.firm.id), name: r.data.name, rules: (r.data.data || {}).rules } : { kind: 'm', id: String(r.data.id), name: r.data.name }; load();
       };
     }
 
     async function run() {
       if (!chosen || !doc || doc.status !== 'ok') { $('.pb-miss', body).innerHTML = '<div class="note-blue" style="margin-top:14px">' + esc(s('need')) + '</div>'; return; }
       var payload = doc.scanId ? { scanId: doc.scanId, name: doc.name } : { text: doc.text, name: doc.name };
-      if (chosen.kind === 'b') payload.builtin = chosen.id; else payload.playbookId = Number(chosen.id);
+      if (chosen.kind === 'b') payload.builtin = chosen.id;
+      else if (chosen.kind === 'f') payload.rules = chosen.rules; // a firm playbook goes by its rules
+      else payload.playbookId = Number(chosen.id);
       body.innerHTML = '<div class="card" style="display:flex;gap:12px;align-items:center"><span class="spin"></span>' + esc(s('working')) + '</div>';
       var r = await (J.agentApi || J.api)('/api/agent/playbook-review', { method: 'POST', body: payload });
       if (r.status === 402) { body.innerHTML = '<div class="card"><p>' + esc((r.data && r.data.message) || s('nounit')) + '</p><a class="pill" href="/tariff.html">' + esc(s('plans')) + '<i>→</i></a> <button class="pill ghost" data-a="back" type="button">' + esc(s('again')) + '</button></div>'; $('[data-a=back]', body).onclick = setup; return; }

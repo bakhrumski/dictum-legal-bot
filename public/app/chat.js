@@ -85,7 +85,9 @@
     },
     all: function () {
       return BUILTIN.map(function (s) { return { id: s.id, icon: s.icon, name: L(s.name), desc: L(s.desc), area: L(s.area), scope: 'j', builtin: true, src: s }; })
-        .concat(J.skills.mine().map(function (s) { return { id: 'u:' + s.id, icon: 'spark', name: s.name, desc: s.ins, area: t('sk.mine'), scope: 'p', mine: true, src: s }; }));
+        .concat(J.skills.mine().map(function (s) { return { id: 'u:' + s.id, icon: 'spark', name: s.name, desc: s.ins, area: t('sk.mine'), scope: 'p', mine: true, src: s }; }))
+        // the firm's skills (K1b, GET /api/library): used like one's own, changed by owner / member
+        .concat(J.firm ? J.firm.items('skill').map(function (x) { return { id: 'f:' + x.id, icon: 'team', name: x.name, desc: x.data.ins, area: x.workspaceName || J.firm.text('firm'), scope: 't', firm: true, item: x, src: { name: x.name, ins: x.data.ins } }; }) : []);
     },
     byId: function (id) { return J.skills.all().filter(function (s) { return s.id === id; })[0] || null; },
     title: L

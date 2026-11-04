@@ -226,6 +226,16 @@ function mountDraftingRoutes(app, deps) {
   initTemplatesTable().catch(e => console.error('[DRAFT DB] init error:', e.message));
 
   // ── GET /api/templates — list (all authenticated users) ──
+  // A firm template (K1b) is "ws:<library item id>": read from the Workspace
+  // library with the caller's membership checked there; anything else is a
+  // stored template, ownership checked in the query as before.
+  async function getTemplateFor(ref, adminId) {
+    if (/^ws:/u.test(String(ref || ''))) {
+      return require('../workspace/library').createLibrary({ db: require('../database/db').pool }).templateFor(ref, adminId);
+    }
+    return dbGetTemplate(ref, adminId);
+  }
+
   app.get('/api/templates', requireAuth, async (req, res) => {
     try {
       // Curated library + this user's own uploads. Never anyone else's.
@@ -264,7 +274,7 @@ function mountDraftingRoutes(app, deps) {
   // ── GET /api/templates/:id — full single template (slug or numeric id) ──
   app.get('/api/templates/:id', requireAuth, async (req, res) => {
     try {
-      const tpl = await dbGetTemplate(req.params.id, req.session.adminId);
+      const tpl = await getTemplateFor(req.params.id, req.session.adminId);
       if (!tpl) return res.status(404).json({ error: 'Shablon topilmadi' });
       res.json(tpl);
     } catch (e) {
@@ -315,7 +325,7 @@ function mountDraftingRoutes(app, deps) {
       const { templateId, fieldKey, values = {} } = req.body || {};
       // Scoped: templateId comes from the client, so an unscoped read would
       // let anyone pull another user's uploaded template by guessing an id.
-      const tpl = await dbGetTemplate(templateId, req.session.adminId);
+      const tpl = await getTemplateFor(templateId, req.session.adminId);
       if (!tpl) return res.status(404).json({ error: 'Shablon topilmadi' });
       const field = tpl.fields.find(f => f.key === fieldKey);
       if (!field) return res.status(400).json({ error: 'Maydon topilmadi' });
@@ -388,7 +398,7 @@ function mountDraftingRoutes(app, deps) {
       const { templateId, values = {}, format = 'pdf' } = req.body || {};
       // Scoped — without this, export renders someone else's private template
       // straight into a downloadable Word/PDF file.
-      const tpl = await dbGetTemplate(templateId, req.session.adminId);
+      const tpl = await getTemplateFor(templateId, req.session.adminId);
       if (!tpl) return res.status(404).json({ error: 'Shablon topilmadi' });
 
       const lang = tpl.lang === 'ru' ? 'ru' : 'uz';

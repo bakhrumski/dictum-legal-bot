@@ -187,6 +187,22 @@ ro'yxat birinchi kirishda bir marta ko'chiriladi (`/api/skills/import`,
 brauzer id'si `client_id` sifatida saqlanadi, takrorlansa hech narsa
 qo'shilmaydi); server bo'lmasa (`SKILLS=off`) brauzerdagi ro'yxat avvalgidek.
 
+K1b (2026-11-04, migratsiya 045, `src/workspace/library.js`): firma
+kutubxonasi `workspace_library_items` jadvalida (tur: shablon / playbook /
+ko'nikma, matn shifrlangan, AAD `workspace_library.content:<ws>:<id>:<v>`),
+har o'zgarish oldingi versiyani `workspace_library_versions` da saqlaydi
+(oxirgi 20 ta, qaytarish mumkin), eski oynadan yozish 409. O'z elementini
+ulashishda server uni egasining jadvalidan o'qiydi (boshqaniki 404); bitta
+element bitta Workspace'ga bir marta ulashiladi (qayta urinish 409, "firmadagi
+nusxani tahrirlang"). Owner / member yozadi, viewer o'qiydi va ishlatadi,
+begona 404; Workspace faol bo'lmasa (owner'ning tarifi tugagan) ko'rinmaydi.
+Jurnal (`workspace_activity_log`) kim va qachon yozganini saqlaydi, matnni
+emas. Ishlatish: ko'nikma - chatdagi "/" menyusi va "Jamoa" yorlig'i;
+playbook - Playbook sahifasidagi "Firma" bo'limi, tekshiruvga qoidalari bilan
+yuboriladi; shablon - Hujjat tayyorlash sahifasidagi "Firma" yorlig'i,
+`ws:<id>` bilan ochiladi va eksport qilinadi (a'zolik serverda tekshiriladi).
+Har turdan 200 ta (`WS_LIBRARY_MAX`), `WS_LIBRARY=off`.
+
 Dastlabki savollar:
 
 1. **Firma = Workspace** (yangi "tashkilot" tushunchasisiz) bo'lsinmi?
