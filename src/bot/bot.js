@@ -502,9 +502,21 @@ const libraryFlow = require('./telegram-library').createLibraryFlow({
 // requests must not be blocked by it. Re-enable the gate only deliberately by
 // setting TELEGRAM_CHANNEL_GATE_ENABLED=true; REQUIRED_CHANNEL on its own is
 // not enough to interrupt a user's legal question.
-const REQUIRED_CHANNEL = process.env.REQUIRED_CHANNEL !== undefined
+// The channel as Telegram's API needs it: "@name". The setting may be written
+// as "@name", "name", "t.me/name" or "https://t.me/name" (2026-11-04, owner:
+// the channel moved to t.me/bakhrom_abdimuminov); a link given to
+// getChatMember fails, and the gate fails closed - everyone would be blocked.
+function normalizeChannel(value) {
+  const v = String(value == null ? '' : value).trim();
+  if (!v) return '';
+  const m = /^(?:https?:\/\/)?(?:www\.)?(?:t\.me|telegram\.me)\/(?:s\/)?@?([A-Za-z0-9_]{4,64})\/?(?:[?#].*)?$/u.exec(v);
+  if (m) return '@' + m[1];
+  if (/^@?[A-Za-z][A-Za-z0-9_]{3,63}$/u.test(v)) return v.startsWith('@') ? v : '@' + v;
+  return v; // a numeric chat id (-100…) or anything else is passed as it is
+}
+const REQUIRED_CHANNEL = normalizeChannel(process.env.REQUIRED_CHANNEL !== undefined
   ? process.env.REQUIRED_CHANNEL
-  : '@eng_sara_huquqiy_yangiliklar';
+  : '@bakhrom_abdimuminov');
 const TELEGRAM_CHANNEL_GATE_ENABLED = /^(?:1|true|yes|on)$/i.test(
   String(process.env.TELEGRAM_CHANNEL_GATE_ENABLED || '').trim()
 );
@@ -2608,6 +2620,6 @@ function getRequestTypeLabel(type) {
 }
 
 // Export bot for use in other modules
-module.exports = { bot, getBot: () => bot, setClaimAgent: (a) => { claimAgent = a && typeof a.run === 'function' ? a : null; }, setDraftGenerator: (fn) => { draftGenerator = typeof fn === 'function' ? fn : null; }, setDocumentAnalyzer: (fn) => { documentAnalyzer = typeof fn === 'function' ? fn : null; }, isChannelMember, channelLink, REQUIRED_CHANNEL, INSTAGRAM_URL };
+module.exports = { bot, getBot: () => bot, setClaimAgent: (a) => { claimAgent = a && typeof a.run === 'function' ? a : null; }, setDraftGenerator: (fn) => { draftGenerator = typeof fn === 'function' ? fn : null; }, setDocumentAnalyzer: (fn) => { documentAnalyzer = typeof fn === 'function' ? fn : null; }, isChannelMember, channelLink, normalizeChannel, REQUIRED_CHANNEL, INSTAGRAM_URL };
 
 console.log('Bot ishlamoqda...');
