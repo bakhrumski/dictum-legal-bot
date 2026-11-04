@@ -118,7 +118,7 @@ Tartib va PR bo'linishi dizayn hujjatining 9-bo'limida.
   #/firma, Hujjatlarim tugmasi, muharrirdagi "Firma bandlari") merge (#563).
   K3 (Workspace AI firma hujjatlarini "qonun emas" belgisi bilan ko'radi)
   merge (#564). K4 (oddiy chatda "Firma bazasi" manbasi, egasining roziligi
-  bilan) PR'da.
+  bilan) merge (#565). K5 (embedding) dizayn bo'yicha o'lchovdan keyin.
 - [~] Adaptiv akkaunt va platformaning o'zini yaxshilashi (egasi, 2026-10-28):
   dizayn `docs/design/adaptiv-akkaunt.md` (#509, qabul qilingan), PR A1-A8.
   Birinchi qismi: shaxsiy ovoz glossariysi (#507). A1 (signallar va profil)
@@ -127,7 +127,10 @@ Tartib va PR bo'linishi dizayn hujjatining 9-bo'limida.
 ## 4-bosqich. Korporativ daraja
 
 - [ ] Mijoz portali: yurist va mijoz uchun umumiy ish, fayllar, savollar,
-  rollar, audit trail.
+  rollar, audit trail. Dizayn (2026-11-04, qoralama):
+  `docs/design/mijoz-portali.md` - mijoz ishning alohida roli (tarifsiz),
+  bot asosiy yo'l, P1 ko'rish -> P2 xabarlar -> P3 hujjat so'rovi ->
+  P4 jurnal -> P5 "Tanishdim" (ixtiyoriy); javoblar 9-bo'limda kutilmoqda.
 - [~] Ma'lumot himoyasi 1-bosqich (egasi, 2026-10-28, occlum.io tahlilidan keyin):
   `docs/design/shifrlash-1-bosqich.md` - bazada shifrlash, AI'ga yuborishdan
   oldin shaxsiy ma'lumotni yashirish, provayder siyosati, kirish jurnali.
@@ -396,3 +399,5 @@ nima o'lchandi.
   (faqat hujjati bor Workspace bo'lsa), server a'zolikni tekshiradi, bandlar
   "qonun emas" bilan promptga va iqtibos tekshiruviga; bunday javob keshga
   yozilmaydi; javob ostida qaysi hujjat va band ishlatilgani.
+- 2026-11-04: #565 (K4) merge: chatda "Firma bazasi" manbasi. Mijoz portali
+  dizayni (qoralama) PR'da.
