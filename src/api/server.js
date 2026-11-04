@@ -10788,6 +10788,38 @@ const planNotifier = require('../services/plan-notify').createPlanNotifier({
   catalog: tariffModule.ledger.PLAN_CATALOG,
 });
 
+// S4 monitoring (src/monitor/): once a Tashkent day, the acts linked in open
+// matters are compared with lex.uz; one Telegram digest per person, no AI.
+const lexMonitor = require('../monitor').createMonitor({
+  db: pool,
+  send: (chat, text, opts) => bot.sendMessage(chat, text, opts),
+  appUrl: (hash) => require('../bot/telegram-roles').appUrl(hash),
+  log: (m) => console.log(m),
+});
+app.get('/api/lex-monitor', requireAuth, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  try {
+    const a = (await pool.query('SELECT COALESCE(telegram_chat_id, telegram_user_id) IS NOT NULL AS tg FROM admins WHERE id = $1', [req.session.adminId])).rows[0] || {};
+    res.json({ off: await lexMonitor.isOff(req.session.adminId), telegram: !!a.tg, enabled: String(process.env.LEX_MONITOR || '').toLowerCase() !== 'off' });
+  } catch (e) { res.status(500).json({ error: 'failed' }); }
+});
+app.put('/api/lex-monitor', require('../auth/same-origin').requireSameOrigin, requireAuth, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  try { res.json(await lexMonitor.setOff(req.session.adminId, !!(req.body && req.body.off))); }
+  catch (e) { res.status(/does not exist/u.test(e.message) ? 503 : 500).json({ error: 'failed' }); }
+});
+// a master runs the day's check now (the digests table still sends one a person a day)
+app.post('/api/admin/lex-monitor/run', require('../auth/same-origin').requireSameOrigin, requireMasterAdmin, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  try {
+    const r = await pool.query('SELECT role FROM admins WHERE id = $1', [req.session.adminId]);
+    if (!r.rows[0] || r.rows[0].role !== 'master') return res.status(403).json({ error: 'Master admin access required' });
+    if (lexMonitor.isRunning()) return res.status(409).json({ error: 'running' });
+    logAudit(req, 'lex_monitor.run', 'lex_monitor', 'manual');
+    res.json(await lexMonitor.run());
+  } catch (e) { console.warn('[MONITOR] manual run:', e.message); res.status(500).json({ error: 'failed', message: e.message }); }
+});
+
 app.post('/api/admin/tariff/grant', requireMasterAdmin, async (req, res) => {
   try {
     const { adminId, plan, paymentRef, amountUzs = null, provider = 'manual', offerId = null } = req.body || {};
@@ -11996,6 +12028,7 @@ async function runMigrations() {
       });
       workspaceTelegram.start();
       planNotifier.start();
+      lexMonitor.start();
       console.log('[WORKSPACE] API, Realtime bridge and shared AI memory mounted');
     } catch (error) {
       error.workspaceMigrationFatal = true;

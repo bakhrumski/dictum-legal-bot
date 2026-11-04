@@ -170,6 +170,22 @@ const corpusChunk = { ...liveChunk, id: 77, source_type: 'law_text', source_url:
     }
   });
 
+  await test('S4 wiring: the daily monitor, the person\'s switch on the site and in the bot, deletion; no AI in src/monitor', () => {
+    const server = fs.readFileSync(path.join(__dirname, '../src/api/server.js'), 'utf8');
+    assert.ok(/require\('\.\.\/monitor'\)\.createMonitor\(/.test(server) && /lexMonitor\.start\(\);/.test(server));
+    assert.ok(/app\.get\('\/api\/lex-monitor', requireAuth/.test(server) && /app\.put\('\/api\/lex-monitor', require\('\.\.\/auth\/same-origin'\)\.requireSameOrigin, requireAuth/.test(server));
+    assert.ok(/app\.post\('\/api\/admin\/lex-monitor\/run', require\('\.\.\/auth\/same-origin'\)\.requireSameOrigin, requireMasterAdmin/.test(server));
+    const bot = fs.readFileSync(path.join(__dirname, '../src/bot/bot.js'), 'utf8');
+    assert.ok(/data === 'lxm_off' \|\| data === 'lxm_on'/.test(bot) && /getLinkedAccount\(pool, chatId/.test(bot));
+    const del = fs.readFileSync(path.join(__dirname, '../src/services/account-deletion.js'), 'utf8');
+    assert.ok(/DELETE FROM lex_monitor_settings/.test(del) && /DELETE FROM lex_monitor_digests/.test(del));
+    const ad = fs.readFileSync(path.join(__dirname, '../public/app/adaptive.js'), 'utf8');
+    assert.ok(/\/api\/lex-monitor/.test(ad));
+    const mon = fs.readFileSync(path.join(__dirname, '../src/monitor/index.js'), 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+    assert.ok(!/callAI|callCheapAI|callOpenAI|embedding/.test(mon), 'no AI');
+    assert.ok(!/summary|note\b/.test(mon.replace(/matter_items WHERE matter_id = \$1 AND kind IN \('chat', 'agent_run'\)/, '')), 'a matter\'s summary and notes are never read');
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);
 })();

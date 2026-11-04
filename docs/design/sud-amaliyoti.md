@@ -184,6 +184,34 @@ lex.uz'ga qo'shimcha so'rov yo'q, AI yo'q:
   kirmaydi.
 - `LEX_MONITOR=off`; odam o'z xabarlarini o'chira oladi.
 
+**Qanday qilindi (2026-11-03, `src/monitor/`, migratsiya 043, AI'siz).** Har
+kuni Toshkent vaqti bilan 9:00 dan keyin bir marta:
+1. Telegram'i ulangan va o'chirmagan odamning har ochiq ishi uchun uning
+   suhbatlaridagi javoblar (citator va lex.uz havolalari) va agent
+   natijalaridagi aktlar hamda citator nomlagan moddalar yig'iladi
+   (`lex_monitor_watch`: faqat id va modda raqami). Suhbatlar xotirada
+   ochiladi; ularning matni saqlanmaydi va yuborilmaydi. Ishning summary va
+   yozuvlari o'qilmaydi.
+2. 20 soatdan eski citator qatorli aktlar lex.uz'dan qayta o'qiladi: bittadan,
+   oralarida tanaffus bilan, kuniga ko'pi bilan `LEX_MONITOR_MAX_READS` (40),
+   jonli qidiruvdagi sahifa hajmi chegarasi bilan.
+3. Odamga oxirgi marta aytilgan holat bilan solishtiriladi; birinchi ko'rish
+   yangilik emas, u bazaviy holat bo'ladi. Yangilik hisoblanadi: lex.uz akt
+   kuchini yo'qotgan deb ko'rsatsa; kuzatilgan moddaning oxirgi o'zgarish
+   izohi yangiroq bo'lsa; moddasiz kuzatilgan aktga yangi o'zgartirish e'lon
+   qilinsa; o'sha kodeksning o'sha moddasini tilga olgan yangi Plenum qarori
+   qo'shilsa.
+4. Kishiga kuniga bitta xabar boradi (`lex_monitor_digests`). Xabarda ish
+   nomi, akt, nima o'zgargani va havola bor, ishning matni yo'q. Tugmalar:
+   "📂 Ishlarim" va "🔕 Bu xabarlarni o'chirish" (`lxm_off`, qayta yoqish -
+   `lxm_on`). Bazaviy holat faqat xabar yuborilgandan keyin suriladi;
+   yuborilmagan xabar ertasi kuni yuboriladi.
+Saytda kalit Moslashish sahifasidagi "Ishlarimdagi o'zgarishlar" kartasida
+(`GET / PUT /api/lex-monitor`). Qayta yoqilganda kuzatuv joriy holatdan
+boshlanadi, to'plangan eski o'zgarishlar yuborilmaydi. Master kunlik
+tekshiruvni hozir ishga tushira oladi: `POST /api/admin/lex-monitor/run`.
+Hozircha xabar faqat ish egasiga boradi; Workspace a'zolariga emas.
+
 ### S5. Sud qarorlari (keyinroq, alohida qaror bilan)
 
 lex.uz va my.sud.uz'dagi hal qiluv qarorlari. Ularda shaxsiy ma'lumot bor va

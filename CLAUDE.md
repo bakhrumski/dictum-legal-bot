@@ -543,6 +543,24 @@ Known state of the suites (Sept 2026):
   ⚠ not in force / stale and ℹ a cited unit changed within
   `CITATOR_RECENT_DAYS` (180), <= 4 lines. Dates are lex.uz's publication
   dates, not the day a change took effect. `CITATOR=off`. `tests/citator.test.js`.
+  S4 monitoring (2026-11-03, `src/monitor/`, migration 043, no AI): once a
+  Tashkent day after `MONITOR_HOUR` (9), for each open matter whose owner has
+  a linked Telegram and has not switched it off (`lex_monitor_settings`): the
+  acts its chats' answers (citator, lex.uz links) and agent results link, ids
+  and article numbers only (`lex_monitor_watch`; chats opened in memory,
+  summary and notes never read); acts whose citator row is over 20 h old are
+  read again (one at a time, `LEX_MONITOR_MAX_READS` 40, `LEX_MONITOR_PAUSE_MS`,
+  the live page size limit); compared with what the owner was last told
+  (first sight = baseline, no news): not in force now, a watched article's
+  newer change note, a newer amending publication for an act watched without
+  articles, a Plenum decision fetched since naming a watched article of that
+  code. One message a person a day (`lex_monitor_digests`): matter title, act,
+  what changed, link, never the matter's text; buttons "📂 Ishlarim" and
+  `lxm_off` (`lxm_on` back, in bot.js); the baseline moves only after a sent
+  message, a failed send frees the day. Site: the Moslashish card
+  (`GET / PUT /api/lex-monitor`); on again = a new baseline, no backlog.
+  Master: `POST /api/admin/lex-monitor/run`. Owner only, not Workspace
+  members. `LEX_MONITOR=off`. `tests/lex-monitor.db.test.js`.
 - `src/ai/model-pricing.js` — **single source of truth for model prices**;
   every spend path, hybrid-pipeline included, reads it. Each price carries
   its source and check date; VoiceLab credits convert at the owner's
