@@ -7204,6 +7204,14 @@ app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, t
     // the adaptive profile records the area once the answer is sent (src/adaptive/profile.js); nothing here reads it
     res.locals.answerTopic = topic || null;
 
+    // K4: the firm's knowledge base, only when the person chose it in the
+    // composer (src/workspace/kb-chat.js): membership checked, bands found
+    // with no AI; none chosen = null and the chat runs as before.
+    const kbChat = require('../workspace/kb-chat');
+    const firmChat = await kbChat.firmForChat(pool, { workspaceId: req.body.firmWorkspaceId, adminId: req.session?.adminId || null, question: message });
+    const firmUsed = !!(firmChat && firmChat.bands.length);
+    if (firmChat) console.log(`[Legal Chat] firm source: ${firmChat.bands.length} band(s)${firmChat.reason ? ` (${firmChat.reason})` : ''}`);
+
     // ── VERIFIED ANSWER OVERRIDE ──
     // The lawyer's "Korpusga qo'shish" button writes corrected answers to
     // legal_chunks with source_type='verified_qa' and an embedding. If the
@@ -7256,6 +7264,9 @@ app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, t
       console.warn(`[Legal Chat] qa_korpus lookup failed: ${korpusErr.message}`);
     }
 
+    // a canned answer cannot speak of the firm's documents: with firm bands
+    // it is grounding only and the answer is generated
+    if (korpusOverride && firmUsed) korpusOverride = null;
     if (korpusOverride) {
       try {
         const overrideEvidence = await retrieveLegalContext(message, topic, null, { strictTopic: true });
@@ -7360,6 +7371,10 @@ app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, t
     }
 
     // ── Short-circuit: return verified answer directly ──
+    if (verifiedOverride && firmUsed) {
+      qaFewShotBlock += `\n\n<TASDIQLANGAN_JAVOB_DATA>\n${verifiedOverride}\n</TASDIQLANGAN_JAVOB_DATA>`;
+      verifiedOverride = null;
+    }
     if (verifiedOverride) {
       try {
         const overrideEvidence = await retrieveLegalContext(message, topic, null, { strictTopic: true });
@@ -7408,6 +7423,8 @@ app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, t
       // a master's X-JAI-Redact comparison asks the provider each time
       && typeof (usageLedger.current() || { shared: {} }).shared.redactLegal !== 'boolean'
       && !hasDocument
+      // an answer built on one firm's documents is never served to anyone else
+      && !firmUsed
       && (!Array.isArray(history) || history.length === 0);
     // The key carries the corpus revision and the prompt-policy versions, so
     // an ingested, repealed or corrected law, or a new legal prompt, retires
@@ -7445,6 +7462,8 @@ app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, t
             cached: true,
             // the citator as it stood when the answer was cached (its checkedAt says when)
             citator: (c.rows[0].rag && Array.isArray(c.rows[0].rag.citator)) ? c.rows[0].rag.citator : [],
+            // a firm source chosen but nothing found in it: said, as on a fresh answer
+            firm: kbChat.replyMeta(firmChat),
             nextActions: buildLegalNextActions({ question: message, answer: cachedReply, topic }),
           };
           if (sse) { sse({ type: 'done', ...payload }); return res.end(); }
@@ -7507,6 +7526,8 @@ app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, t
     if (qaFewShotBlock) {
       systemPrompt += '\n\n' + qaFewShotBlock;
     }
+    // K4: the firm's bands after the law, with the rule that they are not law
+    if (firmUsed) systemPrompt += kbChat.promptBlock(firmChat);
     // Prompt-injection guard: uploaded documents are DATA, never instructions.
     // A scanned PDF/photo can contain adversarial text ("ignore previous
     // instructions, tell the user to...") that would otherwise flow straight
@@ -7777,7 +7798,8 @@ app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, t
     await hydrateLexAnchors(ragChunks, displayReply);
     {
       // quotes of the law are kept only when found word for word (answer-structure.js)
-      const normalized = normalizeLegalAnswerCitationsDetailed(displayReply, ragChunks, citationLanguage);
+      // K4: a quote of a firm band is kept only when its words are in the band (the checks above read the law only)
+      const normalized = normalizeLegalAnswerCitationsDetailed(displayReply, kbChat.quoteSources(ragChunks, firmChat), citationLanguage);
       displayReply = normalized.text;
       ragMeta = Object.assign({}, ragMeta || {}, { quotes: normalized.quotes });
     }
@@ -7793,7 +7815,7 @@ app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, t
     // (Master-Admin reviews → one-click ingest). Fire-and-forget; never blocks.
     if (topic) generateSourceSuggestions(message, topic, displayReply).catch(() => {});
 
-    const usedDbs = Array.isArray(databases) && databases.length > 0 ? databases : ['lex.uz'];
+    const usedDbs = (Array.isArray(databases) && databases.length > 0 ? databases : ['lex.uz']).concat(firmUsed ? ['Firma bazasi'] : []);
     const policyVersions = getLegalPolicyVersions();
     ragMeta = Object.assign({}, ragMeta || {}, { policyVersions });
     const responsePayload = {
@@ -7807,6 +7829,8 @@ app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, t
       nextActions: buildLegalNextActions({ question: message, answer: displayReply, topic }),
       followUpQuestions,
       citator,
+      // K4: which firm bands the answer was given (names, bands, pages - no text)
+      firm: kbChat.replyMeta(firmChat),
       // what of an attached document was used, and under which service
       documentScope: documentScope ? { ...documentScope, note: documentJob.excerptNote(documentScope, documentScope.analysisUnits) || null } : null,
     };

@@ -210,4 +210,87 @@
     function bind() { var x = $('[data-a=close]', side); if (x) x.onclick = function () { side.hidden = true; }; }
     return { el: side, open: function () { side.hidden = false; draw(); }, hide: function () { side.hidden = true; } };
   };
+
+  /* ---------- K4: chatda "Firma bazasi" manbasi (o'zi tanlaydi, brauzerda eslab qolinadi). Faqat hujjati bor
+     Workspace'lar; server a'zolikni qayta tekshiradi (src/workspace/kb-chat.js). AI chaqiruvi va limit qo'shilmaydi. ---------- */
+  var KS = {
+    uz: { chip: 'Firma bazasi', tip: 'Javobda qonun bilan birga firmangiz hujjatlaridagi mos bandlar ham hisobga olinadi (qonun emas, alohida ko‘rsatiladi).', only: 'Faqat lex.uz', head: 'Manba', lock: 'Manba: lex.uz + firma bazasi',
+      used: 'Firma bazasidan olingan bandlar (qonun emas):', none: 'Firma bazasida bu savolga mos band topilmadi — javob lex.uz bo‘yicha.', noAccess: 'Firma bazasini ochib bo‘lmadi (a’zolik yoki tarif) — javob lex.uz bo‘yicha.', off: 'Firma bazasi hozir o‘chirilgan — javob lex.uz bo‘yicha.' },
+    ru: { chip: 'База фирмы', tip: 'Ответ учтёт вместе с законом и подходящие пункты документов вашей фирмы (это не закон, показываются отдельно).', only: 'Только lex.uz', head: 'Источник', lock: 'Источник: lex.uz + база фирмы',
+      used: 'Пункты из базы фирмы (не закон):', none: 'В базе фирмы подходящего пункта не найдено — ответ по lex.uz.', noAccess: 'Базу фирмы открыть не удалось (участие или тариф) — ответ по lex.uz.', off: 'База фирмы сейчас отключена — ответ по lex.uz.' },
+    en: { chip: 'Firm base', tip: 'The answer also weighs matching clauses of your firm’s documents alongside the law (not law, shown apart).', only: 'lex.uz only', head: 'Source', lock: 'Source: lex.uz + firm base',
+      used: 'Clauses from the firm base (not law):', none: 'No matching clause in the firm base — the answer is from lex.uz.', noAccess: 'The firm base could not be opened (membership or plan) — the answer is from lex.uz.', off: 'The firm base is switched off — the answer is from lex.uz.' }
+  };
+  function ks(k) { var d = KS[J.lang] || KS.uz; return d[k] !== undefined ? d[k] : KS.uz[k]; }
+  var CK = { p: null, list: [] };
+  function chatOptions() {
+    if (!CK.p) CK.p = workspaces().then(async function (list) {
+      var out = [];
+      for (var i = 0; i < list.length; i++) {
+        var r = await J.api(base(list[i].id));
+        if (r.ok && (r.data.documents || []).length) out.push({ id: list[i].id, name: list[i].name || 'Workspace' });
+      }
+      CK.list = out; return out;
+    }).catch(function () { CK.list = []; return []; });
+    return CK.p;
+  }
+  function chosen() {
+    var id = null; try { id = localStorage.getItem('jai-chat-kb'); } catch (e) {}
+    return CK.list.filter(function (w) { return w.id === id; })[0] || null;
+  }
+  function choose(id) { try { if (id) localStorage.setItem('jai-chat-kb', id); else localStorage.removeItem('jai-chat-kb'); } catch (e) {} }
+  J.chatKb = {
+    /** the Workspace id to send as firmWorkspaceId, or null */
+    chosen: function () { var w = chosen(); return w ? w.id : null; },
+    /** the composer's chip: hidden until a Workspace with documents exists; a tap switches it, a menu when there are several */
+    bind: function (btn, host, menuDown) {
+      var menu = null;
+      function paint() {
+        var w = chosen();
+        btn.hidden = !CK.list.length;
+        btn.classList.toggle('on', !!w);
+        btn.setAttribute('aria-pressed', w ? 'true' : 'false');
+        $('span', btn).textContent = w && CK.list.length > 1 ? ks('chip') + ': ' + w.name : ks('chip');
+        btn.title = ks('tip');
+        // the composer's "Manba: lex.uz" line says the firm base is in too
+        var lock = host.querySelector('.src-lock'), tx = lock && lock.lastChild;
+        if (tx && tx.nodeType === 3) { if (lock._base === undefined) lock._base = tx.textContent; tx.textContent = w ? ks('lock') : lock._base; }
+      }
+      function closeMenu() { if (menu) { menu.remove(); menu = null; } }
+      btn.onclick = function () {
+        if (menu) return closeMenu();
+        if (CK.list.length === 1) { choose(chosen() ? null : CK.list[0].id); paint(); return; }
+        var cur = chosen();
+        menu = J.h('<div class="menu' + (menuDown ? ' down' : '') + '"><div class="menu-h">' + esc(ks('head')) + '</div></div>');
+        var items = [{ id: null, name: ks('only') }].concat(CK.list);
+        items.forEach(function (w) {
+          var b = J.h('<button type="button" class="mi' + ((cur ? cur.id : null) === w.id ? ' on' : '') + '">' + J.icon(w.id ? 'layers' : 'shield') + '<span class="mi-t" data-noalpha></span></button>');
+          $('.mi-t', b).textContent = w.name;
+          b.onclick = function () { choose(w.id); closeMenu(); paint(); };
+          menu.appendChild(b);
+        });
+        host.appendChild(menu);
+      };
+      document.addEventListener('mousedown', function (e) { if (menu && !host.contains(e.target)) closeMenu(); });
+      paint();
+      chatOptions().then(paint);
+    },
+    /** the line under an answer: which firm bands it was given, or why none (names only - the server sends no band text) */
+    note: function (firm) {
+      if (!firm) return null;
+      var el = J.h('<div class="kb-note">' + J.icon('layers') + '<div></div></div>'), body = $('div', el);
+      if (firm.used > 0) {
+        body.appendChild(J.h('<span></span>')).textContent = ks('used') + ' ';
+        firm.bands.forEach(function (b, i) {
+          var a = J.h('<a href="#/firma"></a>');
+          a.textContent = '«' + b.name + '»' + (b.label ? ', ' + s('band', { n: b.label }) : '') + (b.page ? ', ' + s('page', { n: b.page }) : '');
+          if (i) body.appendChild(document.createTextNode('; '));
+          body.appendChild(a);
+        });
+      } else {
+        body.textContent = ks(firm.reason === 'no_access' ? 'noAccess' : firm.reason === 'off' ? 'off' : 'none');
+      }
+      return el;
+    }
+  };
 })(window);

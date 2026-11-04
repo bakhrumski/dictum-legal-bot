@@ -275,6 +275,40 @@ javobga taxminan $0,0008; band topilmasa, qo'shimcha xarajat yo'q.
 
 `WS_KB_AI=off` faqat AI qismini o'chiradi; qidiruv ishlayveradi.
 
+K4 (2026-11-04, egasi rozilik berdi: "K4 ni boshla"): oddiy chatda
+"Firma bazasi" manbasi (`src/workspace/kb-chat.js`).
+
+Kim nima yutadi: firmaning yuristi chatda savol berganda qonun bilan birga
+firmaning o'z shartnomalaridagi mos bandni ham bir javobda ko'radi - endi
+#/firma sahifasida alohida qidirib, keyin chatga qaytish shart emas.
+
+Qanday ishlaydi:
+- yozish maydonida "Firma bazasi" tugmasi faqat hujjati bor faol Workspace
+  bo'lsa ko'rinadi; bir firma bo'lsa bosish yoqadi / o'chiradi, bir nechta
+  bo'lsa ro'yxatdan tanlanadi ("Faqat lex.uz" ham bor); tanlov shu brauzerda
+  eslab qolinadi, yoqilganda pastdagi yozuv "Manba: lex.uz + firma bazasi";
+- so'rov `firmWorkspaceId` bilan boradi; server a'zolikni qayta tekshiradi
+  (viewer ham o'qiydi; begona, noto'g'ri id yoki faol bo'lmagan Workspace -
+  band yo'q, javob lex.uz bo'yicha va buni aytadi);
+- bandlar K3 dagi kabi AI'siz olinadi (≤ 5 band / 8 000 belgi) va promptga
+  "FIRMA HUJJATI (qonun emas)" bloki va `FIRM_RULE` bilan qo'shiladi;
+- iqtiboslar tekshiruvi firma bandlarini ham o'qiydi ("— Firma: <nomi>,
+  <band>-band"); lex.uz qayta tekshiruvi, claim guard va citator faqat
+  qonunni o'qiydi - o'zgarmagan;
+- firma bandi bor javob keshga yozilmaydi va keshdan olinmaydi (bir
+  firmaning hujjatlari asosidagi javob boshqaga berilmaydi); tasdiqlangan
+  tayyor javob (korpus / verified QA) bu holda to'g'ridan-to'g'ri
+  qaytarilmaydi, faqat asos sifatida beriladi;
+- javob ostida: "Firma bazasidan olingan bandlar (qonun emas): «nomi»,
+  3.1-band, 2-bet" yoki "mos band topilmadi - javob lex.uz bo'yicha";
+  javobda band matni emas, faqat nomi, bandi va sahifasi qaytadi; suhbat
+  qayta ochilganda ham ko'rinadi.
+
+Tanlanmasa - chat avvalgidek. Narx: K3 dagi kabi (qo'shimcha AI chaqiruvi
+yo'q, limitdan ortiqcha birlik olinmaydi; kontekst ~2 700 tokenga uzayishi
+mumkin). Telegram bot o'zgarmagan. `WS_KB_CHAT=off` faqat chat qismini
+o'chiradi (`WS_KB_AI` unga ta'sir qilmaydi).
+
 Dastlabki savollar:
 
 1. **Firma = Workspace** (yangi "tashkilot" tushunchasisiz) bo'lsinmi?

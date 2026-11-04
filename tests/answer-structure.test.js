@@ -80,7 +80,7 @@ test('wired: the chat prompt asks for both; web chat returns followUpQuestions a
   const src = fs.readFileSync(path.join(__dirname, '../src/api/server.js'), 'utf8');
   assert.ok(src.includes("require('../rag/answer-structure').promptRules(lexLangForText(userQuestion))"));
   assert.ok(/extractFollowUpQuestions\(displayReply\)/u.test(src) && /followUpQuestions,\n/u.test(src));
-  assert.ok(/normalizeLegalAnswerCitationsDetailed\(displayReply, ragChunks, citationLanguage\)/u.test(src) && /quotes: normalized\.quotes/u.test(src));
+  assert.ok(/normalizeLegalAnswerCitationsDetailed\(displayReply, kbChat\.quoteSources\(ragChunks, firmChat\), citationLanguage\)/u.test(src) && /quotes: normalized\.quotes/u.test(src));
   const tg = fs.readFileSync(path.join(__dirname, '../src/agents/telegram-agent.js'), 'utf8');
   assert.ok(/followUpQuestions: followUp\.questions/u.test(tg) && /Yana so'rashingiz mumkin/u.test(tg));
   const { toTelegramMarkdown } = require('../src/agents/telegram-agent');
