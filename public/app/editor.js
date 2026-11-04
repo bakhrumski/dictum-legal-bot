@@ -132,6 +132,7 @@
       '<button class="pill sm ghost" type="button" data-a="share">' + J.icon('team') + '<span class="ed-shn">' + esc(s('sh').share) + '</span></button>' +
       (J.editorCheck ? '<button class="pill sm ghost" type="button" data-a="chk">' + J.icon('check') + '<span class="ed-chkn">' + esc(J.editorCheckLabel()) + '</span></button>' : '') +
       (J.editorAi ? '<button class="pill sm ghost" type="button" data-a="ai">' + J.icon('spark') + '<span class="ed-ain">' + esc(J.editorAiLabel()) + '</span></button>' : '') +
+      (J.editorKb ? '<button class="pill sm ghost" type="button" data-a="kb">' + J.icon('layers') + '<span class="ed-kbn">' + esc(J.editorKbLabel()) + '</span></button>' : '') +
       '<button class="pill sm ghost" type="button" data-a="cm">' + J.icon('chat') + '<span class="ed-cmn">' + esc(s('cm').title) + '</span></button>' +
       '<button class="pill sm ghost" type="button" data-a="ver">' + esc(s('versions')) + '</button>' +
       '<div class="ed-dl"><button class="pill sm" type="button" data-a="dl">' + J.icon('up') + esc(s('download')) + '</button><div class="ed-menu" hidden><button type="button" data-a="docx">' + J.icon('word') + esc(s('word')) + '</button><button type="button" data-a="pdf">' + J.icon('doc') + esc(s('pdf')) + '</button><button type="button" data-a="del" class="ed-del">' + J.icon('trash') + esc(s('del')) + '</button></div></div></div>' +
@@ -376,11 +377,15 @@
     /* D5: the check panel (editor-check.js): free rules at once, AI spelling as proposals */
     var CHK = J.editorCheck ? J.editorCheck(v, ed, { id: id, canWrite: canWrite, flush: function () { return canWrite ? flush() : Promise.resolve(); },
       changed: function () { if (canWrite) { dirty = true; status('saving'); schedule(); } } }) : null;
-    /* one side panel at a time: comments, AI analysis, check */
-    var cmSide = $('.ed-side', v), panels = [AI || null, CHK].filter(Boolean);
+    /* K2b: the firm's clauses (firm-kb.js): find one, put it where the cursor is */
+    var KB = J.editorKb ? J.editorKb(v, ed, { id: id, canWrite: canWrite, flush: function () { return canWrite ? flush() : Promise.resolve(); },
+      changed: function () { if (canWrite) { dirty = true; status('saving'); schedule(); } } }) : null;
+    /* one side panel at a time: comments, AI analysis, check, firm clauses */
+    var cmSide = $('.ed-side', v), panels = [AI || null, CHK, KB].filter(Boolean);
     var only = function (keep) { if (keep !== 'cm') cmSide.hidden = true; panels.forEach(function (p) { if (p !== keep) p.hide(); }); };
     if (AI) $('[data-a=ai]', v).onclick = function () { if (AI.el.hidden) { only(AI); AI.open(); } else AI.hide(); };
     if (CHK) $('[data-a=chk]', v).onclick = function () { if (CHK.el.hidden) { only(CHK); CHK.open(); } else CHK.hide(); };
+    if (KB) $('[data-a=kb]', v).onclick = function () { if (KB.el.hidden) { only(KB); KB.open(); } else KB.hide(); };
     $('[data-a=cm]', v).addEventListener('click', function () { if (!cmSide.hidden) only('cm'); });
     /* toolbar by role: a reader keeps only the comment button (a commenter) or nothing */
     if (!canWrite) $$('[data-c]', bar).forEach(function (b) { if (b.dataset.c !== 'comment' || !canComment) b.hidden = true; });

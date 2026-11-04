@@ -608,7 +608,21 @@ Known state of the suites (Sept 2026):
   `splitChunks`: clause numbers and paragraphs, ~2 000 chars. Owner / member
   add, viewer searches, stranger 404; 2 000 documents / 2 GB a Workspace
   (`WS_KB_MAX_DOCS`, `WS_KB_MAX_BYTES`); no DATA_KEYS -> plain text and ILIKE.
-  `WS_KB=off`. UI in K2b. `tests/workspace-kb.db.test.js`.
+  `WS_KB=off`. `tests/workspace-kb.db.test.js`.
+  K2b (`public/app/firm-kb.js`): page `#/firma` (search: document, clause,
+  page, passage with the query's roots on light blue, `partial` marked, the
+  whole band in a window; Hujjatlar: list, owner / member add from
+  Hujjatlarim and remove), "Firma bazasiga" on each Hujjatlarim document
+  (`J.kbAdd`), the editor's "Firma bandlari" panel (`J.editorKb`: search,
+  insert the band at the cursor, add this document); nav `#/firma` in the
+  lawyer and firm role views and the full view, locked on Sinov. Search
+  since K2b: a Cyrillic band is indexed in Latin too and a Cyrillic query is
+  written in Latin (`cyrToLat`), 4-letter word starts are indexed, the hit is
+  the line with the most query roots (its own clause number counts); without
+  DATA_KEYS the roots are kept unhashed (`plain-index`). Measured on
+  `docs/quality/kb-search-eval/cases.json` (12 synthetic documents, 20
+  queries, `scripts/kb-search-eval.js`, unreviewed): 19 / 20 found, 17 first,
+  the miss a synonym (K5).
 - `src/ai/model-pricing.js` — **single source of truth for model prices**;
   every spend path, hybrid-pipeline included, reads it. Each price carries
   its source and check date; VoiceLab credits convert at the owner's

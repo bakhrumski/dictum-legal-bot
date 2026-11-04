@@ -67,6 +67,20 @@ Tomonlar yengib bo'lmaydigan kuch holatlarida javobgar bo'lmaydi.`;
     assert.ok(!/callAI|callCheapAI|callOpenAI|getEmbedding|embedding/.test(src));
   });
 
+  await test('K2b pages: #/firma, the nav (lawyer and firm views), Hujjatlarim and the editor panel; light blue hits; "encrypted" only when sealed', () => {
+    const read = f => fs.readFileSync(path.join(__dirname, '../public/app', f), 'utf8');
+    const kbjs = read('firm-kb.js');
+    assert.ok(/J\.route\(\/\^\\\/firma\$\//.test(kbjs) && /J\.editorKb = function/.test(kbjs) && /J\.kbAdd = async function/.test(kbjs));
+    assert.ok(/r\.data\.sealed \?/.test(kbjs), 'encryption claimed only when sealed');
+    assert.ok(read('index.html').includes('/app/firm-kb.js?v='));
+    assert.ok(/\['#\/firma', 'layers', 'nav\.kb'\]/.test(read('app.js')));
+    const core = read('core.js');
+    assert.ok(/lawyer: \{ slug: 'yurist', nav: \[[^\]]*'#\/firma'/.test(core) && /firm: \{ slug: 'firma', nav: \[[^\]]*'#\/firma'/.test(core));
+    assert.ok(/data-kb=/.test(read('library.js')) && /J\.kbAdd\(\{ kind: 'library'/.test(read('library.js')));
+    assert.ok(/J\.editorKb\(v, ed,/.test(read('editor.js')) && /panels = \[AI \|\| null, CHK, KB\]/.test(read('editor.js')));
+    assert.ok(/\.kb-hit\{background:var\(--accent-soft\)/.test(read('app.css')), 'hits on light blue');
+  });
+
   if (!process.env.TEST_DATABASE_URL) {
     console.log('  (database part skipped: TEST_DATABASE_URL not set)');
     console.log(`\n${passed} passed, ${failed} failed`);
@@ -120,6 +134,7 @@ Tomonlar yengib bo'lmaydigan kuch holatlarida javobgar bo'lmaydi.`;
     const late = (await kb.search(ws, viewer, { q: 'kechiktirilgan kun penya' })).results[0];
     assert.ok(late.page === 2 || late.label, 'where it stands');
     assert.deepStrictEqual((await kb.search(ws, viewer, { q: 'ijara' })).results, [], 'a word not in the document');
+    assert.ok((await kb.search(ws, viewer, { q: 'umumiy miqdo' })).results.length >= 1, 'a 5-letter start');
     assert.deepStrictEqual((await kb.search(ws, viewer, { q: '' })).results, []);
   });
 
@@ -144,11 +159,18 @@ Tomonlar yengib bo'lmaydigan kuch holatlarida javobgar bo'lmaydi.`;
       [ws, wd, privacy.seal('Ichki mehnat tartibi qoidalari: ish vaqti soat 9 dan 18 gacha, tushlik tanaffusi bir soat.', `workspace_document_versions.content_text:${ws}:${wd}`), member]));
     await kb.add(ws, member, { from: { kind: 'workspace_doc', id: wd } });
     assert.ok((await kb.search(ws, viewer, { q: 'tushlik tanaffusi' })).results.length === 1);
+    // a Cyrillic document meets a Latin query and the other way round; a 4-letter word meets its longer forms
+    const cy = (await withWorkspaceTransaction(pool, member, c => c.query(`INSERT INTO workspace_documents (workspace_id, title, kind, created_by) VALUES ($1, 'Ижара', 'generated', $2) RETURNING id`, [ws, member]))).rows[0].id;
+    await withWorkspaceTransaction(pool, member, c => c.query(`INSERT INTO workspace_document_versions (workspace_id, document_id, version_number, content_text, created_by) VALUES ($1, $2, 1, $3, $4)`,
+      [ws, cy, privacy.seal('1. Ижарачи ижара ҳақини ҳар ойнинг ўнинчи санасигача тўлайди. Тижорат сирини ошкор қилмайди.', `workspace_document_versions.content_text:${ws}:${cy}`), member]));
+    const cyDoc = await kb.add(ws, member, { from: { kind: 'workspace_doc', id: cy } });
+    assert.ok((await kb.search(ws, viewer, { q: 'ijara haqini' })).results.some(x => x.documentId === cyDoc.id), 'Latin query, Cyrillic document');
+    assert.ok((await kb.search(ws, viewer, { q: 'тижорат сири' })).results.some(x => x.documentId === cyDoc.id && !x.partial), 'Cyrillic query; a 4-letter word meets "сирини"');
   });
 
   await test('list without text; taking a document out deletes its bands and frees the text for a new add', async () => {
     const l = await kb.list(ws, viewer);
-    assert.ok(l.documents.length === 3 && l.used.documents === 3 && !JSON.stringify(l).includes('penya'));
+    assert.ok(l.documents.length === 4 && l.used.documents === 4 && !JSON.stringify(l).includes('penya'));
     await assert.rejects(kb.remove(ws, docId, viewer), e => e.status === 403);
     await kb.remove(ws, docId, member);
     assert.strictEqual((await pool.query('SELECT count(*)::int AS n FROM workspace_kb_chunks WHERE document_id = $1', [docId])).rows[0].n, 0);
@@ -158,7 +180,7 @@ Tomonlar yengib bo'lmaydigan kuch holatlarida javobgar bo'lmaydi.`;
   });
 
   await test('limits: documents a Workspace (WS_KB_MAX_DOCS); a text too short is refused', async () => {
-    process.env.WS_KB_MAX_DOCS = '3';
+    process.env.WS_KB_MAX_DOCS = '4';
     const s2 = await scans.saveScan(pool, { adminId: member, fileHash: require("crypto").createHash("sha256").update(String(rnd())).digest("hex"), kind: 'text', pages: 1, bytes: 100, text: 'Boshqa hujjat matni, yetarlicha uzun bo\'lishi kerak bo\'lgan qism shu yerda.', provider: 'text', name: 'b.docx' });
     await assert.rejects(kb.add(ws, member, { from: { kind: 'library', id: s2.id || s2 } }), e => e.status === 409 && e.code === 'too_many');
     delete process.env.WS_KB_MAX_DOCS;

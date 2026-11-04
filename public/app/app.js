@@ -13,7 +13,7 @@
   /* ---------- chap panel ---------- */
   var NAV = [
     ['#/', 'home', 'nav.home'], ['#/ishlar', 'folder', 'nav.matters'], ['#/hujjatlarim', 'doc', 'nav.docs'], ['#/tahlil', 'scan', 'nav.analyze'], ['#/tayyorlash', 'pen', 'nav.draft'],
-    ['#/konikmalar', 'spark', 'nav.skills'], ['#/yozuvlar', 'mic', 'nav.voice'], ['#/jamoa', 'team', 'nav.team'], ['#/advokatlar', 'scale', 'nav.lawyers']
+    ['#/konikmalar', 'spark', 'nav.skills'], ['#/firma', 'layers', 'nav.kb'], ['#/yozuvlar', 'mic', 'nav.voice'], ['#/jamoa', 'team', 'nav.team'], ['#/advokatlar', 'scale', 'nav.lawyers']
   ];
   function drawNav() {
     // Boshqaruv faqat bazada master bo'lgan hisobga (admin.js; server har so'rovni o'zi tekshiradi)
@@ -26,7 +26,7 @@
         // the client's own role view: the other sections are one click away
         rv && !J.rolePreview() ? [['#/rol/hammasi', 'more', 'rv.all']] : []);
     $('#nav').innerHTML = items.map(function (n) {
-      var lock = (n[0] === '#/tayyorlash' && !J.hasService('draft') && !J.needsPlan()) || (n[0] === '#/jamoa' && !J.isStaff() && /^(sinov|none)$/.test(J.planKey()));
+      var lock = (n[0] === '#/tayyorlash' && !J.hasService('draft') && !J.needsPlan()) || ((n[0] === '#/jamoa' || n[0] === '#/firma') && !J.isStaff() && /^(sinov|none)$/.test(J.planKey()));
       return '<a href="' + n[0] + '" data-r="' + n[0] + '" title="' + esc(t(n[2])) + '">' + J.icon(n[1]) + '<span>' + esc(t(n[2])) + '</span>' + (lock ? '<span class="lock">' + J.icon('lock') + '</span>' : '') + '</a>';
     }).join('');
     markNav();

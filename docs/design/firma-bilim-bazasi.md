@@ -221,6 +221,28 @@ bo'lmasa, matn ochiq saqlanadi va qidiruv `ILIKE` bilan ishlaydi.
 `WS_KB=off` o'chiradi. UI (qidiruv sahifasi, "Firma bazasiga qo'shish"
 tugmalari, muharrirdagi "Firma bandlari") K2b da.
 
+K2b (2026-11-04, `public/app/firm-kb.js`):
+- **Sahifa.** `#/firma` "Firma bazasi". Unda ikki yorliq bor:
+  - Qidiruv: natijada hujjat, band, sahifa va parcha chiqadi; so'rov so'zlari och ko'k fonda belgilanadi; "qisman" mos kelganlar alohida ko'rsatiladi; band oynada to'liq ochiladi va undan nusxa olinadi.
+  - Hujjatlar: ro'yxat. Owner yoki member "Hujjat qo'shish" bilan Hujjatlarimdan qo'shadi va kerak bo'lsa olib tashlaydi.
+- **Tugmalar.** Hujjatlarimda har hujjat yonida "Firma bazasiga" tugmasi bor.
+- **Muharrir.** "Firma bandlari" paneli: qidiradi, topilgan bandni kursor turgan joyga qo'yadi, shu hujjatni bazaga qo'shadi.
+- **Navigatsiya.** Bo'lim Yurist va Advokatlik firmasi ko'rinishlarida va to'liq ko'rinishda bor; Sinovda qulf bilan chiqadi.
+
+K2b paytida qidiruvga uchta o'zgarish kiritildi (sinov to'plami ko'rsatdi):
+1. Kirillcha band lotinchada ham indekslanadi, so'rov esa lotinchaga o'giriladi. Lotincha so'rov kirillcha hujjatni topadi va aksincha.
+2. 4 harfli so'z boshlari ham indekslanadi. Masalan, "siri" so'rovi "sirini"ni topadi.
+3. Parcha so'rov so'zlari eng ko'p uchragan qatordan boshlanadi. Band va sahifa raqami ham shu qatorning o'zidan olinadi.
+
+`DATA_KEYS` bo'lmasa, ildizlar xeshsiz saqlanadi; matn bu holda baribir ochiq turadi. Qidiruv ikkala rejimda bir xil ishlaydi.
+
+O'lchov (`scripts/kb-search-eval.js`, `docs/quality/kb-search-eval/cases.json`: 12 sintetik hujjat, 20 so'rov, yurist hali ko'rmagan):
+- kalit bilan ham, kalitsiz ham 20 tadan 19 tasi topildi;
+- 17 tasida kerakli hujjat birinchi o'rinda;
+- topilmagani "arenda": ma'nodosh so'z, uni K5 hal qiladi;
+- "jarima kechikish" so'rovi "qisman" sifatida 2-o'rinda chiqdi;
+- bitta so'rov 1–11 ms vaqt oldi.
+
 Dastlabki savollar:
 
 1. **Firma = Workspace** (yangi "tashkilot" tushunchasisiz) bo'lsinmi?

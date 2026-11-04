@@ -70,6 +70,8 @@
       $('.lib-l', v).innerHTML = list.length ? list.map(function (d) {
         return '<div class="mt-item lib-it" data-id="' + esc(d.id) + '"><span>' + J.icon(d.kind === 'text' ? 'doc' : 'scan') + '</span><span style="flex:1;min-width:0"><b class="lib-n" data-noalpha style="display:block;overflow-wrap:anywhere"></b><small class="muted">' + esc(meta(d)) + '</small></span>' +
           (J.openLibraryInEditor ? '<button class="pill sm ghost" type="button" data-ed="' + esc(d.id) + '">' + esc(s('edit')) + '</button>' : '') +
+          // K2b: into the firm's searchable base (a text document; a scan has its text after OCR too)
+          (J.kbAdd ? '<button class="pill sm ghost" type="button" data-kb="' + esc(d.id) + '" title="' + esc(J.kbText('toKb')) + '" aria-label="' + esc(J.kbText('toKb')) + '">' + J.icon('layers') + '</button>' : '') +
           '<button class="pill sm ghost" type="button" data-rn="' + esc(d.id) + '" aria-label="' + esc(s('rename')) + '">' + J.icon('pen') + '</button>' +
           '<button class="pill sm ghost" type="button" data-del="' + esc(d.id) + '" aria-label="' + esc(s('del')) + '">' + J.icon('trash') + '</button></div>';
       }).join('') : '<div class="empty-state">' + esc(s('none')) + '</div>';
@@ -77,6 +79,7 @@
       $$('[data-ed]', v).forEach(function (b) {
         b.onclick = function () { b.disabled = true; J.openLibraryInEditor(all.filter(function (x) { return x.id === b.dataset.ed; })[0]); };
       });
+      $$('[data-kb]', v).forEach(function (b) { b.onclick = async function () { b.disabled = true; await J.kbAdd({ kind: 'library', id: b.dataset.kb }); b.disabled = false; }; });
       $$('[data-rn]', v).forEach(function (b) {
         b.onclick = async function () {
           var d = all.filter(function (x) { return x.id === b.dataset.rn; })[0];

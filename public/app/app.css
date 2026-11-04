@@ -943,3 +943,15 @@ textarea.inp{height:auto;min-height:96px;padding:10px 13px;resize:vertical;line-
 .pl-open{text-align:left}
 .adm-b .link{border:0;background:none;padding:0;color:var(--cta);cursor:pointer;font:inherit;text-align:left}
 .adm-b .link:hover{text-decoration:underline}
+/* K2b firma bazasi (firm-kb.js): results, the hit in light blue (the owner's rule) */
+.kb-q{display:flex;gap:8px;align-items:center}
+.kb-q .inp{flex:1;min-width:0}
+.kb-res{display:flex;flex-direction:column;gap:8px}
+.kb-r{display:block;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;cursor:pointer;font:inherit;color:inherit}
+.kb-r:hover{border-color:var(--cta)}
+.kb-rh{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;margin-bottom:4px}
+.kb-rh b{font-size:14px;font-weight:600;overflow-wrap:anywhere}
+.kb-p{display:block;font-size:13.5px;line-height:1.55;color:var(--fg)}
+.kb-hit{background:var(--accent-soft);color:inherit;border-radius:3px;padding:0 1px}
+.kb-part{color:var(--warn)}
+.ed-kb .kb-q .pill{flex:none}
