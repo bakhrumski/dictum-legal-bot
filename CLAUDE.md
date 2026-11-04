@@ -577,6 +577,23 @@ Known state of the suites (Sept 2026):
   did not fit stays in the browser); writes same-origin; account deletion
   removes them; `SKILLS=off` -> the app uses the browser list as before.
   `tests/user-skills.db.test.js`.
+  K1b (migration 045, `src/workspace/library.js`): the firm library
+  `workspace_library_items` (kind template / playbook / skill, `content` the
+  body as sealed JSON, AAD `workspace_library.content:<ws>:<id>:<v>`), every
+  change keeping the previous one in `workspace_library_versions` (20 kept,
+  restore keeps the current first), a stale `version` 409; `/api/library`
+  (every active Workspace of the caller), `/api/workspaces/:id/library`
+  GET / POST (`{ from: { kind, id } }` reads one's own item from its owner
+  table - another's 404; one source shared to a Workspace once, 409
+  `already_shared`) / PUT / DELETE (archive) / versions / restore; owner and
+  member write, viewer reads, a stranger 404, an inactive Workspace hidden;
+  writes in the Workspace transaction, the activity-log trigger
+  (`library_item`) drops `content`. Use: firm skills in `J.skills.all`
+  (scope 't', the "/" menu, the Jamoa tab), firm playbooks reviewed by their
+  `rules`, firm templates opened and exported by `ws:<id>` (drafting's
+  `getTemplateFor`, membership checked); the page helper is `J.firm` in
+  `public/app/ws-save.js`. `WS_LIBRARY_MAX` 200 a kind, `WS_LIBRARY=off`.
+  `tests/workspace-library.db.test.js`.
 - `src/ai/model-pricing.js` — **single source of truth for model prices**;
   every spend path, hybrid-pipeline included, reads it. Each price carries
   its source and check date; VoiceLab credits convert at the owner's

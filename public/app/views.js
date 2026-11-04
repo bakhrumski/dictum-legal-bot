@@ -268,7 +268,7 @@
       // from a chat: the way back first, and the AI card (the step chosen there) above the agent card
       body.innerHTML = (pre && pre.from ? '<button class="chip" data-a="backchat" type="button" style="margin-bottom:16px">' + J.icon('back') + esc(t('dr.backchat')) + '</button>' : '') +
         (pre ? aiCard + agentCard : agentCard + aiCard) +
-        '<div class="tabs"><button class="on" data-tab="all">' + esc(t('dr.templates')) + '</button><button data-tab="mine">' + esc(t('dr.mine')) + '</button></div>' +
+        '<div class="tabs"><button class="on" data-tab="all">' + esc(t('dr.templates')) + '</button><button data-tab="mine">' + esc(t('dr.mine')) + '</button>' + (J.firm ? '<button data-tab="firm">' + esc(J.firm.text('firm')) + '</button>' : '') + '</div>' +
         '<div class="dr-up" hidden></div>' +
         '<div class="search" style="margin-bottom:14px">' + J.icon('search') + '<input class="inp" data-f="q" placeholder="' + esc(t('dr.search')) + '"></div><div class="grid3 tpl-list"><div class="skel"></div></div>';
       var bc = $('[data-a=backchat]', body);
@@ -285,11 +285,18 @@
       $('[data-f=q]', body).oninput = draw;
       function draw() {
         var s = ($('[data-f=q]', body).value || '').toLowerCase();
-        var list = all.filter(function (x) { return (tab === 'mine' ? x.isMine : true) && (!s || (L(x.name) + ' ' + L(x.description)).toLowerCase().indexOf(s) > -1); });
+        // the firm's templates (K1b): opened by "ws:<id>", the membership checked on the server
+        var firm = J.firm ? J.firm.items('template').map(function (it) { return { id: 'ws:' + it.id, name: it.data.nameI18n || it.name, description: it.data.description || {}, category: it.data.category, fieldCount: (it.data.fields || []).length, firm: it }; }) : [];
+        var src = tab === 'firm' ? firm : tab === 'mine' ? all.filter(function (x) { return x.isMine; }) : firm.concat(all);
+        var list = src.filter(function (x) { return !s || (L(x.name) + ' ' + L(x.description)).toLowerCase().indexOf(s) > -1; });
         $('.tpl-list', body).innerHTML = list.length ? list.map(function (x) {
-          return '<button class="tile" data-id="' + esc(x.slug || x.id) + '"><div class="tile-h">' + J.icon('doc') + esc(x.category || '') + '</div><b>' + esc(L(x.name)) + '</b><p>' + esc(L(x.description)) + '</p><div class="tile-f"><span class="tag">' + (x.fieldCount || 0) + ' ·</span>' + (x.isMine ? J.scopeTag('p') + ' <span class="pill sm ghost" role="button" tabindex="0" data-del="' + esc(x.id) + '" aria-label="' + esc(t('dr.del')) + '" style="margin-left:auto">' + J.icon('trash') + '</span>' : '') + '</div></button>';
-        }).join('') : '<div class="empty-state">' + esc(tab === 'mine' ? t('dr.mine.empty') : '—') + '</div>';
-        $$('.tile', body).forEach(function (b) { b.onclick = function (e) { if (e.target.closest('[data-del]')) return; openTpl(b.dataset.id); }; });
+          return '<button class="tile" data-id="' + esc(x.slug || x.id) + '"><div class="tile-h">' + J.icon('doc') + esc(x.category || '') + '</div><b>' + esc(L(x.name)) + '</b><p>' + esc(L(x.description)) + '</p><div class="tile-f"><span class="tag">' + (x.fieldCount || 0) + ' ·</span>' +
+            (x.firm ? J.firm.tag(x.firm) + (J.firm.canWrite(x.firm) ? ' <span class="pill sm ghost" role="button" tabindex="0" data-arch="' + esc(x.firm.id) + '" aria-label="' + esc(J.firm.text('arch')) + '" style="margin-left:auto">' + J.icon('trash') + '</span>' : '')
+              : x.isMine ? J.scopeTag('p') + (J.firm ? ' <span class="pill sm ghost" role="button" tabindex="0" data-share="' + esc(x.id) + '" title="' + esc(J.firm.text('share')) + '" aria-label="' + esc(J.firm.text('share')) + '" style="margin-left:auto">' + J.icon('team') + '</span>' : '') + ' <span class="pill sm ghost" role="button" tabindex="0" data-del="' + esc(x.id) + '" aria-label="' + esc(t('dr.del')) + '"' + (J.firm ? '' : ' style="margin-left:auto"') + '>' + J.icon('trash') + '</span>' : '') + '</div></button>';
+        }).join('') : '<div class="empty-state">' + esc(tab === 'mine' ? t('dr.mine.empty') : tab === 'firm' ? t('dr.firm.empty') : '—') + '</div>';
+        $$('.tile', body).forEach(function (b) { b.onclick = function (e) { if (e.target.closest('[data-del],[data-share],[data-arch]')) return; openTpl(b.dataset.id); }; });
+        $$('[data-share]', body).forEach(function (d) { d.onclick = async function (e) { e.stopPropagation(); if (await J.firm.share('template', d.dataset.share)) draw(); }; });
+        $$('[data-arch]', body).forEach(function (d) { d.onclick = async function (e) { e.stopPropagation(); var it = J.firm.items('template').filter(function (x) { return x.id === d.dataset.arch; })[0]; if (it && await J.firm.archive(it)) draw(); }; });
         $$('[data-del]', body).forEach(function (d) {
           d.onclick = async function (e) {
             e.stopPropagation();
@@ -301,6 +308,7 @@
         });
       }
       J.api('/api/templates').then(function (r) { all = r.ok ? (r.data.templates || []) : []; draw(); });
+      if (J.firm) J.firm.load(true).then(function () { if (document.body.contains(body)) draw(); });
     }
     async function gen(pre) {
       var type = $('[data-f=type]', body).value.trim(), det = $('[data-f=det]', body).value.trim();
@@ -398,17 +406,21 @@
       '<div class="tabs"><button class="on" data-tab="all">' + esc(t('sk.all')) + '</button><button data-tab="b">' + esc(t('sk.builtin')) + '</button><button data-tab="p">' + esc(t('sk.mine')) + '</button><button data-tab="t">' + esc(t('sk.team')) + '</button></div><div class="grid3 sk-list"></div></div>');
     var tab = 'all';
     function draw() {
-      if (tab === 't') { $('.sk-list', v).innerHTML = '<div class="empty-state" style="grid-column:1/-1">' + esc(t('sk.scope.soon')) + '</div>'; return; }
-      var list = J.skills.all().filter(function (s) { return tab === 'all' || (tab === 'b' ? s.builtin : s.mine); });
+      var F = J.firm;
+      var list = J.skills.all().filter(function (s) { return tab === 'all' || (tab === 'b' ? s.builtin : tab === 't' ? s.firm : s.mine); });
+      var empty = tab === 't' ? '<div class="empty-state" style="grid-column:1/-1">' + esc(t('sk.firm.empty')) + '</div>' : '<div class="empty-state" style="grid-column:1/-1">—</div>';
       $('.sk-list', v).innerHTML = list.length ? list.map(function (s) {
-        return '<div class="tile" data-id="' + esc(s.id) + '"><div class="tile-h">' + J.icon(s.icon) + esc(s.area) + '</div><b>' + esc(s.name) + '</b><p>' + esc(s.desc || '') + '</p><div class="tile-f">' + J.scopeTag(s.scope) +
-          '<span style="display:flex;gap:6px">' + (s.mine ? '<button class="pill sm ghost" data-ed="1" aria-label="edit">✎</button>' : '') + '<button class="pill sm" data-use="1">' + esc(t('sk.use')) + '</button></span></div>' +
+        var canEd = s.mine || (s.firm && F && F.canWrite(s.item));
+        return '<div class="tile" data-id="' + esc(s.id) + '"><div class="tile-h">' + J.icon(s.icon) + esc(s.area) + '</div><b>' + esc(s.name) + '</b><p>' + esc(s.desc || '') + '</p><div class="tile-f">' + (s.firm && F ? F.tag(s.item) : J.scopeTag(s.scope)) +
+          '<span style="display:flex;gap:6px">' + (s.mine && F && J.skills.onServer() ? '<button class="pill sm ghost" data-sh="1" title="' + esc(F.text('share')) + '" aria-label="' + esc(F.text('share')) + '">' + J.icon('team') + '</button>' : '') +
+          (canEd ? '<button class="pill sm ghost" data-ed="1" aria-label="edit">✎</button>' : '') + '<button class="pill sm" data-use="1">' + esc(t('sk.use')) + '</button></span></div>' +
           (s.src.needDoc ? '<span class="tag">' + J.icon('clip') + esc(t('sk.needdoc')) + '</span>' : '') + '</div>';
-      }).join('') : '<div class="empty-state" style="grid-column:1/-1">—</div>';
+      }).join('') : empty;
       $$('.tile', v).forEach(function (el) {
         var s = J.skills.byId(el.dataset.id);
         var use = $('[data-use]', el); if (use) use.onclick = function (e) { e.stopPropagation(); useSkill(s); };
-        var ed = $('[data-ed]', el); if (ed) ed.onclick = function (e) { e.stopPropagation(); editor(s.src); };
+        var ed = $('[data-ed]', el); if (ed) ed.onclick = function (e) { e.stopPropagation(); editor(s.firm ? { firm: s.item, name: s.name, ins: s.src.ins } : s.src); };
+        var sh = $('[data-sh]', el); if (sh) sh.onclick = async function (e) { e.stopPropagation(); sh.disabled = true; await F.share('skill', s.src.id); sh.disabled = false; };
         el.onclick = function () { useSkill(s); };
       });
     }
@@ -418,23 +430,33 @@
     }
     function editor(existing) {
       var sk = existing || { id: Date.now().toString(36), name: '', ins: '', scope: 'p' };
-      var m = J.modal({ cls: 'sm', html: '<h2>' + esc(existing ? existing.name : t('sk.new')) + '</h2><p class="sub" style="margin-bottom:16px">' + esc(t(J.skills.onServer() ? 'sk.server' : 'sk.local')) + '</p>' +
+      var firmItem = existing && existing.firm ? existing.firm : null;
+      // a new skill can go to the firm library straight away (owner / member of an active Workspace)
+      var scope = firmItem ? 't' : 'p', teamOk = !!(J.firm && J.skills.onServer());
+      var m = J.modal({ cls: 'sm', html: '<h2>' + esc(existing ? existing.name : t('sk.new')) + '</h2><p class="sub sk-note" style="margin-bottom:16px"></p>' +
         '<div class="field"><label>' + esc(t('sk.form.name')) + '</label><input class="inp" data-f="n" maxlength="60"></div>' +
         '<div class="field"><label>' + esc(t('sk.form.ins')) + '</label><textarea class="inp" data-f="i" maxlength="600" placeholder="' + esc(t('sk.form.ins.ph')) + '"></textarea></div>' +
-        '<div class="field"><label>' + esc(t('sk.form.scope')) + '</label><div class="seg"><button class="on" type="button">' + esc(t('sk.scope.p')) + '</button><button type="button" disabled title="' + esc(t('sk.scope.soon')) + '">' + esc(t('sk.scope.t')) + '</button><button type="button" disabled title="' + esc(t('sk.scope.soon')) + '">' + esc(t('sk.scope.o')) + '</button></div></div>' +
+        (existing ? '' : '<div class="field"><label>' + esc(t('sk.form.scope')) + '</label><div class="seg sk-scope"><button class="on" type="button" data-sc="p">' + esc(t('sk.scope.p')) + '</button><button type="button" data-sc="t"' + (teamOk ? '' : ' disabled title="' + esc(t('sk.scope.soon')) + '"') + '>' + esc(t('sk.scope.t')) + '</button></div></div>') +
         '<div style="display:flex;justify-content:space-between;gap:8px;margin-top:18px">' + (existing ? '<button class="pill ghost" data-a="del">' + J.icon('trash') + esc(t('sk.form.del')) + '</button>' : '<span></span>') + '<button class="pill" data-a="save">' + esc(t('sk.form.save')) + '</button></div>' });
       $('[data-f=n]', m.body).value = sk.name; $('[data-f=i]', m.body).value = sk.ins;
+      function note() { $('.sk-note', m.body).textContent = scope === 't' ? t('sk.firm.note') : t(J.skills.onServer() ? 'sk.server' : 'sk.local'); }
+      note();
+      $$('[data-sc]', m.body).forEach(function (b) { b.onclick = function () { if (b.disabled) return; scope = b.dataset.sc; $$('[data-sc]', m.body).forEach(function (x) { x.classList.toggle('on', x === b); }); note(); }; });
       var saveBtn = $('[data-a=save]', m.body);
       saveBtn.onclick = async function () {
         var n = $('[data-f=n]', m.body).value.trim(), i = $('[data-f=i]', m.body).value.trim(); if (!n || !i) return;
         saveBtn.disabled = true;
-        var r = await J.skills.save({ id: existing ? sk.id : null, name: n, ins: i });
+        var r;
+        if (firmItem) r = await J.firm.update(firmItem, n, { ins: i });
+        else if (scope === 't') { var made = await J.firm.create('skill', n, { ins: i }); r = { ok: !!made, data: {} }; if (!made) { saveBtn.disabled = false; return; } }
+        else r = await J.skills.save({ id: existing ? sk.id : null, name: n, ins: i });
         saveBtn.disabled = false;
         if (!r.ok) { J.toast(J.errMsg(r.data), 5000); return; }
-        m.close(); draw();
+        m.close(); if (scope === 't') { tab = 't'; $$('[data-tab]', v).forEach(function (x) { x.classList.toggle('on', x.dataset.tab === 't'); }); } draw();
       };
       var del = $('[data-a=del]', m.body); if (del) del.onclick = async function () {
         del.disabled = true;
+        if (firmItem) { var ok = await J.firm.archive(firmItem); del.disabled = false; if (ok) { m.close(); draw(); } return; }
         var r = await J.skills.remove(sk.id);
         del.disabled = false;
         if (!r.ok && r.status !== 404) { J.toast(J.errMsg(r.data), 5000); return; }
@@ -444,6 +466,7 @@
     $('[data-a=new]', v).onclick = function () { editor(null); };
     // the server's list arrives after the page: draw again when it does
     J.on('skills', function () { if (document.body.contains(v)) draw(); });
+    J.on('firm', function () { if (document.body.contains(v)) draw(); });
     $$('[data-tab]', v).forEach(function (b) { b.onclick = function () { tab = b.dataset.tab; $$('[data-tab]', v).forEach(function (x) { x.classList.toggle('on', x === b); }); draw(); }; });
     draw();
   };

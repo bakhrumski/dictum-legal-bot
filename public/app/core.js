@@ -165,6 +165,8 @@
     var p = await J.api('/api/tariff/plans', { allow401: true }); if (p.ok) { J.S.plans = p.data.plans || null; J.S.paymentsEnabled = !!p.data.paymentsEnabled; }
     // own skills from the server (K1a); not awaited - the page does not wait for them
     if (J.skills && J.skills.load) J.skills.load().catch(function () {});
+    // the firm library of the account's Workspaces (K1b); not awaited either
+    if (J.firm && J.firm.load) J.firm.load().catch(function () {});
     return true;
   };
   J.refreshTariff = async function () { var t = await J.api('/api/tariff/me'); if (t.ok) { J.S.tariff = t.data; J.emit('tariff'); } return t.ok; };

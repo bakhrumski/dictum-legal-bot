@@ -112,7 +112,8 @@ Tartib va PR bo'linishi dizayn hujjatining 9-bo'limida.
   (qabul qilingan, #558; firma = Workspace; K1 kutubxona va serverdagi
   ko'nikmalar, K2 shifrlangan hujjatlar va blind index qidiruvi, K3 Workspace
   AI, K4 chat, K5 embedding keyin). K1a (ko'nikmalar serverda, migratsiya
-  044) PR'da.
+  044) merge (#559). K1b (firma kutubxonasi: shablon, playbook, ko'nikma,
+  migratsiya 045) PR'da.
 - [~] Adaptiv akkaunt va platformaning o'zini yaxshilashi (egasi, 2026-10-28):
   dizayn `docs/design/adaptiv-akkaunt.md` (#509, qabul qilingan), PR A1-A8.
   Birinchi qismi: shaxsiy ovoz glossariysi (#507). A1 (signallar va profil)
@@ -374,3 +375,6 @@ nima o'lchandi.
 - 2026-11-04: #558 (firma bilim bazasi dizayni) merge; egasi takliflarni qabul
   qildi (firma = Workspace, K3 ga rozilik, 2 000 hujjat / 2 GB, K1a birinchi).
   K1a PR: chat ko'nikmalari serverda, hamma qurilmada.
+- 2026-11-04: #559 (K1a) merge. K1b PR: firma kutubxonasi - o'z shabloni,
+  playbook'i va ko'nikmasini Workspace'ga ulashish, versiyalar, viewer faqat
+  o'qiydi. Alohida PR #560: bepul yordam kanali @bakhrom_abdimuminov.
