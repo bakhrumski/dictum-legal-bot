@@ -319,6 +319,8 @@ function createWorkspaceLegalAnswerGenerator(dependencies) {
     // references, exceptions); a request for a full analysis or opinion never
     // gets here - the route answers it with a pointer, no AI, no quota
     // (routes.js workspaceServiceRouting).
+    // K3: the firm's own documents are context, never a legal basis
+    if (/(^|\n)FIRMA HUJJATI \(qonun emas\): /u.test(workspaceContext)) systemPrompt += require('./kb').FIRM_RULE;
     const hasDocuments = /(^|\n)HUJJAT: /u.test(workspaceContext);
     if (hasDocuments) {
       systemPrompt += "\n\nMUHIM: Workspace hujjatlaridan faqat parchalar berildi: savolga oid bandlar, ularning ta'riflari, havola qilingan bandlar va istisnolar. Javob uchun kerakli band parchalarda bo'lmasa yoki blokda \"Qat'iy xulosa bermang\" deyilgan bo'lsa, buni aniq ayting va qat'iy xulosa bermang. Butun hujjatning to'liq tahlili yoki yuridik xulosasi deb javob bermang.";
@@ -449,7 +451,9 @@ function createWorkspaceLegalAnswerGenerator(dependencies) {
     }
 
     await hydrateLexAnchors(ragChunks, reply);
-    reply = normalizeLegalAnswerCitations(reply, ragChunks, lexLanguage(question));
+    // K3: a quote of a firm band is kept only when its words are in the band (the claim guard above read the law only)
+    const quoteSources = Array.isArray(input.firmChunks) && input.firmChunks.length ? ragChunks.concat(input.firmChunks) : ragChunks;
+    reply = normalizeLegalAnswerCitations(reply, quoteSources, lexLanguage(question));
     reply = appendRepealedNotice(reply, { repealed: mentionedActs.repealed }, lexLanguage(question));
 
     if (typeof dependencies.generateSourceSuggestions === 'function') {

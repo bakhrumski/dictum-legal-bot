@@ -201,7 +201,9 @@ function restoreQuotes(text = '', held = [], chunks = [], linkFor = () => '') {
     // the source's own words are shown (its letters, its apostrophes)
     const own = hit.parts.map(p => p.replace(/\s+/gu, ' ').trim()).join(' ... ');
     const where = quoteSourceLabel(hit);
-    return `> «${own}»${link ? ` [${where ? `${where} · ` : ''}${QUOTE_LINK_LABEL}](${link})` : ''}`;
+    // a firm document (Workspace K3) has no lex.uz page: its name and band are said in words
+    const firmNote = !link && hit.chunk && hit.chunk.doc_type === 'firm' && where ? ` — ${where}` : '';
+    return `> «${own}»${link ? ` [${where ? `${where} · ` : ''}${QUOTE_LINK_LABEL}](${link})` : firmNote}`;
   });
   const cleaned = restored
     .split('\n').filter(l => !l.includes('\u0000DROP\u0000')).join('\n')

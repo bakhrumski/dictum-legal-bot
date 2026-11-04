@@ -168,6 +168,29 @@ Tomonlar yengib bo'lmaydigan kuch holatlarida javobgar bo'lmaydi.`;
     assert.ok((await kb.search(ws, viewer, { q: 'тижорат сири' })).results.some(x => x.documentId === cyDoc.id && !x.partial), 'Cyrillic query; a 4-letter word meets "сирини"');
   });
 
+  await test('K3: Workspace AI gets the firm bands as "FIRMA HUJJATI (qonun emas)" with the quote sources; WS_KB_AI=off leaves them out', async () => {
+    const { createWorkspaceAiService } = require('../src/workspace/ai-service');
+    let seen = null;
+    const ai = createWorkspaceAiService({ pool, generateAnswer: async (input) => { seen = input; return { reply: 'Javob.', provider: 'stub', rag: null }; } });
+    await ai.ask({ workspaceId: ws, question: 'penya kechiktirilgan kun', userId: member });
+    assert.ok(/FIRMA HUJJATI \(qonun emas\): Yetkazib berish\.docx, 3\.1-band, 2-bet/.test(seen.workspaceContext), seen.workspaceContext.slice(0, 300));
+    assert.ok(!/=== PAGE/.test(seen.workspaceContext), 'no page marks');
+    assert.ok(Array.isArray(seen.firmChunks) && seen.firmChunks.length >= 1 && seen.firmChunks[0].doc_type === 'firm' && seen.firmChunks[0].source_url === null);
+    const ctxLen = (seen.workspaceContext.match(/FIRMA HUJJATI/g) || []).length;
+    assert.ok(ctxLen >= 1 && ctxLen <= 5, 'at most 5 bands');
+    process.env.WS_KB_AI = 'off';
+    await ai.ask({ workspaceId: ws, question: 'penya kechiktirilgan kun haqida yana', userId: member });
+    delete process.env.WS_KB_AI;
+    assert.ok(!/FIRMA HUJJATI/.test(seen.workspaceContext) && seen.firmChunks.length === 0);
+    // the generator: the prompt rule and the quote check
+    const gen = fs.readFileSync(path.join(__dirname, '../src/workspace/legal-answer-generator.js'), 'utf8');
+    assert.ok(/systemPrompt \+= require\('\.\/kb'\)\.FIRM_RULE/.test(gen) && /ragChunks\.concat\(input\.firmChunks\)/.test(gen));
+    assert.ok(/qonun emas va huquqiy asos bo'la olmaydi/.test(K.FIRM_RULE) && /qonunga zid/.test(K.FIRM_RULE));
+    const C = require('../src/rag/citation-utils');
+    const r = C.normalizeLegalAnswerCitationsDetailed("> «xaridor har bir kechiktirilgan kun uchun 0,1 foiz miqdorida penya to'laydi»\n> «xaridor 5 foiz jarima to'laydi deb yozilgan»", seen.firmChunks.length ? seen.firmChunks : K.quoteChunks([{ documentId: 'x', n: 1, name: 'Y', label: '3.1', text: "3.1. To'lov kechiktirilsa, xaridor har bir kechiktirilgan kun uchun 0,1 foiz miqdorida penya to'laydi." }]), 'uz');
+    assert.ok(/— Firma: /.test(r.text) && r.quotes.removed === 1, r.text);
+  });
+
   await test('list without text; taking a document out deletes its bands and frees the text for a new add', async () => {
     const l = await kb.list(ws, viewer);
     assert.ok(l.documents.length === 4 && l.used.documents === 4 && !JSON.stringify(l).includes('penya'));
