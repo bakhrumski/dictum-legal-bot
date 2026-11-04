@@ -243,6 +243,38 @@ O'lchov (`scripts/kb-search-eval.js`, `docs/quality/kb-search-eval/cases.json`: 
 - "jarima kechikish" so'rovi "qisman" sifatida 2-o'rinda chiqdi;
 - bitta so'rov 1–11 ms vaqt oldi.
 
+K3 (2026-11-04): Workspace AI'ga savol berilganda server firma bazasidan
+mos bandlarni o'zi oladi (`forContext`, AI'siz):
+- avval savoldagi barcha so'zlar bor bandlar, ular bo'lmasagina qisman mos
+  kelganlari;
+- ko'pi bilan 5 band va 8 000 belgi;
+- Workspace hujjatlaridan keyin "FIRMA HUJJATI (qonun emas): <nomi>,
+  <band>-band, <sahifa>-bet" bloki bo'lib boradi.
+
+Javob qayta ishlatilganda (memory reuse) tanlangan bandlar ham
+solishtiriladi: baza o'zgarsa, eski javob qaytarilmaydi.
+
+Prompt qoidasi (`FIRM_RULE`):
+- firma hujjati qonun emas va huquqiy asos bo'la olmaydi;
+- savolga tegishli bo'lsa, hujjat nomi va bandi aytiladi;
+- qonun normasi bilan aralashtirilmaydi;
+- qonunga zid ko'rinsa, bu ochiq aytiladi;
+- tegishli bo'lmasa, umuman tilga olinmaydi.
+
+Iqtiboslar:
+- javobdagi iqtibos firma bandida so'zma-so'z topilsagina qoladi;
+- lex.uz havolasi bo'lmagani uchun uning o'rniga "— Firma: <nomi>,
+  <band>-band" yozuvi qo'yiladi;
+- topilmagan iqtibos olib tashlanadi.
+
+Claim guard va lex.uz tekshiruvi faqat qonun manbalarini o'qiydi va
+o'zgarmagan.
+
+Narx: kontekst ko'pi bilan ~2 700 tokenga uzayadi. DeepSeek'da bu bir
+javobga taxminan $0,0008; band topilmasa, qo'shimcha xarajat yo'q.
+
+`WS_KB_AI=off` faqat AI qismini o'chiradi; qidiruv ishlayveradi.
+
 Dastlabki savollar:
 
 1. **Firma = Workspace** (yangi "tashkilot" tushunchasisiz) bo'lsinmi?

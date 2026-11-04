@@ -115,7 +115,8 @@ Tartib va PR bo'linishi dizayn hujjatining 9-bo'limida.
   044) merge (#559). K1b (firma kutubxonasi: shablon, playbook, ko'nikma,
   migratsiya 045) merge (#561). K2a (firma hujjatlari: shifrlangan bandlar,
   blind index qidiruvi, migratsiya 046, server) merge (#562). K2b (sahifa
-  #/firma, Hujjatlarim tugmasi, muharrirdagi "Firma bandlari") PR'da.
+  #/firma, Hujjatlarim tugmasi, muharrirdagi "Firma bandlari") merge (#563).
+  K3 (Workspace AI firma hujjatlarini "qonun emas" belgisi bilan ko'radi) PR'da.
 - [~] Adaptiv akkaunt va platformaning o'zini yaxshilashi (egasi, 2026-10-28):
   dizayn `docs/design/adaptiv-akkaunt.md` (#509, qabul qilingan), PR A1-A8.
   Birinchi qismi: shaxsiy ovoz glossariysi (#507). A1 (signallar va profil)
@@ -386,3 +387,6 @@ nima o'lchandi.
 - 2026-11-04: #562 (K2a) merge. K2b PR: "Firma bazasi" sahifasi, Hujjatlarim
   va muharrirdan qo'shish, muharrirda bandni topib qo'yish; kirill / lotin va
   4 harfli so'zlar; sinov to'plamida 20 tadan 19 topildi.
+- 2026-11-04: #563 (K2b) merge. K3 PR: Workspace AI javobida firma bandlari
+  (<= 5 band / 8 000 belgi, "FIRMA HUJJATI (qonun emas)"), iqtibos firma
+  bandida so'zma-so'z tekshiriladi; qonun manbalari va claim guard o'zgarmadi.

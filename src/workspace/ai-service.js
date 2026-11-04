@@ -195,6 +195,9 @@ async function loadContext(db, workspaceId, taskId, question) {
     [workspaceId, taskId, question, questionHash]
   )).rows;
 
+  // K3 (docs/design/firma-bilim-bazasi.md): the firm's own past documents that match the question (no AI)
+  const firmBands = await require('./kb').createKnowledgeBase({ db }).forContext(workspaceId, question);
+
   const policyVersions = getLegalPolicyVersions();
   const fingerprintInput = {
     scope: task ? { taskId: task.id, revision: task.revision } : { workspaceId },
@@ -205,6 +208,7 @@ async function loadContext(db, workspaceId, taskId, question) {
     documentVersions: documents.map((document) => document.version_id).sort(),
     authoritativeMemory: authoritativeMemory.map((item) => item.id).sort(),
     relevantMemory: relevantMemory.map((item) => item.id).sort(),
+    firmBands: firmBands.map((b) => `${b.documentId}:${b.n}`).sort(),
     policyVersions,
   };
   const contextFingerprint = sha256(stableJson(fingerprintInput));
@@ -226,6 +230,8 @@ async function loadContext(db, workspaceId, taskId, question) {
   for (const block of documentContextBlocks(documents, question)) {
     appendWithinLimit(contextParts, block);
   }
+  // the firm's bands after the Workspace's own documents (8 000 characters at most, forContext)
+  if (firmBands.length) appendWithinLimit(contextParts, require('./kb').contextBlock(firmBands));
   for (const memory of relevantMemory) {
     appendWithinLimit(
       contextParts,
@@ -237,6 +243,7 @@ async function loadContext(db, workspaceId, taskId, question) {
     task,
     documents,
     relevantMemory,
+    firmBands,
     contextFingerprint,
     reuseKey,
     policyVersion: stableJson(policyVersions),
@@ -429,6 +436,8 @@ function createWorkspaceAiService({ pool, generateAnswer }) {
         topic,
         history: prepared.history,
         workspaceContext: prepared.context.workspaceContext,
+        // K3: the firm bands, so a quote from them passes the word-for-word check
+        firmChunks: require('./kb').quoteChunks(prepared.context.firmBands || []),
         userId,
       });
     } catch (error) {

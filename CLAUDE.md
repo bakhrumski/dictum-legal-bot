@@ -623,6 +623,18 @@ Known state of the suites (Sept 2026):
   `docs/quality/kb-search-eval/cases.json` (12 synthetic documents, 20
   queries, `scripts/kb-search-eval.js`, unreviewed): 19 / 20 found, 17 first,
   the miss a synonym (K5).
+  K3 (2026-11-04, the owner consented): `loadContext` in
+  `src/workspace/ai-service.js` asks `kb.forContext` (no AI, access already
+  checked: whole matches first, partial only when none, <= 5 bands / 8 000
+  chars) and adds `contextBlock` ("FIRMA HUJJATI (qonun emas): <name>,
+  <clause>-band, <page>-bet") after the Workspace documents; the bands are in
+  the reuse fingerprint (`firmBands`). The generator adds `FIRM_RULE` when the
+  block is there (not a legal basis, name the document and clause, never
+  mixed with the law, say when it seems to contradict the law) and puts
+  `quoteChunks` (doc_type 'firm', no URL, no article numbers) into the final
+  quote check only - the claim guard and the lex.uz cross-check read the law
+  as before; a kept firm quote reads "— Firma: <name>, <clause>-band"
+  (`answer-structure` `firmNote`). `WS_KB_AI=off` stops the AI part only.
 - `src/ai/model-pricing.js` — **single source of truth for model prices**;
   every spend path, hybrid-pipeline included, reads it. Each price carries
   its source and check date; VoiceLab credits convert at the owner's

@@ -275,6 +275,11 @@ function createKnowledgeBase({ db }) {
    */
   async function search(ws, adminId, { q = '', limit = 30 } = {}) {
     await requireWorkspaceAccess(db, ws, adminId, { minimumRole: 'viewer' });
+    return searchIn(ws, { q, limit });
+  }
+
+  /** The search itself, for a caller that has checked access already (the route above, Workspace AI). */
+  async function searchIn(ws, { q = '', limit = 30, withText = false } = {}) {
     const query = String(q || '').trim().slice(0, 200);
     const words = bidx.roots(query);
     if (!words.length) return { results: [], words: 0, mode: 'none' };
@@ -310,7 +315,7 @@ function createKnowledgeBase({ db }) {
       perDoc.set(r.document_id, k + 1);
       const text = privacy.open(r.text, aad(ws, r.document_id, r.n));
       const where = locate(text, query, r);
-      results.push({ documentId: r.document_id, name: r.name, n: r.n, label: where.label, page: where.page, passage: where.passage, partial: r.partial });
+      results.push({ documentId: r.document_id, name: r.name, n: r.n, label: where.label, page: where.page, passage: where.passage, partial: r.partial, ...(withText ? { text: shown(text) } : {}) });
       if (results.length >= max) break;
     }
     return { results, words: words.length, mode };
@@ -326,7 +331,34 @@ function createKnowledgeBase({ db }) {
     return { documentId: docId, name: r.name, n: r.n, of: r.chunks, label: r.label, page: r.page, text: shown(privacy.open(r.text, aad(ws, docId, r.n))) };
   }
 
-  return { list, add, remove, search, chunk };
+  /**
+   * K3: the firm's bands for a Workspace AI question (access checked by the
+   * caller): whole matches first, partial ones only when there is no whole
+   * one; at most `maxBands`, `maxChars` of text in all. [] on any failure.
+   */
+  async function forContext(ws, question, { maxBands = 5, maxChars = 8000 } = {}) {
+    if (off() || String(process.env.WS_KB_AI || '').toLowerCase() === 'off') return [];
+    try {
+      const { results } = await searchIn(ws, { q: question, limit: 20, withText: true });
+      const whole = results.filter(r => !r.partial);
+      const pick = whole.length ? whole : results;
+      const out = [];
+      let used = 0;
+      for (const r of pick) {
+        if (out.length >= maxBands || used >= maxChars) break;
+        const text = r.text.length > maxChars - used ? `${r.text.slice(0, Math.max(0, maxChars - used)).replace(/\s+\S*$/u, '')} …` : r.text;
+        if (text.length < 40) break;
+        out.push({ documentId: r.documentId, name: r.name, n: r.n, label: r.label, page: r.page, text, partial: r.partial });
+        used += text.length;
+      }
+      return out;
+    } catch (e) {
+      if (!/does not exist/u.test(String(e && e.message))) console.warn('[WS-KB] context:', e.message);
+      return [];
+    }
+  }
+
+  return { list, add, remove, search, searchIn, forContext, chunk };
 }
 
 function mountKnowledgeBaseRoutes(app, { db, requireAuth, requireSameOrigin }) {
@@ -351,4 +383,19 @@ function mountKnowledgeBaseRoutes(app, { db, requireAuth, requireSameOrigin }) {
   return kb;
 }
 
-module.exports = { mountKnowledgeBaseRoutes, createKnowledgeBase, splitChunks, passage, locate, shown };
+/** K3: the firm bands as a context block - a firm document is never a law. */
+function contextBlock(bands = []) {
+  if (!bands.length) return '';
+  return bands.map(b => `FIRMA HUJJATI (qonun emas): ${b.name}${b.label ? `, ${b.label}-band` : ''}${b.page ? `, ${b.page}-bet` : ''}\n${b.text}\n\n`).join('');
+}
+/** K3: the bands as quote-check sources (no lex.uz link, no article numbers - "5-band" is not a law's article). */
+function quoteChunks(bands = []) {
+  return bands.map(b => ({
+    doc_type: 'firm', source_type: 'firm', law_name: `Firma: ${b.name}${b.label ? `, ${b.label}-band` : ''}`, chunk_text: b.text,
+    source_url: null, is_active: false, article_numbers: [], firm: { documentId: b.documentId, n: b.n },
+  }));
+}
+/** K3: the prompt rule when the context holds firm documents. */
+const FIRM_RULE = "\n\nFIRMA HUJJATLARI: \"FIRMA HUJJATI (qonun emas)\" bloklari - shu firmaning o'z avvalgi hujjatlaridan topilgan bandlar, ular qonun emas va huquqiy asos bo'la olmaydi. Savolga bevosita tegishli bo'lsa, ulardan foydalaning va hujjat nomi hamda bandini ayting (masalan: \"firmangizning «Yetkazib berish shartnomasi» 3.1-bandida ...\"); iqtibos keltirsangiz, harfma-harf ko'chiring. Qonun normasi bilan aralashtirmang: huquqiy asos qonundan keltiriladi. Firma hujjati qonunga zid ko'rinsa, buni ochiq ayting. Tegishli bo'lmasa, ularni tilga olmang.";
+
+module.exports = { mountKnowledgeBaseRoutes, createKnowledgeBase, splitChunks, passage, locate, shown, contextBlock, quoteChunks, FIRM_RULE };
