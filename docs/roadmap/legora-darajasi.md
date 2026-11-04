@@ -114,7 +114,8 @@ Tartib va PR bo'linishi dizayn hujjatining 9-bo'limida.
   AI, K4 chat, K5 embedding keyin). K1a (ko'nikmalar serverda, migratsiya
   044) merge (#559). K1b (firma kutubxonasi: shablon, playbook, ko'nikma,
   migratsiya 045) merge (#561). K2a (firma hujjatlari: shifrlangan bandlar,
-  blind index qidiruvi, migratsiya 046, server) PR'da.
+  blind index qidiruvi, migratsiya 046, server) merge (#562). K2b (sahifa
+  #/firma, Hujjatlarim tugmasi, muharrirdagi "Firma bandlari") PR'da.
 - [~] Adaptiv akkaunt va platformaning o'zini yaxshilashi (egasi, 2026-10-28):
   dizayn `docs/design/adaptiv-akkaunt.md` (#509, qabul qilingan), PR A1-A8.
   Birinchi qismi: shaxsiy ovoz glossariysi (#507). A1 (signallar va profil)
@@ -382,3 +383,6 @@ nima o'lchandi.
 - 2026-11-04: #560 (kanal @bakhrom_abdimuminov) va #561 (K1b) merge. K2a PR:
   firma hujjatlari serverda - qo'shish, shifrlangan bandlar, so'z bo'yicha
   qidiruv (sahifa va band bilan); UI K2b da.
+- 2026-11-04: #562 (K2a) merge. K2b PR: "Firma bazasi" sahifasi, Hujjatlarim
+  va muharrirdan qo'shish, muharrirda bandni topib qo'yish; kirill / lotin va
+  4 harfli so'zlar; sinov to'plamida 20 tadan 19 topildi.

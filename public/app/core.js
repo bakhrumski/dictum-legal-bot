@@ -105,10 +105,10 @@
   J.ROLE_VIEWS = {
     citizen: { slug: 'fuqaro', nav: ['#/', '#/hujjatlarim', '#/tahlil', '#/tayyorlash', '#/advokatlar'] },
     biz: { slug: 'tadbirkor', nav: ['#/', '#/hujjatlarim', '#/tahlil', '#/tayyorlash', '#/ishlar', '#/advokatlar'] },
-    lawyer: { slug: 'yurist', nav: ['#/', '#/ishlar', '#/hujjatlarim', '#/tahlil', '#/tayyorlash', '#/konikmalar', '#/yozuvlar'] },
+    lawyer: { slug: 'yurist', nav: ['#/', '#/ishlar', '#/hujjatlarim', '#/firma', '#/tahlil', '#/tayyorlash', '#/konikmalar', '#/yozuvlar'] },
     acct: { slug: 'buxgalter', nav: ['#/', '#/hujjatlarim', '#/tahlil', '#/tayyorlash'] },
     hr: { slug: 'hr', nav: ['#/', '#/hujjatlarim', '#/tahlil', '#/tayyorlash', '#/yozuvlar'] },
-    firm: { slug: 'firma', nav: ['#/', '#/ishlar', '#/jamoa', '#/hujjatlarim', '#/tahlil', '#/tayyorlash', '#/konikmalar', '#/yozuvlar'] },
+    firm: { slug: 'firma', nav: ['#/', '#/ishlar', '#/jamoa', '#/hujjatlarim', '#/firma', '#/tahlil', '#/tayyorlash', '#/konikmalar', '#/yozuvlar'] },
   };
   /* 2026-10-30, egasi: "har rol uchun avtomatik". A client account (role user) sees its own role's view by default -
      the role is its "Sohangiz" (client type; none chosen yet = Fuqaro, with the choice offered on the home page).

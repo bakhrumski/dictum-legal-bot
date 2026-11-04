@@ -21,8 +21,9 @@
  * first, then - when few - bands holding at least half of them (`partial`).
  * It finds whole word roots in any form (shartnoma / shartnomaga), both Latin
  * alphabets and Cyrillic folded; it does not find part of a word, a phrase in
- * order, a misspelling or a synonym. Without DATA_KEYS the text is plain and
- * the search is ILIKE on it.
+ * order, a misspelling or a synonym. A Cyrillic band is also indexed in Latin
+ * and 4-letter word starts are indexed too. Without DATA_KEYS the text is
+ * plain anyway and its roots are kept unhashed (mode `plain-index`).
  *
  * Roles: owner / member add and take out, a viewer searches and reads, anyone
  * else 404 (src/workspace/authz.js, the Workspace active). WS_KB_MAX_DOCS
@@ -43,6 +44,36 @@ const off = () => String(process.env.WS_KB || '').toLowerCase() === 'off';
 const isUuid = v => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(String(v || ''));
 const aad = (ws, doc, n) => `workspace_kb_chunks.text:${ws}:${doc}:${n}`;
 function fail(status, message, code) { const e = new Error(message); e.status = status; e.code = code || (status === 404 ? 'not_found' : 'invalid'); return e; }
+
+const CYR = /[\u0400-\u04ff]/u;
+const toLatin = t => require('../drafting/doc-layout').cyrToLat(String(t || ''));
+/**
+ * A band's index: the blind-index tokens of its word roots (5 letters), of
+ * their 4-letter starts too (a 4-letter query word "siri" meets "sirini"),
+ * and of the same words written in Latin when the band is Cyrillic (a Latin
+ * query meets a Cyrillic document). Null without DATA_KEYS.
+ */
+function indexTokens(text) {
+  const t = String(text || '');
+  const variants = CYR.test(t) ? [t, toLatin(t)] : [t];
+  const out = new Set();
+  // without DATA_KEYS the band is plain text anyway: its roots are kept as they are (same search, nothing more shown)
+  const tok = v => bidx.tokens(v) || bidx.roots(v).slice(0, 400);
+  for (const v of variants) {
+    tok(v).forEach(x => out.add(x));
+    const four = bidx.roots(v).filter(r => r.length === 5 && !/^\d+$/u.test(r)).map(r => r.slice(0, 4)).join(' ');
+    if (four) tok(four).forEach(x => out.add(x));
+  }
+  return [...out];
+}
+/** A query's tokens: written in Latin when it is Cyrillic (the index holds both); roots as they are without keys. */
+const queryTokens = (q) => {
+  const v = CYR.test(q) ? toLatin(q) : q;
+  const t = bidx.queryTokens(v);
+  if (t) return t;
+  const r = bidx.roots(v);
+  return r.length ? r : null;
+};
 
 const PAGE_MARK = /^\s*(?:\[Sahifa\s+(\d{1,4})\]|===\s*PAGE\s+(\d{1,4})\s*===)\s*$/iu;
 const CLAUSE = /^\s*((?:\d{1,3}\.){1,4}\d{0,3}|\d{1,3}[.)])\s+\S/u;
@@ -105,17 +136,24 @@ const shown = text => String(text || '').replace(MARK_LINE, '').replace(/\n{3,}/
 function locate(text, query, band = {}) {
   const raw = String(text || '');
   const fold = s => String(require('../../public/js/uz-alphabet').fold(s)).toLowerCase();
-  let at = -1;
-  for (const r of bidx.roots(query)) {
-    const i = fold(raw).search(new RegExp(`(?<![\\p{L}\\p{N}])${r.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}`, 'u'));
-    if (i >= 0 && (at < 0 || i < at)) at = i;
+  // the line holding the most of the query's roots (the first such line), in either alphabet
+  const qr = [...new Set(bidx.roots(query).concat(CYR.test(query) ? bidx.roots(toLatin(query)) : []))];
+  const latinRoots = r => (CYR.test(r) ? bidx.roots(toLatin(r)) : [r]);
+  let best = -1, bestAt = 0, offset = 0;
+  for (const line of raw.split('\n')) {
+    const words = new Set(bidx.roots(line).concat(CYR.test(line) ? bidx.roots(toLatin(line)) : []).flatMap(w => [w, w.slice(0, 4)]));
+    const hits = qr.filter(r => latinRoots(r).some(x => words.has(x))).length;
+    if (hits > best && hits > 0) { best = hits; bestAt = offset; }
+    offset += line.length + 1;
   }
-  const pos = at < 0 ? 0 : Math.round(at * (raw.length / Math.max(1, fold(raw).length)));
-  const before = raw.slice(0, pos);
+  const pos = best > 0 ? bestAt : 0;
+  // the hit's own line counts: a clause number at its start is the hit's clause
+  const lineEnd = raw.indexOf('\n', pos);
+  const before = raw.slice(0, lineEnd < 0 ? raw.length : Math.min(lineEnd, pos + 24));
   const pages = [...before.matchAll(/===\s*PAGE\s+(\d{1,4})\s*===/giu)];
   const clauses = [...before.matchAll(/(?:^|\n)\s*((?:\d{1,3}\.){1,4}\d{0,3}|\d{1,3}[.)])\s+\S/gu)];
   return {
-    passage: passage(raw, query),
+    passage: passage(raw, query, raw.slice(pos).replace(MARK_LINE, '').trim().slice(0, 40)),
     // before the first mark of a band that has marks: the page before it (page 1 when the band opens the document)
     page: pages.length ? Number(pages[pages.length - 1][1]) : (band.page || (/===\s*PAGE\s+(\d{1,4})/iu.test(raw) ? Math.max(1, Number(/===\s*PAGE\s+(\d{1,4})/iu.exec(raw)[1]) - 1) : null)),
     label: clauses.length ? clauses[clauses.length - 1][1].replace(/[.)]$/u, '') : (band.label || null),
@@ -123,7 +161,7 @@ function locate(text, query, band = {}) {
 }
 
 /** The passage of a band around the first query root it holds (~320 characters), page marks left out. */
-function passage(text, query) {
+function passage(text, query, from = null) {
   const t = shown(text);
   const fold = s => String(require('../../public/js/uz-alphabet').fold(s)).toLowerCase();
   const roots = bidx.roots(query);
@@ -134,8 +172,15 @@ function passage(text, query) {
     if (i >= 0 && (at < 0 || i < at)) at = i;
   }
   // fold keeps lengths close but not equal (o' -> o): scale the position back
-  const pos = at < 0 ? 0 : Math.round(at * (t.length / Math.max(1, ft.length)));
-  const start = Math.max(0, pos - 120);
+  let pos = at < 0 ? 0 : Math.round(at * (t.length / Math.max(1, ft.length)));
+  // the best line (locate) when given: the passage opens with it; else a little before the hit, at a word's start
+  let start;
+  const i = from ? t.indexOf(from) : -1;
+  if (i >= 0) start = i;
+  else {
+    start = Math.max(0, pos - 120);
+    if (start > 0) { const sp = t.slice(start, start + 30).search(/\s/u); if (sp >= 0) start += sp + 1; }
+  }
   let s = t.slice(start, start + 320).replace(/\s+/gu, ' ').trim();
   if (start > 0) s = `… ${s}`;
   if (start + 320 < t.length) s = `${s} …`;
@@ -177,7 +222,7 @@ function createKnowledgeBase({ db }) {
          FROM workspace_kb_documents d LEFT JOIN admins a ON a.id = d.added_by
         WHERE d.workspace_id = $1 AND d.archived_at IS NULL ORDER BY d.created_at DESC LIMIT 2000`, [ws]);
     const t = (await db.query('SELECT count(*)::int AS n, COALESCE(sum(bytes), 0)::bigint AS bytes FROM workspace_kb_documents WHERE workspace_id = $1 AND archived_at IS NULL', [ws])).rows[0];
-    return { documents: r.rows, used: { documents: t.n, bytes: Number(t.bytes) }, max: { documents: MAX_DOCS(), bytes: MAX_BYTES() } };
+    return { documents: r.rows, used: { documents: t.n, bytes: Number(t.bytes) }, max: { documents: MAX_DOCS(), bytes: MAX_BYTES() }, sealed: privacy.enabled() };
   }
 
   async function add(ws, adminId, body = {}) {
@@ -207,7 +252,7 @@ function createKnowledgeBase({ db }) {
         [id, ws, name, body.from.kind, String(body.from.id), sha, text.length, bytes, chunks.length, tags, adminId]);
       for (const c of chunks) {
         await client.query('INSERT INTO workspace_kb_chunks (document_id, workspace_id, n, label, page, text, bidx) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-          [id, ws, c.n, c.label, c.page, privacy.seal(c.text, aad(ws, id, c.n)), bidx.tokens(c.text)]);
+          [id, ws, c.n, c.label, c.page, privacy.seal(c.text, aad(ws, id, c.n)), indexTokens(c.text)]);
       }
       return { id, name, chars: text.length, chunks: chunks.length, tags };
     });
@@ -234,14 +279,14 @@ function createKnowledgeBase({ db }) {
     const words = bidx.roots(query);
     if (!words.length) return { results: [], words: 0, mode: 'none' };
     const max = Math.min(50, Math.max(1, Number(limit) || 30));
-    const tokens = bidx.queryTokens(query);
+    const tokens = queryTokens(query);
     let rows;
     let mode;
     const base = `SELECT c.document_id, c.n, c.label, c.page, c.text, d.name, d.created_at
         FROM workspace_kb_chunks c JOIN workspace_kb_documents d ON d.id = c.document_id AND d.archived_at IS NULL
        WHERE c.workspace_id = $1`;
     if (tokens) {
-      mode = 'index';
+      mode = privacy.enabled() ? 'index' : 'plain-index';
       rows = (await db.query(`${base} AND c.bidx @> $2::text[] ORDER BY d.created_at DESC, c.n LIMIT 400`, [ws, tokens])).rows.map(r => ({ ...r, partial: false }));
       // few whole matches: also the bands holding at least half of the words
       if (rows.length < 5 && tokens.length > 1) {
