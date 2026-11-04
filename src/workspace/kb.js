@@ -336,8 +336,9 @@ function createKnowledgeBase({ db }) {
    * caller): whole matches first, partial ones only when there is no whole
    * one; at most `maxBands`, `maxChars` of text in all. [] on any failure.
    */
-  async function forContext(ws, question, { maxBands = 5, maxChars = 8000 } = {}) {
-    if (off() || String(process.env.WS_KB_AI || '').toLowerCase() === 'off') return [];
+  async function forContext(ws, question, { maxBands = 5, maxChars = 8000, switchName = 'WS_KB_AI' } = {}) {
+    // WS_KB_AI stops Workspace AI's use, WS_KB_CHAT the web chat's (K4)
+    if (off() || String(process.env[switchName] || '').toLowerCase() === 'off') return [];
     try {
       const { results } = await searchIn(ws, { q: question, limit: 20, withText: true });
       const whole = results.filter(r => !r.partial);

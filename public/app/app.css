@@ -955,3 +955,9 @@ textarea.inp{height:auto;min-height:96px;padding:10px 13px;resize:vertical;line-
 .kb-hit{background:var(--accent-soft);color:inherit;border-radius:3px;padding:0 1px}
 .kb-part{color:var(--warn)}
 .ed-kb .kb-q .pill{flex:none}
+/* K4: chatdagi "Firma bazasi" manbasi va javob ostidagi qator */
+.cmp-kb span{max-width:180px;overflow:hidden;text-overflow:ellipsis}
+.kb-note{display:flex;gap:8px;align-items:flex-start;font-size:13px;line-height:1.5;color:var(--muted);margin-top:12px}
+.kb-note svg.i{width:15px;height:15px;flex:none;margin-top:2px}
+.kb-note a{color:var(--fg);text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:2px}
+@media (max-width:480px){.cmp-kb span{max-width:96px}}

@@ -635,6 +635,20 @@ Known state of the suites (Sept 2026):
   quote check only - the claim guard and the lex.uz cross-check read the law
   as before; a kept firm quote reads "— Firma: <name>, <clause>-band"
   (`answer-structure` `firmNote`). `WS_KB_AI=off` stops the AI part only.
+  K4 (2026-11-04, the owner consented; `src/workspace/kb-chat.js`, no AI, no
+  extra unit): the web chat's opt-in "Firma bazasi" source - the composer chip
+  (`J.chatKb` in `firm-kb.js`: shown only for an active Workspace with
+  documents, one firm toggles, several a menu, kept in `localStorage
+  jai-chat-kb`, the "Manba" line reads "lex.uz + firma bazasi") sends
+  `firmWorkspaceId`; `/api/legal-chat` checks access (viewer and above, the
+  Workspace active; else `no_access`, the answer from lex.uz as before),
+  takes `forContext` bands and adds `contextBlock` + `FIRM_RULE` after the
+  prompt; the firm bands go to the final quote check only (cross-check,
+  claim guard and citator read the law); with bands the answer cache is
+  neither read nor written and a korpus / verified-QA answer is grounding,
+  never returned as is; the reply's `firm` (and the saved chat) holds names,
+  clauses and pages, never band text; the page shows it under the answer.
+  Not chosen = unchanged. `WS_KB_CHAT=off`. `tests/workspace-kb-chat.db.test.js`.
 - `src/ai/model-pricing.js` — **single source of truth for model prices**;
   every spend path, hybrid-pipeline included, reads it. Each price carries
   its source and check date; VoiceLab credits convert at the owner's

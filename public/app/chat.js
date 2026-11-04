@@ -223,6 +223,7 @@
       '<div class="cmp-bar">' +
         '<button type="button" class="chip" data-a="at">' + J.icon('clip') + '<span>' + esc(t('cmp.attach')) + '</span></button>' +
         '<button type="button" class="chip" data-a="sl"><b>/</b><span>' + esc(t('cmp.skills')) + '</span></button>' +
+        '<button type="button" class="chip cmp-kb" data-a="kb" hidden aria-pressed="false">' + J.icon('layers') + '<span></span></button>' +
         '<button type="button" class="chip cmp-mic" data-a="mic" hidden aria-label="' + esc(t('cmp.mic')) + '" title="' + esc(t('cmp.mic')) + '">' + J.icon('mic') + '<span class="mic-t"></span></button>' +
         '<span class="sp"></span><span class="src-lock">' + J.icon('shield') + esc(t('cmp.src')) + '</span>' +
         '<button type="button" class="send" aria-label="Send">' + J.icon('send') + '</button>' +
@@ -393,6 +394,8 @@
       ta.value = ''; st.skill = null; st.files = []; drawChips(); grow();
     }
     send.onclick = submit;
+    // K4: the firm's knowledge base as a source, chosen here (public/app/firm-kb.js J.chatKb)
+    if (J.chatKb) J.chatKb.bind($('[data-a=kb]', el), el, opts.menuDown);
     drawChips();
     return {
       el: el, focus: function () { ta.focus(); },
@@ -507,6 +510,9 @@
         (J.addToMatter ? '<button class="ib" data-a="matter" title="' + esc(J.matterText('add')) + '">' + J.icon('folder') + '</button>' : '') + '</div>';
       var body = J.h('<div>' + html + '</div>');
       var note = $('.note', body); if (note) note.textContent = data.documentScope.note;
+      // K4: which firm bands the answer was given, or why none
+      var kbn = J.chatKb && data.firm ? J.chatKb.note(data.firm) : null;
+      if (kbn) { var md = $('.md', body); md.parentNode.insertBefore(kbn, md.nextSibling); }
       a.appendChild(body);
       $$('[data-s]', body).forEach(function (c) { c.onclick = function (e) { e.preventDefault(); openSources(r.sources, +c.dataset.s); }; });
       $$('[data-nx]', body).forEach(function (b) {
@@ -574,7 +580,8 @@
         databases: ['lex.uz'], topic: null, topics: null, autoDetect: true,
         documentText: documentText || null, docTicket: typed.length === 1 ? (typed[0].docTicket || null) : null,
         scanIds: scans.length ? scans.map(function (d) { return { id: d.scanId, name: d.name }; }) : null,
-        confirmedJob: confirmedJob, stream: true
+        confirmedJob: confirmedJob, stream: true,
+        firmWorkspaceId: J.chatKb ? J.chatKb.chosen() : null
       };
       C.ctrl = new AbortController();
       var res;
@@ -624,7 +631,7 @@
       if (err && err.quotaRefunded) a.appendChild(J.h('<p class="muted" style="font-size:13px">↺</p>'));
     }
     function afterReply(d) {
-      C.history.push({ role: 'model', text: d.reply || '', nextActions: d.nextActions || [], citator: d.citator || [] });
+      C.history.push({ role: 'model', text: d.reply || '', nextActions: d.nextActions || [], citator: d.citator || [], firm: d.firm || null });
       save(); J.refreshTariff();
     }
     function costCard(a, d, msg, shown) {
@@ -663,11 +670,11 @@
         var r = await J.api('/api/ai-chat-sessions/' + encodeURIComponent(id));
         thread.innerHTML = '';
         if (!r.ok) { thread.appendChild(J.h('<p class="muted">' + esc(J.errMsg(r.data)) + '</p>')); return; }
-        C.title = r.data.title || ''; C.history = (r.data.messages || []).map(function (m) { return { role: m.role === 'user' ? 'user' : 'model', text: m.text || '', nextActions: m.nextActions || [], citator: m.citator || [] }; });
+        C.title = r.data.title || ''; C.history = (r.data.messages || []).map(function (m) { return { role: m.role === 'user' ? 'user' : 'model', text: m.text || '', nextActions: m.nextActions || [], citator: m.citator || [], firm: m.firm || null }; });
       }
       J.setTitle(C.title);
       var lastQ = '';
-      C.history.forEach(function (m) { if (m.role === 'user') { lastQ = m.text; userBubble(m.text); } else finishAi(aiBox(), { reply: m.text, nextActions: m.nextActions, citator: m.citator }, lastQ); });
+      C.history.forEach(function (m) { if (m.role === 'user') { lastQ = m.text; userBubble(m.text); } else finishAi(aiBox(), { reply: m.text, nextActions: m.nextActions, citator: m.citator, firm: m.firm }, lastQ); });
       scroll();
     } else {
       J.setTitle(t('new'));
