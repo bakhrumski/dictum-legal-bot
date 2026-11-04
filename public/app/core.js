@@ -163,6 +163,8 @@
     if (r.data && r.data.clientType && J.TYPE_PERSONA[r.data.clientType] && J.PERSONA_TYPE[J.S.persona] !== r.data.clientType) J.setPersona(J.TYPE_PERSONA[r.data.clientType]);
     var t = await J.api('/api/tariff/me'); J.S.tariff = t.ok ? t.data : null;
     var p = await J.api('/api/tariff/plans', { allow401: true }); if (p.ok) { J.S.plans = p.data.plans || null; J.S.paymentsEnabled = !!p.data.paymentsEnabled; }
+    // own skills from the server (K1a); not awaited - the page does not wait for them
+    if (J.skills && J.skills.load) J.skills.load().catch(function () {});
     return true;
   };
   J.refreshTariff = async function () { var t = await J.api('/api/tariff/me'); if (t.ok) { J.S.tariff = t.data; J.emit('tariff'); } return t.ok; };

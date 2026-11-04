@@ -42,10 +42,47 @@
       desc: L3('Litsenziyali advokat soha va hudud bo‘yicha.', 'Лицензированный адвокат по сфере и региону.', 'Licensed attorney by field and region.') }
   ];
   function L(o) { return o ? (o[J.lang] || o.uz) : ''; }
+  /* K1a: own skills live on the server (/api/skills) and follow the account to every device.
+     The browser's old list (localStorage jai-skills) is moved up once; without the server
+     (SKILLS=off, offline) the browser list is used as before. */
+  function localSkills() { try { return JSON.parse(localStorage.getItem('jai-skills') || '[]'); } catch (e) { return []; } }
+  function setLocal(list) { try { localStorage.setItem('jai-skills', JSON.stringify(list.slice(0, 40))); } catch (e) {} }
+  var SRV = null; // the server's list once loaded, else null
   J.skills = {
     builtin: BUILTIN,
-    mine: function () { try { return JSON.parse(localStorage.getItem('jai-skills') || '[]'); } catch (e) { return []; } },
-    saveMine: function (list) { try { localStorage.setItem('jai-skills', JSON.stringify(list.slice(0, 40))); } catch (e) {} },
+    onServer: function () { return SRV !== null; },
+    mine: function () { return SRV ? SRV.map(function (x) { return { id: x.id, name: x.name, ins: x.ins, scope: 'p' }; }) : localSkills(); },
+    load: async function () {
+      var r = await J.api('/api/skills', { allow401: true });
+      if (!r.ok || !r.data || !Array.isArray(r.data.skills)) return false;
+      SRV = r.data.skills;
+      var old = localSkills();
+      if (old.length) {
+        var m = await J.api('/api/skills/import', { method: 'POST', body: { skills: old } });
+        if (m.ok && m.data && Array.isArray(m.data.skills)) {
+          SRV = m.data.skills;
+          // what did not fit stays in this browser; what moved leaves it
+          try { localStorage.setItem('jai-skills-moved', JSON.stringify(old)); } catch (e) {}
+          if (!m.data.full) { try { localStorage.removeItem('jai-skills'); } catch (e) {} }
+        }
+      }
+      J.emit('skills');
+      return true;
+    },
+    /** Saves a skill { id?, name, ins }: on the server when it is there, else in this browser. */
+    save: async function (sk) {
+      if (!SRV) { var list = localSkills().filter(function (x) { return x.id !== sk.id; }); list.unshift({ id: sk.id || Date.now().toString(36), name: sk.name, ins: sk.ins, scope: 'p' }); setLocal(list); return { ok: true }; }
+      var known = SRV.some(function (x) { return x.id === sk.id; });
+      var r = await J.api(known ? '/api/skills/' + encodeURIComponent(sk.id) : '/api/skills', { method: known ? 'PUT' : 'POST', body: { name: sk.name, ins: sk.ins } });
+      if (r.ok && r.data) { SRV = [r.data].concat(SRV.filter(function (x) { return x.id !== r.data.id; })); J.emit('skills'); }
+      return r;
+    },
+    remove: async function (id) {
+      if (!SRV) { setLocal(localSkills().filter(function (x) { return x.id !== id; })); return { ok: true }; }
+      var r = await J.api('/api/skills/' + encodeURIComponent(id), { method: 'DELETE' });
+      if (r.ok || r.status === 404) { SRV = SRV.filter(function (x) { return x.id !== id; }); J.emit('skills'); }
+      return r;
+    },
     all: function () {
       return BUILTIN.map(function (s) { return { id: s.id, icon: s.icon, name: L(s.name), desc: L(s.desc), area: L(s.area), scope: 'j', builtin: true, src: s }; })
         .concat(J.skills.mine().map(function (s) { return { id: 'u:' + s.id, icon: 'spark', name: s.name, desc: s.ins, area: t('sk.mine'), scope: 'p', mine: true, src: s }; }));

@@ -10788,6 +10788,9 @@ const planNotifier = require('../services/plan-notify').createPlanNotifier({
   catalog: tariffModule.ledger.PLAN_CATALOG,
 });
 
+// K1a: a person's own chat skills on the server, on every device (src/skills/)
+require('../skills/routes').mountSkillRoutes(app, { db: pool, requireAuth, requireSameOrigin: require('../auth/same-origin').requireSameOrigin });
+
 // S4 monitoring (src/monitor/): once a Tashkent day, the acts linked in open
 // matters are compared with lex.uz; one Telegram digest per person, no AI.
 const lexMonitor = require('../monitor').createMonitor({
