@@ -365,6 +365,7 @@ function transactionalPool(handler) {
       '20261103_043_lex_monitor.sql',
       '20261104_044_user_skills.sql',
       '20261104_045_workspace_library.sql',
+      '20261104_046_workspace_kb.sql',
     ]);
     assert.strictEqual(stripOuterTransaction('BEGIN;\nSELECT 1;\nCOMMIT;'), 'SELECT 1;');
   });

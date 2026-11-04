@@ -10788,6 +10788,8 @@ const planNotifier = require('../services/plan-notify').createPlanNotifier({
   catalog: tariffModule.ledger.PLAN_CATALOG,
 });
 
+// K2a: firm documents, sealed bands with a blind index, word search (src/workspace/kb.js)
+require('../workspace/kb').mountKnowledgeBaseRoutes(app, { db: pool, requireAuth, requireSameOrigin: require('../auth/same-origin').requireSameOrigin });
 // K1b: the firm library - a Workspace's shared templates, playbooks and skills (src/workspace/library.js)
 require('../workspace/library').mountLibraryRoutes(app, { db: pool, requireAuth, requireSameOrigin: require('../auth/same-origin').requireSameOrigin });
 // K1a: a person's own chat skills on the server, on every device (src/skills/)
