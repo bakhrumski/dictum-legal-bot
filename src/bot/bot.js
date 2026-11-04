@@ -673,24 +673,53 @@ function agentActionKeyboard(agentResult) {
   return serviceKeyboard();
 }
 
-// Returns true if the user is a member of REQUIRED_CHANNEL.
-// Fails closed on API/config errors because the requirement is mandatory.
-// Configuration errors are logged and access remains blocked until fixed.
-async function isChannelMember(userId) {
-  if (!REQUIRED_CHANNEL || !REQUIRED_CHANNEL.trim()) return true; // gate disabled
+// Membership of REQUIRED_CHANNEL, with "could not check" kept apart from
+// "not a member" (2026-11-04: a subscribed user was told "Hali obuna
+// bo'lmadingiz" - Telegram refused the check, e.g. the bot is not an
+// administrator of the channel, and an error read as "not a member").
+// member: true / false, or null when Telegram did not answer the question.
+// TELEGRAM_CHANNEL_GATE_ON_ERROR: 'open' (default - a broken setting never
+// blocks every user; masters are told, at most once an hour) or 'closed'.
+const CHANNEL_GATE_ON_ERROR = String(process.env.TELEGRAM_CHANNEL_GATE_ON_ERROR || 'open').trim().toLowerCase() === 'closed' ? 'closed' : 'open';
+const CHANNEL_ALERT_MS = 60 * 60 * 1000;
+const channelGate = { lastError: null, lastAlertAt: 0 };
+const scrubTelegramError = (m) => String(m || '').replace(/bot\d+:[A-Za-z0-9_-]+/g, 'bot<token>').slice(0, 300);
+
+async function alertMastersChannelGate(message) {
+  if (Date.now() - channelGate.lastAlertAt < CHANNEL_ALERT_MS) return;
+  channelGate.lastAlertAt = Date.now();
+  try {
+    const masters = await pool.query("SELECT DISTINCT telegram_chat_id FROM admins WHERE role = 'master' AND telegram_chat_id IS NOT NULL");
+    const text = `⚠️ Kanal a'zoligini tekshirib bo'lmadi (${REQUIRED_CHANNEL}).\n\nTelegram javobi: ${message}\n\n` +
+      `Ko'pincha sabab: bot shu kanalda administrator emas yoki bu nom kanal emas. ` +
+      (CHANNEL_GATE_ON_ERROR === 'open' ? 'Hozircha foydalanuvchilar tekshiruvsiz o\'tkazilyapti.' : 'Hozircha foydalanuvchilar to\'xtatilyapti.') +
+      `\n\nBatafsil: /kanal`;
+    for (const m of masters.rows) await bot.sendMessage(m.telegram_chat_id, text).catch(() => {});
+  } catch (e) { console.warn('[Channel gate] master alert failed:', e.message); }
+}
+
+async function checkChannelMembership(userId) {
+  if (!REQUIRED_CHANNEL || !REQUIRED_CHANNEL.trim()) return { member: true, status: 'gate_off' };
   try {
     const member = await bot.getChatMember(REQUIRED_CHANNEL, userId);
     const status = member && member.status;
-    if (status === 'creator' || status === 'administrator' || status === 'member') return true;
-    if (status === 'restricted') return member.is_member === true;
-    return false; // 'left' or 'kicked'
+    if (status === 'creator' || status === 'administrator' || status === 'member') return { member: true, status };
+    if (status === 'restricted') return { member: member.is_member === true, status };
+    return { member: false, status: status || 'unknown' }; // 'left' or 'kicked'
   } catch (error) {
-    console.error(
-      `[Channel gate] Could not check membership for ${REQUIRED_CHANNEL}. ` +
-      `Make sure the bot is an ADMINISTRATOR of the channel. Error: ${error.message}`
-    );
-    return false; // fail closed: the free-answer requirement is mandatory
+    const message = scrubTelegramError(error && error.message);
+    channelGate.lastError = { at: new Date(), message };
+    console.error(`[Channel gate] Could not check membership for ${REQUIRED_CHANNEL}. ` +
+      `Make sure the bot is an ADMINISTRATOR of the channel. Error: ${message}`);
+    alertMastersChannelGate(message);
+    return { member: null, status: 'error', error: message };
   }
+}
+
+// true when the user may pass: a member, or the check failed and the gate is open on errors
+async function isChannelMember(userId) {
+  const r = await checkChannelMembership(userId);
+  return r.member === null ? CHANNEL_GATE_ON_ERROR === 'open' : r.member;
 }
 
 // Prompt shown to users who haven't joined yet.
@@ -797,6 +826,50 @@ bot.onText(/\/unlink/, async (msg) => {
   } catch (error) {
     console.error('Unlink error:', error);
     bot.sendMessage(chatId, '❌ Xatolik yuz berdi.');
+  }
+});
+
+// /kanal - the master sees why the channel check passes or fails, without the
+// server logs: the channel as Telegram knows it, the bot's own role there, the
+// master's own membership and the last error.
+bot.onText(/^\/kanal(?:@\w+)?\s*$/i, async (msg) => {
+  const chatId = msg.chat.id;
+  try {
+    const account = await getLinkedAccount(pool, chatId, privateSenderId(msg));
+    if (!account || !isMasterRole(account.role)) { bot.sendMessage(chatId, 'ℹ️ Bu buyruq faqat bosh administrator uchun.'); return; }
+    const lines = [`📢 Kanal tekshiruvi`, '',
+      `Kanal: ${REQUIRED_CHANNEL || '(yo\'q — tekshiruv o\'chiq)'}`,
+      `Talab yoqilganmi: ${TELEGRAM_CHANNEL_GATE_ENABLED ? 'ha' : 'yo\'q'} (TELEGRAM_CHANNEL_GATE_ENABLED)`,
+      `Xato bo'lsa: ${CHANNEL_GATE_ON_ERROR === 'open' ? 'o\'tkaziladi' : 'to\'xtatiladi'} (TELEGRAM_CHANNEL_GATE_ON_ERROR)`];
+    const advice = [];
+    if (REQUIRED_CHANNEL) {
+      try {
+        const chat = await bot.getChat(REQUIRED_CHANNEL);
+        lines.push(`Telegram bu nomni topdi: ${chat.type}${chat.title ? ` — «${chat.title}»` : ''}`);
+        if (chat.type === 'private') advice.push('Bu nom shaxsiy akkauntniki, kanal emas: a\'zolikni tekshirib bo\'lmaydi. REQUIRED_CHANNEL ga kanalning o\'z @nomini yozing.');
+      } catch (e) {
+        lines.push(`Telegram bu nomni topmadi: ${scrubTelegramError(e.message)}`);
+        advice.push('Kanal nomini tekshiring (REQUIRED_CHANNEL) yoki botni kanalga administrator qilib qo\'shing.');
+      }
+      try {
+        const me = await bot.getMe();
+        const mine = await bot.getChatMember(REQUIRED_CHANNEL, me.id);
+        lines.push(`Botning kanaldagi o'rni: ${mine.status}`);
+        if (mine.status !== 'administrator' && mine.status !== 'creator') advice.push(`@${me.username} ni kanalga administrator qilib qo'shing (alohida huquq shart emas).`);
+      } catch (e) {
+        lines.push(`Botning o'rni aniqlanmadi: ${scrubTelegramError(e.message)}`);
+        advice.push('Ko\'pincha sabab: bot kanalda administrator emas. Kanal → Administratorlar → botni qo\'shing.');
+      }
+      const own = await checkChannelMembership(msg.from.id);
+      lines.push(`Sizning a'zoligingiz: ${own.member === null ? `tekshirib bo'lmadi (${own.error})` : own.status}`);
+    }
+    if (channelGate.lastError) lines.push(`Oxirgi xato: ${channelGate.lastError.at.toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent' })} — ${channelGate.lastError.message}`);
+    if (advice.length) lines.push('', 'Nima qilish kerak:', ...advice.map(a => '• ' + a));
+    else if (REQUIRED_CHANNEL) lines.push('', '✅ Sozlama to\'g\'ri: bot a\'zolikni tekshira oladi.');
+    bot.sendMessage(chatId, lines.join('\n'));
+  } catch (error) {
+    console.error('[BOT] /kanal failed:', error.message);
+    bot.sendMessage(chatId, 'Tekshiruvda xatolik yuz berdi.').catch(() => {});
   }
 });
 
@@ -1260,7 +1333,14 @@ async function handleCallbackQuery(callbackQuery) {
   // Handle channel-subscription re-check
   if (data === 'check_sub') {
     try {
-      if (await isChannelMember(callbackQuery.from.id)) {
+      const sub = await checkChannelMembership(callbackQuery.from.id);
+      if (sub.member === null && CHANNEL_GATE_ON_ERROR === 'closed') {
+        // Telegram did not answer: never tell a subscriber they are not subscribed
+        bot.answerCallbackQuery(callbackQuery.id, {
+          text: 'Obunani hozir tekshira olmadik (texnik sabab, sizda emas). Birozdan keyin qayta urinib ko\'ring.',
+          show_alert: true
+        });
+      } else if (sub.member !== false) {
         bot.answerCallbackQuery(callbackQuery.id, { text: '✅ Rahmat! Obuna tasdiqlandi.' });
         bot.sendMessage(chatId, '✅ Obuna tasdiqlandi! Kerakli xizmatni tanlang:', { reply_markup: serviceKeyboard() });
       } else {
@@ -2026,7 +2106,7 @@ async function handleTelegramMessage(msg) {
   try {
     const account = await getLinkedAccount(pool, chatId, privateSenderId(msg));
     if (chatRoute(account, { testMode: inAdminTestMode(chatId) }) === 'staff') {
-      bot.sendMessage(chatId, `👋 ${account.full_name}, siz admin sifatida ulangansiz.\n\nBildirishnomalarni shu yerda olasiz.\n\n📋 Murojaatlar navbati: ${queueUrl()}\n/me - Hisob holati\n/unlink - Uzish${isMasterRole(account.role) ? '\n/testmode - Botni oddiy foydalanuvchi sifatida sinash' : ''}`);
+      bot.sendMessage(chatId, `👋 ${account.full_name}, siz admin sifatida ulangansiz.\n\nBildirishnomalarni shu yerda olasiz.\n\n📋 Murojaatlar navbati: ${queueUrl()}\n/me - Hisob holati\n/unlink - Uzish${isMasterRole(account.role) ? '\n/testmode - Botni oddiy foydalanuvchi sifatida sinash\n/kanal - Kanal obunasi tekshiruvi' : ''}`);
       return;
     }
   } catch (error) {
@@ -2620,6 +2700,6 @@ function getRequestTypeLabel(type) {
 }
 
 // Export bot for use in other modules
-module.exports = { bot, getBot: () => bot, setClaimAgent: (a) => { claimAgent = a && typeof a.run === 'function' ? a : null; }, setDraftGenerator: (fn) => { draftGenerator = typeof fn === 'function' ? fn : null; }, setDocumentAnalyzer: (fn) => { documentAnalyzer = typeof fn === 'function' ? fn : null; }, isChannelMember, channelLink, normalizeChannel, REQUIRED_CHANNEL, INSTAGRAM_URL };
+module.exports = { bot, getBot: () => bot, checkChannelMembership, channelGateOnError: CHANNEL_GATE_ON_ERROR, setClaimAgent: (a) => { claimAgent = a && typeof a.run === 'function' ? a : null; }, setDraftGenerator: (fn) => { draftGenerator = typeof fn === 'function' ? fn : null; }, setDocumentAnalyzer: (fn) => { documentAnalyzer = typeof fn === 'function' ? fn : null; }, isChannelMember, channelLink, normalizeChannel, REQUIRED_CHANNEL, INSTAGRAM_URL };
 
 console.log('Bot ishlamoqda...');
