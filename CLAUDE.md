@@ -594,6 +594,21 @@ Known state of the suites (Sept 2026):
   `getTemplateFor`, membership checked); the page helper is `J.firm` in
   `public/app/ws-save.js`. `WS_LIBRARY_MAX` 200 a kind, `WS_LIBRARY=off`.
   `tests/workspace-library.db.test.js`.
+  K2a (migration 046, `src/workspace/kb.js`, no AI, no embeddings): firm
+  documents `workspace_kb_documents` (no text: name, source, size, tags) and
+  `workspace_kb_chunks` (bands sealed AAD `workspace_kb_chunks.text:<ws>:<doc>:<n>`,
+  `bidx` the blind index of their roots, GIN). `/api/workspaces/:id/kb` GET /
+  POST (`{ from: { kind: library | editor | workspace_doc, id } }`: the
+  member's own Hujjatlarim document, an editor document they may read, a
+  document of this Workspace; the text copied then, not followed; the same
+  text 409 `already_added`) / DELETE (archived, bands deleted), `/kb/search`
+  (`{ q }`: every root first, then half the roots marked `partial` when few;
+  3 a document, 30 in all; the passage, page and clause of the hit itself -
+  page marks are kept in the sealed band and never shown), `/kb/:doc/chunks/:n`.
+  `splitChunks`: clause numbers and paragraphs, ~2 000 chars. Owner / member
+  add, viewer searches, stranger 404; 2 000 documents / 2 GB a Workspace
+  (`WS_KB_MAX_DOCS`, `WS_KB_MAX_BYTES`); no DATA_KEYS -> plain text and ILIKE.
+  `WS_KB=off`. UI in K2b. `tests/workspace-kb.db.test.js`.
 - `src/ai/model-pricing.js` — **single source of truth for model prices**;
   every spend path, hybrid-pipeline included, reads it. Each price carries
   its source and check date; VoiceLab credits convert at the owner's

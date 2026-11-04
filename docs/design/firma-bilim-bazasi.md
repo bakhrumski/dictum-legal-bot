@@ -203,6 +203,24 @@ yuboriladi; shablon - Hujjat tayyorlash sahifasidagi "Firma" yorlig'i,
 `ws:<id>` bilan ochiladi va eksport qilinadi (a'zolik serverda tekshiriladi).
 Har turdan 200 ta (`WS_LIBRARY_MAX`), `WS_LIBRARY=off`.
 
+K2a (2026-11-04, migratsiya 046, `src/workspace/kb.js`, AI'siz): firma
+hujjatlari `workspace_kb_documents` (matnsiz: nomi, manbasi, hajmi, teglar)
+va `workspace_kb_chunks` (bandlar, har biri shifrlangan, AAD
+`workspace_kb_chunks.text:<ws>:<doc>:<n>`, yonida so'z ildizlarining blind
+indeksi). Member va owner Hujjatlarimidagi o'z hujjatini, o'qiy oladigan
+muharrir hujjatini yoki shu Workspace hujjatini qo'shadi. Qo'shilgan paytdagi
+matn saqlanadi, manbaning keyingi o'zgarishi kuzatilmaydi. Bir xil matn
+ikki marta qo'shilsa, 409 qaytadi. Matn band raqami va xatboshi bo'yicha
+~2 000 belgilik bo'laklarga bo'linadi. Sahifa belgilari saqlanadi, lekin
+ko'rsatilmaydi: natijada so'z turgan sahifa va band raqami beriladi. Qidiruv
+avval hamma so'z ildizi bor bandlarni, kam bo'lsa yarmi bor bandlarni
+("qisman") beradi. Bir hujjatdan ko'pi bilan 3 ta, jami 30 ta. Viewer
+qidiradi va o'qiydi, qo'sha olmaydi. Begona 404 oladi. Cheklov: 2 000
+hujjat va 2 GB matn (`WS_KB_MAX_DOCS`, `WS_KB_MAX_BYTES`). `DATA_KEYS`
+bo'lmasa, matn ochiq saqlanadi va qidiruv `ILIKE` bilan ishlaydi.
+`WS_KB=off` o'chiradi. UI (qidiruv sahifasi, "Firma bazasiga qo'shish"
+tugmalari, muharrirdagi "Firma bandlari") K2b da.
+
 Dastlabki savollar:
 
 1. **Firma = Workspace** (yangi "tashkilot" tushunchasisiz) bo'lsinmi?
