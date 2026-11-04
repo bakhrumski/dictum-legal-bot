@@ -105,10 +105,13 @@ Tartib va PR bo'linishi dizayn hujjatining 9-bo'limida.
 - [~] Monitoring: lex.uz'dagi yangi va o'zgargan aktlar; foydalanuvchi
   ishlariga tegishlisi Telegram'ga yuboriladi (kuniga bitta yig'ma xabar).
   S4 (migratsiya 043, `src/monitor/`, AI'siz): ishlardagi aktlar har kuni
-  tekshiriladi, kuniga bitta Telegram xabar; PR'da.
+  tekshiriladi, kuniga bitta Telegram xabar; merge (#557).
 - [ ] Firma bilim bazasi: firmaning shablonlari va avvalgi hujjatlari, qidiruv
   bilan (Workspace xotirasidan kengaytiriladi); jamoaviy prompt va ko'nikma
-  kutubxonasi.
+  kutubxonasi. Dizayn (2026-11-04): `docs/design/firma-bilim-bazasi.md`
+  (qoralama; firma = Workspace; K1 kutubxona va serverdagi ko'nikmalar, K2
+  shifrlangan hujjatlar va blind index qidiruvi, K3 Workspace AI, K4 chat,
+  K5 embedding keyin).
 - [~] Adaptiv akkaunt va platformaning o'zini yaxshilashi (egasi, 2026-10-28):
   dizayn `docs/design/adaptiv-akkaunt.md` (#509, qabul qilingan), PR A1-A8.
   Birinchi qismi: shaxsiy ovoz glossariysi (#507). A1 (signallar va profil)
@@ -364,3 +367,6 @@ nima o'lchandi.
 - 2026-11-03: #556 (S3) merge. S4 PR: monitoring - ochiq ishlardagi aktlar
   har kuni lex.uz bilan solishtiriladi; o'zgarish bo'lsa, kuniga bitta
   Telegram xabar (ish nomi, akt, nima o'zgardi, havola), o'z kaliti bilan.
+- 2026-11-04: #557 (S4 monitoring) merge; sud amaliyoti dizaynining S1-S4
+  bosqichlari tugadi (S5 keyinga). Keyingi band: firma bilim bazasi dizayni
+  (`docs/design/firma-bilim-bazasi.md`, qoralama).
