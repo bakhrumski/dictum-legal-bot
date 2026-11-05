@@ -961,3 +961,35 @@ textarea.inp{height:auto;min-height:96px;padding:10px 13px;resize:vertical;line-
 .kb-note svg.i{width:15px;height:15px;flex:none;margin-top:2px}
 .kb-note a{color:var(--fg);text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:2px}
 @media (max-width:480px){.cmp-kb span{max-width:96px}}
+/* Mijoz portali (P1b, portal.js) */
+.pt-sec{margin-top:16px;padding-top:12px;border-top:1px solid var(--line)}
+.pt-sec>b{display:block;font-size:14px;margin-bottom:6px}
+.pt-row{display:flex;align-items:center;gap:10px;padding:7px 0;font-size:14px;min-width:0}
+.pt-rt{flex:1;min-width:0;overflow-wrap:anywhere}
+.pt-date{flex:none;min-width:86px;color:var(--muted);font-size:13px}
+.pt-ic svg.i{width:15px;height:15px;color:var(--muted)}
+.pt-vis{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);white-space:nowrap}
+.pt-empty{font-size:13px;margin:2px 0}
+.pt-form{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}
+.pt-form .pt-dlt{flex:1 1 200px;min-width:0}
+.pt-form .pt-dld{flex:0 0 160px}
+.pt-note{margin-top:10px}
+.pt-note textarea{width:100%;min-height:72px}
+.pt-stages{list-style:none;margin:6px 0 8px;padding:0;display:flex;flex-wrap:wrap;gap:8px 18px}
+.pt-stages li{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--muted)}
+.pt-stages li.past,.pt-stages li.cur{color:var(--fg)}
+.pt-stages li.cur{font-weight:600}
+.pt-dot{width:10px;height:10px;flex:none;border-radius:50%;border:1.5px solid var(--line)}
+.pt-stages li.past .pt-dot{background:var(--ok);border-color:var(--ok)}
+.pt-stages li.cur .pt-dot{background:var(--cta);border-color:var(--cta)}
+.pt-msg{padding:10px 12px;border-radius:12px;background:var(--accent-soft);margin-top:8px}
+.pt-msg p{margin:0 0 4px;white-space:pre-wrap;overflow-wrap:anywhere}
+.pt-docrow{width:100%;background:none;border:0;border-bottom:1px solid var(--line);text-align:left;font:inherit;color:inherit}
+.pt-doc{white-space:pre-wrap;overflow-wrap:anywhere;max-height:60vh;overflow:auto;font-size:14px;line-height:1.55;margin-top:10px}
+.pt-hist{margin-top:14px;font-size:13.5px}
+.pt-hist ul{margin:8px 0 0;padding-left:18px;color:var(--muted)}
+.pt-link{width:100%;margin-top:6px}
+.pt-inv h2{margin:0 0 10px}
+.pt-inv p{margin:0 0 16px;line-height:1.55}
+.pt-body .card{margin-top:14px}
+@media (max-width:480px){.pt-form .pt-dld{flex:1 1 140px}.pt-date{min-width:74px}}
