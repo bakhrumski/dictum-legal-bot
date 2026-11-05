@@ -37,7 +37,20 @@ function enabled(env = process.env) {
 
 /** What the login page may know: the numeric bot id (public), or null. */
 function telegramLoginOptions(env = process.env) {
-  return enabled(env) ? { botId: String(env.REG_BOT_TOKEN).split(':')[0] } : null;
+  return enabled(env) ? { botId: String(env.REG_BOT_TOKEN).split(':')[0], origin: loginOrigin(env) } : null;
+}
+
+/**
+ * The origin the login page must be on for Telegram to sign (the BotFather
+ * domain): APP_URL's origin when it is an https URL, else null (no move).
+ * A page opened on www.juristai.uz or the onrender.com address got Telegram's
+ * "Bot domain invalid" (2026-11-05); the page now moves to this origin first.
+ */
+function loginOrigin(env = process.env) {
+  try {
+    const u = new URL(String(env.APP_URL || ''));
+    return u.protocol === 'https:' ? u.origin : null;
+  } catch (_) { return null; }
 }
 
 /**
@@ -123,4 +136,4 @@ function mountTelegramLoginRoutes(app, { pool, logAudit = () => {}, appHome = nu
   });
 }
 
-module.exports = { mountTelegramLoginRoutes, checkTelegramAuth, telegramLoginOptions };
+module.exports = { mountTelegramLoginRoutes, checkTelegramAuth, telegramLoginOptions, loginOrigin };
