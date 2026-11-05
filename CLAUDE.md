@@ -1481,7 +1481,14 @@ breve added the way the font builds Ă (OFL, no reserved name).
   browser that started (bound by a per-flow `jai_tga_<flow>` cookie); the
   code is never in an API reply, is per flow, per Telegram id, 5 minutes,
   5 tries, used once. Credential, test-user and Telegram-code POSTs need
-  this site's Origin/Referer (`src/auth/same-origin.js`). Recovery: the browser never receives a reset token; an
+  this site's Origin/Referer (`src/auth/same-origin.js`). One-step Telegram
+  Login (`TELEGRAM_LOGIN_ENABLED=true`, the REG bot's id; Telegram signs only
+  for the BotFather `/setdomain` domain, else "Bot domain invalid",
+  2026-11-05): `/api/auth/options` gives `telegram.origin` (APP_URL's https
+  origin) and the page moves there first - only www. <-> bare or off
+  onrender.com; a Telegram window that closed or failed sends the next tap
+  the code way in that tab (`sessionStorage jai-tg-widget`).
+  `tests/telegram-login-page.test.js`. Recovery: the browser never receives a reset token; an
   ordinary account resets on its account page after Telegram sign-in; the
   reset link is for staff. A master may create an ordinary test account
   (`POST /api/admin/test-users`, master password re-entered, initial password
