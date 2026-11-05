@@ -131,7 +131,8 @@ Tartib va PR bo'linishi dizayn hujjatining 9-bo'limida.
   `docs/design/mijoz-portali.md` - mijoz ishning alohida roli (tarifsiz),
   bot asosiy yo'l, P1 ko'rish -> P2 xabarlar -> P3 hujjat so'rovi ->
   P4 jurnal -> P5 "Tanishdim" (ixtiyoriy); qabul qilingan (2026-11-05,
-  barcha takliflar). P1a navbatda.
+  barcha takliflar). P1a (server: taklif, bosqich, muddatlar, mijozga
+  ko'rinadiganlar, migratsiya 047) PR'da.
 - [~] Ma'lumot himoyasi 1-bosqich (egasi, 2026-10-28, occlum.io tahlilidan keyin):
   `docs/design/shifrlash-1-bosqich.md` - bazada shifrlash, AI'ga yuborishdan
   oldin shaxsiy ma'lumotni yashirish, provayder siyosati, kirish jurnali.
