@@ -226,7 +226,10 @@ function createMatterStore({ db, resolveEntitlement = null }) {
       if (open.rows[0].n >= limit) throw new MatterError(402, 'limit', `Ochiq ishlar soni ${limit} tadan oshmaydi.`);
     }
     const r = await db.query(
-      `UPDATE matters SET title = $2, summary = $3, status = $4, updated_at = now() WHERE id = $1 RETURNING *`,
+      // closed_at: a client of the matter still reads it 30 days after (src/matters/portal.js)
+      `UPDATE matters SET title = $2, summary = $3, status = $4, updated_at = now(),
+              closed_at = CASE WHEN $4 = 'closed' AND status <> 'closed' THEN now() WHEN $4 = 'open' THEN NULL ELSE closed_at END
+        WHERE id = $1 RETURNING *`,
       [m.id, title, summary, status]);
     if (status === 'closed' && m.status !== 'closed') await holdScans(m.id);
     if (status === 'open' && m.status === 'closed') {
@@ -327,4 +330,4 @@ async function deleteAccountMatters(db, adminId) {
   await db.query('DELETE FROM matters WHERE owner_id = $1', [adminId]);
 }
 
-module.exports = { createMatterStore, deleteAccountMatters, MatterError, KINDS, MAX_OPEN, MAX_OPEN_TRIAL, MAX_ITEMS, SCAN_AFTER_CLOSE_DAYS };
+module.exports = { createMatterStore, deleteAccountMatters, accessOf, MatterError, KINDS, MAX_OPEN, MAX_OPEN_TRIAL, MAX_ITEMS, SCAN_AFTER_CLOSE_DAYS };

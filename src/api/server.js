@@ -11946,6 +11946,11 @@ async function runMigrations() {
         resolveEntitlement: require('../rag/tariff-ledger').resolveEntitlement,
       });
     } catch (e) { console.log('[MATTERS] Mount skipped:', e.message); }
+    // Client portal P1a (docs/design/mijoz-portali.md): the client of one matter
+    // sees only what the lawyer marked for them; no AI, no unit; MATTER_PORTAL=off
+    try {
+      require('../matters/portal').mountPortalRoutes(app, { pool, requireAuth, requireSameOrigin: require('../auth/same-origin').requireSameOrigin });
+    } catch (e) { console.log('[PORTAL] Mount skipped:', e.message); }
 
     // Voice commands level 2 (docs/design/ovozli-buyruqlar-2.md): a spoken
     // command becomes a card; nothing runs until its token is run. No AI, no unit.
