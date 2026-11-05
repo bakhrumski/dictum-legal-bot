@@ -791,6 +791,16 @@ Known state of the suites (Sept 2026):
   `VOICE_DICTATION=off`); the text lands in the box, never sent by itself.
   Recordings transcribe only with `VOICE_NOTES_ENABLED=true` (customers also
   `VOICE_NOTES_USERS=true`) and an STT engine; the page says which is missing.
+  Channel gate (2026-11-04, `TELEGRAM_CHANNEL_GATE_ENABLED=true`, `REQUIRED_CHANNEL`
+  default @bakhrom_abdimuminov): `checkChannelMembership` keeps "could not
+  check" (`member: null`, e.g. the bot not an admin of the channel) apart
+  from "not a member" - a subscriber was told "Hali obuna bo'lmadingiz";
+  on an error `TELEGRAM_CHANNEL_GATE_ON_ERROR` open (default: let through,
+  masters told at most once an hour) or closed (the button then says the
+  check failed, never "not subscribed"); the site's free-access check keeps
+  its old verification and writes nothing on an error. `/kanal` (master):
+  the channel as Telegram sees it, the bot's role there, one's own status,
+  the last error and what to do.
   Account help (login/OTP/password) is matched only on unambiguous account
   words, never "hisob…" in a legal question ("hisoblash" once routed wage
   questions to password reset). `/testmode` (master only, in memory, auto-off after 12 h) lifts that for one
@@ -1471,7 +1481,14 @@ breve added the way the font builds Ă (OFL, no reserved name).
   browser that started (bound by a per-flow `jai_tga_<flow>` cookie); the
   code is never in an API reply, is per flow, per Telegram id, 5 minutes,
   5 tries, used once. Credential, test-user and Telegram-code POSTs need
-  this site's Origin/Referer (`src/auth/same-origin.js`). Recovery: the browser never receives a reset token; an
+  this site's Origin/Referer (`src/auth/same-origin.js`). One-step Telegram
+  Login (`TELEGRAM_LOGIN_ENABLED=true`, the REG bot's id; Telegram signs only
+  for the BotFather `/setdomain` domain, else "Bot domain invalid",
+  2026-11-05): `/api/auth/options` gives `telegram.origin` (APP_URL's https
+  origin) and the page moves there first - only www. <-> bare or off
+  onrender.com; a Telegram window that closed or failed sends the next tap
+  the code way in that tab (`sessionStorage jai-tg-widget`).
+  `tests/telegram-login-page.test.js`. Recovery: the browser never receives a reset token; an
   ordinary account resets on its account page after Telegram sign-in; the
   reset link is for staff. A master may create an ordinary test account
   (`POST /api/admin/test-users`, master password re-entered, initial password
