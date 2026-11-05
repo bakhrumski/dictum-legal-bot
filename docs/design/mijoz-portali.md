@@ -1,6 +1,6 @@
 # Mijoz portali: yurist va mijoz bitta ishda (dizayn)
 
-Holat: **qoralama** — egasining 9-bo'limdagi javoblarisiz kod boshlanmaydi.
+Holat: **qabul qilingan** (egasi, 2026-11-05: "Hammasini qabul qilaman" — 9-bo'limdagi barcha takliflar).
 Yo'l xaritasi: `docs/roadmap/legora-darajasi.md`, 4-bosqich ("Mijoz portali").
 Egasining topshirig'i (2026-11-04): "Keyingi bosqichni boshla!"
 
@@ -194,3 +194,11 @@ muharrirdagi D3 ulashish kabi: bitta obyekt, bitta havola, istalgan akkaunt.
    qoladimi? Taklif: ha (yuristning ish materiali); xabarlar matni
    almashtiriladi.
 8. **Tartib:** P1a → P1b → P1c → P2 → P3 → P4 → (P5). Taklif: shunday.
+
+**Javoblar (2026-11-05, egasi):** 1–8 savollarning hammasiga taklif qilingan
+javob qabul qilindi: mijoz — ishning alohida roli, tarifsiz; ish egasi va
+Workspace'ning owner / member a'zolari taklif qiladi; 20 MB / 200 fayl,
+Workspace'ning 2 GB chegarasi ichida; asosiy yo'l Telegram bot; P5 P4 dan
+keyin, yuristlar so'rasa; yopilgan ish mijozga 30 kun ochiq; mijoz akkaunti
+o'chirilsa uning fayllari ishda qoladi, xabarlari matni almashtiriladi;
+tartib P1a → P1b → P1c → P2 → P3 → P4 → (P5).

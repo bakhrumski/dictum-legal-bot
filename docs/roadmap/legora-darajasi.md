@@ -130,7 +130,8 @@ Tartib va PR bo'linishi dizayn hujjatining 9-bo'limida.
   rollar, audit trail. Dizayn (2026-11-04, qoralama):
   `docs/design/mijoz-portali.md` - mijoz ishning alohida roli (tarifsiz),
   bot asosiy yo'l, P1 ko'rish -> P2 xabarlar -> P3 hujjat so'rovi ->
-  P4 jurnal -> P5 "Tanishdim" (ixtiyoriy); javoblar 9-bo'limda kutilmoqda.
+  P4 jurnal -> P5 "Tanishdim" (ixtiyoriy); qabul qilingan (2026-11-05,
+  barcha takliflar). P1a navbatda.
 - [~] Ma'lumot himoyasi 1-bosqich (egasi, 2026-10-28, occlum.io tahlilidan keyin):
   `docs/design/shifrlash-1-bosqich.md` - bazada shifrlash, AI'ga yuborishdan
   oldin shaxsiy ma'lumotni yashirish, provayder siyosati, kirish jurnali.
@@ -401,3 +402,6 @@ nima o'lchandi.
   yozilmaydi; javob ostida qaysi hujjat va band ishlatilgani.
 - 2026-11-04: #565 (K4) merge: chatda "Firma bazasi" manbasi. Mijoz portali
   dizayni (qoralama) PR'da.
+- 2026-11-05: #566 (kanal tekshiruvi: xato "obuna emas" emas, /kanal) va #568
+  (Telegram orqali kirish: to'g'ri domen, xatodan keyin kod) merge. Mijoz
+  portali dizayni qabul qilindi (#567).
