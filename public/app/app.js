@@ -22,7 +22,9 @@
     var items = NAV.filter(function (n) { return !keep || keep.indexOf(n[0]) > -1; });
     // staff answer the human queue (queue.js): their work, right under the home page
     if (J.isStaff()) items.splice(1, 0, ['#/navbat', 'chat', 'nav.queue']);
-    items = items.concat(J.salesAgent ? [['#/mijozlarim', 'user', 'nav.myClients']] : [], J.isMaster && J.isMaster() ? [['#/boshqaruv', 'shield', 'nav.admin']] : [],
+    items = items.concat(J.salesAgent ? [['#/mijozlarim', 'user', 'nav.myClients']] : [],
+        // the client of a lawyer's matter (portal.js): their matters, in every view
+        J.portalClient ? [['#/portal', 'folder', 'nav.portal']] : [], J.isMaster && J.isMaster() ? [['#/boshqaruv', 'shield', 'nav.admin']] : [],
         // the client's own role view: the other sections are one click away
         rv && !J.rolePreview() ? [['#/rol/hammasi', 'more', 'rv.all']] : []);
     $('#nav').innerHTML = items.map(function (n) {
