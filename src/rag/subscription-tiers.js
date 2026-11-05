@@ -325,10 +325,19 @@ async function isChannelOkForAdmin(row, adminId) {
   if (!row.telegram_user_id) return false;
   const cachedAt = row.channel_verified_at ? new Date(row.channel_verified_at).getTime() : 0;
   if (cachedAt && (Date.now() - cachedAt) < CHANNEL_REVERIFY_MS) return true;
-  const { isChannelMember } = _bot();
+  const { isChannelMember, checkChannelMembership } = _bot();
   if (typeof isChannelMember !== 'function') return cachedAt > 0;
   try {
-    const ok = await isChannelMember(row.telegram_user_id);
+    // Telegram did not answer (bot not an admin of the channel...): the old
+    // verification stands and nothing is written - an error is not "left"
+    let ok;
+    if (typeof checkChannelMembership === 'function') {
+      const r = await checkChannelMembership(row.telegram_user_id);
+      if (r.member === null) return cachedAt > 0 || _bot().channelGateOnError === 'open';
+      ok = r.member;
+    } else {
+      ok = await isChannelMember(row.telegram_user_id);
+    }
     if (ok) {
       await pool.query('UPDATE admins SET channel_verified_at = NOW() WHERE id = $1', [adminId]);
       return true;
