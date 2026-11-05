@@ -1002,6 +1002,26 @@ Known state of the suites (Sept 2026):
   viewers read. Paid plans keep 200 open matters, Sinov 1. A scan held by an
   open matter does not expire; 30 days after the last one closes. Account
   deletion removes matters and scans. No AI, no unit; `MATTERS=off`.
+  Client portal (2026-11-05, design `docs/design/mijoz-portali.md`, accepted
+  with all proposals: P1a server -> P1b pages -> P1c bot -> P2 messages ->
+  P3 document requests -> P4 log -> P5 optional). P1a (migration 047,
+  `src/matters/portal.js`, no AI, no unit): the client of one matter is any
+  account with no plan and never a Workspace member (`matter_clients`);
+  whoever writes the matter invites by a one-use link (24 random bytes, only
+  the sha256 kept, shown once, `PORTAL_INVITE_DAYS` 7, revocable; a person who
+  already reaches the matter is refused, `PORTAL_MAX_CLIENTS` 10); the client
+  sees only the stage (`matters.client_stage`, received / in_progress /
+  waiting_client / in_court / done, with `matter_stage_history`), deadlines
+  marked `client_visible`, notes written for the client and documents shared
+  from the sharer's OWN library as a sealed copy (`matter_client_items`, AAD
+  `matter_client_items.body:<matter>:<id>`; the library row is never read
+  again) - never the matter's summary, notes, chats, agent results or
+  Workspace; anything else 404; a closed matter stays readable 30 days
+  (`matters.closed_at`). Lawyer: `/api/matters/:id/portal` GET and
+  `.../stage|invites|clients|deadlines|items`; client: `/api/portal`,
+  `/api/portal/invite/:token[/accept]`, `/api/portal/:id[/items/:item|/leave]`;
+  writes same-origin. Account deletion ends the person's client rows.
+  `MATTER_PORTAL=off`. `tests/matter-portal.db.test.js`.
 - `src/agents/runs/` (2026-10-28, PR-B) — agent runs (migration 020): the
   claim draft, tabular and playbook routes are a service each (`prepare` no
   AI + reservation held with `meta.holdUntil` 45 min, `run` the harness,
