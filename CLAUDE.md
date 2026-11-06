@@ -345,6 +345,14 @@ Known state of the suites (Sept 2026):
   charged (`commitUsage` settles a missing text as empty). The user bubble
   writes its text into its own line, not over the file chip.
   `tests/chat-retry.test.js`.
+  Broken sentences and language (2026-11-06, owner's screenshot of a
+  Russian analysis: "Это значит, что п. Для вас ...", and an Uzbek request
+  answered in Russian): the claim guard's `sentences` does not end a
+  sentence after an abbreviation (п., ст., ч., абз., гл., стр., №, art. ...)
+  or a single letter - "3.4 ..." was a claim of its own, withheld, and "п."
+  was left; `lexLangForText` leaves quoted parts out and lets the script with
+  more letters decide (one quoted Russian word no longer makes an Uzbek
+  request Russian). `tests/claim-guard-abbrev.test.js`.
   `src/rag/question-aspects.js` splits a question into deadline,
   compensation, evidence and remedy and runs a light corpus search for each
   (Telegram, web chat, Workspace).
