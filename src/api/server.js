@@ -7109,6 +7109,14 @@ app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, t
       // headers + first frame immediately (Render's front proxy can hold small
       // responses); harmless to the client SSE parser (lines starting with ':').
       res.write(':' + ' '.repeat(2048) + '\n\n');
+      // a heartbeat while the slow steps (a long document's digest, the lex.uz
+      // rounds, the checks) send nothing: a proxy that closes an idle stream
+      // cut answers as "Javob uzildi" (2026-11-05). A comment line, ignored by
+      // the page's parser; stopped when the response ends or the client goes.
+      const beat = setInterval(() => { try { if (!res.writableEnded) res.write(': ping\n\n'); } catch (_) {} }, 15000);
+      if (typeof beat.unref === 'function') beat.unref();
+      res.on('close', () => clearInterval(beat));
+      res.on('finish', () => clearInterval(beat));
       sse({ type: 'status', kind: 'search', text: 'Qonunlar qidirilmoqda...' });
     }
     // Optional attached-document text (OCR/PDF extract from the composer). When

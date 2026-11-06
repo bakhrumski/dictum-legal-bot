@@ -336,6 +336,15 @@ Known state of the suites (Sept 2026):
   set aside while citations are linked. The `KEYINGI SAVOLLAR:` block (max
   2) leaves the answer: web chat `followUpQuestions` buttons, Telegram a
   short list, Workspace drops it.
+  A cut answer (2026-11-05, owner: a document analysis ended in "Javob
+  uzildi"): the web chat's stream writes `: ping` every 15 s (a proxy closing
+  an idle stream during a long digest); a failed answer (cut stream, network,
+  5xx) gets "Qayta urinish" (`retryBtn` in chat.js) - the same message, the
+  chat's documents (`C.docs`) and the confirmed cost, nothing uploaded or
+  typed again; a document service cut before its first word is released, not
+  charged (`commitUsage` settles a missing text as empty). The user bubble
+  writes its text into its own line, not over the file chip.
+  `tests/chat-retry.test.js`.
   `src/rag/question-aspects.js` splits a question into deadline,
   compensation, evidence and remedy and runs a light corpus search for each
   (Telegram, web chat, Workspace).

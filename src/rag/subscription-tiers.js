@@ -473,8 +473,10 @@ function commitUsage(res) {
   const text = res && res.locals ? res.locals.deliveredText : undefined;
   const jobs = jobsOf(res);
   const sectionJobs = jobs.filter(t => t && t.section);
-  const settled = sectionJobs.length && typeof text === 'string'
-    ? require('./document-job').settleSections(text, sectionJobs.map(t => t.service)) : {};
+  // nothing delivered at all (a stream cut before its first word, 2026-11-05)
+  // settles as an empty text: a document service is never charged for it
+  const settled = sectionJobs.length
+    ? require('./document-job').settleSections(typeof text === 'string' ? text : '', sectionJobs.map(t => t.service)) : {};
   for (const t of jobs) {
     if (!t || t.refunded || t.committed || !t.jobKey) continue;
     if (t.section && settled[t.service] === 'not_delivered') {

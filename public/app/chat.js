@@ -463,7 +463,8 @@
 
     function userBubble(text, chipsHtml) {
       var b = J.h('<div class="m-user">' + (chipsHtml ? '<div class="cmp-chips">' + chipsHtml + '</div>' : '') + '<span></span></div>');
-      $('span:last-child', b).textContent = text; thread.appendChild(b); return b;
+      // the bubble's own text line (not a file chip: 'span:last-child' found the chip first and wrote the message over the file name)
+      b.lastElementChild.textContent = text; thread.appendChild(b); return b;
     }
     /* S3, citator: the act's status on lex.uz, its cited articles' changes, our copy's date, Plenum - from the server, no AI */
     var CT = {
@@ -586,7 +587,7 @@
       C.ctrl = new AbortController();
       var res;
       try { res = await fetch('/api/legal-chat', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: C.ctrl.signal }); }
-      catch (e) { cmp.busy(false); se.remove(); a.appendChild(J.h('<p class="err">' + esc(t('err.net')) + '</p>')); return; }
+      catch (e) { cmp.busy(false); se.remove(); C.history.pop(); a.appendChild(J.h('<p class="err">' + esc(t('err.net')) + '</p>')); retryBtn(a, msg, shown, confirmedJob); return; }
       if (res.status === 401) return J.toLogin();
       var ct = res.headers.get('Content-Type') || '';
       if (!res.ok || ct.indexOf('event-stream') < 0) {
@@ -599,6 +600,8 @@
         var lim = J.handleLimit(d);
         a.appendChild(J.h('<div class="note"></div>')); $('.note', a).textContent = J.errMsg(d);
         if (lim) { var bt = J.h('<div class="btns" style="margin-top:10px"><button class="pill sm">' + esc(t('limit.btn')) + '</button></div>'); bt.firstChild.onclick = function () { J.openPlans({ ended: true }); }; a.appendChild(bt); }
+        // a server or gateway failure (5xx, 0) is retried with one tap; a limit or a refused request is not
+        else if (!res.status || res.status >= 500) retryBtn(a, msg, shown, confirmedJob);
         return;
       }
       // SSE oqimi
@@ -629,6 +632,20 @@
       se.remove(); C.history.pop();
       var p2 = J.h('<p class="err"></p>'); p2.textContent = (err && err.error) || t('err.cut'); a.appendChild(p2);
       if (err && err.quotaRefunded) a.appendChild(J.h('<p class="muted" style="font-size:13px">↺</p>'));
+      retryBtn(a, msg, shown, confirmedJob);
+    }
+    /* "Qayta urinish": the same message with the same documents (still in this chat: C.docs) and the cost already
+       confirmed - nothing is uploaded or typed again. A stream cut before anything arrived is not charged (the server
+       releases its units), so the retry is the only charge. */
+    function retryBtn(a, msg, shown, confirmedJob) {
+      var b = J.h('<div class="btns" style="margin-top:10px"><button type="button" class="pill sm" data-a="retry">' + J.icon('refresh') + '<span>' + esc(t('err.retry')) + '</span></button></div>');
+      $('[data-a=retry]', b).onclick = function () {
+        if (C.ctrl) return;
+        a.remove();
+        C.history.push({ role: 'user', text: msg });
+        ask(msg, shown, confirmedJob);
+      };
+      a.appendChild(b); scroll();
     }
     function afterReply(d) {
       C.history.push({ role: 'model', text: d.reply || '', nextActions: d.nextActions || [], citator: d.citator || [], firm: d.firm || null });
