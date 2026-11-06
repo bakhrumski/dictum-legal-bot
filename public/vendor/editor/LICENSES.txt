@@ -21,6 +21,8 @@
 @tiptap/extension-ordered-list@3.31.4 MIT
 @tiptap/extension-paragraph@3.31.4 MIT
 @tiptap/extension-strike@3.31.4 MIT
+@tiptap/extension-subscript@3.31.4 MIT
+@tiptap/extension-superscript@3.31.4 MIT
 @tiptap/extension-table@3.31.4 MIT
 @tiptap/extension-text@3.31.4 MIT
 @tiptap/extension-text-align@3.31.4 MIT

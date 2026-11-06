@@ -5,7 +5,9 @@
  * the editor itself writes is kept - paragraphs, headings, lists, tables,
  * quotes, rules, line breaks, bold / italic / underline / strike / sup / sub,
  * links (http, https, mailto), and inline colour, background, font family,
- * font size and alignment. Everything else (scripts, event attributes, images,
+ * font size and alignment, and (U5a) a paragraph's line spacing (1, 1.15, 1.5,
+ * 2) and left indent (1.25 cm steps, <= 10 cm) and a page break
+ * (<hr data-page-break>). Everything else (scripts, event attributes, images,
  * iframes, unknown styles) is dropped, its text kept. Used on every save,
  * import and export, so a stored document never holds markup the editor did
  * not make.
@@ -18,6 +20,8 @@ const INLINE = new Set(['strong', 'b', 'em', 'i', 'u', 's', 'strike', 'del', 'su
 const DROP = new Set(['script', 'style', 'iframe', 'object', 'embed', 'noscript', 'template', 'svg', 'math', 'head', 'title', 'meta', 'link', 'img', 'video', 'audio', 'canvas', 'form', 'input', 'button', 'select', 'textarea']);
 const RENAME = { b: 'strong', i: 'em', strike: 's', del: 's', h5: 'h4', h6: 'h4', div: 'p', section: 'p', article: 'p' };
 
+// U5a: the tags the editor writes line spacing and indent on
+const LINE_TAGS = new Set(['p', 'h1', 'h2', 'h3', 'h4']);
 const COLOR = /^(#[0-9a-f]{3,8}|rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*(,\s*(0|1|0?\.\d+)\s*)?\))$/iu;
 const FONT = /^[\p{L}\p{N} ,'"-]{1,80}$/u;
 const SIZE = /^\d{1,2}(\.\d)?(px|pt)$/u;
@@ -35,6 +39,8 @@ function cleanStyle(style, tag) {
     else if (k === 'font-family' && FONT.test(v)) out.push(`${k}: ${v.replace(/"/gu, "'")}`);
     else if (k === 'font-size' && SIZE.test(v)) out.push(`${k}: ${v}`);
     else if (k === 'text-align' && /^(left|center|right|justify)$/u.test(v) && BLOCK.has(tag)) out.push(`${k}: ${v}`);
+    else if (k === 'line-height' && LINE_TAGS.has(tag) && /^(1|1\.15|1\.5|2)$/u.test(v)) out.push(`${k}: ${v}`);
+    else if (k === 'margin-left' && LINE_TAGS.has(tag) && /^(\d(\.\d{1,2})?|10)cm$/u.test(v) && parseFloat(v) <= 10) out.push(`${k}: ${v}`);
   }
   return out.join('; ');
 }
@@ -64,6 +70,7 @@ function cleanHtml(html, { maxChars = 2000000 } = {}) {
     if (name === 'mark' && el.attribs && COLOR.test(String(el.attribs['data-color'] || ''))) keep['data-color'] = el.attribs['data-color'];
     // a comment's anchor (D2, src/editor/comments.js): the comment's id only
     if (name === 'span' && el.attribs && /^[0-9a-f-]{36}$/iu.test(String(el.attribs['data-comment'] || ''))) keep['data-comment'] = el.attribs['data-comment'];
+    if (name === 'hr' && el.attribs && el.attribs['data-page-break'] != null) keep['data-page-break'] = '1';
     if (name === 'ol' && el.attribs && /^\d{1,4}$/u.test(String(el.attribs.start || ''))) keep.start = el.attribs.start;
     el.attribs = keep;
   });

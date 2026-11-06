@@ -194,7 +194,8 @@ function mountEditorRoutes(app, { pool, requireAuth, requireSameOrigin, extractF
     if (!d) return notFound(res);
     const { htmlToDocx, DOCX_MIME } = require('../drafting/html-to-docx');
     const open = await comments.forExport(d.id, me(req));
-    const buf = await htmlToDocx(d.html, { title: d.title, comments: open, lang: /[Ѐ-ӿ]/u.test(d.html) && !/[A-Za-z]{4}/u.test(d.html.replace(/<[^>]+>/gu, '')) ? 'ru' : 'uz' });
+    // U5a: page numbers in the footer
+    const buf = await htmlToDocx(d.html, { title: d.title, comments: open, pageNumbers: true, lang: /[Ѐ-ӿ]/u.test(d.html) && !/[A-Za-z]{4}/u.test(d.html.replace(/<[^>]+>/gu, '')) ? 'ru' : 'uz' });
     const file = `${d.title.replace(/[\\/:*?"<>|]+/gu, ' ').trim().slice(0, 120) || 'hujjat'}.docx`;
     res.set('Content-Type', DOCX_MIME);
     res.set('Content-Disposition', `attachment; filename="hujjat.docx"; filename*=UTF-8''${encodeURIComponent(file)}`);

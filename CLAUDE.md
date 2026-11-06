@@ -1330,6 +1330,25 @@ Known state of the suites (Sept 2026):
   where the paragraph still reads as checked, a version "Imlo
   tuzatishidan oldin" kept first. `EDITOR_SPELL=off`.
   `tests/doc-check.test.js`.
+  U5a (2026-11-06, `docs/design/ux-audit-2026-11.md` §U5; bundle `?b=4`,
+  `public/vendor/editor/entry.js`): a click on an AI or check card (not its
+  buttons) marks its words in light blue and brings them into view
+  (`J.editorSpot`; a `jaiSpots` decoration, never saved or shared, gone on the
+  next click or typing; on a phone the panel steps aside) - the "Ko'rsatish" /
+  "Joyini ko'rsatish" buttons are gone. Word set 1: sub / superscript, line
+  spacing 1 / 1.15 / 1.5 / 2 and a 1.25 cm indent step (`paragraphFormat`,
+  inline `line-height` / `margin-left` on p and h1-h4, kept by the sanitizer),
+  "Formatlashni tozalash" (marks, block, spacing, alignment - never comment
+  anchors or links), a page break (`<hr data-page-break>`, Ctrl+Enter, at the
+  selection's start - selected words stay; Word `w:br w:type="page"`, a new
+  page in print), find and replace (`public/app/editor-find.js`, Ctrl+F /
+  Ctrl+H: case and apostrophe forms folded, within a paragraph, hits as
+  decorations, replace for editors only, "Hammasini" is one undo step), the
+  status line (page n / m counting the breaks, words, characters) and zoom
+  75-150 % (`localStorage jai-ed-zoom`, print at 100 %). The editor's Word
+  download has the page number in the footer (`htmlToDocx` `pageNumbers`, a
+  PAGE field; drafts and opinions unchanged) and the spacing / indent / break.
+  `tests/editor-word-set1.test.js`.
 - `src/workspace/` — Workspace: routes, authz, Supabase
   realtime/storage, Workspace AI. Since 2026-10-28 (owner, migration 025)
   any active paid plan (Silver, Gold, Platinum) owns one (`PLAN_CATALOG`
