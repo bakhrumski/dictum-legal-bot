@@ -19,7 +19,7 @@
         none: 'Izoh yo‘q. Matndan so‘z belgilab, «Izoh qo‘shish»ni bosing.', noneDone: 'Hal qilingan izoh yo‘q.', gone: 'Izohlangan matn o‘chirilgan', word: 'Word', me: 'Siz',
         hint: 'Word faylidagi izohlar shu yerda ochiladi; Word’ga yuklaganda ochiq izohlar Word izohi bo‘lib boradi.' },
       kinds: { auto: 'avto', named: 'nomli', restore: 'tiklashdan oldin' }, noVer: 'Hali versiya yo‘q — birinchisi 10 daqiqada o‘zi saqlanadi.',
-      del: 'O‘chirish', delQ: 'Hujjat va uning barcha versiyalari butunlay o‘chiriladi. Davom etasizmi?', back: 'Hujjatlarim',
+      del: 'O‘chirish', delQ: 'Hujjat va uning barcha versiyalari butunlay o‘chiriladi. Davom etasizmi?', back: 'Hujjatlar',
       page: 'Sahifa {n} / {m}', chars: '{n} belgi', loading: 'Muharrir yuklanmoqda…', loadFail: 'Muharrirni yuklab bo‘lmadi. Sahifani yangilang.',
       notes: 'Ochishda saqlanmagan qismlar:', note: { header_footer: 'yuqori / pastki kolontitul', footnotes: 'sahifa osti izohlari', comments: 'Word izohlari',
         tracked_changes: 'Track Changes (qabul qilingan ko‘rinish olindi)', images: 'rasmlar', pdf_layout: 'PDF sahifa ko‘rinishi (matn olindi)', plain_text: 'formatlash (matn olindi)', unreadable_parts: 'faylning ayrim qismlari' },
@@ -44,7 +44,7 @@
         none: 'Комментариев нет. Выделите слова в тексте и нажмите «Добавить комментарий».', noneDone: 'Решённых комментариев нет.', gone: 'Текст комментария удалён', word: 'Word', me: 'Вы',
         hint: 'Комментарии из файла Word открываются здесь; при скачивании в Word открытые комментарии сохраняются как примечания Word.' },
       kinds: { auto: 'авто', named: 'именная', restore: 'перед восстановлением' }, noVer: 'Версий пока нет — первая сохранится сама через 10 минут.',
-      del: 'Удалить', delQ: 'Документ и все его версии будут удалены. Продолжить?', back: 'Мои документы',
+      del: 'Удалить', delQ: 'Документ и все его версии будут удалены. Продолжить?', back: 'Документы',
       page: 'Стр. {n} / {m}', chars: '{n} знаков', loading: 'Загрузка редактора…', loadFail: 'Не удалось загрузить редактор. Обновите страницу.',
       notes: 'При открытии не сохранены:', note: { header_footer: 'колонтитулы', footnotes: 'сноски', comments: 'примечания Word', tracked_changes: 'исправления (взят принятый вид)',
         images: 'изображения', pdf_layout: 'вид страниц PDF (взят текст)', plain_text: 'форматирование (взят текст)', unreadable_parts: 'некоторые части файла' },
@@ -127,7 +127,7 @@
 
   J.viewEditor = async function (id) {
     J.setTitle(s('title'));
-    var v = J.mount('<div class="ed-wrap"><div class="ed-top"><a class="ed-back" href="#/hujjatlarim">' + J.icon('back') + '<span>' + esc(s('back')) + '</span></a>' +
+    var v = J.mount('<div class="ed-wrap"><div class="ed-top"><a class="ed-back" href="#/hujjatlarim?muharrir">' + J.icon('back') + '<span>' + esc(s('back')) + '</span></a>' +
       '<input class="ed-title" maxlength="200" aria-label="' + esc(s('title')) + '"><span class="ed-st muted"></span><span class="ed-ppl"></span><span class="ed-sp"></span>' +
       '<button class="pill sm ghost" type="button" data-a="share">' + J.icon('team') + '<span class="ed-shn">' + esc(s('sh').share) + '</span></button>' +
       (J.editorCheck ? '<button class="pill sm ghost" type="button" data-a="chk">' + J.icon('check') + '<span class="ed-chkn">' + esc(J.editorCheckLabel()) + '</span></button>' : '') +
@@ -325,7 +325,7 @@
       stopped = true; dirty = false; titleDirty = false;
       var x = await J.api('/api/editor/docs/' + encodeURIComponent(id), { method: 'DELETE' });
       if (!x.ok) { J.toast(J.errMsg(x.data)); return; }
-      J.go('#/hujjatlarim');
+      J.go('#/hujjatlarim?muharrir');
     };
     $('[data-a=ver]', v).onclick = async function () {
       await flush();
@@ -396,7 +396,7 @@
       if (!(await J.confirm(SH.leaveQ, SH.leave))) return;
       var x = await J.api('/api/editor/docs/' + encodeURIComponent(id) + '/members/' + me, { method: 'DELETE' });
       if (!x.ok) { J.toast(J.errMsg(x.data)); return; }
-      J.go('#/hujjatlarim');
+      J.go('#/hujjatlarim?muharrir');
     };
     if (!canWrite) { var vb = $('[data-a=ver]', v); if (vb) vb.dataset.ro = '1'; }
     $('[data-a=share]', v).onclick = function () { shareModal(id, role, me); };

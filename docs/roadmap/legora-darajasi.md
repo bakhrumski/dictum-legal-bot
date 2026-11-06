@@ -419,3 +419,8 @@ nima o'lchandi.
 - 2026-11-06: #573 merge ("п." dan keyin gap uzilmaydi; javob tili). UI/UX
   audit qabul qilindi (#574, barcha takliflar); tartib U1 → U5a → U2–U4 →
   U5b, keyin P2. U1 boshlandi.
+- 2026-11-06: U1 PR (server: `src/search/routes.js` - `GET /api/search`,
+  `GET /api/recent`, nomlar bo'yicha, AI yo'q; sahifa: chap paneldagi
+  "Qidirish" + Ctrl/⌘K, bosh sahifada "Davom ettirish", "Hujjatlar"
+  uch oynada - Yuklanganlar / Tahrirdagilar / Natijalar). Merge egasining
+  roziligi bilan.

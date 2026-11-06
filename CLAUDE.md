@@ -470,6 +470,25 @@ Known state of the suites (Sept 2026):
   `tests/privacy-crypto.test.js`, `tests/document-library.db.test.js`,
   `tests/sealing-e2b.db.test.js`, `tests/privacy-redact.test.js`,
   `tests/redaction-eval.test.js`.
+- U1 of the UX audit (2026-11-06, `docs/design/ux-audit-2026-11.md`, accepted
+  with all proposals: U1 -> U5a -> U2-U4 -> U5b, then P2): one search by NAME
+  (`src/search/routes.js`, no AI, no unit, `SEARCH=off`): `GET /api/search?q=`
+  - every word of the query in the name, both Latin alphabets and apostrophe
+  forms folded (in SQL and `uz-alphabet.fold`), LIKE wildcards escaped, <= 6
+  a kind - over own chats, own library documents, editor documents owned or
+  shared, matters owned or of a live Workspace, own agent runs (by the title
+  a matter saved them under); a message, a document text, a summary or a
+  result is never read. `GET /api/recent`: the last 8 of every kind together
+  (a plan never approved left out). Page (`public/app/find.js`): the side
+  field "Qidirish" under "Yangi suhbat" and Ctrl/⌘K open one window (section
+  names matched in the page, then the server's rows; arrows, Enter, Esc; a
+  document opens Hujjatlar filtered by its name, a table review its page,
+  another agent result `J.openRun`'s window from matters.js); the home page's
+  "So'nggi suhbatlar" is "Davom ettirish" (`J.recentBlock`; the recent chats
+  when it cannot load). "Hujjatlarim" is "Hujjatlar" (`#/hujjatlarim?yuklangan
+  | muharrir | natijalar`): uploaded documents, the editor's documents (the
+  editor's back link opens that tab) and the person's agent results
+  (`GET /api/agent/runs`). `tests/search.db.test.js`.
 - "Hujjatlarim" (2026-10-29, owner: every uploaded document stays for later
   actions until the person deletes it; migration 029): `document_scans` is the
   person's library - a text Word/PDF read by `/api/analyze/extract` (it now
