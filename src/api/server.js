@@ -3794,6 +3794,8 @@ app.get('/api/events', requireStaff, (req, res) => {
   res.flushHeaders();
   res.write('retry: 5000\n\n');
   sseClients.add(res);
+  // a shutdown ends this endless stream instead of waiting for it (the page reconnects)
+  require('./lifecycle').trackStream(res, null, { wait: false });
   const hb = setInterval(() => { try { res.write(':hb\n\n'); } catch (_) {} }, 25000);
   req.on('close', () => { clearInterval(hb); sseClients.delete(res); });
 });
@@ -7117,6 +7119,15 @@ app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, t
       if (typeof beat.unref === 'function') beat.unref();
       res.on('close', () => clearInterval(beat));
       res.on('finish', () => clearInterval(beat));
+      // a deploy (SIGTERM) waits for this answer (SHUTDOWN_WAIT_MS); one still open at the end is told
+      // why it ends and its units are released - never cut silently (src/api/lifecycle.js)
+      require('./lifecycle').trackStream(res, () => {
+        if (res.writableEnded) return;
+        const refund = tariffModule.refundUsage(res, 'server_restart');
+        // "returned" only when units were really held for this answer
+        sse({ type: 'error', code: 'SERVER_RESTART', error: 'Server yangilanmoqda, javob tugamay qoldi. «Qayta urinish»ni bosing' + (refund.quotaRefunded ? ' — limit qaytarildi.' : '.'), ...refund });
+        try { res.end(); } catch (_) { /* gone */ }
+      });
       sse({ type: 'status', kind: 'search', text: 'Qonunlar qidirilmoqda...' });
     }
     // Optional attached-document text (OCR/PDF extract from the composer). When
@@ -12228,8 +12239,9 @@ lifecycle.waitForDatabase(pool)
       console.log(`[SERVER] Dashboard running on port ${PORT} | Node ${process.version}${WEBHOOK_DOMAIN ? ' | https://' + WEBHOOK_DOMAIN : ''}`);
     });
     // the editor's live co-editing (D3): a WebSocket on this server, the app's own session and origin
+    let editorHub = null;
     try {
-      require('../editor/live').attachLive(server, {
+      editorHub = require('../editor/live').attachLive(server, {
         sessionMiddleware, pool, store: require('../editor/store').createEditorStore({ db: pool }),
         allowedOrigin: (req) => require('../auth/same-origin').isSameOrigin(req),
       });
@@ -12242,6 +12254,8 @@ lifecycle.waitForDatabase(pool)
         // agent runs: stop taking new ones; a running one resumes in the next process after its lease
         async () => { if (agentRunWorker) await agentRunWorker.stop(); },
       ],
+      // what lives only in memory is saved before the sockets close: the editor's open documents
+      beforeClose: [async () => { if (editorHub) await editorHub.shutdown(); }],
     });
   })
   .catch((error) => {
