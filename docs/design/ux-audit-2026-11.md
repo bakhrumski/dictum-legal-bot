@@ -1,6 +1,6 @@
 # UI/UX audit: platformani "birinchi kun" uchun soddalashtirish
 
-Holat: **qoralama**. Egasining 8-bo'limdagi javoblarisiz kod boshlanmaydi.
+Holat: **qabul qilingan** (egasi, 2026-11-06: "Takliflaringni qabul qilaman", 9 ta maket ko'rilgandan keyin).
 Egasining topshirig'i (2026-11-06): "User platformadan 1-marta foydalanishni
 boshlaganda hech narsani tushunmaydi… labirintga o'xshaydi. Nima? Qayerda?
 Qanday?… Platformadan foydalanish dummy'lar uchun ham oson bo'lishi kerak,
@@ -305,3 +305,17 @@ so'raladi.
 6. **Tartib**: avval U1 (yo'qolgan hujjat muammosi) va U5a, keyin U2–U4, keyin
    U5b; roadmap'dagi P2 (mijoz bilan xabarlar) shulardan keyinmi? Taklif:
    shunday.
+
+**Javoblar (2026-11-06, egasi):** 1–6 savollarning hammasiga taklif
+qilingan javob qabul qilindi:
+- tarif oynasi birinchi kirishda chiqmaydi;
+- menyuda 5 ta band, qolganlari "Asboblar"da;
+- taklif qilingan nomlar ("Tayyor buyruqlar", "Firma qoidalari bilan
+  tekshirish", "Ko'p hujjatni solishtirish");
+- muharrirdagi AI chatda har savol 1 chat birligi, javob shu hujjat bilan
+  birga va "Suhbatlar"da saqlanadi;
+- Word funksiyalarining 1-to'plami;
+- tartib: U1 → U5a → U2–U4 → U5b, keyin P2.
+
+Maketlar 9 ta rasm bo'lib egasiga ko'rsatildi (1280px, platformaning
+o'z CSS'i va shrifti bilan).

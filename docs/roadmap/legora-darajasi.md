@@ -416,3 +416,6 @@ nima o'lchandi.
   birinchi kirish, U3 hujjat uchun bitta eshik, U4 menyu, U5 muharrir);
   javoblar 8-bo'limda kutilmoqda. P2 shundan keyin. #573: "п." dan keyin gap
   uzilishi va javob tili tuzatildi.
+- 2026-11-06: #573 merge ("п." dan keyin gap uzilmaydi; javob tili). UI/UX
+  audit qabul qilindi (#574, barcha takliflar); tartib U1 → U5a → U2–U4 →
+  U5b, keyin P2. U1 boshlandi.
