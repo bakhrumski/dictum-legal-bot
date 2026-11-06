@@ -353,6 +353,18 @@ Known state of the suites (Sept 2026):
   was left; `lexLangForText` leaves quoted parts out and lets the script with
   more letters decide (one quoted Russian word no longer makes an Uzbek
   request Russian). `tests/claim-guard-abbrev.test.js`.
+  A deploy (2026-11-06, the owner's DOCX analysis read "Javob uzildi" right
+  after a staging release): Render sends SIGTERM on every deploy and kills the
+  process after its shutdown delay (30 s unless `maxShutdownDelaySeconds`,
+  <= 300 s); `src/api/lifecycle.js` waits `SHUTDOWN_WAIT_MS` (default 25 s,
+  5-290 s, keep it below the delay) for the open answer streams
+  (`trackStream`), and one still open at the end gets `{ type: 'error',
+  code: 'SERVER_RESTART' }` with its units released ("limit qaytarildi" only
+  when units were held) - the page shows it with "Qayta urinish"; the staff
+  event feed (`wait: false`) is ended at once; the editor's live documents are
+  saved first and their sockets closed with 1012 (the page reconnects by
+  itself). Telegram answers in progress are not tracked yet.
+  `tests/server-lifecycle.test.js`.
   `src/rag/question-aspects.js` splits a question into deadline,
   compensation, evidence and remedy and runs a light corpus search for each
   (Telegram, web chat, Workspace).

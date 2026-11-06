@@ -167,6 +167,17 @@ function createHub({ store, log = console }) {
       return false;
     },
     people(docId) { const r = rooms.get(docId); return r ? r.conns.size : 0; },
+    /**
+     * The server stops (SIGTERM, a deploy): every open document's state is saved now (it lives only in
+     * memory until its 2 s timer), then the sockets close with 1012 "service restart" - the page's
+     * LiveDoc reconnects by itself to the next server, which opens the saved state.
+     */
+    async shutdown() {
+      const list = Array.from(rooms.values());
+      await Promise.all(list.map(r => save(r)));
+      for (const r of list) for (const ws of r.conns.keys()) { try { ws.close(1012, 'restart'); } catch (_) { /* gone */ } }
+      return list.length;
+    },
     _rooms: rooms,
   };
 }
