@@ -466,6 +466,8 @@
     if (doc) doc.innerHTML = run.result.body.draftHtml; // sanitized on the server (src/rag/safe-html.js)
     if (asking) wireAsk(m.body, run.id, onChange);
   }
+  /** U1: an agent result opened from search, "Davom ettirish" or Hujjatlar → Natijalar (find.js, library.js). */
+  J.openRun = function (id, title) { return openRun({ ref: id, title: title || '' }); };
   function askHtml(q) {
     return '<div class="mt-ask"><b>' + esc(s('askH')) + '</b><p class="mt-ask-q"></p><textarea class="inp mt-ask-a" maxlength="2000" placeholder="' + esc(s('askPh')) + '"></textarea>' +
       '<p class="muted" style="font-size:12.5px;margin-top:6px">' + esc(s('askNote')) + '</p><div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="pill sm" type="button" data-a="ask">' + esc(s('askSend')) + '</button></div></div>';

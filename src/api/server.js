@@ -11962,6 +11962,11 @@ async function runMigrations() {
         notify: require('../bot/telegram-portal').createNotifier({ pool, getBot: () => require('../bot/bot').bot }).notify });
     } catch (e) { console.log('[PORTAL] Mount skipped:', e.message); }
 
+    // U1 (docs/design/ux-audit-2026-11.md): one search over the names of the person's
+    // chats, documents and matters, and the "Davom ettirish" list; no AI, no unit
+    try { require('../search/routes').mountSearchRoutes(app, { pool, requireAuth }); }
+    catch (e) { console.log('[SEARCH] Mount skipped:', e.message); }
+
     // Voice commands level 2 (docs/design/ovozli-buyruqlar-2.md): a spoken
     // command becomes a card; nothing runs until its token is run. No AI, no unit.
     try {

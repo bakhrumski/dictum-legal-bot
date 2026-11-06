@@ -127,7 +127,8 @@ async function test(name, fn) {
     assert.match(page, /G\.print\(\)/u);
     assert.match(page, /x\.status === 409/u, 'a stale save stops and says so');
     assert.match(fs.readFileSync(path.join(__dirname, '../public/app/views.js'), 'utf8'), /J\.openInEditor\(title, \$\('\.doc', body\)\.innerHTML\)/u);
-    assert.match(fs.readFileSync(path.join(__dirname, '../public/app/library.js'), 'utf8'), /J\.editorDocsBlock\(\$\('\.lib-ed', v\)\)/u);
+    // U1: the editor's documents are the Hujjatlar page's "Tahrirdagilar" tab
+    assert.match(fs.readFileSync(path.join(__dirname, '../public/app/library.js'), 'utf8'), /if \(tab === 'muharrir'\) \{[\s\S]{0,160}J\.editorDocsBlock\(pane\)/u);
     assert.match(fs.readFileSync(path.join(__dirname, '../public/app/index.html'), 'utf8'), /<script src="\/app\/editor\.js\?v=\d+"><\/script>/u);
   });
 

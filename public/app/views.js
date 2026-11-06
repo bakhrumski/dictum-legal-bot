@@ -57,7 +57,9 @@
           : '<div class="empty-state" style="padding:18px 4px;text-align:left">' + esc(t('hist.empty')) + '</div>';
         $$('.row', lean).forEach(function (r) { r.onclick = function () { J.go('#/c/' + r.dataset.id); }; });
       };
-      drawLeanRecent(); J.on('sessions', function () { if (document.body.contains(lean)) drawLeanRecent(); });
+      // U1: "Davom ettirish" - the last items of every kind (find.js); the recent chats when it cannot load
+      if (J.recentBlock) J.recentBlock($('.recent', lean), { max: 5, fallback: function () { $('.recent h3', lean).textContent = t('recent'); drawLeanRecent(); } });
+      else { drawLeanRecent(); J.on('sessions', function () { if (document.body.contains(lean)) drawLeanRecent(); }); }
       // the client's field: picked here, saved as their type (grants nothing), the view follows it
       var ch = $('.rv-change', lean); if (ch) ch.onclick = function () { var pk = $('.rv-pick', lean); pk.hidden = !pk.hidden; };
       $$('.rv-pick [data-r]', lean).forEach(function (b) {
@@ -107,7 +109,10 @@
         : '<div class="empty-state" style="padding:18px 4px;text-align:left">' + esc(t('hist.empty')) + '</div>';
       $$('.row', v).forEach(function (r) { r.onclick = function () { J.go('#/c/' + r.dataset.id); }; });
     }
-    drawTasks(); drawRecent(); J.on('sessions', function () { if (document.body.contains(v)) drawRecent(); });
+    drawTasks();
+    // U1: "Davom ettirish" - the last 8 items of every kind (find.js); the recent chats when it cannot load
+    if (J.recentBlock) J.recentBlock($('.recent', v), { max: 8, fallback: function () { $('.recent h3', v).textContent = t('recent'); drawRecent(); } });
+    else { drawRecent(); J.on('sessions', function () { if (document.body.contains(v)) drawRecent(); }); }
     cmp.focus();
   };
 
