@@ -12,9 +12,15 @@ const { buildCoreLegalPolicyPrefix } = require('./legal-prompt-policy');
 // lex.uz language segment for a question: Uzbek by default; Russian only when
 // the text is Russian Cyrillic (no Uzbek-specific letters ў/қ/ғ/ҳ).
 function lexLangForText(text) {
-  const t = String(text || '');
+  // A word quoted from a Russian document does not make the question Russian
+  // (2026-11-06: 'Men "Исполнитель" yuristiman' got its analysis in Russian):
+  // quoted parts are left out, then the script with more letters decides.
+  const t = String(text || '').replace(/«[^»]{0,200}»|"[^"]{0,200}"|“[^”]{0,200}”|„[^“”]{0,200}[“”]/gu, ' ');
   if (/[ўқғҳ]/i.test(t)) return 'uz';     // Uzbek Cyrillic
-  if (/[а-яё]/i.test(t)) return 'ru';     // Russian Cyrillic
+  const cyr = (t.match(/[а-яё]/giu) || []).length;
+  const lat = (t.match(/[a-zʻʼ'‘’`öğşç]/giu) || []).length;
+  if (cyr > 0 && cyr >= lat) return 'ru';  // mostly Russian Cyrillic
+  if (cyr > 0 && !lat) return 'ru';
   return 'uz';                            // Latin / default → Uzbek
 }
 
