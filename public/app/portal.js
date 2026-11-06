@@ -11,7 +11,7 @@
     uz: { nav: 'Yuristdagi ishlarim', card: 'Mijoz portali', lead: 'Mijoz faqat shu yerda belgilaganingizni ko‘radi: bosqich, belgilangan muddatlar, unga yozilgan izohlar va ulashilgan hujjatlar. Ichki yozuvlar, suhbatlar va jamoa ko‘rinmaydi.',
       stage: 'Bosqich', st: { received: 'Qabul qilindi', in_progress: 'Ishlanmoqda', waiting_client: 'Mijozdan kutilmoqda', in_court: 'Sudda / organda', done: 'Yakunlandi' },
       stC: { waiting_client: 'Sizdan kutilmoqda' }, clients: 'Mijozlar', noClients: 'Hali mijoz qo‘shilmagan.', invite: 'Mijozni taklif qilish', invites: 'Ochiq takliflar', revoke: 'Bekor qilish',
-      linkH: 'Taklif havolasi', linkP: 'Havolani mijozga yuboring. U faqat bir marta ishlaydi, {d} gacha amal qiladi va boshqa ko‘rsatilmaydi.', copy: 'Nusxa olish', copied: 'Nusxalandi', remove: 'Chiqarish', removeQ: 'Mijoz bu ishni boshqa ko‘rmaydi. Davom etasizmi?',
+      linkH: 'Taklif havolasi', viaTg: 'Telegram orqali (mijoz ishni botda kuzatadi)', viaWeb: 'Sayt orqali', oneUse: 'Ikkalasi bitta taklif: qaysi biri birinchi ochilsa, o‘sha ishlaydi.', linkP: 'Havolani mijozga yuboring. U faqat bir marta ishlaydi, {d} gacha amal qiladi va boshqa ko‘rsatilmaydi.', copy: 'Nusxa olish', copied: 'Nusxalandi', remove: 'Chiqarish', removeQ: 'Mijoz bu ishni boshqa ko‘rmaydi. Davom etasizmi?',
       deadlines: 'Muddatlar', dlTitle: 'Nima qilinadi', dlAdd: 'Qo‘shish', visible: 'Mijoz ko‘radi', noDl: 'Muddat yo‘q.', items: 'Mijozga ko‘rsatilganlar', noItems: 'Hali hech narsa ko‘rsatilmagan.',
       notePh: 'Mijozga izoh: masalan, qaysi hujjatni olib kelish kerak', sendNote: 'Izohni ko‘rsatish', addDoc: 'Hujjatlarimdan hujjat', note: 'Izoh', doc: 'Hujjat', del: 'Olib tashlash',
       closedInv: 'Yopilgan ishga mijoz taklif qilinmaydi.', ro: 'Siz bu ishni faqat o‘qiysiz.',
@@ -22,7 +22,7 @@
     ru: { nav: 'Мои дела у юриста', card: 'Портал клиента', lead: 'Клиент видит только отмеченное здесь: этап, отмеченные сроки, заметки для него и переданные документы. Внутренние записи, чаты и команда не видны.',
       stage: 'Этап', st: { received: 'Принято', in_progress: 'В работе', waiting_client: 'Ждём клиента', in_court: 'В суде / органе', done: 'Завершено' },
       stC: { waiting_client: 'Ждём вас' }, clients: 'Клиенты', noClients: 'Клиент ещё не присоединился.', invite: 'Пригласить клиента', invites: 'Открытые приглашения', revoke: 'Отменить',
-      linkH: 'Ссылка-приглашение', linkP: 'Отправьте ссылку клиенту. Она работает один раз, действует до {d} и больше не будет показана.', copy: 'Копировать', copied: 'Скопировано', remove: 'Убрать', removeQ: 'Клиент больше не увидит это дело. Продолжить?',
+      linkH: 'Ссылка-приглашение', viaTg: 'Через Telegram (клиент следит за делом в боте)', viaWeb: 'Через сайт', oneUse: 'Это одно приглашение: сработает та ссылка, которую откроют первой.', linkP: 'Отправьте ссылку клиенту. Она работает один раз, действует до {d} и больше не будет показана.', copy: 'Копировать', copied: 'Скопировано', remove: 'Убрать', removeQ: 'Клиент больше не увидит это дело. Продолжить?',
       deadlines: 'Сроки', dlTitle: 'Что сделать', dlAdd: 'Добавить', visible: 'Видит клиент', noDl: 'Сроков нет.', items: 'Показано клиенту', noItems: 'Пока ничего не показано.',
       notePh: 'Заметка клиенту: например, какой документ принести', sendNote: 'Показать заметку', addDoc: 'Документ из «Моих документов»', note: 'Заметка', doc: 'Документ', del: 'Убрать',
       closedInv: 'В закрытое дело клиента не пригласить.', ro: 'Вы только читаете это дело.',
@@ -33,7 +33,7 @@
     en: { nav: 'My matters with a lawyer', card: 'Client portal', lead: 'The client sees only what you mark here: the stage, marked deadlines, notes for them and shared documents. Internal notes, chats and the team stay hidden.',
       stage: 'Stage', st: { received: 'Received', in_progress: 'In progress', waiting_client: 'Waiting for the client', in_court: 'In court / with an authority', done: 'Done' },
       stC: { waiting_client: 'Waiting for you' }, clients: 'Clients', noClients: 'No client has joined yet.', invite: 'Invite the client', invites: 'Open invites', revoke: 'Revoke',
-      linkH: 'Invite link', linkP: 'Send the link to the client. It works once, until {d}, and is not shown again.', copy: 'Copy', copied: 'Copied', remove: 'Remove', removeQ: 'The client will no longer see this matter. Continue?',
+      linkH: 'Invite link', viaTg: 'Via Telegram (the client follows the matter in the bot)', viaWeb: 'Via the site', oneUse: 'Both are one invite: whichever is opened first works.', linkP: 'Send the link to the client. It works once, until {d}, and is not shown again.', copy: 'Copy', copied: 'Copied', remove: 'Remove', removeQ: 'The client will no longer see this matter. Continue?',
       deadlines: 'Deadlines', dlTitle: 'What to do', dlAdd: 'Add', visible: 'Client sees it', noDl: 'No deadlines.', items: 'Shown to the client', noItems: 'Nothing shown yet.',
       notePh: 'A note for the client, e.g. which document to bring', sendNote: 'Show the note', addDoc: 'A document from My documents', note: 'Note', doc: 'Document', del: 'Remove',
       closedInv: 'A closed matter takes no new client.', ro: 'You only read this matter.',
@@ -116,11 +116,16 @@
         var q = await api(base(M.id) + '/invites', { method: 'POST', body: {} });
         ib.disabled = false;
         if (!q.ok) { J.toast(J.errMsg(q.data), 6000); return; }
-        var link = location.origin + q.data.path;
-        var m = J.modal({ cls: 'sm', html: '<h2>' + esc(s('linkH')) + '</h2><p class="muted" style="font-size:13.5px"></p><input class="inp pt-link" readonly data-noalpha><div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="pill sm" type="button" data-a="cp">' + J.icon('copy') + esc(s('copy')) + '</button></div>' });
+        // two forms of the same one-use link: Telegram first (the client joins and follows the matter in the bot), the site second
+        var links = [q.data.botUrl ? { k: 'tg', label: s('viaTg'), url: q.data.botUrl } : null, { k: 'web', label: s('viaWeb'), url: location.origin + q.data.path }].filter(Boolean);
+        var m = J.modal({ cls: 'sm', html: '<h2>' + esc(s('linkH')) + '</h2><p class="muted" style="font-size:13.5px"></p>' + links.map(function (l) {
+          return '<div class="field" style="margin-top:10px"><label>' + esc(l.label) + '</label><div class="pt-linkrow"><input class="inp pt-link" readonly data-noalpha data-k="' + l.k + '"><button class="pill sm" type="button" data-cp="' + l.k + '">' + J.icon('copy') + esc(s('copy')) + '</button></div></div>';
+        }).join('') + '<p class="muted" style="font-size:12.5px;margin-top:10px">' + esc(s('oneUse')) + '</p>' });
         $('p', m.body).textContent = s('linkP', { d: J.fmtDate(q.data.expiresAt) });
-        var inp = $('.pt-link', m.body); inp.value = link; inp.onfocus = function () { inp.select(); };
-        $('[data-a=cp]', m.body).onclick = function () { navigator.clipboard.writeText(link).then(function () { J.toast(s('copied')); }, function () { inp.focus(); }); };
+        links.forEach(function (l) {
+          var inp = $('[data-k=' + l.k + ']', m.body); inp.value = l.url; inp.onfocus = function () { inp.select(); };
+          $('[data-cp=' + l.k + ']', m.body).onclick = function () { navigator.clipboard.writeText(l.url).then(function () { J.toast(s('copied')); }, function () { inp.focus(); }); };
+        });
         load();
       };
       $$('[data-rvi]', host).forEach(function (b) { b.onclick = async function () { var q = await api(base(M.id) + '/invites/' + encodeURIComponent(b.dataset.rvi), { method: 'DELETE' }); if (!q.ok) J.toast(J.errMsg(q.data)); load(); }; });

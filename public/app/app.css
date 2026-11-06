@@ -993,3 +993,6 @@ textarea.inp{height:auto;min-height:96px;padding:10px 13px;resize:vertical;line-
 .pt-inv p{margin:0 0 16px;line-height:1.55}
 .pt-body .card{margin-top:14px}
 @media (max-width:480px){.pt-form .pt-dld{flex:1 1 140px}.pt-date{min-width:74px}}
+.pt-linkrow{display:flex;gap:8px;align-items:center}
+.pt-linkrow .inp{flex:1;min-width:0}
+.pt-linkrow .inp{margin:0}

@@ -132,7 +132,8 @@ Tartib va PR bo'linishi dizayn hujjatining 9-bo'limida.
   bot asosiy yo'l, P1 ko'rish -> P2 xabarlar -> P3 hujjat so'rovi ->
   P4 jurnal -> P5 "Tanishdim" (ixtiyoriy); qabul qilingan (2026-11-05,
   barcha takliflar). P1a (server: taklif, bosqich, muddatlar, mijozga
-  ko'rinadiganlar, migratsiya 047) PR'da.
+  ko'rinadiganlar, migratsiya 047) merge (#569). P1b (sahifalar) merge (#571).
+  P1c (botda mijozning ishlari, Telegram orqali qo'shilish, xabarnomalar) PR'da.
 - [~] Ma'lumot himoyasi 1-bosqich (egasi, 2026-10-28, occlum.io tahlilidan keyin):
   `docs/design/shifrlash-1-bosqich.md` - bazada shifrlash, AI'ga yuborishdan
   oldin shaxsiy ma'lumotni yashirish, provayder siyosati, kirish jurnali.
@@ -406,3 +407,6 @@ nima o'lchandi.
 - 2026-11-05: #566 (kanal tekshiruvi: xato "obuna emas" emas, /kanal) va #568
   (Telegram orqali kirish: to'g'ri domen, xatodan keyin kod) merge. Mijoz
   portali dizayni qabul qilindi (#567).
+- 2026-11-06: #569 (P1a), #571 (P1b), #570 (chatda "Qayta urinish", uzilgan
+  tahlil uchun limit yechilmaydi) merge. P1c PR: mijoz ishini botda ko'radi,
+  Telegram havolasi bilan qo'shiladi, o'zgarishda bitta xabar oladi.

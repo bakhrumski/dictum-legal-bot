@@ -1031,6 +1031,22 @@ Known state of the suites (Sept 2026):
   `/api/portal/invite/:token[/accept]`, `/api/portal/:id[/items/:item|/leave]`;
   writes same-origin. Account deletion ends the person's client rows.
   `MATTER_PORTAL=off`. `tests/matter-portal.db.test.js`.
+  P1b (#571, `public/app/portal.js`): the "Mijoz portali" card on a matter
+  page (stage, clients, the invite link shown once, deadlines with "Mijoz
+  ko'radi", notes, documents from Hujjatlarim) and the client's `#/portal`,
+  `#/portal/<id>`, `#/portal/taklif/<token>`; nav "Yuristdagi ishlarim" for a
+  client only. P1c (2026-11-06, `src/bot/telegram-portal.js`, no AI): the
+  invite also comes as `t.me/<legal bot>?start=mpi_<token>` (the same one-use
+  token; held 15 min for that Telegram user, never in a button; "Qo'shilish"
+  `mpj_y` makes the account from the Telegram identity when there is none);
+  "ishlarim" carries "📁 Yuristdagi ishlarim" (`mpl`) for a client; `mpm_<id>`
+  the matter's card (stage, visible deadlines, client notes, documents),
+  `mpd_<item>` a shared document as a .txt file - each read through
+  portal.js; the notifier (`createPortal({ notify })`): a stage change, a
+  note, a document or a deadline made visible becomes ONE message per linked
+  client per burst (`PORTAL_NOTIFY_DELAY_MS` 20 s, in memory): the matter's
+  title and what changed with "Ochish" - never a note's or document's text.
+  `PORTAL_TELEGRAM=off` stops the notices. `tests/telegram-portal.db.test.js`.
 - `src/agents/runs/` (2026-10-28, PR-B) — agent runs (migration 020): the
   claim draft, tabular and playbook routes are a service each (`prepare` no
   AI + reservation held with `meta.holdUntil` 45 min, `run` the harness,

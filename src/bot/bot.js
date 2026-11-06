@@ -654,6 +654,10 @@ function agentActionKeyboard(agentResult) {
     }
     return { inline_keyboard: [[yes, no]] };
   }
+  // "ishlarim": a client of a lawyer's matter also gets their client matters (src/bot/telegram-portal.js)
+  if (agentResult.meta && agentResult.meta.portalCount > 0) {
+    return { inline_keyboard: [[{ text: require('./telegram-portal').T(agentResult.meta.lang).listBtn(agentResult.meta.portalCount), callback_data: 'mpl' }]] };
+  }
   // "hujjatlarim" in the bot (src/bot/telegram-library.js): a button a document, then the site
   if (agentResult.action === 'tool_documents_list' && agentResult.meta && Array.isArray(agentResult.meta.docs)) {
     return require('./telegram-library').listKeyboard(agentResult.meta.docs, String(agentResult.meta.url || ''), agentResult.meta.lang);
@@ -1099,6 +1103,43 @@ async function handleCallbackQuery(callbackQuery) {
     return;
   }
 
+  // the client portal in the bot (src/bot/telegram-portal.js): a client's matters, a matter, a
+  // shared document as a file, and the invite's tap - each read checked by src/matters/portal.js
+  if (data === 'mpl' || data === 'mpj_y' || data === 'mpj_n' || /^mp[md]_[0-9a-f-]{36}$/.test(data)) {
+    const tp = require('./telegram-portal');
+    const lang = /^ru/i.test(String(callbackQuery.from.language_code || '')) ? 'ru' : 'uz';
+    const t = tp.T(lang);
+    await bot.answerCallbackQuery(callbackQuery.id).catch(() => {});
+    if (!callbackQuery.message || callbackQuery.message.chat.type !== 'private') return;
+    try {
+      if (data === 'mpj_y' || data === 'mpj_n') {
+        await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: callbackQuery.message.message_id }).catch(() => {});
+        if (data === 'mpj_n') { tp.take(callbackQuery.from.id); return; }
+        const out = await tp.inviteJoin(pool, { from: callbackQuery.from, chatId, lang });
+        await bot.sendMessage(chatId, out.text).catch(() => {});
+        if (out.card) await bot.sendMessage(chatId, out.card.text, out.card.keyboard ? { reply_markup: out.card.keyboard } : {}).catch(() => {});
+        return;
+      }
+      const account = await tp.accountOf(pool, chatId, callbackQuery.from.id);
+      if (!account) { await bot.sendMessage(chatId, t.noLink).catch(() => {}); return; }
+      if (data === 'mpl') {
+        const r = await tp.listReply(pool, account.id, lang);
+        await bot.sendMessage(chatId, r.text, r.keyboard ? { reply_markup: r.keyboard } : {}).catch(() => {});
+      } else if (data.startsWith('mpm_')) {
+        const r = await tp.matterCard(pool, account.id, data.slice(4), lang);
+        await bot.sendMessage(chatId, r.text, r.keyboard ? { reply_markup: r.keyboard } : {}).catch(() => {});
+      } else {
+        const f = await tp.documentFile(pool, account.id, data.slice(4), lang);
+        if (!f) { await bot.sendMessage(chatId, t.notFound).catch(() => {}); return; }
+        await bot.sendDocument(chatId, f.buffer, { caption: f.caption }, { filename: f.filename, contentType: 'text/plain' });
+      }
+    } catch (e) {
+      console.warn('[BOT] portal button failed:', e.message);
+      await bot.sendMessage(chatId, "Hozir bajarib bo'lmadi. Birozdan keyin qayta urinib ko'ring.").catch(() => {});
+    }
+    return;
+  }
+
   // an agent invite's tap (src/sales/invites.js): the token was held at /start, never in the button
   if (data === 'agi_y' || data === 'agi_n') {
     const inv = require('../sales/invites');
@@ -1432,6 +1473,22 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
     } catch (e) {
       console.warn('[BOT] agent invite not opened:', e.message);
       await bot.sendMessage(chatId, inv.TEXTS.bad).catch(() => {});
+    }
+    return;
+  }
+
+  // Client portal invite opened in Telegram: /start mpi_<token> (src/bot/telegram-portal.js) -
+  // the token is held for this Telegram user; "Qo'shilish" below joins (an account is made if none)
+  if (/^mpi_/.test(param)) {
+    const tp = require('./telegram-portal');
+    const lang = /^ru/i.test(String(msg.from.language_code || '')) ? 'ru' : 'uz';
+    try {
+      if (msg.chat.type !== 'private') return;
+      const r = await tp.inviteStart(pool, { from: msg.from, token: param.slice(tp.PREFIX.length), lang });
+      await bot.sendMessage(chatId, r.text, r.keyboard ? { reply_markup: r.keyboard } : {}).catch(() => {});
+    } catch (e) {
+      console.warn('[BOT] portal invite not opened:', e.message);
+      await bot.sendMessage(chatId, tp.T(lang).gone).catch(() => {});
     }
     return;
   }
