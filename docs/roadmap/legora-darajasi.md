@@ -410,3 +410,9 @@ nima o'lchandi.
 - 2026-11-06: #569 (P1a), #571 (P1b), #570 (chatda "Qayta urinish", uzilgan
   tahlil uchun limit yechilmaydi) merge. P1c PR: mijoz ishini botda ko'radi,
   Telegram havolasi bilan qo'shiladi, o'zgarishda bitta xabar oladi.
+- 2026-11-06: #572 (P1c, mijozning ishi botda) merge. Egasi: roadmap'dan oldin
+  UI/UX audit ("platforma labirintga o'xshaydi"). Audit qoralamasi:
+  `docs/design/ux-audit-2026-11.md` (U1 qidiruv va "Davom ettirish", U2
+  birinchi kirish, U3 hujjat uchun bitta eshik, U4 menyu, U5 muharrir);
+  javoblar 8-bo'limda kutilmoqda. P2 shundan keyin. #573: "п." dan keyin gap
+  uzilishi va javob tili tuzatildi.
