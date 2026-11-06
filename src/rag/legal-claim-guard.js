@@ -162,11 +162,24 @@ function citedArticles(sentence = '') {
   return [...out].filter(Boolean);
 }
 
+// A point after these is an abbreviation, not a sentence's end (2026-11-06: a
+// Russian analysis cited "п. 3.4", the split made "3.4 ..." a sentence of its
+// own, it was withheld as a claim and "По п." was left behind): clause, article,
+// part, paragraph, chapter, page, number (never a whole word such as "yil",
+// which ends sentences) - and a single letter (an initial, "т. е.", "b.").
+const ABBREV_END = /(?:^|[\s(«"“'])(?:пп?|ст|стт|ч|абз|подп|гл|разд|стр|прил|рис|см|гг|ул|им|№|art|cl|pp|\p{L})\.$/iu;
 function sentences(text = '') {
-  // Keep list items and lines apart; split sentences inside a line.
+  // Keep list items and lines apart; split sentences inside a line, but not after an abbreviation.
   return String(text || '')
     .split(/\n+/u)
-    .flatMap(line => line.split(/(?<=[.!?…])\s+(?=[\p{Lu}*«"(\d])/u))
+    .flatMap((line) => {
+      const out = [];
+      for (const part of line.split(/(?<=[.!?…])\s+(?=[\p{Lu}*«"(\d])/u)) {
+        if (out.length && ABBREV_END.test(out[out.length - 1])) out[out.length - 1] += ` ${part}`;
+        else out.push(part);
+      }
+      return out;
+    })
     .map(s => s.trim())
     .filter(Boolean);
 }
@@ -679,5 +692,5 @@ async function guardLegalAnswer({
 
 module.exports = {
   DEFAULTS, wordNumber, quantityFacts, extractCriticalClaims, deterministicSupport,
-  buildEvidence, parseVerdicts, unverifiedBlock, NO_CALC, removeSentences, repairStructure, guardLegalAnswer, citedArticles,
+  buildEvidence, parseVerdicts, unverifiedBlock, NO_CALC, removeSentences, repairStructure, guardLegalAnswer, citedArticles, sentences,
 };
