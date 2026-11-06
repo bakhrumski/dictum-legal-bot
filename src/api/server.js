@@ -11957,7 +11957,9 @@ async function runMigrations() {
     // Client portal P1a (docs/design/mijoz-portali.md): the client of one matter
     // sees only what the lawyer marked for them; no AI, no unit; MATTER_PORTAL=off
     try {
-      require('../matters/portal').mountPortalRoutes(app, { pool, requireAuth, requireSameOrigin: require('../auth/same-origin').requireSameOrigin });
+      require('../matters/portal').mountPortalRoutes(app, { pool, requireAuth, requireSameOrigin: require('../auth/same-origin').requireSameOrigin,
+        // P1c: the matter's clients hear of a change in the bot (src/bot/telegram-portal.js)
+        notify: require('../bot/telegram-portal').createNotifier({ pool, getBot: () => require('../bot/bot').bot }).notify });
     } catch (e) { console.log('[PORTAL] Mount skipped:', e.message); }
 
     // Voice commands level 2 (docs/design/ovozli-buyruqlar-2.md): a spoken

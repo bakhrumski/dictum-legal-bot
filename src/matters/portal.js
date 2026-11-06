@@ -48,8 +48,10 @@ const NOT_FOUND = () => fail(404, 'not_found', 'Ish topilmadi');
 const clean = (v, max) => String(v == null ? '' : v).replace(/\s+/gu, ' ').trim().slice(0, max);
 const off = () => String(process.env.MATTER_PORTAL || '').toLowerCase() === 'off';
 
-function createPortal({ db }) {
+function createPortal({ db, notify = null }) {
   if (!db) throw new Error('db is required');
+  // P1c: the bot tells the matter's clients (src/bot/telegram-portal.js); a failure never fails the change
+  const tell = (matterId, event) => { try { if (typeof notify === 'function') notify(matterId, event); } catch (_) {} };
 
   /** The matter row for a lawyer: write (or read when allowed) access, else 404. */
   async function lawyerMatter(matterId, adminId, need = 'write') {
@@ -117,8 +119,9 @@ function createPortal({ db }) {
       `INSERT INTO matter_client_invites (matter_id, token_hash, note, created_by, expires_at)
        VALUES ($1, $2, $3, $4, now() + make_interval(days => $5)) RETURNING id, expires_at`,
       [m.id, hashToken(token), clean(note, 120) || null, adminId, INVITE_DAYS()]);
-    // the token is shown once and never stored
-    return { id: r.rows[0].id, token, path: `/app/#/portal/taklif/${token}`, expiresAt: r.rows[0].expires_at };
+    // the token is shown once and never stored; the same link opens in the bot (P1c, /start mpi_<token>)
+    const bot = require('../config/bot-usernames').LEGAL_BOT_USERNAME;
+    return { id: r.rows[0].id, token, path: `/app/#/portal/taklif/${token}`, botUrl: `https://t.me/${bot}?start=mpi_${token}`, expiresAt: r.rows[0].expires_at };
   }
 
   async function revokeInvite(matterId, inviteId, adminId) {
@@ -142,6 +145,7 @@ function createPortal({ db }) {
     if (m.client_stage === stage) return { stage, stageAt: m.client_stage_at };
     const r = await db.query('UPDATE matters SET client_stage = $2, client_stage_at = now(), updated_at = now() WHERE id = $1 RETURNING client_stage_at', [m.id, stage]);
     await db.query('INSERT INTO matter_stage_history (matter_id, stage, changed_by) VALUES ($1, $2, $3)', [m.id, stage, adminId]);
+    tell(m.id, { kind: 'stage', stage });
     return { stage, stageAt: r.rows[0].client_stage_at };
   }
 
@@ -154,14 +158,17 @@ function createPortal({ db }) {
     if (n >= MAX_ITEMS) throw fail(409, 'too_many', `Bir ishda ${MAX_ITEMS} tadan ortiq muddat bo'lmaydi.`);
     const r = await db.query('INSERT INTO matter_deadlines (matter_id, title, due_on, client_visible, created_by) VALUES ($1, $2, $3, $4, $5) RETURNING *',
       [m.id, t, dueOn, clientVisible === true, adminId]);
+    if (clientVisible === true) tell(m.id, { kind: 'deadline', title: t, dueOn });
     return deadlineView(r.rows[0]);
   }
 
   async function updateDeadline(matterId, deadlineId, adminId, { clientVisible } = {}) {
     const m = await lawyerMatter(matterId, adminId);
     if (!isUuid(deadlineId) || typeof clientVisible !== 'boolean') throw NOT_FOUND();
+    const before = (await db.query('SELECT client_visible FROM matter_deadlines WHERE id = $1 AND matter_id = $2', [deadlineId, m.id])).rows[0];
     const r = await db.query('UPDATE matter_deadlines SET client_visible = $3 WHERE id = $1 AND matter_id = $2 RETURNING *', [deadlineId, m.id, clientVisible]);
     if (!r.rows[0]) throw fail(404, 'not_found', 'Muddat topilmadi');
+    if (clientVisible && before && !before.client_visible) tell(m.id, { kind: 'deadline', title: r.rows[0].title, dueOn: deadlineView(r.rows[0]).dueOn });
     return deadlineView(r.rows[0]);
   }
 
@@ -204,6 +211,7 @@ function createPortal({ db }) {
       throw fail(400, 'invalid', 'kind: note yoki doc');
     }
     const r = await db.query('SELECT id, matter_id, kind, title, pages, chars, created_at FROM matter_client_items WHERE id = $1', [id]);
+    tell(m.id, kind === 'doc' ? { kind: 'doc', title: r.rows[0].title } : { kind: 'note' });
     return itemView(r.rows[0], false);
   }
 
@@ -311,8 +319,8 @@ function createPortal({ db }) {
     inviteInfo, accept, myMatters, clientView, clientItem, leave };
 }
 
-function mountPortalRoutes(app, { pool, requireAuth, requireSameOrigin }) {
-  const portal = createPortal({ db: pool });
+function mountPortalRoutes(app, { pool, requireAuth, requireSameOrigin, notify = null }) {
+  const portal = createPortal({ db: pool, notify });
   const guard = fn => async (req, res) => {
     res.set('Cache-Control', 'no-store');
     if (off()) return res.status(503).json({ error: 'unavailable', message: "Mijoz portali vaqtincha o'chirilgan" });

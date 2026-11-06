@@ -1343,8 +1343,10 @@ Agar texnik uzilish yuz bersa, limitingiz avtomatik tiklanadi.`,
       require('../voice/command-events').note(pool, { place: 'telegram', kind: 'matter', action: intent.command.action, outcome: out.confirm || out.needsTitle ? 'ask' : 'run', via: voice ? 'voice' : 'text', lang: cmdLang });
       if (out.confirm && voice && (out.confirm.action === 'create' || out.confirm.action === 'note')) pendingVoiceWrite.set(String(chatId), { token: out.confirm.token, at: Date.now() });
       await remember(out.reply, 0);
+      // "ishlarim": the matters this account is a client of come as one button (src/bot/telegram-portal.js)
+      const portalCount = intent.command.action === 'list' && !out.confirm ? await require('../bot/telegram-portal').clientCount(pool, account.id) : 0;
       return complete({ handled: true, reply: out.reply, action: out.confirm ? 'tool_matter_confirm' : out.action, escalate: false,
-        meta: { intent: intent.intent, command: intent.command.action, lang: cmdLang, token: out.confirm ? out.confirm.token : undefined, alt: out.confirm && out.confirm.alt ? out.confirm.alt : undefined } });
+        meta: { intent: intent.intent, command: intent.command.action, lang: cmdLang, token: out.confirm ? out.confirm.token : undefined, alt: out.confirm && out.confirm.alt ? out.confirm.alt : undefined, portalCount: portalCount || undefined } });
     } catch (e) {
       console.warn('[TG-AGENT] matter command failed:', intent.command.action, e.message);
       const reply = e && e.status && e.message ? e.message : (cmdLang === 'ru' ? 'Не удалось выполнить команду. Попробуйте ещё раз.' : "Buyruqni bajarib bo'lmadi. Qayta urinib ko'ring.");
