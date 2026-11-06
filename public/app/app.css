@@ -1026,3 +1026,30 @@ textarea.inp{height:auto;min-height:96px;padding:10px 13px;resize:vertical;line-
 @media (max-width:900px){.ovl:has(.modal.find){padding:12px 12px 0}.fd-foot{display:none}.fd-res{max-height:70vh}}
 /* Hujjatlar on a phone: the name gets the whole line, the buttons go under it */
 @media (max-width:600px){.lib-it{flex-wrap:wrap;row-gap:8px}.lib-it>span:nth-child(2){flex:1 1 calc(100% - 40px)!important}.lib-it>.pill:first-of-type{margin-left:28px}}
+
+/* U5a muharrir (editor.js, editor-find.js): the place a card points to and find hits - light blue only (owner's rule) */
+.ed-doc .ed-spot{background:#DCE8FD;border-radius:2px;box-shadow:0 0 0 2px #DCE8FD}
+.ed-doc .ed-find{background:#E8F0FE;border-radius:2px}
+.ed-doc .ed-find.on{background:#BFD4FB;box-shadow:0 0 0 1px #8FB3F5}
+.ed-card.ed-go{cursor:pointer}
+.ed-card.ed-go:hover{border-color:var(--cta)}
+.ed-card.ed-go:focus-visible{outline:2px solid var(--cta);outline-offset:2px}
+/* page break: a dashed line with its name on the sheet; a new page in print and in Word */
+.ed-doc hr[data-page-break]{border:0;border-top:1px dashed #9aa3b2;margin:18px -76px;height:0;position:relative;overflow:visible}
+.ed-doc hr[data-page-break]::after{content:"Sahifa uzilishi";position:absolute;left:50%;top:-9px;transform:translateX(-50%);background:#fff;color:#7a8394;font:11px/16px var(--font-sans,sans-serif);padding:0 8px}
+html[lang=ru] .ed-doc hr[data-page-break]::after{content:"Разрыв страницы"}html[lang=en] .ed-doc hr[data-page-break]::after{content:"Page break"}
+.ed-doc hr[data-page-break].ProseMirror-selectednode{border-top-color:var(--cta)}
+@media print{body.ed-on .ed-doc hr[data-page-break]{border:0;margin:0;break-after:page;page-break-after:always}body.ed-on .ed-doc hr[data-page-break]::after{content:none}body.ed-on .ed-doc .ed-spot,body.ed-on .ed-doc .ed-find{background:none;box-shadow:none}}
+@media (max-width:900px){.ed-doc hr[data-page-break]{margin:18px -16px}}
+.ed-b sub,.ed-b sup{font-size:9px;line-height:0;margin-left:1px}.ed-b sup{vertical-align:6px}.ed-b sub{vertical-align:-3px}
+/* find and replace bar, under the toolbar */
+.ed-fbar{display:flex;flex-direction:column;gap:6px;padding:8px 12px;background:var(--surface);border-bottom:1px solid var(--line-2)}
+.ed-frow{display:flex;align-items:center;gap:4px;max-width:720px;width:100%;margin:0 auto}
+.ed-frow .inp{flex:1;min-width:0;height:34px;padding:0 10px;font-size:14px}
+.ed-fn{font-size:12.5px;min-width:56px;text-align:center;white-space:nowrap}
+.ed-fn.ed-fnone{color:var(--bad,#b42318)}
+.ed-frep .pill{flex:none}
+/* status line: words, characters, pages, zoom */
+.ed-foot{align-items:center;flex-wrap:wrap}
+.ed-zoom{height:24px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--fg);font:inherit;font-size:12px;padding:0 4px}
+@media print{body.ed-on .ed-paper{zoom:1!important}}

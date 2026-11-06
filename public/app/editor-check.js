@@ -79,12 +79,10 @@
       var vis = function (z) { return esc(z).replace(/ {2,}/g, function (m) { return m.split('').map(function () { return '·'; }).join(''); }); };
       return (a > 0 ? '…' : '') + vis(t.slice(a, x.from)) + '<mark class="ed-chk-hit">' + (vis(t.slice(x.from, x.to)) || '·') + '</mark>' + vis(t.slice(x.to, b)) + (b < t.length ? '…' : '');
     }
+    // U5a: the place in light blue (editor.js J.editorSpot); the panel steps aside on a phone
     function show(x) {
       var b = blocks[x.block]; if (!b) return;
-      if (G.matchMedia && G.matchMedia('(max-width: 1099px)').matches) side.hidden = true;
-      ed.chain().focus().setTextSelection({ from: posOf(b, x.from), to: posOf(b, Math.max(x.to, x.from + 1)) }).run();
-      var dom = ed.view.domAtPos(posOf(b, x.from)), el = dom.node.nodeType === 1 ? dom.node : dom.node.parentElement;
-      if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      J.editorSpot(ed, { from: posOf(b, x.from), to: posOf(b, Math.max(x.to, x.from + 1)) }, side);
     }
     /** Apply edits made on `snap` (block texts at check time); refused when a block changed since. */
     function apply(edits, snap) {
@@ -135,11 +133,13 @@
           if (apply(all, snap)) { J.toast(s('fixed')); run(); }
         };
         list.slice(0, 50).forEach(function (x) {
-          var c = J.h('<div class="ed-card ed-chk-c"><p class="ed-chk-s"></p><p class="ed-chk-m"></p><div class="ed-ca"><button type="button" class="link" data-a="show">' + esc(s('show')) + '</button>' +
+          var c = J.h('<div class="ed-card ed-chk-c ed-go" tabindex="0" title="' + esc(s('show')) + '"><p class="ed-chk-s"></p><p class="ed-chk-m"></p><div class="ed-ca">' +
             (o.canWrite && x.edits.length ? '<button type="button" class="link" data-a="fix">' + esc(s('fix')) + (x.edits.length === 1 && x.edits[0].text ? ' → «' + esc(x.edits[0].text.slice(0, 40)) + '»' : '') + '</button>' : '') + '</div></div>');
           $('.ed-chk-s', c).innerHTML = snippet(x);
           $('.ed-chk-m', c).textContent = msg(x) + (x.edits.length ? '' : ' ' + s('noFix'));
-          $('[data-a=show]', c).onclick = function () { show(x); };
+          // U5a: a click on the card (not on "Tuzatish") marks the place
+          c.addEventListener('click', function (e) { if (e.target.closest('button, a')) return; show(x); });
+          c.addEventListener('keydown', function (e) { if ((e.key === 'Enter' || e.key === ' ') && e.target === c) { e.preventDefault(); show(x); } });
           var fb = $('[data-a=fix]', c);
           if (fb) fb.onclick = function () { if (apply(x.edits, snap)) { J.toast(s('fixed')); run(); } };
           g.appendChild(c);

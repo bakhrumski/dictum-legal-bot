@@ -112,13 +112,8 @@
     }
 
     function lvTag(l) { var c = l === 'high' ? 'bad' : l === 'medium' ? 'warn' : 'ok'; return '<span class="tag"><span class="dot ' + c + '"></span>' + esc(s('lv')[l] || l) + '</span>'; }
-    function show(at) {
-      // on a phone the panel covers the sheet: it steps aside so the place can be seen
-      if (G.matchMedia && G.matchMedia('(max-width: 1099px)').matches) side.hidden = true;
-      ed.chain().focus().setTextSelection(at).run();
-      var dom = ed.view.domAtPos(at.from), el = dom.node.nodeType === 1 ? dom.node : dom.node.parentElement;
-      if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    }
+    // U5a: the place in light blue (editor.js J.editorSpot); the panel steps aside on a phone
+    function show(at) { J.editorSpot(ed, at, side); }
     async function keepVersion() {
       if (versioned) return; versioned = true;
       await o.flush();
@@ -152,18 +147,22 @@
         var at = locate(ed, r.excerpt), done = m[r.id];
       // accepted in another browser or by a co-editor: the proposal's own words stand in the text now
       if (!done && !at && r.replacement && locate(ed, r.replacement)) done = 'applied';
-        var card = J.h('<div class="ed-card ed-ai-c' + (done ? ' ed-ai-done' : '') + '">' +
+        var card = J.h('<div class="ed-card ed-ai-c' + (done ? ' ed-ai-done' : '') + (at ? ' ed-go' : '') + '"' + (at ? ' tabindex="0" title="' + esc(s('show')) + '"' : '') + '>' +
           '<div class="ed-ai-ch">' + lvTag(r.level) + '<b class="ed-ai-cl"></b>' + (done ? '<span class="ed-ai-st">' + esc(s(done)) + '</span>' : '') + '</div>' +
           (r.excerpt ? '<p class="ed-q"></p>' : '') + (r.excerpt && !at ? '<p class="ed-gone">' + esc(s('notFound')) + '</p>' : '') +
           '<p class="ed-ai-i"></p>' + (r.suggestion ? '<p class="ed-ai-sg"></p>' : '') +
           '<div class="ed-ai-prop" hidden></div>' +
-          '<div class="ed-ca">' + (at ? '<button type="button" class="link" data-a="show">' + esc(s('show')) + '</button>' : '') +
-          (at && r.replacement && o.canWrite && !done ? '<button type="button" class="link" data-a="prop">' + esc(s('propose')) + '</button>' : '') + '</div></div>');
+          '<div class="ed-ca">' + (at && r.replacement && o.canWrite && !done ? '<button type="button" class="link" data-a="prop">' + esc(s('propose')) + '</button>' : '') + '</div></div>');
         $('.ed-ai-cl', card).textContent = r.clause || '';
         if (r.excerpt) $('.ed-q', card).textContent = '«' + r.excerpt + '»';
         $('.ed-ai-i', card).textContent = r.issue || '';
         if (r.suggestion) $('.ed-ai-sg', card).textContent = r.suggestion;
-        var sb = $('[data-a=show]', card); if (sb) sb.onclick = function () { var x = locate(ed, r.excerpt); if (x) show(x); else J.toast(s('moved')); };
+        // U5a: a click on the card (not on its buttons) marks the place - no separate "show" button
+        if (at) {
+          var go = function () { var x = locate(ed, r.excerpt); if (x) show(x); else J.toast(s('moved')); };
+          card.addEventListener('click', function (e) { if (e.target.closest('button, a, textarea, input')) return; go(); });
+          card.addEventListener('keydown', function (e) { if ((e.key === 'Enter' || e.key === ' ') && e.target === card) { e.preventDefault(); go(); } });
+        }
         var pb = $('[data-a=prop]', card);
         if (pb) pb.onclick = function () {
           var x = locate(ed, r.excerpt); if (!x) { J.toast(s('moved')); return; }

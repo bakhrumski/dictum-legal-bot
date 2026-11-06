@@ -6,7 +6,7 @@
 (function (G) {
   'use strict';
   var J = G.JAI, $ = J.$, $$ = J.$$, esc = J.esc;
-  var BUNDLE = '/vendor/editor/editor-3.31.4.js?b=3'; // b=2: D2 comment mark, b=3: D3 live co-editing
+  var BUNDLE = '/vendor/editor/editor-3.31.4.js?b=4'; // b=2: D2 comment mark, b=3: D3 live co-editing, b=4: U5a Word set 1
   var S = {
     uz: { title: 'Muharrir', docs: 'Muharrirdagi hujjatlar', none: 'Hali hujjat yo‘q. Bo‘sh hujjat oching yoki Word / PDF faylni yuklang.',
       blank: 'Bo‘sh hujjat', open: 'Word / PDF ochish', openHint: 'Word (.docx) formatlash bilan ochiladi; PDF — matn sifatida.',
@@ -26,6 +26,8 @@
       notesTail: 'Asl faylingiz o‘zgarmaydi.', ph: 'Hujjat matnini yozing…', table: 'Jadval', undo: 'Bekor qilish', redo: 'Qaytarish',
       color: 'Matn rangi', hl: 'Belgilash', font: 'Shrift', size: 'O‘lcham', bullet: 'Belgili ro‘yxat', ordered: 'Raqamli ro‘yxat', h: 'Sarlavha', para: 'Oddiy matn',
       left: 'Chapga', center: 'Markazga', right: 'O‘ngga', justify: 'Ikki tomonga', created: 'Hujjat yaratildi', busy: 'Ochilmoqda…',
+      sub: 'Pastki indeks', sup: 'Yuqori indeks', line: 'Qator oralig‘i', indent: 'Xat boshini oshirish', outdent: 'Xat boshini kamaytirish', clear: 'Formatlashni tozalash',
+      pb: 'Sahifa uzilishi (Ctrl+Enter)', pbLabel: 'Sahifa uzilishi', find: 'Topish va almashtirish (Ctrl+F)', words: '{n} so‘z', pages: '{n} sahifa', zoom: 'Masshtab',
       sh: { share: 'Ulashish', people: 'Ishtirokchilar', link: 'Havola yaratish', role: 'Havola beradigan huquq', roles: { owner: 'Egasi', editor: 'Tahrirlaydi', commenter: 'Izoh qoldiradi', viewer: 'Faqat o‘qiydi' },
         made: 'Havola tayyor — nusxalab yuboring. U faqat bir marta ko‘rsatiladi, {d} kun amal qiladi.', copy: 'Nusxalash', copied: 'Nusxalandi', links: 'Faol havolalar', revoke: 'Bekor qilish',
         joined: '{n} kishi qo‘shilgan', until: '{d} gacha', remove: 'Chiqarish', leave: 'Hujjatdan chiqish', leaveQ: 'Bu hujjatdan chiqasizmi? Qayta kirish uchun yangi havola kerak bo‘ladi.',
@@ -51,6 +53,8 @@
       notesTail: 'Исходный файл не меняется.', ph: 'Введите текст документа…', table: 'Таблица', undo: 'Отменить', redo: 'Повторить',
       color: 'Цвет текста', hl: 'Выделение', font: 'Шрифт', size: 'Размер', bullet: 'Маркированный список', ordered: 'Нумерованный список', h: 'Заголовок', para: 'Обычный текст',
       left: 'По левому краю', center: 'По центру', right: 'По правому краю', justify: 'По ширине', created: 'Документ создан', busy: 'Открывается…',
+      sub: 'Подстрочный', sup: 'Надстрочный', line: 'Междустрочный интервал', indent: 'Увеличить отступ', outdent: 'Уменьшить отступ', clear: 'Очистить форматирование',
+      pb: 'Разрыв страницы (Ctrl+Enter)', pbLabel: 'Разрыв страницы', find: 'Найти и заменить (Ctrl+F)', words: '{n} слов', pages: '{n} стр.', zoom: 'Масштаб',
       sh: { share: 'Поделиться', people: 'Участники', link: 'Создать ссылку', role: 'Права по ссылке', roles: { owner: 'Владелец', editor: 'Редактирует', commenter: 'Комментирует', viewer: 'Только читает' },
         made: 'Ссылка готова — скопируйте и отправьте. Она показывается один раз и действует {d} дн.', copy: 'Копировать', copied: 'Скопировано', links: 'Активные ссылки', revoke: 'Отозвать',
         joined: 'Присоединились: {n}', until: 'до {d}', remove: 'Убрать', leave: 'Выйти из документа', leaveQ: 'Выйти из этого документа? Чтобы вернуться, нужна новая ссылка.',
@@ -120,10 +124,23 @@
     });
   };
 
+  /** U5a: a card points at words - they get the light blue spot (a decoration, never saved) and come into view.
+      On a phone the side panel covers the sheet, so it steps aside (hide). */
+  J.editorSpot = function (ed, range, side) {
+    if (!range) return false;
+    if (side && G.matchMedia && G.matchMedia('(max-width: 1099px)').matches) side.hidden = true;
+    if (ed.jaiSpot) ed.jaiSpot(range); else ed.chain().focus().setTextSelection(range).run();
+    var dom = ed.view.domAtPos(range.from), el = dom.node.nodeType === 1 ? dom.node : dom.node.parentElement;
+    if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    return true;
+  };
+
   /* ---------- muharrir sahifasi ---------- */
   var FONTS = ['Arial', 'Times New Roman', 'Calibri', 'Golos Text'];
   var SIZES = ['10pt', '11pt', '12pt', '14pt', '16pt', '18pt', '20pt', '24pt'];
   var PAGE_PX = 1123; // A4 at 96 dpi
+  var ZOOMS = [75, 90, 100, 110, 125, 150];
+  var LINES = ['1', '1.15', '1.5', '2'];
 
   J.viewEditor = async function (id) {
     J.setTitle(s('title'));
@@ -137,7 +154,8 @@
       '<button class="pill sm ghost" type="button" data-a="ver">' + esc(s('versions')) + '</button>' +
       '<div class="ed-dl"><button class="pill sm" type="button" data-a="dl">' + J.icon('up') + esc(s('download')) + '</button><div class="ed-menu" hidden><button type="button" data-a="docx">' + J.icon('word') + esc(s('word')) + '</button><button type="button" data-a="pdf">' + J.icon('doc') + esc(s('pdf')) + '</button><button type="button" data-a="del" class="ed-del">' + J.icon('trash') + esc(s('del')) + '</button></div></div></div>' +
       '<div class="ed-bar" role="toolbar"></div><div class="ed-banner" hidden></div>' +
-      '<div class="ed-main"><div class="ed-scroll"><div class="ed-paper"><div class="ed-loading muted">' + esc(s('loading')) + '</div></div></div><aside class="ed-side" hidden></aside></div><div class="ed-foot muted"><span class="ed-pg"></span><span class="ed-cc"></span></div></div>');
+      '<div class="ed-main"><div class="ed-scroll"><div class="ed-paper"><div class="ed-loading muted">' + esc(s('loading')) + '</div></div></div><aside class="ed-side" hidden></aside></div><div class="ed-foot muted"><span class="ed-pg"></span><span class="ed-wc"></span><span class="ed-cc"></span><span class="ed-np"></span><select class="ed-zoom" aria-label="' + esc(s('zoom')) + '">' +
+      ZOOMS.map(function (z) { return '<option value="' + z + '">' + z + '%</option>'; }).join('') + '</select></div></div>');
     document.body.classList.add('ed-on');
     var r = await J.api('/api/editor/docs/' + encodeURIComponent(id));
     if (!r.ok) { $('.ed-paper', v).innerHTML = '<div class="empty-state">' + esc(r.status === 404 ? J.t('err.notFound') || 'Topilmadi' : J.errMsg(r.data)) + '</div>'; return; }
@@ -190,8 +208,13 @@
         if (canWrite && !(remote && remote.isChangeOrigin)) { dirty = true; status('saving'); schedule(); }
         counts();
       },
-      onSelectionUpdate: function () { if (!ready) return; syncBar(); if (CM) CM.follow(); } });
-    var CM = null;
+      onSelectionUpdate: function () { if (!ready) return; syncBar(); if (CM) CM.follow(); clearSpot(); } });
+    /* U5a: the place an AI / check card points to - light blue until the person clicks or types elsewhere (J.editorSpot) */
+    var spotOn = false;
+    function clearSpot() { if (spotOn) { spotOn = false; ed.commands.setSpot(null); } }
+    ed.on('update', function () { if (spotOn && ed.isFocused) clearSpot(); });
+    ed.jaiSpot = function (r) { spotOn = !!r; ed.commands.setSpot(r || null); };
+    var CM = null, FIND = null;
     function seedIfEmpty() { if (live && canWrite && live.doc.getXmlFragment('default').length === 0) ed.commands.setContent(doc.html || '<p></p>'); }
     if (live) live.awareness.setLocalStateField('user', user);
     function onControl(m) {
@@ -269,17 +292,32 @@
       '<select class="ed-sel" data-c="font" aria-label="' + esc(s('font')) + '"><option value="">' + esc(s('font')) + '</option>' + FONTS.map(function (f) { return '<option value="' + esc(f) + '">' + esc(f) + '</option>'; }).join('') + '</select>' +
       '<select class="ed-sel sm" data-c="size" aria-label="' + esc(s('size')) + '"><option value="">' + esc(s('size')) + '</option>' + SIZES.map(function (z) { return '<option value="' + z + '">' + parseInt(z, 10) + '</option>'; }).join('') + '</select><span class="ed-sep"></span>' +
       btn('bold', '<b>B</b>', 'Bold') + btn('italic', '<i>I</i>', 'Italic') + btn('underline', '<u>U</u>', 'Underline') + btn('strike', '<s>S</s>', 'Strike') +
+      btn('sub', '<span>x<sub>2</sub></span>', s('sub')) + btn('sup', '<span>x<sup>2</sup></span>', s('sup')) +
       '<label class="ed-b ed-col" title="' + esc(s('color')) + '"><span style="text-decoration:underline">A</span><input type="color" data-c="color" value="#c00000" aria-label="' + esc(s('color')) + '"></label>' +
       '<label class="ed-b ed-col" title="' + esc(s('hl')) + '"><span class="ed-hl">ab</span><input type="color" data-c="hl" value="#fff59d" aria-label="' + esc(s('hl')) + '"></label><span class="ed-sep"></span>' +
-      btn('left', '<span class="ed-al l"></span>', s('left')) + btn('center', '<span class="ed-al c"></span>', s('center')) + btn('right', '<span class="ed-al r"></span>', s('right')) + btn('justify', '<span class="ed-al j"></span>', s('justify')) + '<span class="ed-sep"></span>' +
-      btn('bullet', '•≡', s('bullet')) + btn('ordered', '1≡', s('ordered')) + btn('table', '▦', s('table')) + '<span class="ed-sep"></span>' +
-      btn('undo', '↶', s('undo')) + btn('redo', '↷', s('redo')) + '<span class="ed-sep"></span>' + btn('comment', '💬', s('cm').add);
+      btn('left', '<span class="ed-al l"></span>', s('left')) + btn('center', '<span class="ed-al c"></span>', s('center')) + btn('right', '<span class="ed-al r"></span>', s('right')) + btn('justify', '<span class="ed-al j"></span>', s('justify')) +
+      // U5a: line spacing and indent of the paragraphs the selection touches
+      '<select class="ed-sel sm" data-c="line" title="' + esc(s('line')) + '" aria-label="' + esc(s('line')) + '"><option value="">↕</option>' + LINES.map(function (l) { return '<option value="' + l + '">' + l + '</option>'; }).join('') + '</select>' +
+      btn('outdent', '⇤', s('outdent')) + btn('indent', '⇥', s('indent')) + '<span class="ed-sep"></span>' +
+      btn('bullet', '•≡', s('bullet')) + btn('ordered', '1≡', s('ordered')) + btn('table', '▦', s('table')) + btn('pagebreak', '⤓', s('pb')) + '<span class="ed-sep"></span>' +
+      btn('clear', '<span>T<sub>×</sub></span>', s('clear')) + btn('undo', '↶', s('undo')) + btn('redo', '↷', s('redo')) + '<span class="ed-sep"></span>' + btn('comment', '💬', s('cm').add) +
+      btn('find', J.icon('search'), s('find'));
     var C = function () { return ed.chain().focus(); };
     var ACT = {
       bold: function () { C().toggleBold().run(); }, italic: function () { C().toggleItalic().run(); }, underline: function () { C().toggleUnderline().run(); }, strike: function () { C().toggleStrike().run(); },
       left: function () { C().setTextAlign('left').run(); }, center: function () { C().setTextAlign('center').run(); }, right: function () { C().setTextAlign('right').run(); }, justify: function () { C().setTextAlign('justify').run(); },
       bullet: function () { C().toggleBulletList().run(); }, ordered: function () { C().toggleOrderedList().run(); },
       table: function () { C().insertTable({ rows: 3, cols: 3, withHeaderRow: false }).run(); },
+      sub: function () { C().toggleSubscript().run(); }, sup: function () { C().toggleSuperscript().run(); },
+      indent: function () { C().indent().run(); }, outdent: function () { C().outdent().run(); },
+      pagebreak: function () { C().setPageBreak().run(); },
+      // marks, headings / lists back to plain paragraphs, spacing and indent
+      // (never the comment anchors or links: those are not formatting)
+      clear: function () {
+        var c = C(); ['bold', 'italic', 'underline', 'strike', 'subscript', 'superscript', 'highlight', 'textStyle'].forEach(function (m) { c = c.unsetMark(m); });
+        c.clearNodes().unsetParagraphFormat().unsetTextAlign().run();
+      },
+      find: function () { if (FIND) FIND.open(false); },
       undo: function () { C().undo().run(); }, redo: function () { C().redo().run(); },
       comment: function () { CM.compose(); }
     };
@@ -291,28 +329,45 @@
     $('[data-c=size]', bar).onchange = function () { this.value ? C().setFontSize(this.value).run() : C().unsetFontSize().run(); };
     $('[data-c=color]', bar).oninput = function () { C().setColor(this.value).run(); };
     $('[data-c=hl]', bar).oninput = function () { C().toggleHighlight({ color: this.value }).run(); };
+    $('[data-c=line]', bar).onchange = function () { C().setLineHeight(this.value || null).run(); };
     function syncBar() {
-      ['bold', 'italic', 'underline', 'strike', 'bulletList', 'orderedList'].forEach(function (m) {
-        var b = $('[data-c="' + ({ bulletList: 'bullet', orderedList: 'ordered' }[m] || m) + '"]', bar); if (b) b.classList.toggle('on', ed.isActive(m));
+      ['bold', 'italic', 'underline', 'strike', 'subscript', 'superscript', 'bulletList', 'orderedList'].forEach(function (m) {
+        var b = $('[data-c="' + ({ bulletList: 'bullet', orderedList: 'ordered', subscript: 'sub', superscript: 'sup' }[m] || m) + '"]', bar); if (b) b.classList.toggle('on', ed.isActive(m));
       });
       ['left', 'center', 'right', 'justify'].forEach(function (a) { var b = $('[data-c=' + a + ']', bar); if (b) b.classList.toggle('on', ed.isActive({ textAlign: a })); });
       var bl = $('[data-c=block]', bar); bl.value = ed.isActive('heading', { level: 1 }) ? '1' : ed.isActive('heading', { level: 2 }) ? '2' : ed.isActive('heading', { level: 3 }) ? '3' : 'p';
       var ts = ed.getAttributes('textStyle') || {};
       $('[data-c=font]', bar).value = FONTS.indexOf(String(ts.fontFamily || '').replace(/["']/g, '')) > -1 ? String(ts.fontFamily).replace(/["']/g, '') : '';
       $('[data-c=size]', bar).value = SIZES.indexOf(ts.fontSize) > -1 ? ts.fontSize : '';
+      var pa = ed.getAttributes(ed.isActive('heading') ? 'heading' : 'paragraph') || {};
+      $('[data-c=line]', bar).value = LINES.indexOf(pa.lineHeight) > -1 ? pa.lineHeight : '';
     }
 
     /* sahifa va belgi soni (A4 balandligi bo'yicha, taxminan — Word'da sahifa chegaralari biroz farq qilishi mumkin) */
     var scroller = $('.ed-scroll', v);
+    /* U5a: masshtab (shu brauzerda eslab qolinadi); sahifa soni sahifa uzilishlarini ham hisobga oladi */
+    var zoom = 100; try { zoom = +localStorage.getItem('jai-ed-zoom') || 100; } catch (e) { /* bo'lmasa 100 */ }
+    if (ZOOMS.indexOf(zoom) < 0) zoom = 100;
+    var zs = $('.ed-zoom', v); zs.value = String(zoom);
+    function applyZoom() { paper.style.zoom = zoom === 100 ? '' : String(zoom / 100); counts(); }
+    zs.onchange = function () { zoom = +zs.value; try { localStorage.setItem('jai-ed-zoom', String(zoom)); } catch (e) { /* bo'lmasa ham */ } applyZoom(); };
+    function pageMap() {
+      // the sheet measured on screen and scaled back to 100 %, cut at each page break: every piece starts a new page
+      var z = zoom / 100, pr = paper.getBoundingClientRect(), top = 0, out = [];
+      $$('hr[data-page-break]', paper).forEach(function (hr) { var y = (hr.getBoundingClientRect().bottom - pr.top) / z; out.push(y - top); top = y; });
+      out.push(Math.max(1, pr.height / z - top));
+      return { pieces: out.map(function (h) { return Math.max(1, Math.ceil(h / PAGE_PX)); }), z: z };
+    }
     function counts() {
-      var h = paper.scrollHeight, m = Math.max(1, Math.ceil(h / PAGE_PX));
-      var n = Math.min(m, Math.max(1, Math.floor((scroller.scrollTop + scroller.clientHeight / 3) / PAGE_PX) + 1));
+      var pm = pageMap(), m = pm.pieces.reduce(function (a, b) { return a + b; }, 0);
+      var n = Math.min(m, Math.max(1, Math.floor((scroller.scrollTop / pm.z + scroller.clientHeight / 3 / pm.z) / PAGE_PX) + 1));
       $('.ed-pg', v).textContent = s('page', { n: n, m: m });
-      var cc = ed.storage.characterCount ? ed.storage.characterCount.characters() : ed.getText().length;
-      $('.ed-cc', v).textContent = s('chars', { n: J.fmtNum(cc) });
+      var st0 = ed.storage.characterCount;
+      $('.ed-cc', v).textContent = s('chars', { n: J.fmtNum(st0 ? st0.characters() : ed.getText().length) });
+      $('.ed-wc', v).textContent = s('words', { n: J.fmtNum(st0 && st0.words ? st0.words() : (ed.getText().match(/\S+/g) || []).length) });
     }
     scroller.addEventListener('scroll', counts, { passive: true });
-    counts(); syncBar();
+    applyZoom(); syncBar();
 
     /* yuklab olish, versiyalar, o'chirish */
     var menu = $('.ed-menu', v);
@@ -380,6 +435,17 @@
     /* K2b: the firm's clauses (firm-kb.js): find one, put it where the cursor is */
     var KB = J.editorKb ? J.editorKb(v, ed, { id: id, canWrite: canWrite, flush: function () { return canWrite ? flush() : Promise.resolve(); },
       changed: function () { if (canWrite) { dirty = true; status('saving'); schedule(); } } }) : null;
+    /* U5a: find and replace (editor-find.js), Ctrl+F / Ctrl+H on this page */
+    FIND = J.editorFind ? J.editorFind(v, ed, { canWrite: canWrite, changed: function () { if (canWrite) { dirty = true; status('saving'); schedule(); } } }) : null;
+    if (!FIND) { var fb0 = $('[data-c=find]', bar); if (fb0) fb0.hidden = true; }
+    var onKeys = function (e) {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || !FIND || !document.body.contains(v)) return;
+      var k = (e.key || '').toLowerCase();
+      if (k === 'f' || e.code === 'KeyF') { e.preventDefault(); FIND.open(false); }
+      else if ((k === 'h' || e.code === 'KeyH') && canWrite) { e.preventDefault(); FIND.open(true); }
+    };
+    document.addEventListener('keydown', onKeys);
+    G.addEventListener('hashchange', function offk() { G.removeEventListener('hashchange', offk); document.removeEventListener('keydown', onKeys); });
     /* one side panel at a time: comments, AI analysis, check, firm clauses */
     var cmSide = $('.ed-side', v), panels = [AI || null, CHK, KB].filter(Boolean);
     var only = function (keep) { if (keep !== 'cm') cmSide.hidden = true; panels.forEach(function (p) { if (p !== keep) p.hide(); }); };
@@ -388,7 +454,7 @@
     if (KB) $('[data-a=kb]', v).onclick = function () { if (KB.el.hidden) { only(KB); KB.open(); } else KB.hide(); };
     $('[data-a=cm]', v).addEventListener('click', function () { if (!cmSide.hidden) only('cm'); });
     /* toolbar by role: a reader keeps only the comment button (a commenter) or nothing */
-    if (!canWrite) $$('[data-c]', bar).forEach(function (b) { if (b.dataset.c !== 'comment' || !canComment) b.hidden = true; });
+    if (!canWrite) $$('[data-c]', bar).forEach(function (b) { if (b.dataset.c === 'find') return; if (b.dataset.c !== 'comment' || !canComment) b.hidden = true; });
     if (!canWrite) $$('.ed-sep', bar).forEach(function (x) { x.hidden = true; });
     if (role !== 'owner') { var dd = $('[data-a=del]', v); if (dd) { dd.innerHTML = J.icon('out') + esc(SH.leave); dd.dataset.a = 'leave'; } }
     var lv = $('[data-a=leave]', v);

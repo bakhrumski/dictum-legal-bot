@@ -424,3 +424,8 @@ nima o'lchandi.
   "Qidirish" + Ctrl/⌘K, bosh sahifada "Davom ettirish", "Hujjatlar"
   uch oynada - Yuklanganlar / Tahrirdagilar / Natijalar). Merge egasining
   roziligi bilan.
+- 2026-11-06: #576 merge (deploy paytida ochiq javob kutiladi, tugamagani
+  `SERVER_RESTART` bilan aytiladi, limit qaytariladi; muharrir avval
+  saqlanadi). U5a PR: muharrirda kartani bosish = joyi och ko'k; Word
+  1-to'plami (indekslar, oraliq, xat boshi, tozalash, sahifa uzilishi,
+  topish/almashtirish, so'z/sahifa soni, masshtab, Word'da sahifa raqami).

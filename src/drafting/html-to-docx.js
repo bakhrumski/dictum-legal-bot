@@ -11,6 +11,9 @@
  * superscript (prim articles), line breaks, bullet and numbered lists
  * (numbering restarts per list), tables with borders and column spans,
  * block quotes and horizontal rules. Anything else degrades to its text.
+ * U5a (the editor): a paragraph's line spacing and left indent, page breaks
+ * (<hr data-page-break>) and, with opts.pageNumbers, the page number in the
+ * footer (a PAGE field, so Word counts the pages itself).
  */
 
 const cheerio = require('cheerio');
@@ -44,6 +47,17 @@ function alignOf($el) {
   const m = /text-align\s*:\s*(left|right|center|justify)/i.exec(style);
   const a = (m ? m[1] : $el.attr('align') || '').toLowerCase();
   return { center: 'center', right: 'right', justify: 'both', left: 'left' }[a] || null;
+}
+
+/** The editor's line spacing (src/editor/sanitize.js: 1, 1.15, 1.5, 2) -> w:line in 240ths, else null. */
+function lineOf($el) {
+  const m = /line-height\s*:\s*(1|1\.15|1\.5|2)(?:\s*;|\s*$)/i.exec(String($el.attr('style') || ''));
+  return m ? Math.round(Number(m[1]) * 240) : null;
+}
+/** The editor's left indent in cm -> twips (567 a cm), else 0. */
+function indentOf($el) {
+  const m = /margin-left\s*:\s*(\d+(?:\.\d+)?)cm/i.exec(String($el.attr('style') || ''));
+  return m ? Math.min(5670, Math.round(Number(m[1]) * 567)) : 0;
 }
 
 const BLOCK = new Set(['p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'table',
@@ -118,12 +132,12 @@ function createConverter(comments = new Map()) {
     return `<w:r>${rPr ? `<w:rPr>${rPr}</w:rPr>` : ''}<w:t xml:space="preserve">${xml(text)}</w:t></w:r>`;
   }
 
-  function paragraph(inner, { style, jc, num, ind, firstLine, borderBottom, tight } = {}) {
+  function paragraph(inner, { style, jc, num, ind, firstLine, borderBottom, tight, line } = {}) {
     let pPr = '';
     if (style) pPr += `<w:pStyle w:val="${style}"/>`;
     if (num) pPr += `<w:numPr><w:ilvl w:val="${num.lvl}"/><w:numId w:val="${num.id}"/></w:numPr>`;
     if (borderBottom) pPr += '<w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="auto"/></w:pBdr>';
-    if (tight) pPr += '<w:spacing w:after="0"/>';
+    if (tight || line) pPr += `<w:spacing${tight ? ' w:after="0"' : ''}${line ? ` w:line="${line}" w:lineRule="auto"` : ''}/>`;
     if (ind || firstLine) pPr += `<w:ind${ind ? ` w:left="${ind}"` : ''}${firstLine ? ` w:firstLine="${firstLine}"` : ''}/>`;
     if (jc) pPr += `<w:jc w:val="${jc}"/>`;
     return `<w:p>${pPr ? `<w:pPr>${pPr}</w:pPr>` : ''}${inner}</w:p>`;
@@ -169,7 +183,7 @@ function createConverter(comments = new Map()) {
       const jc = alignOf($n) || ctx.jc;
       if (/^h[1-6]$/.test(name)) {
         const level = Math.min(Number(name[1]), 3);
-        out += paragraph(runs($, $n.contents()), { style: `Heading${level}`, jc });
+        out += paragraph(runs($, $n.contents()), { style: `Heading${level}`, jc, line: lineOf($n), ind: indentOf($n) || undefined });
       } else if (name === 'ul' || name === 'ol') {
         const id = newList(name === 'ol');
         const lvl = Math.min(ctx.listLevel || 0, 8);
@@ -181,6 +195,8 @@ function createConverter(comments = new Map()) {
         });
       } else if (name === 'table') {
         out += table($, $n);
+      } else if (name === 'hr' && $n.attr('data-page-break') != null) {
+        out += '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
       } else if (name === 'hr') {
         out += paragraph('', { borderBottom: true });
       } else if (name === 'blockquote') {
@@ -189,7 +205,10 @@ function createConverter(comments = new Map()) {
         out += blocks($, $n.contents(), Object.assign({}, ctx, { jc }));
       } else {
         const r = runs($, $n.contents());
-        out += paragraph(r, bodyPara(alignOf($n) || ctx.jc, ctx));
+        // the editor's own spacing / indent (U5a) win over the legal layout's first-line indent
+        const own = indentOf($n), line = lineOf($n);
+        const pp = own ? { jc: alignOf($n) || ctx.jc, ind: (ctx.ind || 0) + own } : bodyPara(alignOf($n) || ctx.jc, ctx);
+        out += paragraph(r, line ? Object.assign({}, pp, { line }) : pp);
       }
     });
     flush();
@@ -289,7 +308,13 @@ function commentsXml(list) {
  * [{ id, author, date, text }] - each becomes a Word comment on the words its
  * <span data-comment="id"> pieces mark; a comment with no anchor left is skipped.
  */
-async function htmlToDocx(bodyHtml, { title = 'Hujjat', lang = 'uz', comments = [], legal = false } = {}) {
+/** U5a: the footer with the page number in the middle, as Word's PAGE field. */
+function footerXml() {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:ftr ${NS}><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> PAGE </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>1</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p></w:ftr>`;
+}
+
+async function htmlToDocx(bodyHtml, { title = 'Hujjat', lang = 'uz', comments = [], legal = false, pageNumbers = false } = {}) {
   const $ = cheerio.load(`<div id="__root">${String(bodyHtml || '')}</div>`, { decodeEntities: true });
   const cmap = new Map();
   const used = [];
@@ -304,20 +329,21 @@ async function htmlToDocx(bodyHtml, { title = 'Hujjat', lang = 'uz', comments = 
   let body = conv.blocks($, $('#__root').contents(), { legal: !!legal });
   if (!body) body = '<w:p/>';
   const langTag = lang === 'ru' ? 'ru-RU' : 'uz-Latn-UZ';
-  const sect = `<w:sectPr><w:pgSz w:w="${A4.w}" w:h="${A4.h}"/><w:pgMar w:top="${MARGIN.top}" w:right="${MARGIN.right}" w:bottom="${MARGIN.bottom}" w:left="${MARGIN.left}" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr>`;
+  const sect = `<w:sectPr>${pageNumbers ? '<w:footerReference w:type="default" r:id="rId4"/>' : ''}<w:pgSz w:w="${A4.w}" w:h="${A4.h}"/><w:pgMar w:top="${MARGIN.top}" w:right="${MARGIN.right}" w:bottom="${MARGIN.bottom}" w:left="${MARGIN.left}" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr>`;
   const document = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:document ${NS}><w:body>${body}${sect}</w:body></w:document>`;
 
   const zip = new JSZip();
   zip.file('[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>${used.length ? '<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/>' : ''}</Types>`);
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>${used.length ? '<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/>' : ''}${pageNumbers ? '<Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>' : ''}</Types>`);
   zip.file('_rels/.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/></Relationships>`);
   zip.file('word/_rels/document.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>${used.length ? '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments" Target="comments.xml"/>' : ''}</Relationships>`);
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>${used.length ? '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments" Target="comments.xml"/>' : ''}${pageNumbers ? '<Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>' : ''}</Relationships>`);
   zip.file('word/document.xml', document);
   zip.file('word/styles.xml', stylesXml(langTag));
   zip.file('word/numbering.xml', numberingXml(conv.numbering));
   if (used.length) zip.file('word/comments.xml', commentsXml(used));
+  if (pageNumbers) zip.file('word/footer1.xml', footerXml());
   zip.file('docProps/core.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>${xml(title)}</dc:title><dc:creator>JuristAI</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">${new Date().toISOString().replace(/\.\d+Z$/, 'Z')}</dcterms:created></cp:coreProperties>`);
   return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
