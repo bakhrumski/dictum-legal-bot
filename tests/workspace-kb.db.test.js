@@ -73,7 +73,8 @@ Tomonlar yengib bo'lmaydigan kuch holatlarida javobgar bo'lmaydi.`;
     assert.ok(/J\.route\(\/\^\\\/firma\$\//.test(kbjs) && /J\.editorKb = function/.test(kbjs) && /J\.kbAdd = async function/.test(kbjs));
     assert.ok(/r\.data\.sealed \?/.test(kbjs), 'encryption claimed only when sealed');
     assert.ok(read('index.html').includes('/app/firm-kb.js?v='));
-    assert.ok(/\['#\/firma', 'layers', 'nav\.kb'\]/.test(read('app.js')));
+    // U4: the firm base is a card on "Asboblar" (tools.js), first for the lawyer and firm views
+    assert.ok(/\['firma', '#\/firma', 'layers'\]/.test(read('tools.js')));
     const core = read('core.js');
     assert.ok(/lawyer: \{ slug: 'yurist', nav: \[[^\]]*'#\/firma'/.test(core) && /firm: \{ slug: 'firma', nav: \[[^\]]*'#\/firma'/.test(core));
     assert.ok(/data-kb=/.test(read('library.js')) && /J\.kbAdd\(\{ kind: 'library'/.test(read('library.js')));

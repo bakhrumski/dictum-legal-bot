@@ -436,3 +436,7 @@ nima o'lchandi.
 - 2026-11-07: #578 merge (U2). U3 PR: hujjat uchun bitta eshik - "Nima
   qilaylik?" kartasi (chat, bosh sahifa, Hujjatlar; har amal narxi va natijasi
   bilan; Playbook / Jadval / muharrir hujjat bilan ochiladi).
+- 2026-11-07: #579 merge (U3). U4 PR: menyu 5 band + "Asboblar" sahifasi
+  (har bo'lim karta: nima qiladi, misol, narx), telefonda pastki panel,
+  oddiy nomlar ("Tayyor buyruqlar", "Firma qoidalari bilan tekshirish",
+  "Ko'p hujjatni solishtirish"), limit qutisi oddiy tilda.

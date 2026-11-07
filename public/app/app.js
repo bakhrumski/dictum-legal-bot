@@ -11,32 +11,35 @@
   J.setTitle = function (s) { $('#title').textContent = s || ''; document.title = (s ? s + ' — ' : '') + 'JuristAI'; };
 
   /* ---------- chap panel ---------- */
+  /* U4 (docs/design/ux-audit-2026-11.md): five items for everyone - the rest are cards on "Asboblar" (tools.js),
+     ordered by the role view there; old links (#/tahlil, #/jadval, #/playbook ...) still open their pages */
   var NAV = [
-    ['#/', 'home', 'nav.home'], ['#/ishlar', 'folder', 'nav.matters'], ['#/hujjatlarim', 'doc', 'nav.docs'], ['#/tahlil', 'scan', 'nav.analyze'], ['#/tayyorlash', 'pen', 'nav.draft'],
-    ['#/konikmalar', 'spark', 'nav.skills'], ['#/firma', 'layers', 'nav.kb'], ['#/yozuvlar', 'mic', 'nav.voice'], ['#/jamoa', 'team', 'nav.team'], ['#/advokatlar', 'scale', 'nav.lawyers']
+    ['#/', 'chat', 'nav.ask'], ['#/hujjatlarim', 'doc', 'nav.docs'], ['#/ishlar', 'folder', 'nav.matters'], ['#/asboblar', 'layers', 'nav.tools'], ['#/advokatlar', 'scale', 'nav.lawyers']
   ];
   function drawNav() {
     // Boshqaruv faqat bazada master bo'lgan hisobga (admin.js; server har so'rovni o'zi tekshiradi)
-    // a role view (#/rol/<rol>) shows only that role's sections
-    var rv = J.roleView && J.roleView(), keep = rv ? J.ROLE_VIEWS[rv].nav : null;
-    var items = NAV.filter(function (n) { return !keep || keep.indexOf(n[0]) > -1; });
-    // staff answer the human queue (queue.js): their work, right under the home page
+    var items = NAV.slice();
+    // staff answer the human queue (queue.js): their work, right under the first item
     if (J.isStaff()) items.splice(1, 0, ['#/navbat', 'chat', 'nav.queue']);
     items = items.concat(J.salesAgent ? [['#/mijozlarim', 'user', 'nav.myClients']] : [],
-        // the client of a lawyer's matter (portal.js): their matters, in every view
-        J.portalClient ? [['#/portal', 'folder', 'nav.portal']] : [], J.isMaster && J.isMaster() ? [['#/boshqaruv', 'shield', 'nav.admin']] : [],
-        // the client's own role view: the other sections are one click away
-        rv && !J.rolePreview() ? [['#/rol/hammasi', 'more', 'rv.all']] : []);
+        // the client of a lawyer's matter (portal.js): their matters
+        J.portalClient ? [['#/portal', 'folder', 'nav.portal']] : [], J.isMaster && J.isMaster() ? [['#/boshqaruv', 'shield', 'nav.admin']] : []);
     $('#nav').innerHTML = items.map(function (n) {
-      var lock = (n[0] === '#/tayyorlash' && !J.hasService('draft') && !J.needsPlan()) || ((n[0] === '#/jamoa' || n[0] === '#/firma') && !J.isStaff() && /^(sinov|none)$/.test(J.planKey()));
-      return '<a href="' + n[0] + '" data-r="' + n[0] + '" title="' + esc(t(n[2])) + '">' + J.icon(n[1]) + '<span>' + esc(t(n[2])) + '</span>' + (lock ? '<span class="lock">' + J.icon('lock') + '</span>' : '') + '</a>';
+      return '<a href="' + n[0] + '" data-r="' + n[0] + '" title="' + esc(t(n[2])) + '">' + J.icon(n[1]) + '<span>' + esc(t(n[2])) + '</span></a>';
     }).join('');
     markNav();
+    if (J.drawBottomNav) J.drawBottomNav();
   }
   J.redrawNav = function () { drawNav(); };
   function markNav() {
     var h = location.hash || '#/';
-    $$('#nav a').forEach(function (a) { var r = a.dataset.r; a.classList.toggle('on', r === '#/' ? (h === '#/' || h === '' || h === '#') : h.indexOf(r) === 0); });
+    var tool = (J.TOOL_ROUTES || []).some(function (r) { return h.indexOf(r) === 0; });
+    $$('#nav a').forEach(function (a) {
+      var r = a.dataset.r;
+      // "Savol" is the home page and every chat; "Asboblar" is any tool's page
+      a.classList.toggle('on', r === '#/' ? (h === '#/' || h === '' || h === '#') : r === '#/asboblar' ? (tool || h.indexOf(r) === 0) : h.indexOf(r) === 0);
+    });
+    if (J.markBottomNav) J.markBottomNav();
     $$('#hist a').forEach(function (a) { a.classList.toggle('on', h === '#/c/' + a.dataset.id); });
   }
   function drawHist() {
@@ -54,10 +57,11 @@
     } else if (!J.S.tariff || b.kind === 'none') {
       box.innerHTML = '<div class="usage-h"><b>' + esc(t('usage.none')) + '</b></div><button class="pill sm" data-a="plans">' + esc(t('usage.upgrade')) + '</button>';
     } else {
-      var c = J.svc('chat') || { used: 0, limit: 0, remaining: 0 }, pct = c.limit ? Math.min(100, Math.round(100 * c.used / c.limit)) : 0;
-      box.innerHTML = '<div class="usage-h"><b>' + esc(J.planLabel()) + '</b><span class="num muted">' + c.used + ' / ' + c.limit + '</span></div><div class="meter"><i style="width:' + pct + '%"></i></div>' +
-        '<small>' + esc(c.remaining + ' ' + t('usage.chat')) + (b.endsAt ? ' · ' + esc(t('usage.until', { d: J.fmtDate(b.endsAt) })) : '') + '</small>' +
-        '<small>' + J.icon('mic').replace('class="i"', 'class="i" style="width:12px;height:12px;vertical-align:-2px"') + ' ' + esc(J.VOICE_MIN && J.VOICE_MIN[J.planKey()] ? t('vc.min', { n: J.VOICE_MIN[J.planKey()] }) : t('vc.min.none')) + '</small>' +
+      // U4: in plain words - what is left this period, not "0 / 0"; a document unit says what it is
+      var c = J.svc('chat') || { used: 0, limit: 0, remaining: 0 }, an = J.svc('analysis'), pct = c.limit ? Math.min(100, Math.round(100 * c.used / c.limit)) : 0;
+      box.innerHTML = '<div class="usage-h"><b>' + esc(J.planLabel()) + '</b>' + (b.endsAt ? '<span class="muted">' + esc(t('usage.until', { d: J.fmtDate(b.endsAt) })) + '</span>' : '') + '</div><div class="meter"><i style="width:' + pct + '%"></i></div>' +
+        '<small>' + esc(t(b.kind === 'trial' ? 'usage.left.trial' : 'usage.left', { n: J.fmtNum(c.remaining) })) + (an ? ' · ' + esc(t('usage.left.an', { n: J.fmtNum(an.remaining) })) : '') + '</small>' +
+        (an ? '<small class="muted">' + esc(t('usage.unit')) + '</small>' : '') +
         (b.kind === 'trial' || c.remaining <= Math.ceil(c.limit * 0.1) ? '<button class="pill sm" data-a="plans">' + esc(t('usage.upgrade')) + '</button>' : '');
     }
     var p = $('[data-a=plans]', box); if (p) p.onclick = function () { J.openPlans({ ended: J.trialEnded() }); };

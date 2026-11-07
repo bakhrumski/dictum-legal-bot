@@ -10,7 +10,7 @@
 
   var S = {
     uz: {
-      title: 'Jadvalli tahlil', sub: 'Bir nechta hujjatni bir vaqtda ko‘ring: har hujjat — qator, har savol — ustun. Har bir javob yonida hujjatdan iqtibos va sahifa.',
+      title: 'Ko‘p hujjatni solishtirish', sub: 'Bir nechta hujjatni bir vaqtda ko‘ring: har hujjat — qator, har savol — ustun. Har bir javob yonida hujjatdan iqtibos va sahifa.',
       docs: 'Hujjatlar', add: 'Hujjat qo‘shish', types: 'PDF, DOCX yoki skan/rasm (OCR — narxi oldin ko‘rsatiladi), 100 tagacha', reading: 'o‘qilmoqda…', scanned: 'skan — hozircha qo‘llab-quvvatlanmaydi', bad: 'o‘qib bo‘lmadi',
       cols: 'Savollar (ustunlar)', colPh: 'O‘z savolingiz, masalan: Javobgarlik chegarasi qancha?', addCol: 'Qo‘shish', presets: 'Tayyor savollar',
       run: 'Jadvalni tuzish', cost: 'Har hujjat — 1 ta savol birligi (10 tagacha savol); faqat o‘qilgan hujjat uchun yechiladi.',
@@ -25,7 +25,7 @@
       types_: { text: 'Matn', yesno: 'Ha/Yo‘q', date: 'Sana', amount: 'Summa', choice: 'Tanlov' }
     },
     ru: {
-      title: 'Табличный анализ', sub: 'Несколько документов сразу: документ — строка, вопрос — столбец. У каждого ответа — цитата из документа и страница.',
+      title: 'Сравнение нескольких документов', sub: 'Несколько документов сразу: документ — строка, вопрос — столбец. У каждого ответа — цитата из документа и страница.',
       docs: 'Документы', add: 'Добавить документ', types: 'PDF, DOCX или скан/фото (OCR — цена показывается заранее), до 100', reading: 'читается…', scanned: 'скан — пока не поддерживается', bad: 'не удалось прочитать',
       cols: 'Вопросы (столбцы)', colPh: 'Свой вопрос, например: Каков предел ответственности?', addCol: 'Добавить', presets: 'Готовые вопросы',
       run: 'Построить таблицу', cost: 'Каждый документ — 1 единица вопроса (до 10 вопросов); списывается только за прочитанные.',

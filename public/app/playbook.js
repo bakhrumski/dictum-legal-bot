@@ -8,7 +8,7 @@
 
   var S = {
     uz: {
-      title: 'Playbook bo‘yicha tekshiruv', sub: 'Shartnomani firmangizning o‘z qoidalari bilan solishtiring: qaysi band talabga mos, qaysi biri farq qiladi yoki yo‘q — va o‘rniga taklif matni.',
+      title: 'Firma qoidalari bilan tekshirish', sub: 'Shartnomani firmangizning o‘z qoidalari bilan solishtiring: qaysi band talabga mos, qaysi biri farq qiladi yoki yo‘q — va o‘rniga taklif matni.',
       pick: '1. Playbook tanlang', builtin: 'Tayyor', mine: 'Meniki', newPb: 'Yangi playbook', copy: 'Nusxa olib tahrirlash', edit: 'Tahrirlash', del: 'O‘chirish', rules: 'qoida',
       doc: '2. Shartnomani yuklang', upload: 'PDF, DOCX yoki skan tanlash', reading: 'O‘qilmoqda…', scanned: 'Skan hujjat — hozircha qo‘llab-quvvatlanmaydi', bad: 'Faylni o‘qib bo‘lmadi',
       run: 'Solishtirish', cost: 'Tahlil birligi shartnoma hajmiga qarab (40 000 belgigacha — 1 birlik); faqat natija chiqsa yechiladi.',
@@ -21,7 +21,7 @@
       delQ: 'Playbookni o‘chirasizmi?', nounit: 'Tahlil birligi yetarli emas', plans: 'Tariflar', entry: 'Playbook: firma qoidalari bilan tekshiruv', open: 'Ochish'
     },
     ru: {
-      title: 'Проверка по плейбуку', sub: 'Сравните договор с правилами вашей фирмы: какой пункт соответствует, какой отличается или отсутствует — и предложенная формулировка.',
+      title: 'Проверка по правилам фирмы', sub: 'Сравните договор с правилами вашей фирмы: какой пункт соответствует, какой отличается или отсутствует — и предложенная формулировка.',
       pick: '1. Выберите плейбук', builtin: 'Готовые', mine: 'Мои', newPb: 'Новый плейбук', copy: 'Скопировать и изменить', edit: 'Изменить', del: 'Удалить', rules: 'правил',
       doc: '2. Загрузите договор', upload: 'Выбрать PDF, DOCX или скан', reading: 'Читается…', scanned: 'Скан — пока не поддерживается', bad: 'Не удалось прочитать файл',
       run: 'Сравнить', cost: 'Единицы анализа по объёму договора (до 40 000 знаков — 1); списываются только при результате.',
@@ -39,7 +39,7 @@
 
   J.viewPlaybook = function () {
     J.setTitle(s('title'));
-    var v = J.mount('<div class="wrap narrow"><div class="vh"><div><div class="kicker">AI · Playbook</div><h2>' + esc(s('title')) + '</h2><p>' + esc(s('sub')) + '</p></div></div><div class="pb-body"></div></div>');
+    var v = J.mount('<div class="wrap narrow"><div class="vh"><div><div class="kicker">AI</div><h2>' + esc(s('title')) + '</h2><p>' + esc(s('sub')) + '</p></div></div><div class="pb-body"></div></div>');
     var body = $('.pb-body', v);
     var data = { builtin: [], mine: [], firm: [] }, chosen = null, doc = null;
     // U3: a document carried from "Nima qilaylik?" (docact.js) is already here - nothing to upload again

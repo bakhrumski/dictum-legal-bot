@@ -1095,3 +1095,30 @@ html[lang=ru] .ed-doc hr[data-page-break]::after{content:"Разрыв стра�
 .da-modal .da-list{grid-template-columns:minmax(0,1fr)}
 .da-over{outline:2px dashed var(--cta);outline-offset:-6px;border-radius:14px}
 @media (max-width:700px){.da-list{grid-template-columns:minmax(0,1fr)}.da-row{flex-wrap:wrap;row-gap:2px}.da-c{order:3;flex-basis:100%;max-width:none;padding-left:40px;white-space:normal;color:var(--cta-dark)}}
+
+/* U4 (tools.js): "Asboblar" - every tool as a card (what it does, an example, the price); the phone's bottom bar */
+.tl-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.tl-card{display:flex;gap:14px;align-items:flex-start;padding:16px;border:1px solid var(--line);border-radius:16px;background:var(--surface);color:var(--fg);text-decoration:none}
+.tl-card:hover{border-color:var(--cta)}
+.tl-ic{flex:none;width:40px;height:40px;border-radius:12px;background:var(--accent-soft);color:var(--cta-dark);display:grid;place-items:center}
+.tl-ic .i{width:20px;height:20px}
+.tl-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.tl-t b{font-weight:500;font-size:15.5px}
+.tl-t b .lock{color:var(--faint);font-size:11px}
+.tl-t small{color:var(--muted);font-size:13.5px;line-height:1.45}
+.tl-eg{font-size:12.5px;color:var(--muted)}
+.tl-eg i{font-style:normal;color:var(--faint)}
+.tl-price{flex:none;font-size:12px;color:var(--cta-dark);white-space:nowrap;max-width:34%;text-align:right;overflow:hidden;text-overflow:ellipsis}
+.tl-unit{font-size:12.5px;margin-top:14px}
+@media (max-width:700px){.tl-grid{grid-template-columns:minmax(0,1fr)}.tl-card{flex-wrap:wrap}.tl-price{order:3;flex-basis:100%;max-width:none;text-align:left;padding-left:54px;white-space:normal}}
+.bnav{display:none}
+@media (max-width:900px){
+  .bnav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--surface);border-top:1px solid var(--line);padding:4px 4px calc(4px + env(safe-area-inset-bottom))}
+  .bnav a,.bnav button{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 2px;border:0;background:none;color:var(--muted);font:inherit;font-size:11.5px;text-decoration:none;cursor:pointer;border-radius:10px}
+  .bnav .i{width:20px;height:20px}
+  .bnav a.on{color:var(--fg);background:var(--panel)}
+  body:not(.ed-on):not(.booting) .main{padding-bottom:calc(58px + env(safe-area-inset-bottom))}
+  body.ed-on .bnav,body.booting .bnav{display:none}
+}
+/* the composer's buttons wrap on a narrow phone; the send button keeps its place at the end of the row */
+@media (max-width:480px){.cmp-bar{flex-wrap:wrap;row-gap:6px}.cmp-bar .send{margin-left:auto}}
