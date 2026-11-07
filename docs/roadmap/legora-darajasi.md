@@ -433,3 +433,6 @@ nima o'lchandi.
   (Sinov birinchi savolda serverda boshlanadi), "Nimadan boshlaysiz?" uchta
   tugma bilan, alifbo paneli birinchi ishdan keyin va kontent ustida emas,
   bo'sh sahifalarda bitta gap va bitta tugma.
+- 2026-11-07: #578 merge (U2). U3 PR: hujjat uchun bitta eshik - "Nima
+  qilaylik?" kartasi (chat, bosh sahifa, Hujjatlar; har amal narxi va natijasi
+  bilan; Playbook / Jadval / muharrir hujjat bilan ochiladi).

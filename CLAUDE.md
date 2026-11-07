@@ -517,6 +517,23 @@ Known state of the suites (Sept 2026):
   the app is a row under the top bar (`offerHost`), never over the content;
   the landing keeps the floating bar. Empty chats / uploaded documents /
   results pages: one sentence and one button. `tests/first-visit.test.js`.
+- U3 of the UX audit (2026-11-07, frontend only, `public/app/docact.js`): one
+  door for a document - "Nima qilaylik?". A file read in a composer (home or
+  chat; the home page takes a drop anywhere into its composer), a file
+  dropped on Hujjatlar (read once, kept, `J.bindDocDrop`) or a list row's
+  button gets one card: Oddiy tilda tushuntirish / To'liq tahlil (the
+  `explain` / `risk` skills through the normal send - the server's 409
+  DOC_COST_CONFIRM still shows the price first), Savol berish (the box asks),
+  Muharrirda ochish (by the library id: `/api/analyze/extract` `docId` now
+  kept by `J.readFile`, or the scanId; hidden without one), Firma qoidalari
+  bilan tekshirish and Boshqa hujjatlar bilan solishtirish (`J.docHandoff`:
+  playbook.js / tabular.js take the document as read - text or library id -
+  with no second upload). Each row names its result and price (analysis
+  units by max(pages/10, chars/40 000), "1 savol", "bepul", "har hujjatga 1
+  savol"); the card appears only with nothing typed and no skill and goes on
+  typing or sending; nothing runs by itself. `J.chatWithDoc` opens a new chat
+  with the document (a service sent, else waiting in the box).
+  `tests/doc-actions.test.js`.
 - "Hujjatlarim" (2026-10-29, owner: every uploaded document stays for later
   actions until the person deletes it; migration 029): `document_scans` is the
   person's library - a text Word/PDF read by `/api/analyze/extract` (it now

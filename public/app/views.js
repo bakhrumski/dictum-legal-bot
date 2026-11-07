@@ -34,6 +34,7 @@
         '<div class="st-host" hidden></div><div class="tasks"></div><div class="recent"><h3>' + esc(t('recent')) + '</h3><div class="rows"></div></div></div>');
       $('.hello', lean).textContent = greet + (name ? ', ' + name : '') + '.';
       var lc = J.composer($('.cmp-host', lean), { menuDown: true, placeholder: t('rv.ph.' + rv), onSend: function (p) { J.startChat(p); } });
+      homeDrop(lean, lc);
       J.homeComposer = lc;
       var list = t('tasks.' + rv).slice(0, 4);
       $('.tasks', lean).innerHTML = list.map(function (x, i) {
@@ -80,6 +81,7 @@
       '<div class="recent"><h3>' + esc(t('recent')) + '</h3><div class="rows"></div></div></div>');
     $('.hello', v).textContent = greet + (name ? ', ' + name : '') + '.';
     var cmp = J.composer($('.cmp-host', v), { menuDown: true, onSend: function (p) { J.startChat(p); } });
+    homeDrop(v, cmp);
     J.homeComposer = cmp;
     if (!J.isStaff()) J.tg.banner($('.tg-host', v));
     function drawTasks() {
@@ -118,6 +120,18 @@
     else { drawRecent(); J.on('sessions', function () { if (document.body.contains(v)) drawRecent(); }); }
     cmp.focus();
   };
+
+  /** U3: a file dropped anywhere on the home page lands in its composer, where "Nima qilaylik?" opens (docact.js). */
+  function homeDrop(root, composer) {
+    var has = function (e) { var ty = e.dataTransfer && e.dataTransfer.types; return !!ty && Array.prototype.indexOf.call(ty, 'Files') > -1; };
+    root.addEventListener('dragover', function (e) { if (has(e)) { e.preventDefault(); root.classList.add('da-over'); } });
+    root.addEventListener('dragleave', function (e) { if (!root.contains(e.relatedTarget)) root.classList.remove('da-over'); });
+    root.addEventListener('drop', function (e) {
+      root.classList.remove('da-over');
+      if (!has(e) || composer.el.contains(e.target)) return; // the composer takes its own drop
+      e.preventDefault(); composer.addFiles(Array.prototype.slice.call(e.dataTransfer.files || []));
+    });
+  }
 
   /**
    * U2: a person with nothing yet (no chat, document, matter or result - GET /api/recent) sees one question,

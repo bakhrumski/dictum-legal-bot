@@ -105,7 +105,8 @@
       var r = await J.api('/api/analyze/extract', { method: 'POST', body: fd });
       if (!r.ok) throw new Error(J.errMsg(r.data));
       if (!r.data.scanned && r.data.text && r.data.text.trim()) {
-        return { name: name, text: r.data.text, docTicket: r.data.docTicket || null, pages: r.data.pageCount || null, chars: r.data.charCount || r.data.text.length, units: r.data.units || null };
+        // docId: the library row the server kept (U3: the editor and the other pages open it by id)
+        return { name: name, text: r.data.text, docTicket: r.data.docTicket || null, pages: r.data.pageCount || null, chars: r.data.charCount || r.data.text.length, units: r.data.units || null, docId: r.data.docId || null };
       }
     }
     // skan yoki rasm: avval narx, so'ng tasdiq bilan OCR
@@ -241,11 +242,26 @@
       });
       chips.innerHTML = html;
       $$('[data-x]', chips).forEach(function (b) {
-        b.onclick = function () { var x = b.dataset.x; if (x === 'skill') st.skill = null; else st.files.splice(+x, 1); drawChips(); };
+        b.onclick = function () { var x = b.dataset.x; if (x === 'skill') st.skill = null; else { st.files.splice(+x, 1); closeDa(); } drawChips(); };
       });
       sync();
     }
     function sync() { send.disabled = st.busy ? false : !(ta.value.trim() || st.skill || st.files.length); send.innerHTML = J.icon(st.busy ? 'stop' : 'send'); }
+    /* U3: a file that has just been read, with nothing typed and no skill chosen, gets "Nima qilaylik?" (docact.js);
+       nothing runs by itself - a service still shows its price first (409 DOC_COST_CONFIRM) */
+    var daCard = null;
+    function closeDa() { if (daCard) { daCard.remove(); daCard = null; } }
+    function offerDa(f) {
+      closeDa();
+      if (!J.docActions || opts.docActions === false || st.skill || ta.value.trim() || st.files.length !== 1) return;
+      daCard = J.docActions(f, {
+        explain: function () { closeDa(); pick('explain'); submit(); },
+        risk: function () { closeDa(); pick('risk'); submit(); },
+        ask: function () { closeDa(); ta.placeholder = J.docActText('askPh'); ta.focus(); },
+        editor: J.docGo.editor, playbook: J.docGo.playbook, compare: J.docGo.compare
+      }, { inline: true, onClose: closeDa });
+      el.insertBefore(daCard, chips.nextSibling);
+    }
     function closeMenu() { if (menu) { menu.remove(); menu = null; } }
     function openMenu(kind, q) {
       closeMenu();
@@ -357,7 +373,7 @@
     }
 
     ta.addEventListener('input', function () {
-      closeCard();
+      closeCard(); if (ta.value.trim()) closeDa();
       grow(); sync();
       var m = ta.value.match(/(?:^|\s)\/([^\s]*)$/);
       if (m) openMenu('sl', m[1]); else if (/(?:^|\s)@$/.test(ta.value)) { ta.value = ta.value.replace(/@$/, ''); openMenu('at'); } else if (menu && !menu.querySelector('[data-a=up]')) closeMenu();
@@ -380,7 +396,7 @@
     function addFiles(files) {
       files.slice(0, 5).forEach(function (file) {
         var f = { name: file.name, status: 'reading' }; st.files.push(f); drawChips();
-        readFile(file, J.scanConfirm).then(function (d) { Object.assign(f, d, { status: 'ready' }); drawChips(); })
+        readFile(file, J.scanConfirm).then(function (d) { Object.assign(f, d, { status: 'ready' }); drawChips(); offerDa(f); })
           .catch(function (err) { var i = st.files.indexOf(f); if (i > -1) st.files.splice(i, 1); drawChips(); if (err.message !== 'cancel') J.toast(f.name + ': ' + err.message); });
       });
     }
@@ -391,7 +407,7 @@
       if (!text && !st.skill && !st.files.length) return;
       var payload = { text: text, skill: st.skill, files: st.files.slice() };
       if (opts.onSend(payload) === false) return;
-      ta.value = ''; st.skill = null; st.files = []; drawChips(); grow();
+      closeDa(); ta.value = ''; st.skill = null; st.files = []; drawChips(); grow();
     }
     send.onclick = submit;
     // K4: the firm's knowledge base as a source, chosen here (public/app/firm-kb.js J.chatKb)
@@ -402,6 +418,8 @@
       setText: function (s) { ta.value = s; grow(); sync(); ta.focus(); },
       setSkill: function (id) { pick(id); },
       addFiles: addFiles,
+      /** a file already read (a document carried from another page): attached as it is, no card; the box asks for the question */
+      addReady: function (f) { st.files.push(Object.assign({}, f, { status: 'ready' })); drawChips(); ta.placeholder = J.docActText ? J.docActText('askPh') : ta.placeholder; ta.focus(); },
       busy: function (b) { st.busy = !!b; sync(); }
     };
   };
@@ -414,6 +432,15 @@
 
   /** Bosh sahifadan birinchi xabar: suhbat ko'rinishiga o'tadi va yuboradi */
   J.startChat = function (payload) { C.id = null; C.history = []; C.docs = []; C.pending = payload; J.go('#/c/new'); };
+  /** U3: a new chat with this document - a service (explain / risk) is sent at once, else it waits in the box for the question */
+  J.chatWithDoc = function (f, skillId) {
+    C.id = null; C.history = []; C.docs = [];
+    var file = Object.assign({}, f, { status: 'ready' });
+    if (!file.text && !file.scanId && (f.docId || f.scanId)) file.scanId = f.docId || f.scanId;
+    if (skillId) C.pending = { text: '', skill: J.skills.byId(skillId), files: [file] };
+    else C.preFiles = [file];
+    J.go('#/c/new');
+  };
 
   J.viewChat = async function (id) {
     var v = J.mount('<div class="chatv"><div class="thread"><div class="thread-in"></div></div><div class="dock"></div>' +
@@ -696,6 +723,7 @@
     } else {
       J.setTitle(t('new'));
       if (C.pending) { var p = C.pending; C.pending = null; send(p); }
+      else if (C.preFiles) { var pf = C.preFiles; C.preFiles = null; pf.forEach(function (f) { cmp.addReady(f); }); }
       else cmp.focus();
     }
   };

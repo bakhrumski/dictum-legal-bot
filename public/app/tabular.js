@@ -60,6 +60,8 @@
     var v = J.mount('<div class="wrap"><div class="vh"><div><div class="kicker">AI · ' + esc(s('quote')) + '</div><h2>' + esc(s('title')) + '</h2><p>' + esc(s('sub')) + '</p></div></div><div class="tb-body"></div></div>');
     var body = $('.tb-body', v);
     var docs = [], cols = [], queue = [], reading = 0, alive = true;
+    // U3: a document carried from "Nima qilaylik?" (docact.js) is the first row; the others are added here
+    if (J.docHandoff && !openRunId) { docs.push(J.docHandoff); J.docHandoff = null; }
     var off = function () { if (!document.body.contains(v)) { alive = false; window.removeEventListener('hashchange', off); } };
     window.addEventListener('hashchange', off);
 
@@ -83,7 +85,7 @@
     function drawDocs() {
       var box = $('.tb-docs', body); if (!box) return;
       box.innerHTML = docs.length ? '<ul class="tb-list">' + docs.map(function (d, i) {
-        var st = d.status === 'reading' ? '<span class="spin"></span>' + esc(s('reading')) : d.status === 'ok' ? '<span class="muted">' + (d.scanId ? 'OCR · ' : '') + Math.round((d.chars || 0) / 1000) + 'k</span>' : '<span class="err" title="' + esc(d.error || '') + '">' + esc(s(d.status)) + '</span>';
+        var st = d.status === 'reading' ? '<span class="spin"></span>' + esc(s('reading')) : d.status === 'ok' ? '<span class="muted">' + (d.scanId && !d.textDoc ? 'OCR · ' : '') + Math.round((d.chars || 0) / 1000) + 'k</span>' : '<span class="err" title="' + esc(d.error || '') + '">' + esc(s(d.status)) + '</span>';
         return '<li>' + J.icon('doc') + '<span class="tb-n">' + esc(d.name) + '</span><small>' + st + '</small><button type="button" class="ib" data-rd="' + i + '" aria-label="x">' + J.icon('x') + '</button></li>';
       }).join('') + '</ul>' : '';
       $$('[data-rd]', box).forEach(function (b) { b.onclick = function () { docs.splice(+b.dataset.rd, 1); drawDocs(); }; });
