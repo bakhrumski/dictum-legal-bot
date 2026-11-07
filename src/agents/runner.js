@@ -1,6 +1,8 @@
 'use strict';
 
 const { pool } = require('../database/db');
+const privacy = require('../privacy/crypto');
+const traceAad = (requestId, agentType) => `agent_traces:${requestId}:${agentType}`;
 
 /**
  * Agent Runner — Core orchestrator for all AI agents.
@@ -67,8 +69,9 @@ async function runAgent(agentType, requestId, input, meta = {}) {
       [
         requestId,
         agentType,
-        (meta.inputSummary || '').substring(0, 500),
-        JSON.stringify(output),
+        // sealed at rest (data protection E2b), bound to the request and the agent
+        privacy.seal((meta.inputSummary || '').substring(0, 500), traceAad(requestId, agentType)),
+        JSON.stringify(privacy.sealJson(output, traceAad(requestId, agentType))),
         JSON.stringify(meta.sources || []),
         provider,
         durationMs,
@@ -98,7 +101,8 @@ async function getTraces(requestId) {
      FROM agent_traces WHERE request_id = $1 ORDER BY created_at DESC`,
     [requestId]
   );
-  return result.rows;
+  return result.rows.map(r => ({ ...r, input_summary: privacy.open(r.input_summary, traceAad(requestId, r.agent_type)),
+    output: privacy.openJson(r.output, traceAad(requestId, r.agent_type)) }));
 }
 
 /**
@@ -111,7 +115,8 @@ async function getLatestTrace(requestId, agentType) {
      ORDER BY created_at DESC LIMIT 1`,
     [requestId, agentType]
   );
-  return result.rows[0] || null;
+  const r = result.rows[0];
+  return r ? { ...r, output: privacy.openJson(r.output, traceAad(requestId, agentType)) } : null;
 }
 
 module.exports = { initRunner, runAgent, getTraces, getLatestTrace };

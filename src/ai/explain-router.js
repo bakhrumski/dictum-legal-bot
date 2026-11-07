@@ -41,7 +41,9 @@ function routing(env = process.env) {
  * callDefault is the previous route (callCheapAI) for EXPLAIN_PROVIDER=default.
  */
 function createExplainAI(deps) {
-  const { usageLedger, modelPricing, deepseek, callOpenAI, paidAllowed, spendAllowed = paidAllowed, lastResort, callDefault, log = console, testModel = () => null } = deps;
+  const { usageLedger, modelPricing, deepseek, callOpenAI, paidAllowed, spendAllowed = paidAllowed, lastResort, callDefault, log = console, testModel = () => null,
+    // the person's "not to DeepSeek" choice (src/privacy/provider-choice.js): the default route, which skips it too
+    deepseekAllowed = async () => true } = deps;
   return async function callExplainAI(messages, options = {}) {
     const cfg = routing();
     // a master's own test model (src/ai/test-model.js): through callOpenAI,
@@ -52,7 +54,7 @@ function createExplainAI(deps) {
       const halved = /^(deepseek|zai)\//u.test(tm);
       return callOpenAI(messages, { ...options, model: tm, lane: 'cheap', maxTokens: halved ? Math.round(cfg.deepseekMaxTokens / 2) : cfg.fallbackMaxTokens, useSearch: false });
     }
-    if (cfg.provider !== 'deepseek') return callDefault(messages, options);
+    if (cfg.provider !== 'deepseek' || !(await deepseekAllowed())) return callDefault(messages, options);
     return usageLedger.withChain(async () => {
       // the same daily paid-spend ceiling as every paid model
       if (!(await spendAllowed())) return lastResort(messages, options);

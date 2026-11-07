@@ -20,6 +20,10 @@ const confirm = require('./telegram-confirm');
 const { requireSameOrigin } = require('./same-origin');
 const { startSession } = require('./login-routes');
 
+// Where a signed-in user goes (APP_HOME=/app/ → new app shell; it shows the plan
+// choice itself, so a new account goes there too instead of /tariff.html).
+const APP_HOME = /^\/[\w\-./]*$/u.test(process.env.APP_HOME || '') ? process.env.APP_HOME : null;
+
 function mountTelegramAuthRoutes(app, { pool, loginSessions, regSessions, logAudit = () => {}, authBotUsername = 'juristAI_registration_bot' }) {
   const storeOf = mode => (mode === 'register' ? regSessions : mode === 'login' ? loginSessions : null);
 
@@ -46,7 +50,7 @@ function mountTelegramAuthRoutes(app, { pool, loginSessions, regSessions, logAud
       if (!row) return res.status(404).json({ error: 'Bu Telegram hisob bilan ro\'yxatdan o\'tilmagan. Iltimos, avval ro\'yxatdan o\'ting.' });
       await startSession(req, row);
       logAudit(req, 'login.telegram_code', 'admin', row.id, row.id);
-      res.json({ success: true, redirect: '/dashboard.html' });
+      res.json({ success: true, redirect: APP_HOME || '/dashboard.html' });
     } catch (err) {
       console.error('[login/telegram-otp]', err.message);
       res.status(500).json({ error: 'Kirishda xatolik' });
@@ -68,7 +72,7 @@ function mountTelegramAuthRoutes(app, { pool, loginSessions, regSessions, logAud
       if (existing.rows.length > 0) {
         await startSession(req, existing.rows[0]);
         logAudit(req, 'login.telegram_code', 'admin', existing.rows[0].id, existing.rows[0].id);
-        return res.json({ success: true, redirect: '/dashboard.html' });
+        return res.json({ success: true, redirect: APP_HOME || '/dashboard.html' });
       }
 
       // Sinov abuse: same device fingerprint
@@ -96,9 +100,11 @@ function mountTelegramAuthRoutes(app, { pool, loginSessions, regSessions, logAud
           parseInt(tgUserId, 10), BigInt(tgUserId), dfp || null]
       );
       const admin = insert.rows[0];
+      // the CustDev agent the client came through (?ref= cookie, or ref_ in the bot), the first one only (src/sales/agents.js)
+      await require('../sales/agents').claimAtRegistration(pool, { adminId: admin.id, refCode: require('../sales/routes').refFromCookie(req), telegramUserId: tgUserId });
       await startSession(req, admin);
       logAudit(req, 'register.telegram_code', 'admin', admin.id, admin.id);
-      res.json({ success: true, role: admin.role, fullName: admin.full_name, redirect: '/tariff.html' });
+      res.json({ success: true, role: admin.role, fullName: admin.full_name, redirect: APP_HOME || '/tariff.html' });
     } catch (err) {
       console.error('[register/telegram-otp]', err.message);
       res.status(500).json({ error: 'Ro\'yxatdan o\'tishda xatolik' });

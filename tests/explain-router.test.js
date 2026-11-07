@@ -153,7 +153,11 @@ const fakeLedger = () => {
     const fs = require('fs'), path = require('path');
     const src = fs.readFileSync(path.join(__dirname, '../src/api/server.js'), 'utf8');
     const body = name => { const i = src.indexOf(`async function ${name}(`); return src.slice(i, src.indexOf('\n}\n', i)); };
-    for (const fn of ['callOpenAI', 'callOpenAIStream']) {
+    // callOpenAI hides identifiers first (src/privacy/redact.js, E3), then runs the chain
+    assert.ok(/withRedaction\(messages, options, \(msgs, opts\) => callOpenAIChain\(msgs, opts\)\)/u.test(body('callOpenAI')), 'callOpenAI: redaction, then the chain');
+    // the stream too (E4): pieces restored as they come
+    assert.ok(/withRedaction\.stream\(messages, options, onToken, \(m, o, t\) => callOpenAIStreamChain\(m, o, t\)\)/u.test(body('callOpenAIStream')), 'callOpenAIStream: redaction, then the chain');
+    for (const fn of ['callOpenAIChain', 'callOpenAIStreamChain']) {
       const b = body(fn);
       assert.ok(b.indexOf('tryDeepSeek(') > 0 && b.indexOf('tryDeepSeek(') < b.indexOf('tryVoiceLab('), `${fn}: DeepSeek first`);
       assert.ok(/openaiModelFor\(options\)/u.test(b), `${fn}: the lane's GPT-6 after it`);

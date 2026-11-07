@@ -21,11 +21,48 @@ const LEX_SEARCH_URL = 'https://lex.uz/search/nat';
 const MAX_DOCS_TO_FETCH = 2;
 const MAX_EXCERPT_CHARS = 4000;
 const SEARCH_TIMEOUT_MS = 15000;
+// One document read (a historical version followed to the current one
+// included). httpGet's own socket timeout is 60 s, and the candidates of one
+// search are read one after another, so without this a slow lex.uz alone
+// could spend a request's whole AI_REQUEST_MAX_MS (2026-10-22: a Telegram
+// answer used ~29 s of AI calls and still hit the 120 s limit before its
+// claim check). The read itself is not cancelled - it may still fill the
+// cache - it is only no longer waited for.
+const DOC_FETCH_MAX_MS = () => Math.max(1000, Number(process.env.LEX_FETCH_MAX_MS) || 30000);
 const DOCUMENT_CACHE_TTL_MS = Math.max(
   60_000,
   Number.parseInt(process.env.LEX_DOCUMENT_CACHE_TTL_MS || String(24 * 60 * 60 * 1000), 10) || 24 * 60 * 60 * 1000
 );
-const DOCUMENT_CACHE_LIMIT = 128;
+const DOCUMENT_CACHE_LIMIT = Math.max(8, Number(process.env.LEX_DOCUMENT_CACHE_LIMIT) || 64);
+// The cache also holds at most this many characters of act text (the Civil
+// Code alone is 685 000): the oldest acts leave first.
+const DOCUMENT_CACHE_MAX_CHARS = () => Math.max(500000, Number(process.env.LEX_DOCUMENT_CACHE_MAX_CHARS) || 8000000);
+// A lex.uz page larger than this is not read (2026-10-26: an 8 MB decree page
+// took the instance down; the largest code, the Tax Code, is 6 MB).
+// That limit is for a code or law (found by its form, the topic registry or
+// its address); any other search result is read up to LEX_PAGE_MAX_KB_OTHER
+// (2 MB): the multi-MB pages a plain search brings are decrees with long
+// annexes, and each one read costs ~100 MB outside the heap (measured).
+const PAGE_MAX_BYTES = () => Math.max(256, Number(process.env.LEX_PAGE_MAX_KB) || 7000) * 1024;
+const PAGE_MAX_BYTES_OTHER = () => Math.max(256, Number(process.env.LEX_PAGE_MAX_KB_OTHER) || 2000) * 1024;
+let cachedChars = 0;
+// Documents read at once, across every search of every request (2026-10-24:
+// with #477's queries finding acts, one question's 22 searches read dozens of
+// 0.3-1 MB pages in parallel and the process went from 57 to 515 MB - the
+// Render instance has 512 MB, the answer never came). A read waits for a slot.
+// one page at a time since 2026-10-26 (two large pages at once, plus the cache, went over 512 MB)
+const FETCH_SLOTS = () => Math.max(1, Number(process.env.LEX_FETCH_CONCURRENCY) || 1);
+let activeFetches = 0;
+const fetchQueue = [];
+function acquireFetchSlot() {
+  if (activeFetches < FETCH_SLOTS()) { activeFetches++; return Promise.resolve(); }
+  return new Promise(resolve => fetchQueue.push(resolve));
+}
+function releaseFetchSlot() {
+  const next = fetchQueue.shift();
+  if (next) next();
+  else activeFetches = Math.max(0, activeFetches - 1);
+}
 const documentCache = new Map();
 const documentInFlight = new Map();
 const SEARCH_PAGE_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -64,7 +101,18 @@ async function searchLexUz(query, opts = {}) {
     // known acts by address (a named special status), inspected first and
     // kept only when the page's own title matches
     pinnedDocs = [],
+    // epoch ms: no read starts after it, and a running one is waited for only
+    // until it; what was found by then is returned
+    deadline = 0,
+    // 'code' | 'law': only that act form (ACT_FORMS)
+    actForm = '',
+    // { left: n } shared by every search of one round: lex.uz pages not in
+    // the cache it may still read (the cache and the slots bound memory over
+    // time, this bounds one question)
+    readBudget = null,
   } = opts;
+  const startedAt = Date.now();
+  const leftMs = () => (deadline ? deadline - Date.now() : Infinity);
   const effectiveScoreText = [scoreText || query, TOPIC_SCORE_HINTS[String(topic || '').toLowerCase()] || '']
     .filter(Boolean)
     .join(' ');
@@ -72,17 +120,33 @@ async function searchLexUz(query, opts = {}) {
   if (!query || query.trim().length < 3) return [];
 
   const requestedActs = extractActIdentifiers(query);
-  const searchUrl = buildLexSearchUrl(query);
-  console.log(`[LEX-LIVE] Searching lex.uz: "${query.substring(0, 60)}"`);
+  const searchUrl = buildLexSearchUrl(query, { actForm });
+  console.log(`[LEX-LIVE] Searching lex.uz${actForm ? ` (${actForm})` : ''}: "${query.substring(0, 60)}"`);
 
   let html = '';
   try {
-    html = await fetchCachedSearchPage(searchUrl);
+    if (leftMs() <= 0) throw new Error('time limit reached before the search');
+    html = await within(fetchCachedSearchPage(searchUrl), Math.min(SEARCH_TIMEOUT_MS, leftMs()));
   } catch (err) {
     console.warn(`[LEX-LIVE] Search page fetch failed: ${err.message}`);
   }
 
-  const searchCandidates = html ? parseSearchCandidates(html) : [];
+  let searchCandidates = html ? parseSearchCandidates(html) : [];
+  if (searchCandidates.length === 0 && html && !requestedActs.length) {
+    for (const shorter of relaxedQueries(query)) {
+      if (leftMs() <= 0) break;
+      try {
+        const more = parseSearchCandidates(await within(fetchCachedSearchPage(buildLexSearchUrl(shorter, { actForm })), Math.min(SEARCH_TIMEOUT_MS, leftMs())));
+        if (more.length) {
+          console.log(`[LEX-LIVE] Nothing for the whole query; "${shorter}" found ${more.length}`);
+          searchCandidates = more;
+          break;
+        }
+      } catch (err) {
+        console.warn(`[LEX-LIVE] Search page fetch failed: ${err.message}`);
+      }
+    }
+  }
   if (searchCandidates.length === 0) console.log('[LEX-LIVE] No document links found in search results');
 
   // Search results on lex.uz are often ordered by publication date rather
@@ -139,10 +203,23 @@ async function searchLexUz(query, opts = {}) {
       console.warn(`[LEX-LIVE] Candidate inspection capped at ${inspectionLimit}`);
       break;
     }
-    inspectedCandidates += 1;
+    if (leftMs() <= 0) {
+      console.warn(`[LEX-LIVE] Time limit reached, ${results.length} documents kept`);
+      break;
+    }
     const docUrl = candidate.url;
+    if (readBudget && !isLexDocumentCached(docUrl)) {
+      if (readBudget.left <= 0) {
+        console.warn(`[LEX-LIVE] Round read limit reached, ${results.length} documents kept`);
+        break;
+      }
+      readBudget.left -= 1;
+    }
+    inspectedCandidates += 1;
     try {
-      const doc = await fetchCachedLexDocument(docUrl);
+      // the read has its own limit (fetchCachedLexDocument); here only the round's deadline
+      const big = actForm || candidate.source === 'lex.uz-registry' || candidate.source === 'lex.uz-pinned' || candidate.exactIdentityMatch;
+      const doc = await within(fetchCachedLexDocument(docUrl, { maxBytes: big ? PAGE_MAX_BYTES() : PAGE_MAX_BYTES_OTHER() }), leftMs());
       if (!doc.body || doc.body.trim().length === 0) continue;
 
       // Skip if still a historical version after the auto-follow attempt
@@ -165,7 +242,7 @@ async function searchLexUz(query, opts = {}) {
         continue;
       }
 
-      const excerpt = extractRelevantSections(doc.body, effectiveScoreText, maxChars);
+      const excerpt = extractRelevantSections(doc.body, effectiveScoreText, maxChars, { keyLine: candidate.source === 'lex.uz-pinned' || candidate.exactIdentityMatch === true });
       // A search-row title is used to verify document identity, but it must
       // not automatically make an unrelated result relevant. The sole safe
       // exception is an exact match between the requested act number and the
@@ -202,8 +279,18 @@ async function searchLexUz(query, opts = {}) {
     }
   }
 
-  console.log(`[LEX-LIVE] Returning ${results.length} documents from lex.uz`);
+  console.log(`[LEX-LIVE] Returning ${results.length} documents from lex.uz (${Date.now() - startedAt} ms)`);
   return results;
+}
+
+/** Waits for a lex.uz read at most ms; the read itself goes on. */
+function within(promise, ms) {
+  if (!Number.isFinite(ms)) return promise;
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`lex.uz time limit ${Math.round(ms)} ms`)), Math.max(0, ms)); }),
+  ]).finally(() => clearTimeout(timer));
 }
 
 /**
@@ -224,10 +311,34 @@ function parseSearchResults(html) {
  * and Cabinet decisions are Qaror (3972). Issuing-body/type verification is
  * still performed against each result row's own badge.
  */
-function buildLexSearchUrl(query = '') {
+// lex.uz's own form ids (its search page's "Hujjat turi" list): a code or a
+// law is found among a few acts, where the plain search lists the newest of
+// hundreds (2026-10-22: "pudratchining javobgarligi" with the code filter
+// returned the Civil Code, part two, alone).
+const ACT_FORMS = Object.freeze({ code: '3964', law: '3968' });
+// lex.uz refuses a text query over 100 characters
+const MAX_QUERY_CHARS = 100;
+
+function capQuery(value = '') {
+  const text = String(value || '').replace(/\s+/gu, ' ').trim();
+  if (text.length <= MAX_QUERY_CHARS) return text;
+  const cut = text.slice(0, MAX_QUERY_CHARS + 1);
+  const space = cut.lastIndexOf(' ');
+  return (space > 0 ? cut.slice(0, space) : cut.slice(0, MAX_QUERY_CHARS)).trim();
+}
+
+/**
+ * Text queries search acts in force only (status=Y: a repealed or historical
+ * page is skipped after reading anyway) and, with actForm, one act form.
+ */
+function buildLexSearchUrl(query = '', { actForm = '' } = {}) {
   const rawQuery = String(query || '').trim();
   const exact = extractActIdentifiers(rawQuery)[0];
-  if (!exact) return `${LEX_SEARCH_URL}?Query=${encodeURIComponent(rawQuery)}`;
+  if (!exact) {
+    const params = new URLSearchParams({ Query: capQuery(rawQuery), status: 'Y' });
+    if (ACT_FORMS[actForm]) params.set('form_id', ACT_FORMS[actForm]);
+    return `${LEX_SEARCH_URL}?${params.toString()}`;
+  }
 
   const formId = exact.prefix === 'PF'
     ? '3973'
@@ -239,6 +350,23 @@ function buildLexSearchUrl(query = '') {
   });
   if (formId) params.set('form_id', formId);
   return `${LEX_SEARCH_URL}?${params.toString()}`;
+}
+
+/**
+ * Shorter forms of a query that found nothing: lex.uz wants every word near
+ * the others, so a long phrase finds no act where two of its words would
+ * (2026-10-22: "avans to'lovini qaytarish majburiyati" 0, "avans to'lovini"
+ * 17). The first and the last two words, at most two more searches.
+ */
+const CONNECTORS = new Set(["bo'yicha", 'boʻyicha', 'буйича', 'бўйича', 'tomonidan', 'томонидан', 'va', 'ва', 'uchun', 'учун', 'bilan', 'билан', 'hamda', 'ҳамда', 'yoki', 'ёки', 'haqida', 'ҳақида']);
+
+function relaxedQueries(query = '') {
+  const words = String(query || '').replace(/[,.;:!?«»"“”()]/gu, ' ').split(/\s+/u)
+    .filter(w => w && !CONNECTORS.has(w.toLocaleLowerCase('uz').replace(/[ʻ‘’`]/gu, "'")));
+  if (words.length < 2) return [];
+  const joined = words.join(' ');
+  const out = words.length === 2 ? [joined] : [words.slice(0, 2).join(' '), words.slice(-2).join(' ')];
+  return Array.from(new Set(out)).filter(q => q.length >= 3 && q !== query);
 }
 
 function normalizeSearchText(value = '') {
@@ -400,18 +528,44 @@ async function fetchCachedSearchPage(searchUrl) {
   return pending;
 }
 
-async function fetchCachedLexDocument(url) {
+function isLexDocumentCached(url) {
+  const key = canonicalLexUrl(url);
+  const cached = documentCache.get(key);
+  return !!(cached && cached.expiresAt > Date.now()) || documentInFlight.has(key);
+}
+
+async function fetchCachedLexDocument(url, { maxBytes = PAGE_MAX_BYTES() } = {}) {
   const key = canonicalLexUrl(url);
   const cached = documentCache.get(key);
   if (cached && cached.expiresAt > Date.now()) return cached.document;
-  if (cached) documentCache.delete(key);
+  if (cached) { cachedChars -= String((cached.document || {}).body || '').length; documentCache.delete(key); }
   if (documentInFlight.has(key)) return documentInFlight.get(key);
 
-  const pending = fetchLexDocument(key).then((document) => {
-    if (documentCache.size >= DOCUMENT_CACHE_LIMIT) {
+  // the slot is held until the read itself ends; a read past LEX_FETCH_MAX_MS
+  // (from its start, not from the wait for a slot) is cancelled, so a page
+  // that never finishes cannot hold the only slot (2026-10-26)
+  const pending = acquireFetchSlot().then(() => {
+    const controller = new AbortController();
+    let released = false;
+    const release = () => { if (!released) { released = true; releaseFetchSlot(); } };
+    const read = Promise.resolve().then(() => fetchLexDocument(key, { maxBytes, signal: controller.signal }));
+    read.then(release, release);
+    return within(read, DOC_FETCH_MAX_MS()).catch((err) => {
+      controller.abort();
+      release();
+      throw err;
+    });
+  }).then((full) => {
+    // the page's HTML (0.3-1 MB) is not kept: live search reads the text only;
+    // ingest reads lex.uz itself (fetchLexDocument), never this cache
+    const document = { title: full.title, body: full.body, metadata: full.metadata };
+    const size = String(document.body || '').length;
+    while (documentCache.size && (documentCache.size >= DOCUMENT_CACHE_LIMIT || cachedChars + size > DOCUMENT_CACHE_MAX_CHARS())) {
       const oldest = documentCache.keys().next().value;
-      if (oldest) documentCache.delete(oldest);
+      cachedChars -= String((documentCache.get(oldest).document || {}).body || '').length;
+      documentCache.delete(oldest);
     }
+    cachedChars += size;
     documentCache.set(key, {
       document,
       expiresAt: Date.now() + DOCUMENT_CACHE_TTL_MS,
@@ -426,6 +580,7 @@ async function fetchCachedLexDocument(url) {
 
 function clearLexDocumentCache() {
   documentCache.clear();
+  cachedChars = 0;
   documentInFlight.clear();
   searchPageCache.clear();
   searchPageInFlight.clear();
@@ -486,7 +641,11 @@ function relevanceScore(value = '', query = '') {
  * Extract the most relevant sections from a document body given a query.
  * Splits by article boundaries, scores by keyword overlap, returns best sections.
  */
-function extractRelevantSections(body, query, maxChars) {
+// keyLine: put the act's best-answering line first (findKeyLine) - only for an
+// act the server identified itself (pinned for a named status, or the number
+// asked): on a general question the line most like the words can mislead
+// (Labour Code: "may withhold pay during a strike" for unpaid wages).
+function extractRelevantSections(body, query, maxChars, { keyLine = false } = {}) {
   const keywords = (query || '')
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')
@@ -569,7 +728,61 @@ function extractRelevantSections(body, query, maxChars) {
     result += (result ? '\n\n' : '') + text;
   }
 
-  return result || body.substring(0, maxChars);
+  const excerpt = result || body.substring(0, maxChars);
+  // the line that answers best goes first, word for word, with its unit
+  const key = keyLine ? findKeyLine(body, query) : null;
+  if (!key) return excerpt;
+  const label = `SAVOLGA ENG YAQIN QATOR${key.unit ? ` (${key.unit})` : ''} [server so'zlar bo'yicha tanlagan - o'qing va tekshiring]: ${key.line}`;
+  const rest = excerpt.length + label.length + 2 > maxChars ? excerpt.slice(0, Math.max(0, maxChars - label.length - 2)) : excerpt;
+  return `${label}\n\n${rest}`;
+}
+
+// A line that grants an exception or a right ("...olmasdan turib ... jalb
+// etish", "talab qilinmaydi", "ozod etiladi", "huquqiga ega") answers a
+// question about a requirement more directly than the requirement itself.
+const EXCEPTION_MARK = /olmasdan|olinmasdan|talab\s+qilinmaydi|talab\s+etilmaydi|qilinmaydi|ozod\s+et|ozod\s+qilin|istisno|mustasno|huquqiga\s+ega|(?:^|\s)без\s|не\s+требуется|освобожда|за\s+исключением|вправе/iu;
+
+// words of any sentence, not of the matter ("olib", "uchun" matched a customs
+// line in VMQ-589); compared by their 5-letter start
+const KEY_STOP = new Set(['uchun', 'bilan', 'haqid', 'kerak', 'olib', 'qanda', 'nima', 'mumki', 'menga', 'menin',
+  'bizni', 'ularn', 'bunda', 'shuni', 'amalg', 'oshir', 'tartib', 'belgi', 'boyic', 'respu', 'ozbek', 'tomon', 'etish', 'qilis',
+  'mavju', 'hamda', 'yoki', 'agar', 'ammo', 'lekin', 'kelis', 'bolad', 'bolsa', 'beril', 'chun', 'для', 'когда', 'нужно', 'можно']);
+const keyRoots = (text = '') => Array.from(new Set(String(text || '')
+  .normalize('NFKC').toLocaleLowerCase('uz')
+  .replace(/[\u02bb\u02bc\u2018\u2019`']/gu, '')
+  .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+  .split(/\s+/u)
+  .filter(w => w.length >= 4)
+  .map(w => w.slice(0, 5))
+  .filter(r => !KEY_STOP.has(r))));
+
+/**
+ * The act's one line that answers the question best (2026-10-27: an IT Park
+ * answer cited band 5 of VMQ-589 - the Ministry shall issue confirmations -
+ * and said no exemption exists, while band 17, deep in the excerpt among the
+ * tax privileges, lets a resident hire foreign specialists without one). A
+ * line counts its distinct question roots (5-letter starts), and an exception
+ * or a right is worth two more; at least two roots, else none. Returned with
+ * its band or article number. No AI; it points, it does not judge.
+ */
+function findKeyLine(body = '', query = '') {
+  const qRoots = new Set(keyRoots(query));
+  if (qRoots.size < 2) return null;
+  let best = null;
+  let unit = '';
+  let unitRoots = [];
+  for (const raw of String(body || '').split(/\n+/u)) {
+    const line = raw.trim();
+    const head = line.match(/^(\d{1,4})(?:[\u2070\u00B9\u00B2\u00B3\u2074-\u2079]*)\s*[-.]\s*(modda)?/u);
+    // a list item reads with its unit's opening line ("17. Texnopark rezidenti:")
+    if (head) { unit = head[2] ? `${head[1]}-modda` : `${head[1]}-band`; unitRoots = keyRoots(line.slice(0, 200)); }
+    if (line.length < 20 || line.length > 600) continue;
+    const hits = new Set([...keyRoots(line), ...unitRoots].filter(r => qRoots.has(r))).size;
+    if (hits < 2) continue;
+    const score = hits + (EXCEPTION_MARK.test(line) ? 2 : 0);
+    if (!best || score > best.score) best = { line, unit, score, hits };
+  }
+  return best;
 }
 
 function inferExcerptProvision(excerpt = '') {
@@ -604,6 +817,8 @@ function formatLexSearchResults(results, language = 'uz') {
 
 module.exports = {
   searchLexUz,
+  relaxedQueries,
+  ACT_FORMS,
   titleMostlyMatches,
   identityMatches,
   buildLexSearchUrl,
@@ -614,7 +829,10 @@ module.exports = {
   extractActIdentifiers,
   canonicalLexUrl,
   extractRelevantSections,
+  findKeyLine,
+  EXCEPTION_MARK,
   inferExcerptProvision,
   fetchCachedLexDocument,
+  isLexDocumentCached,
   clearLexDocumentCache,
 };

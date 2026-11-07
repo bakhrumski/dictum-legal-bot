@@ -43,7 +43,10 @@ const LEX_BASE = 'https://lex.uz';
  * Make an HTTP(S) GET request using Node built-in modules (no global fetch needed).
  * Follows up to 5 redirects.
  */
-function httpGet(url, maxRedirects = 5, signal = null) {
+// maxBytes: a page larger than this is not read at all - the download stops
+// there (2026-10-26: an 8 MB decree page, read while the live search held
+// other pages, took the 512 MB instance down). 0 = no limit (ingest).
+function httpGet(url, maxRedirects = 5, signal = null, maxBytes = 0) {
   return new Promise((resolve, reject) => {
     if (signal && signal.aborted) {
       const e = new Error('Aborted'); e.name = 'AbortError'; return reject(e);
@@ -63,7 +66,7 @@ function httpGet(url, maxRedirects = 5, signal = null) {
         const next = res.headers.location.startsWith('http')
           ? res.headers.location
           : new URL(res.headers.location, url).href;
-        return httpGet(next, maxRedirects - 1, signal).then(resolve, reject);
+        return httpGet(next, maxRedirects - 1, signal, maxBytes).then(resolve, reject);
       }
 
       if (res.statusCode !== 200) {
@@ -71,8 +74,23 @@ function httpGet(url, maxRedirects = 5, signal = null) {
         return reject(new Error(`HTTP ${res.statusCode} for ${url}`));
       }
 
+      const declared = Number(res.headers['content-length']) || 0;
+      if (maxBytes > 0 && declared > maxBytes) {
+        res.destroy();
+        return reject(Object.assign(new Error(`page too large: ${Math.round(declared / 1024)} KB > ${Math.round(maxBytes / 1024)} KB`), { code: 'PAGE_TOO_LARGE' }));
+      }
       const chunks = [];
-      res.on('data', (chunk) => chunks.push(chunk));
+      let received = 0;
+      res.on('data', (chunk) => {
+        received += chunk.length;
+        if (maxBytes > 0 && received > maxBytes) {
+          res.destroy();
+          req.destroy();
+          reject(Object.assign(new Error(`page too large: over ${Math.round(maxBytes / 1024)} KB`), { code: 'PAGE_TOO_LARGE' }));
+          return;
+        }
+        chunks.push(chunk);
+      });
       res.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
       res.on('error', reject);
     });
@@ -95,18 +113,28 @@ function httpGet(url, maxRedirects = 5, signal = null) {
  * @param {string} urlOrId - full URL or numeric doc ID (e.g. "145261" or "https://lex.uz/docs/145261")
  * @returns {Promise<{ title: string, body: string, metadata: object }>}
  */
+// The citator (S3, src/citator/store.js) learns an act's status and changes
+// from every page read here; the server sets it, scripts read without it.
+let pageObserver = null;
+function setPageObserver(fn) { pageObserver = typeof fn === 'function' ? fn : null; }
+function observePage(url, html, parsed) {
+  if (!pageObserver) return;
+  try { pageObserver(url, html, parsed); } catch (e) { console.warn('[FETCH-LEX] page observer:', e.message); }
+}
+
 async function fetchLexDocument(urlOrId, opts = {}) {
-  const { signal } = opts;
+  const { signal, maxBytes = 0 } = opts;
   const url = urlOrId.startsWith('http')
     ? urlOrId
     : `${LEX_BASE}/docs/${urlOrId}`;
 
   console.log(`[FETCH-LEX] Fetching: ${url}`);
 
-  const html = await httpGet(url, 5, signal);
+  const html = await httpGet(url, 5, signal, maxBytes);
   console.log(`[FETCH-LEX] Downloaded ${(html.length / 1024).toFixed(0)} KB`);
 
   const parsed = parseLexHtml(html, url);
+  observePage(url, html, parsed);
 
   // ── Auto-follow to current version if lex.uz is showing a date-locked snapshot ──
   // lex.uz shows "Hujjat DD.MM.YYYY sanasi holatiga" banner with
@@ -116,8 +144,9 @@ async function fetchLexDocument(urlOrId, opts = {}) {
     const currentUrl = parsed.metadata.current_version_url;
     console.log(`[FETCH-LEX] Historical version detected at ${url} → fetching current: ${currentUrl}`);
     try {
-      const currentHtml = await httpGet(currentUrl, 5, signal);
+      const currentHtml = await httpGet(currentUrl, 5, signal, maxBytes);
       const currentParsed = parseLexHtml(currentHtml, currentUrl);
+      observePage(currentUrl, currentHtml, currentParsed);
       return { ...currentParsed, rawHtml: currentHtml };
     } catch (err) {
       console.warn(`[FETCH-LEX] Could not fetch current version (${err.message}), using historical`);
@@ -529,4 +558,4 @@ function formatForIngestion(doc, opts = {}) {
   return `${header}\n\n${doc.body}`;
 }
 
-module.exports = { fetchLexDocument, parseLexHtml, formatForIngestion, extractTitleMetadata, httpGet, inferDocLanguage };
+module.exports = { fetchLexDocument, parseLexHtml, formatForIngestion, extractTitleMetadata, httpGet, inferDocLanguage, setPageObserver };

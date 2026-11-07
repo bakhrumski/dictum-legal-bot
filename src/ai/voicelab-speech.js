@@ -80,7 +80,8 @@ async function transcribe(buffer, options = {}) {
 }
 
 async function transcribeOnce(buffer, { filename = 'voice.ogg', contentType = 'audio/ogg', language, pollMs = 1500, maxWaitMs = 60000 } = {}, call) {
-  const lang = language || process.env.VOICELAB_STT_LANGUAGE || 'uz';
+  // 'auto' (the recordings page) is not a VoiceLab language: Uzbek unless configured
+  const lang = (language && language !== 'auto') ? language : (process.env.VOICELAB_STT_LANGUAGE || 'uz');
   let upload = { data: buffer, filename, contentType };
   try {
     upload = { data: await toSpeechWav(buffer), filename: 'voice.wav', contentType: 'audio/wav' };

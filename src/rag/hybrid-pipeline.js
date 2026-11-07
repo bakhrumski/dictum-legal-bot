@@ -161,7 +161,8 @@ function estimateTokens(text) {
 async function callOpenAIModel(model, messages, { temperature = 0.2, maxTokens = DEFAULT_MAX_OUTPUT_TOKENS, responseFormat = null } = {}) {
   // DeepSeek first; on a failure the OpenAI request below runs (its failed
   // attempt is a ledger row of its own)
-  if (deepseek.routes(model)) {
+  // the person's "not to DeepSeek" choice (E6b, src/privacy/provider-choice.js)
+  if (deepseek.routes(model) && await require('../privacy/provider-choice').deepseekAllowed(usageLedger.current())) {
     const started = Date.now();
     const dsLabel = `deepseek/${deepseek.modelFor(model)}`;
     try {
@@ -340,7 +341,17 @@ async function callModel(model, messages, opts) {
  * Try each model in chain. Falls back on 404 / model-not-found, on missing API key,
  * and on transient 5xx. Bails on the first successful call.
  */
-async function callWithFallback(chain, messages, opts = {}) {
+// Data protection E4 (src/privacy/redact.js): identifiers hidden before the
+// call and put back in its text, under the same rules as callOpenAI - this
+// pipeline serves /api/rag/*, so only with REDACT_LEGAL_CHAT=on or a
+// master's X-JAI-Redact for the request.
+const withRedaction = require('../privacy/redact').createWrapper({ current: () => usageLedger.current() });
+
+function callWithFallback(chain, messages, opts = {}) {
+  return withRedaction(messages, opts, (msgs, o) => callWithFallbackRaw(chain, msgs, o));
+}
+
+async function callWithFallbackRaw(chain, messages, opts = {}) {
   checkBudget();
   const errors = [];
   for (const model of chain) {

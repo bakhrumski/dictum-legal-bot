@@ -7,7 +7,7 @@ const { pool } = require('../database/db');
 const { verificationTokens, regSessions, loginSessions } = require('../verification-store');
 
 let regBot = null;
-const OTP_BOT_USERNAME = 'juristAI_registration_bot';
+const { AUTH_BOT_USERNAME: OTP_BOT_USERNAME } = require('../config/bot-usernames');
 
 function startRegBot() {
   const token = process.env.REG_BOT_TOKEN;

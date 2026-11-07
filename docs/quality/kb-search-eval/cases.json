@@ -1,0 +1,40 @@
+{
+  "note": "K2b firm search, synthetic documents and queries. `expect` is the document a lawyer would want first; `kind` says what the query tests. A synonym query is expected to MISS (the search is by word root, design K5 covers meaning). Not reviewed by a lawyer.",
+  "reviewed": false,
+  "documents": [
+    { "id": "supply", "name": "Yetkazib berish shartnomasi", "text": "1. Shartnoma predmeti\nSotuvchi xaridorga tovarni yetkazib beradi.\n\n2. Narx va to'lov\n2.1. To'lov tovar qabul qilingandan keyin 10 bank kuni ichida amalga oshiriladi.\n\n=== PAGE 2 ===\n3. Javobgarlik\n3.1. To'lov kechiktirilsa, xaridor har bir kechiktirilgan kun uchun 0,1 foiz miqdorida penya to'laydi.\n3.2. Penyaning umumiy miqdori shartnoma bahosining 10 foizidan oshmaydi." },
+    { "id": "lease", "name": "Bino ijarasi shartnomasi", "text": "1. Ijaraga beruvchi binoni ijarachiga vaqtincha egalik qilish va foydalanish uchun beradi.\n2. Ijara muddati bir yil, tomonlarning kelishuvi bilan uzaytirilishi mumkin.\n3. Ijara haqi har oyning 5-sanasigacha to'lanadi.\n4. Ijarachi binoni ijaraga beruvchining yozma roziligisiz qayta ijaraga bera olmaydi." },
+    { "id": "labor", "name": "Mehnat shartnomasi (namuna)", "text": "1. Xodim bosh yurist lavozimiga qabul qilinadi.\n2. Sinov muddati uch oy.\n3. Ish vaqti haftasiga 40 soat.\n4. Mehnat shartnomasini bekor qilishda xodim ikki hafta oldin yozma ogohlantiriladi.\n5. Har yili 21 ish kunidan kam bo'lmagan mehnat ta'tili beriladi." },
+    { "id": "nda", "name": "Maxfiylik kelishuvi", "text": "1. Tomonlar bir-biridan olingan tijorat sirini uchinchi shaxslarga oshkor qilmaydi.\n2. Maxfiylik majburiyati kelishuv tugaganidan keyin uch yil davomida amal qiladi.\n3. Oshkor qilgan tomon yetkazilgan zararni to'liq qoplaydi." },
+    { "id": "loan", "name": "Qarz shartnomasi", "text": "1. Qarz beruvchi qarz oluvchiga 50 000 000 so'm qarz beradi.\n2. Qarz 2027 yil 1 iyungacha qaytariladi.\n3. Qarz muddatida qaytarilmasa, qarz oluvchi har bir kun uchun 0,05 foiz penya to'laydi.\n4. Qarz foizsiz beriladi." },
+    { "id": "claim", "name": "Da'vo arizasi (qarz undirish)", "text": "Iqtisodiy sudga\nDa'vogar: \"Alfa\" MChJ\nJavobgar: \"Beta\" MChJ\nDa'vo summasi: 120 000 000 so'm.\n1. Javobgar yetkazib berilgan tovar haqini to'lamadi.\n2. Shartnomaning 3.1-bandiga ko'ra penya undirilishi lozim.\nSo'raymiz: asosiy qarz va penyani javobgardan undirish." },
+    { "id": "service", "name": "Xizmat ko'rsatish shartnomasi", "text": "1. Ijrochi buyurtmachiga yuridik maslahat xizmatini ko'rsatadi.\n2. Xizmat haqi oyiga 5 000 000 so'm.\n3. Ijrochi xizmatni sifatsiz ko'rsatsa, buyurtmachi to'lovni kamaytirishni talab qilishga haqli.\n4. Shartnoma har qaysi tomonning bir oy oldin yozma xabarnomasi bilan bekor qilinadi." },
+    { "id": "board", "name": "Kuzatuv kengashi qarori", "text": "1. Jamiyatning direktori etib Karimov A. tayinlansin.\n2. Direktorning vakolat muddati besh yil.\n3. Yirik bitimlar kuzatuv kengashining roziligi bilan tuziladi." },
+    { "id": "ru-supply", "name": "Договор поставки (рус)", "text": "1. Поставщик обязуется передать покупателю товар.\n2. Оплата производится в течение 10 банковских дней.\n3. За просрочку оплаты покупатель уплачивает неустойку в размере 0,1 процента за каждый день просрочки." },
+    { "id": "cyr", "name": "Ижара шартномаси (кирилл)", "text": "1. Ижарага берувчи биносини ижарачига беради.\n2. Ижара ҳақи ҳар ойнинг 10-санасигача тўланади.\n3. Ижара муддати икки йил." },
+    { "id": "policy", "name": "Ichki mehnat tartibi qoidalari", "text": "1. Ish vaqti soat 9:00 dan 18:00 gacha.\n2. Tushlik tanaffusi bir soat.\n3. Ishga kechikish uchun intizomiy jazo qo'llanilishi mumkin." },
+    { "id": "power", "name": "Ishonchnoma", "text": "Ushbu ishonchnoma bilan \"Alfa\" MChJ yuristi sudda kompaniya nomidan ish yuritish, da'vo arizasi berish va kelishuv bitimini tuzish vakolatini oladi. Ishonchnoma bir yil amal qiladi." }
+  ],
+  "queries": [
+    { "q": "penya kechiktirilgan kun", "expect": "supply", "kind": "exact words" },
+    { "q": "penyaning miqdori", "expect": "supply", "kind": "suffix" },
+    { "q": "qayta ijaraga", "expect": "lease", "kind": "exact words" },
+    { "q": "ijara haqi", "expect": "lease", "kind": "two docs share the words" },
+    { "q": "sinov muddati", "expect": "labor", "kind": "exact words" },
+    { "q": "ogohlantirish", "expect": "labor", "kind": "another form (ogohlantiriladi)" },
+    { "q": "tijorat siri", "expect": "nda", "kind": "suffix" },
+    { "q": "qarz qaytarilmasa penya", "expect": "loan", "kind": "several words" },
+    { "q": "asosiy qarz undirish", "expect": "claim", "kind": "several words" },
+    { "q": "xizmatni sifatsiz", "expect": "service", "kind": "exact words" },
+    { "q": "direktor vakolat muddati", "expect": "board", "kind": "forms" },
+    { "q": "неустойка просрочка", "expect": "ru-supply", "kind": "Russian forms" },
+    { "q": "ijara haqi", "expect": "cyr", "kind": "Latin query, Cyrillic document (expected miss: Cyrillic is not folded to Latin)" },
+    { "q": "tushlik tanaffusi", "expect": "policy", "kind": "exact words" },
+    { "q": "kelishuv bitimi", "expect": "power", "kind": "forms" },
+    { "q": "Toʻlov kechiktirilsa", "expect": "supply", "kind": "apostrophe form" },
+    { "q": "jarima kechikish", "expect": "supply", "kind": "synonym (expected miss: jarima vs penya)" },
+    { "q": "arenda", "expect": "lease", "kind": "synonym (expected miss: arenda vs ijara)" },
+    { "q": "maxfiylik majburiyati uch yil", "expect": "nda", "kind": "several words" },
+    { "q": "intizomiy jazo kechikish", "expect": "policy", "kind": "forms" }
+  ]
+}

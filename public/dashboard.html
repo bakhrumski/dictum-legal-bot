@@ -9,9 +9,9 @@
         }
     </script>
     <title>JuristAI - Murojaatlar Dashboard</title>
-    <link rel="icon" type="image/svg+xml" href="./brand/favicon.svg">
-    <link rel="icon" type="image/png" sizes="256x256" href="./favicon-256.png">
-    <link rel="apple-touch-icon" href="./brand/app-icon.svg">
+    <link rel="icon" href="/favicon.svg?v=2" type="image/svg+xml">
+    <link rel="icon" href="/favicon-32.png?v=2" type="image/png" sizes="32x32">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2">
     <!-- PDF & Chart Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2/dist/jspdf.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3/dist/jspdf.plugin.autotable.min.js"></script>
@@ -459,6 +459,7 @@
         #auditLogSection.collapsed .reg-section-body,
         #spendSection.collapsed .reg-section-body,
         #aiUsageSection.collapsed .reg-section-body,
+        #landingSection.collapsed .reg-section-body,
         #offersSection.collapsed .reg-section-body { display: none !important; }
 
         /* Hide chat wrapper button (chat is now a tab) */
@@ -7576,6 +7577,7 @@
             <button type="button" class="mg-card" data-mg-target="auditLogSection" aria-pressed="false" onclick="openManagementSection('auditLogSection', loadAuditLog, true)"><span>Xavfsizlik</span><small>Audit va muhim hodisalar</small></button>
             <button type="button" class="mg-card" data-mg-target="spendSection" aria-pressed="false" onclick="openManagementSection('spendSection', loadSpendReport, true)"><span>Xarajat</span><small>AI token va API sarfi</small></button>
             <button type="button" class="mg-card" id="aiUsageCard" data-mg-target="aiUsageSection" aria-pressed="false" onclick="openManagementSection('aiUsageSection', loadAiUsage, true)"><span>AI so'rovlar</span><small>Har so'rov: modellar, usage, xarajat</small></button>
+            <button type="button" class="mg-card" id="landingCard" style="display:none" data-mg-target="landingSection" aria-pressed="false" onclick="openManagementSection('landingSection', loadLandingAdmin, true)"><span>Landing</span><small>juristai.uz fon bezagi</small></button>
             <button type="button" class="mg-card" id="offersCard" data-mg-target="offersSection" aria-pressed="false" onclick="openManagementSection('offersSection', loadOffers, true)"><span>Chegirmalar</span><small>Individual tarif takliflari</small></button>
         </div>
         <script>
@@ -7657,7 +7659,7 @@
         </div>
 
         <!-- Weekly R&D Survey management (Master Only) -->
-        <div class="reg-section collapsed" id="surveyAdminSection" style="margin-top:16px;">
+        <div class="reg-section collapsed" id="surveyAdminSection" style="margin-top:16px;display:none" hidden><!-- removed from view 2026-10-21 (owner); ids kept for the page's scripts -->
             <div class="reg-section-header" onclick="document.getElementById('surveyAdminSection').classList.toggle('collapsed'); if(!document.getElementById('surveyAdminSection').classList.contains('collapsed')) loadSurveyAdmin();">
                 <div style="display:flex;align-items:center;gap:6px;">
                     <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
@@ -7785,6 +7787,26 @@
             </div>
         </div>
 
+        <!-- Landing sozlamalari — master only -->
+        <div class="reg-section collapsed" id="landingSection" style="margin-top:16px;display:none">
+            <div class="reg-section-header" onclick="openManagementSection('landingSection', loadLandingAdmin)">
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                    <h2>Landing sahifasi</h2>
+                </div>
+            </div>
+            <div class="reg-section-body">
+                <p style="font-size:13px;color:var(--text-secondary);margin:0 0 12px;">
+                    juristai.uz'dagi och rangli bo'limlarning fon bezagi. Saqlangach barcha tashrif buyuruvchilarga 30 soniya ichida ko'rinadi. Faqat Master Admin o'zgartiradi.
+                </p>
+                <div id="landingBgOptions" style="display:flex;flex-direction:column;gap:8px;max-width:420px"></div>
+                <div style="display:flex;gap:10px;align-items:center;margin-top:14px;">
+                    <button type="button" id="landingSaveBtn" class="btn btn-primary" onclick="saveLandingAdmin()" style="padding:7px 16px;border-radius:8px;">Saqlash</button>
+                    <span id="landingStatus" style="font-size:12px;color:var(--text-secondary);"></span>
+                </div>
+            </div>
+        </div>
+
         <!-- Per-request AI usage (Master Only) -->
         <div class="reg-section collapsed" id="aiUsageSection" style="margin-top:16px;">
             <div class="reg-section-header" onclick="openManagementSection('aiUsageSection', loadAiUsage)">
@@ -7872,7 +7894,7 @@
         <!-- TAB: Boshqaruv — Analytics -->
         <div class="tab-view" data-tab="sorov">
         <!-- Monte Carlo Simulation Section -->
-        <div class="monte-carlo-section" id="monteCarloSection">
+        <div class="monte-carlo-section" id="monteCarloSection" style="display:none" hidden><!-- removed from view 2026-10-21 (owner); ids kept for the page's scripts -->
             <div class="mc-card">
                 <h3>
                     Murojaatlar prognozi
@@ -8508,7 +8530,7 @@
                 // Survey admin panel: master only
                 const surveyAdminSection = document.getElementById('surveyAdminSection');
                 if (surveyAdminSection) {
-                    surveyAdminSection.style.display = data.role === 'master' ? '' : 'none';
+                    surveyAdminSection.style.display = 'none'; // the survey panel is retired (2026-10-21)
                 }
                 // Coverage gaps panel: master only
                 const coverageSection = document.getElementById('coverageSection');
@@ -8536,7 +8558,7 @@
                     spendSection.style.display = data.role === 'master' ? '' : 'none';
                 }
                 // Per-request AI usage: master only (the API refuses everyone else too)
-                ['aiUsageSection', 'aiUsageCard', 'offersSection', 'offersCard'].forEach(function (id) {
+                ['aiUsageSection', 'aiUsageCard', 'offersSection', 'offersCard', 'landingSection', 'landingCard'].forEach(function (id) {
                     const el = document.getElementById(id);
                     if (el) el.style.display = data.role === 'master' ? '' : 'none';
                 });
@@ -9142,7 +9164,7 @@
             try {
                 const response = await fetch('/api/monte-carlo');
                 const data = await response.json();
-                renderForecast(data.volume);
+                // the forecast is retired (2026-10-21): its section stays hidden, nothing is computed
                 renderResolution(data.resolution);
             } catch (error) {
                 console.error('Error loading Monte Carlo:', error);
@@ -12956,7 +12978,11 @@
                 });
                 var d = await r.json();
                 var typing = document.getElementById('aiChatTyping'); if (typing) typing.remove();
-                if (!r.ok || !d.html) { docInfoCard('❌ ' + escapeHtml(d.error || 'Hujjat yaratib bo\'lmadi — qayta urinib ko\'ring')); return; }
+                if (!r.ok || !d.html) {
+                    docInfoCard('❌ ' + escapeHtml(d.message || d.error || 'Hujjat yaratib bo\'lmadi — qayta urinib ko\'ring') +
+                        (d.upgradeUrl ? ' <a href="/tariff.html">Tariflar</a>' : ''));
+                    return;
+                }
                 renderDocMessage({ rawTitle: docType, html: d.html });
                 if (continuation && continuation.workspaceId) {
                     try {
@@ -13368,7 +13394,9 @@
                 if (typeof collectSessionDocs === 'function' && collectSessionDocs().length) {
                     clearInterval(wait);
                     explainFromAttachment();
-                } else if (tries > 60) {
+                } else if (tries > 60 && !(typeof aiAttachments !== 'undefined' && aiAttachments.some(function (a) { return a.status === 'processing'; }) && tries < 600)) {
+                    // a scan waiting on its confirm card (or a long OCR) is still
+                    // processing: keep waiting for it (up to 5 min), not 30 s
                     clearInterval(wait);
                     if (label) label.textContent = '❌ Fayldan matn ajratib bo\'lmadi';
                 }
@@ -13480,7 +13508,8 @@
         async function tplDeleteMine(id) {
             if (!confirm('Shablon o\'chirilsinmi?')) return;
             try {
-                await fetch('/api/templates/mine/' + id, { method: 'DELETE', credentials: 'same-origin' });
+                var delRes = await fetch('/api/templates/mine/' + id, { method: 'DELETE', credentials: 'same-origin' });
+                if (!delRes.ok) { var delErr = await delRes.json().catch(function () { return {}; }); alert(delErr.message || delErr.error || 'Shablonni o\'chirib bo\'lmadi'); }
                 tplEditorHome();
             } catch (e) { alert(e.message); }
         }
@@ -13868,11 +13897,16 @@
 
             // Document context = conversation-persistent docs + newly attached.
             // Follow-up questions keep working against the same document(s).
-            var allDocs = sessionDocs.concat(readyDocs.map(function (a) { return { name: a.name, text: a.text, scanId: a.scanId || null }; }));
+            var allDocs = sessionDocs.concat(readyDocs.map(function (a) { return { name: a.name, text: a.text, docTicket: a.docTicket || null, scanId: a.scanId || null }; }));
             // typed documents go as text; scans as ids (their text is on the server)
-            var documentText = allDocs.filter(function (d) { return !d.scanId; }).map(function (d) {
+            var typedDocs = allDocs.filter(function (d) { return !d.scanId; });
+            // One typed document goes as its own text with its signed ticket, so the
+            // server sizes it by the real page count (the ticket is bound to that exact
+            // text); several are joined under their names and re-measured by the server.
+            var documentText = typedDocs.length === 1 ? typedDocs[0].text : typedDocs.map(function (d) {
                 return '【' + d.name + '】\n' + d.text;
             }).join('\n\n');
+            var chatDocTicket = typedDocs.length === 1 ? (typedDocs[0].docTicket || null) : null;
             var scanIds = allDocs.filter(function (d) { return d.scanId; }).map(function (d) { return { id: d.scanId, name: d.name }; });
             var attachLine = readyDocs.length
                 ? '<div class="ai-msg-files">' + readyDocs.map(function (a) {
@@ -13887,7 +13921,7 @@
             input.style.height = 'auto';
             // Newly sent docs persist for the rest of the conversation
             // (removable via the × on their "suhbatda" chip).
-            readyDocs.forEach(function (a) { sessionDocs.push({ name: a.name, text: a.text, scanId: a.scanId || null, pages: a.pages || null, chars: a.chars || null }); });
+            readyDocs.forEach(function (a) { sessionDocs.push({ name: a.name, text: a.text, docTicket: a.docTicket || null, scanId: a.scanId || null, pages: a.pages || null, chars: a.chars || null }); });
             aiAttachments = aiAttachments.filter(function (a) { return a.status !== 'ready'; });
             renderAttachChips();
 
@@ -13924,6 +13958,7 @@
                             topics: selectedTopics.length > 0 ? selectedTopics : null,
                             autoDetect: topicAutoDetect === true,
                             documentText: documentText || null,
+                            docTicket: chatDocTicket,
                             scanIds: scanIds.length ? scanIds : null,
                             confirmedUnits: confirmedUnits,
                             confirmedJob: confirmedJob,
@@ -14694,6 +14729,8 @@
 
                 currentAiSessionId = session.id;
                 aiChatHistory = session.messages || [];
+                // documents belong to the chat they were attached in (as in createNewAiChat)
+                if (typeof aiAttachments !== 'undefined') { aiAttachments = []; sessionDocs = []; docActionsUsed = { opinion: false, explain: false }; renderAttachChips(); }
                 if (typeof invalidateExplainTrace === 'function') invalidateExplainTrace();
                 selectedDatabases = session.databases || ['lex.uz'];
                 // Force-set topic without toggle (selectTopic toggles if same topic)
@@ -14763,7 +14800,7 @@
                 });
                 // Find and activate
                 document.querySelectorAll('.ai-history-item').forEach(function(el) {
-                    if (el.getAttribute('onclick') && el.getAttribute('onclick').indexOf(sessionId) > -1) {
+                    if (el.getAttribute('onclick') === 'openAiChatSession(' + sessionId + ')') {
                         el.classList.add('active');
                     }
                 });
@@ -15640,6 +15677,46 @@
             } catch (e) {
                 box.innerHTML = '<div class="reg-empty">Yuklashda xatolik</div>';
             }
+        }
+
+        // Landing background decoration (PUT /api/admin/landing-config, master only)
+        const LANDING_BG = [['1', "To'r"], ['2', 'Nuqta'], ['3', "Rang dog'i"], ['5', '§ belgi'], ['0', 'Bezaksiz']];
+        let landingBgSaved = '1';
+        async function loadLandingAdmin() {
+            const box = document.getElementById('landingBgOptions');
+            const st = document.getElementById('landingStatus');
+            if (!box) return;
+            try {
+                const r = await fetch('/api/landing-config', { cache: 'no-store' });
+                const d = r.ok ? await r.json() : {};
+                landingBgSaved = String(d.bg || '1');
+            } catch (e) { if (st) st.textContent = 'Joriy sozlamani o\'qib bo\'lmadi'; }
+            box.innerHTML = LANDING_BG.map(function (o) {
+                return '<label style="display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--glass-border);border-radius:8px;cursor:pointer;font-size:14px">'
+                    + '<input type="radio" name="landingBg" value="' + o[0] + '"' + (o[0] === landingBgSaved ? ' checked' : '') + '>'
+                    + '<span style="flex:1">' + o[1] + (o[0] === landingBgSaved ? ' <small style="color:var(--text-muted)">(joriy)</small>' : '') + '</span>'
+                    + '<a href="/?bg=' + o[0] + '" target="_blank" rel="noopener" style="font-size:12px">Ko\'rish</a></label>';
+            }).join('');
+        }
+        async function saveLandingAdmin() {
+            const st = document.getElementById('landingStatus');
+            const btn = document.getElementById('landingSaveBtn');
+            const pick = document.querySelector('input[name="landingBg"]:checked');
+            if (!pick) return;
+            if (btn) btn.disabled = true;
+            if (st) st.textContent = 'Saqlanmoqda...';
+            try {
+                const r = await fetch('/api/admin/landing-config', {
+                    method: 'PUT', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ bg: pick.value })
+                });
+                if (!r.ok) throw new Error(r.status === 403 || r.status === 401 ? 'Ruxsat yo\'q' : 'Xato ' + r.status);
+                if (st) st.textContent = 'Saqlandi';
+                await loadLandingAdmin();
+            } catch (e) {
+                if (st) st.textContent = e.message || 'Saqlab bo\'lmadi';
+            } finally { if (btn) btn.disabled = false; }
         }
 
         function openManagementSection(sectionId, loader, forceOpen) {

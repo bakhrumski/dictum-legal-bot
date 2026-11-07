@@ -226,10 +226,25 @@ function promptBytes() {
     pdfOnePage: Math.max(...hints.map(h => Buffer.byteLength(PAGED_PROMPT(h, 1), 'utf8'))),
   };
 }
-function ocrPageBudget() {
+/** The Gemini OCR model of this deployment (src/ocr/routes.js reads the same setting). */
+function ocrModel(env = process.env) { return String(env.GEMINI_OCR_MODEL || 'gemini-2.5-flash').trim(); }
+/**
+ * Only a Gemini 2.x OCR model has a budget: it is sent thinkingBudget 0. A
+ * 3.x model is sent thinkingLevel 'minimal', which does not promise zero
+ * thinking tokens (billed as output), so its per-page cost is not bounded
+ * here (2026-10-20 review: the budget kept 2.5 Flash's price whatever model
+ * GEMINI_OCR_MODEL named).
+ */
+function ocrModelBudgeted(env = process.env) {
+  const m = ocrModel(env);
+  return /^gemini-2\./u.test(m) && !!require('../ai/model-pricing').priceAt(m);
+}
+function ocrPageBudget(env = process.env) {
   const p = require('../ai/model-pricing');
-  const price = p.MODEL_PRICING['gemini-2.5-flash'];
-  const src = p.PRICING_SOURCES.gemini_2026_08_11; // the source the price table names for gemini-2.5-flash
+  const model = ocrModel(env);
+  const price = p.priceAt(model) || p.MODEL_PRICING['gemini-2.5-flash'];
+  const snap = p.pricingSnapshot(model);
+  const src = snap && snap.source ? snap : p.PRICING_SOURCES.gemini_2026_08_11;
   const pb = promptBytes();
   const parts = {
     pdfPageInputTokens: { tokens: PDF_PAGE_INPUT_TOKENS, status: 'planning_assumption',
@@ -247,7 +262,7 @@ function ocrPageBudget() {
   const maxImageTokens = imageInputTokens(MAX_IMAGE_SIDE, Math.floor(MAX_IMAGE_PIXELS / MAX_IMAGE_SIDE));
   return {
     kind: 'planning_estimate', expected: null, expectedStatus: 'unmeasured', hardMaximum: false,
-    model: 'gemini-2.5-flash', api: 'Gemini Developer API (generativelanguage.googleapis.com v1beta, API key)',
+    model, api: 'Gemini Developer API (generativelanguage.googleapis.com v1beta, API key)',
     inPerM: price.in, outPerM: price.out, priceSource: src ? `${src.source}, checked ${src.checkedAt}` : 'src/ai/model-pricing.js',
     parts, inputTokens, outputTokens,
     attempts, attemptsBasis: "usage ledger: one transient retry of a call (stage 'ocr'); it re-sends the whole chunk",
@@ -289,14 +304,18 @@ function ocrCostBasis(env = process.env, { voicelabVision = null } = {}) {
   const reach = [...new Set([img.primary, ...img.fallbacks, pdf.primary, ...pdf.fallbacks].filter(Boolean))];
   const route = { image: [img.primary, ...img.fallbacks].filter(Boolean), pdf: [pdf.primary].filter(Boolean) };
   if (!pdf.primary) return { status: 'unknown', route, reason: 'GEMINI_API_KEY is not set: scanned PDFs cannot be read and images go to providers of unknown cost' };
+  if (reach.includes('gemini') && !ocrModelBudgeted(env)) {
+    return { status: 'unknown', route, providers: ['gemini'],
+      reason: `Gemini OCR model ${ocrModel(env)}: only a Gemini 2.x model with a listed price has a per-page budget (a 3.x model may bill thinking tokens, which are not bounded here)` };
+  }
   const unknown = reach.filter(p => PROVIDER_COST[p] !== 'estimated');
   if (unknown.length) return { status: 'unknown', route, providers: unknown,
     reason: `${unknown.map(p => PROVIDER_COST_REASON[p]).join('; ')} (set OCR_IMAGE_PROVIDER=gemini and OCR_FALLBACK=off for the Gemini-only route)` };
-  return { status: 'estimated', route, usdPerPage: ocrPageUsd(), estimate: ocrPageBudget() };
+  return { status: 'estimated', route, usdPerPage: ocrPageBudget(env).usdPerPage, estimate: ocrPageBudget(env) };
 }
 
 module.exports = {
   MAX_PDF_BYTES, MAX_IMAGE_BYTES, MAX_IMAGE_SIDE, MAX_IMAGE_PIXELS, IMAGE_TYPES, TEXT_PDF_CHARS_PER_PAGE,
   OCR_OUTPUT_TOKENS_PER_PAGE, OCR_PDF_CHUNK_PAGES, OCR_SINGLE_PAGE_CAP, EMPTY_PAGE, LANG_HINTS, VISION_PROMPT, PAGED_PROMPT, PROVIDERS, PROVIDER_COST,
-  pdfInfo, imageInfo, measureScan, parsePagedText, promptTokenBound, imageInputTokens, ocrProviders, ocrPageBudget, ocrPageUsd, ocrCostBasis,
+  pdfInfo, imageInfo, measureScan, parsePagedText, promptTokenBound, imageInputTokens, ocrProviders, ocrPageBudget, ocrPageUsd, ocrCostBasis, ocrModel, ocrModelBudgeted,
 };

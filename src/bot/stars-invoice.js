@@ -61,4 +61,34 @@ function matchesOffer(offer, currency, totalAmount) {
   return !!offer && currency === 'XTR' && totalAmount === offer.stars;
 }
 
-module.exports = { buildAnswerInvoicePayload, parseAnswerInvoicePayload, matchesOffer, PREFIX_V1, PREFIX_V2 };
+// ── One-time services (2026-10-21, src/rag/one-time-products.js) ──────────
+// Payload: jsv1:<telegramUserId>:<product>:<qty>:<starsEach>:<nonce>:<sig>.
+// The price is the one written when the invoice was made; the total charged
+// must be qty x starsEach.
+const PREFIX_SERVICE = 'jsv1';
+
+function buildServiceInvoicePayload({ telegramUserId, product, qty = 1, stars, secret, nonce }) {
+  const n = nonce || crypto.randomBytes(6).toString('hex');
+  const body = `${PREFIX_SERVICE}:${telegramUserId}:${product}:${qty}:${stars}:${n}`;
+  return `${body}:${sign(body, secret)}`;
+}
+
+/** { product, qty, stars, total } or null (not ours, another user, a bad signature or numbers). */
+function parseServiceInvoicePayload(payload, telegramUserId, { secret } = {}) {
+  const parts = String(payload || '').split(':');
+  if (parts[0] !== PREFIX_SERVICE || parts.length !== 7) return null;
+  const [, uid, product, qty, stars, , sig] = parts;
+  if (uid !== String(telegramUserId) || !/^[a-z0-9]{2,12}$/u.test(product)) return null;
+  const expected = sign(parts.slice(0, 6).join(':'), secret);
+  if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
+  const q = Number(qty), s = Number(stars);
+  if (!Number.isInteger(q) || q < 1 || q > 10 || !Number.isInteger(s) || s < 1) return null;
+  return { product, qty: q, stars: s, total: q * s };
+}
+
+function matchesServiceOffer(offer, currency, totalAmount) {
+  return !!offer && currency === 'XTR' && totalAmount === offer.total;
+}
+
+module.exports = { buildAnswerInvoicePayload, parseAnswerInvoicePayload, matchesOffer, PREFIX_V1, PREFIX_V2,
+  buildServiceInvoicePayload, parseServiceInvoicePayload, matchesServiceOffer, PREFIX_SERVICE };

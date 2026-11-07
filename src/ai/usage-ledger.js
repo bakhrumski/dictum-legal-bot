@@ -230,6 +230,7 @@ const STAGE_BY_ENDPOINT = [
   [/claim-check/u, 'claim_check'],
   [/cross-check/u, 'cross_check'],
   [/query-plan|lex-plan/u, 'retrieval_plan'],
+  [/lex-relevance/u, 'source_relevance'],
   [/query-rewrite/u, 'query_rewrite'],
   [/corrective/u, 'retrieval_grade'],
   [/classify-topic/u, 'topic'],
@@ -242,7 +243,7 @@ const STAGE_BY_ENDPOINT = [
   [/legal-verify/u, 'verification'],
   [/screening/u, 'screening'],
   [/ocr|vision/u, 'ocr'],
-  [/rag-eval|model-ab/u, 'admin_test'],
+  [/rag-eval|model-ab|tools-eval/u, 'admin_test'],
   [/tg-agent\/answer|legal-chat|assistant|ai-compact-answer/u, 'answer'],
 ];
 

@@ -71,8 +71,12 @@ function balanceText({ balance: b, paidCredits = 0, pending = false, testAccount
       lines.push(`• ${SERVICE_NAMES[k] || k}: ${v.remaining} / ${v.limit} qoldi`);
     }
     if (b.kind === 'trial') lines.push("Sinov tugagach tarif tanlanadi; avtomatik to'lov olinmaydi.");
-    else lines.push("Yangi davr to'lov bilan boshlanadi; ishlatilmagan limit keyingi davrga o'tmaydi va avtomatik qayta sotib olinmaydi.");
+    else lines.push("Yangi davr to'lov bilan boshlanadi; ishlatilmagan limit keyingi davrga o'tmaydi va avtomatik qayta sotib olinmaydi.",
+      `Davom ettirish yoki yuqori tarif: ${String(process.env.APP_URL || 'https://juristai.uz').replace(/\/+$/u, '')}/tariff.html`);
   }
+  // services bought one at a time (src/rag/one-time-products.js): after the plan's, never expire
+  const bought = Object.entries((b && b.oneTime) || {}).filter(([k, v]) => v > 0 && k !== 'ocr');
+  if (bought.length) lines.push('', 'Alohida sotib olingan (muddatsiz, tarif limitidan keyin ishlatiladi):', ...bought.map(([k, v]) => `• ${SERVICE_NAMES[k] || k}: ${v}`));
   if (paidCredits > 0) lines.push('', `Oldin Telegram Stars bilan sotib olingan javob kreditlari: ${paidCredits} (alohida hisob, muddati tugamaydi).`);
   if (pending) lines.push('', 'Hozir bitta huquqiy javob tayyorlanmoqda.');
   return lines.join('\n');
@@ -87,8 +91,8 @@ const FILE_TYPES = new Set(['document', 'photo', 'video', 'video_note']);
 
 function startFileLine({ voiceToText = false } = {}) {
   return [
-    "📎 Fayl (hujjat, rasm, video, 5 MB gacha) yuborsangiz, uni AI o'qimaydi — murojaat yurist navbatiga tushadi; tarif limitingizdan hech narsa yechilmaydi.",
-    "Hujjatni AI bilan tahlil qilish yoki AI yuridik xulosa olish — juristai.uz saytida.",
+    "📎 PDF yoki DOCX hujjat (5 MB gacha) yuborsangiz, AI tahlilni taklif qilaman — tarifingizdagi tahlil birligi bilan; xohlasangiz, fayl yurist navbatiga yuboriladi (limitdan yechilmaydi).",
+    "Skanerlangan hujjat, rasm va video yurist navbatiga tushadi; ularni AI bilan o'qish va AI yuridik xulosa — juristai.uz saytida.",
     voiceToText ? '🎙 Ovozli savol matnga aylantiriladi va yozma savol kabi javob beriladi.' : '🎙 Ovozli xabarni ham yurist ko\'rib chiqadi.',
   ].join(' ');
 }
@@ -96,7 +100,7 @@ function startFileLine({ voiceToText = false } = {}) {
 /** Asked when a file arrives without a description (it is held). */
 function fileHeldText({ tooShortNote = '', minChars = 0 } = {}) {
   return '📎 Faylingiz qabul qilindi.' + tooShortNote + '\n\n'
-    + "ℹ️ Telegram'da fayllar AI bilan tahlil qilinmaydi: murojaatingiz yurist navbatiga yuboriladi va tahlil yoki xulosa limitingizdan hech narsa yechilmaydi.\n\n"
+    + "ℹ️ Bu yo'lda fayl AI bilan tahlil qilinmaydi: murojaatingiz yurist navbatiga yuboriladi va tahlil yoki xulosa limitingizdan hech narsa yechilmaydi.\n\n"
     + `✍️ Endi vaziyatingizni yozib yuboring — nima bo'lgani va qanday yordam kerakligini batafsil tushuntiring (kamida ${minChars} belgi).\n\n`
     + "⚠️ Faqat fayl yuborish yetarli emas: hujjat/rasm bilan birga izoh (savolingiz) bo'lishi shart.";
 }
@@ -107,7 +111,7 @@ function fileQueuedText({ typeLabel = 'Fayl' } = {}) {
     "✅ Murojaatingiz yurist navbatiga yuborildi.",
     `📝 Turi: ${typeLabel}`,
     '',
-    "🤖 Bu AI tahlili emas: Telegram'da fayllar sun'iy intellekt bilan o'qilmaydi va tarifingizning tahlil yoki xulosa limitidan hech narsa yechilmadi.",
+    "🤖 Bu AI tahlili emas: fayl yurist navbatiga yuborildi va tarifingizning tahlil yoki xulosa limitidan hech narsa yechilmadi.",
     "👨‍⚖️ Yurist murojaatni ko'rib chiqib, shu yerda javob beradi. Yurist ko'rigi tarif limitlariga kirmaydi; uning shartlari, agar pullik bo'lsa, yurist bilan alohida kelishiladi.",
     "💻 Hujjatni hozir AI bilan tahlil qilish yoki AI yuridik xulosa olish — saytda: hujjat birligida, sarf ish boshlanishidan oldin ko'rsatiladi.",
   ].join('\n');

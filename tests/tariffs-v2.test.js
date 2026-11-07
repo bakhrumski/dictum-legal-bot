@@ -82,10 +82,10 @@ const tick = () => new Promise(r => setImmediate(r));
     }
   });
 
-  await test('Workspace: create only on Platinum, join from Silver; Sinov neither', () => {
+  await test('Workspace: every paid plan creates and joins (2026-10-28); Sinov neither', () => {
     const w = k => ledger.PLAN_CATALOG[k].workspace;
     assert.deepStrictEqual(['sinov', 'silver', 'gold', 'platinum'].map(k => [w(k).create, w(k).join]),
-      [[false, false], [false, true], [false, true], [true, true]]);
+      [[false, false], [true, true], [true, true], [true, true]]);
   });
 
   console.log('tariffs v2 — units');
@@ -344,8 +344,8 @@ const tick = () => new Promise(r => setImmediate(r));
     const texts = require('../src/bot/tariff-texts');
     const lines = texts.planLines().join('\n');
     assert.match(lines, /Sinov — bepul, bir martalik: 5 huquqiy savol \+ 1 hujjat tahlili \+ 1 yuridik xulosa \(yangilanmaydi\)/u);
-    assert.match(lines, /Silver — 199 000 so'm \/ 30 kun: 150 savol, 8 tahlil, 8 xulosa, 10 hujjat/u);
-    assert.match(lines, /Gold — 599 000 so'm \/ 30 kun: 450 savol, 24 tahlil, 24 xulosa, 30 hujjat/u);
+    assert.match(lines, /Silver — 199 000 so'm \/ 30 kun: 150 savol, 8 tahlil, 8 xulosa, 10 hujjat, Workspace yaratish/u);
+    assert.match(lines, /Gold — 599 000 so'm \/ 30 kun: 450 savol, 24 tahlil, 24 xulosa, 30 hujjat, Workspace yaratish/u);
     assert.match(lines, /Platinum — 999 000 so'm \/ 30 kun: 750 savol, 40 tahlil, 40 xulosa, 50 hujjat, Workspace yaratish/u);
   });
 

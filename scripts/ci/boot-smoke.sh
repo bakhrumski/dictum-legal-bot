@@ -49,6 +49,11 @@ if [ -f tests/test-entitlement.e2e.test.js ]; then
   BASE_URL="http://localhost:$PORT" TEST_DATABASE_URL="$DATABASE_URL" node tests/test-entitlement.e2e.test.js
 fi
 
+# Word add-in: pairing, token-only routes, logout (no AI)
+if [ -f tests/word-addin.e2e.test.js ]; then
+  BASE_URL="http://localhost:$PORT" TEST_DATABASE_URL="$DATABASE_URL" node tests/word-addin.e2e.test.js
+fi
+
 kill -TERM $PID
 for _ in $(seq 1 30); do kill -0 $PID 2>/dev/null || break; sleep 1; done
 if kill -0 $PID 2>/dev/null; then echo "server ignored SIGTERM"; exit 1; fi

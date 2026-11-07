@@ -29,6 +29,10 @@ function allowedHosts(req, env = process.env) {
 
 function requireSameOrigin(req, res, next) {
   if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
+  // a Word / Google Docs task-pane token (src/addin/word-addin.js) is sent by
+  // the pane itself, never by a browser on its own, so it cannot be forged
+  // cross-site; such a request comes from Word or a Google sandbox origin
+  if (req.addinTokenId) return next();
   const origin = req.get('origin');
   const referer = req.get('referer');
   const from = origin && origin !== 'null' ? hostOf(origin) : (referer ? hostOf(referer) : null);
@@ -36,4 +40,16 @@ function requireSameOrigin(req, res, next) {
   return res.status(403).json({ error: 'cross_site', message: "So'rov JuristAI saytidan kelmadi." });
 }
 
-module.exports = { requireSameOrigin, allowedHosts };
+/**
+ * The same check for a WebSocket upgrade (src/editor/live.js): a raw Node
+ * request, and an Origin is required - every browser sends one on a
+ * WebSocket, so a cross-site page cannot open a socket with this site's cookie.
+ */
+function isSameOrigin(req) {
+  const h = req && req.headers ? req.headers : {};
+  const wrap = { get: n => h[String(n).toLowerCase()] };
+  const from = h.origin && h.origin !== 'null' ? hostOf(h.origin) : null;
+  return !!from && allowedHosts(wrap).has(from);
+}
+
+module.exports = { requireSameOrigin, allowedHosts, isSameOrigin };
