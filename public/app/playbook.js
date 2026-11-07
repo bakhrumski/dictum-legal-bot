@@ -42,6 +42,8 @@
     var v = J.mount('<div class="wrap narrow"><div class="vh"><div><div class="kicker">AI · Playbook</div><h2>' + esc(s('title')) + '</h2><p>' + esc(s('sub')) + '</p></div></div><div class="pb-body"></div></div>');
     var body = $('.pb-body', v);
     var data = { builtin: [], mine: [], firm: [] }, chosen = null, doc = null;
+    // U3: a document carried from "Nima qilaylik?" (docact.js) is already here - nothing to upload again
+    if (J.docHandoff) { doc = J.docHandoff; J.docHandoff = null; }
 
     async function load() {
       var r = await J.api('/api/playbooks');
@@ -100,7 +102,7 @@
       var box = $('.pb-doc', body); if (!box) return;
       if (!doc) { box.innerHTML = ''; return; }
       box.innerHTML = '<div class="pb-file">' + J.icon('doc') + '<span>' + esc(doc.name) + '</span><small class="' + (doc.status === 'ok' ? 'muted' : doc.status === 'reading' ? 'muted' : 'err') + '">' +
-        (doc.status === 'ok' ? (doc.scanId ? 'OCR · ' : '') + Math.round((doc.chars || 0) / 1000) + 'k' : esc(doc.status === 'bad' && doc.error ? doc.error : s(doc.status === 'reading' ? 'reading' : doc.status))) + '</small></div>';
+        (doc.status === 'ok' ? (doc.scanId && !doc.textDoc ? 'OCR · ' : '') + Math.round((doc.chars || 0) / 1000) + 'k' : esc(doc.status === 'bad' && doc.error ? doc.error : s(doc.status === 'reading' ? 'reading' : doc.status))) + '</small></div>';
     }
 
     function editor(p) {

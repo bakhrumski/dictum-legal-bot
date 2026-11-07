@@ -1072,3 +1072,26 @@ html[lang=ru] .ed-doc hr[data-page-break]::after{content:"Разрыв стра�
 .st-empty{display:flex;flex-direction:column;align-items:center;gap:12px}
 .st-empty p{margin:0}
 .usage-plans{font:inherit;font-size:12.5px;padding:0;margin-top:4px;align-self:flex-start;background:none;border:0;color:var(--cta);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+
+/* U3 (docact.js): one door for a document - "Nima qilaylik?", each action with its result and price; no coloured stripes */
+.da-card{border:1px solid var(--line);border-radius:14px;background:var(--surface);padding:12px}
+.da-inline{margin:4px 2px 8px}
+.da-h{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.da-h b{font-weight:500}
+.da-f{flex:1;min-width:0;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.da-x{width:28px;height:28px;flex:none}
+.da-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.da-row{display:flex;align-items:center;gap:10px;text-align:left;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--fg);font:inherit;cursor:pointer;min-width:0}
+.da-row:hover{border-color:var(--cta)}
+.da-row:focus-visible{outline:2px solid var(--cta);outline-offset:1px}
+.da-ic{flex:none;width:30px;height:30px;border-radius:8px;background:var(--accent-soft);color:var(--cta-dark);display:grid;place-items:center}
+.da-ic .i{width:16px;height:16px}
+.da-t{flex:1;min-width:0;display:flex;flex-direction:column}
+.da-t b{font-weight:500;font-size:13.5px}
+.da-t small{color:var(--muted);font-size:12px;line-height:1.35}
+.da-c{flex:none;font-size:11.5px;color:var(--muted);white-space:nowrap;max-width:40%;overflow:hidden;text-overflow:ellipsis}
+.da-note{font-size:12px;margin:8px 2px 0}
+.da-modal .da-card{border:0;padding:0}
+.da-modal .da-list{grid-template-columns:minmax(0,1fr)}
+.da-over{outline:2px dashed var(--cta);outline-offset:-6px;border-radius:14px}
+@media (max-width:700px){.da-list{grid-template-columns:minmax(0,1fr)}.da-row{flex-wrap:wrap;row-gap:2px}.da-c{order:3;flex-basis:100%;max-width:none;padding-left:40px;white-space:normal;color:var(--cta-dark)}}

@@ -72,7 +72,7 @@ test('empty pages: one sentence and one button (chats, uploaded documents, resul
 });
 
 test('wiring: start.js loaded before find.js; light blue only for the icon tile', () => {
-  assert.ok(/<script src="\/app\/start\.js\?v=\d+"><\/script>\s*<script src="\/app\/find\.js/.test(read('public', 'app', 'index.html')));
+  assert.ok(/<script src="\/app\/start\.js\?v=\d+"><\/script>(\s*<script src="\/app\/[a-z-]+\.js\?v=\d+"><\/script>)*\s*<script src="\/app\/find\.js/.test(read('public', 'app', 'index.html')));
   assert.ok(read('public', 'app', 'app.css').includes('.st-ic{width:40px;height:40px;border-radius:12px;background:var(--accent-soft)'));
 });
 

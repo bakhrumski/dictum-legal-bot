@@ -22,7 +22,7 @@
       (d.last_used_at ? s('used') + ' ' + J.fmtDate(d.last_used_at) : s('added') + ' ' + J.fmtDate(d.created_at))].filter(Boolean).join(' · ');
   }
   /** As a composer / analysis file: the service reads it by id on the server. */
-  function asFile(d) { return { name: d.name || 'Hujjat', scanId: d.id, pages: d.pages, chars: d.chars, status: 'ready', fromLibrary: true }; }
+  function asFile(d) { return { name: d.name || 'Hujjat', scanId: d.id, pages: d.pages, chars: d.chars, status: 'ready', fromLibrary: true, kind: d.kind }; }
 
   /** Pick documents from the library: resolves with [file] (empty when cancelled). opts.max: how many at most. */
   J.pickDocs = function (opts) {
@@ -82,6 +82,8 @@
       var list = all.filter(function (d) { return !q || String(d.name || '').toLowerCase().indexOf(q) > -1; });
       $('.lib-l', v).innerHTML = list.length ? list.map(function (d) {
         return '<div class="mt-item lib-it" data-id="' + esc(d.id) + '"><span>' + J.icon(d.kind === 'text' ? 'doc' : 'scan') + '</span><span style="flex:1;min-width:0"><b class="lib-n" data-noalpha style="display:block;overflow-wrap:anywhere"></b><small class="muted">' + esc(meta(d)) + '</small></span>' +
+          // U3: everything this document can go to, with its price, in one card (docact.js)
+          (J.docActionsModal ? '<button class="pill sm" type="button" data-da="' + esc(d.id) + '">' + esc(J.docActText('act')) + '</button>' : '') +
           (J.openLibraryInEditor ? '<button class="pill sm ghost" type="button" data-ed="' + esc(d.id) + '">' + esc(s('edit')) + '</button>' : '') +
           // K2b: into the firm's searchable base (a text document; a scan has its text after OCR too)
           (J.kbAdd ? '<button class="pill sm ghost" type="button" data-kb="' + esc(d.id) + '" title="' + esc(J.kbText('toKb')) + '" aria-label="' + esc(J.kbText('toKb')) + '">' + J.icon('layers') + '</button>' : '') +
@@ -92,6 +94,9 @@
       list.forEach(function (d) { var el = $('[data-id="' + d.id + '"] .lib-n', v); if (el) el.textContent = d.name || 'Hujjat'; });
       $$('[data-ed]', v).forEach(function (b) {
         b.onclick = function () { b.disabled = true; J.openLibraryInEditor(all.filter(function (x) { return x.id === b.dataset.ed; })[0]); };
+      });
+      $$('[data-da]', v).forEach(function (b) {
+        b.onclick = function () { var d = all.filter(function (x) { return x.id === b.dataset.da; })[0]; if (d) J.docActionsModal(asFile(d)); };
       });
       $$('[data-kb]', v).forEach(function (b) { b.onclick = async function () { b.disabled = true; await J.kbAdd({ kind: 'library', id: b.dataset.kb }); b.disabled = false; }; });
       $$('[data-rn]', v).forEach(function (b) {
@@ -114,6 +119,8 @@
       });
     }
     $('[data-f=q]', v).oninput = draw;
+    // U3: a file dropped anywhere on the page is read (kept here) and gets "Nima qilaylik?"
+    if (J.bindDocDrop) J.bindDocDrop(v, function () { J.api('/api/documents').then(function (r) { if (r.ok && document.body.contains(v)) { all = r.data.documents || []; draw(); } }); });
     // opened from search (find.js): the document's name is the filter
     if (J.libQuery) { $('[data-f=q]', v).value = J.libQuery; J.libQuery = ''; }
     J.api('/api/documents').then(function (r) {
