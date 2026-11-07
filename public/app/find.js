@@ -63,8 +63,10 @@
     var box = $('.fd-rows', host);
     J.api('/api/recent').then(function (r) {
       if (!document.body.contains(box)) return;
-      if (!r.ok) { if (opts.fallback) opts.fallback(box); return; }
+      if (!r.ok) { if (opts.onItems) opts.onItems(null); if (opts.fallback) opts.fallback(box); return; }
       var list = (r.data.items || []).slice(0, opts.max || 8);
+      // U2: the home page asks "Nimadan boshlaysiz?" while there is nothing yet (start.js)
+      if (opts.onItems) opts.onItems(list);
       if (!list.length) { box.innerHTML = '<div class="empty-state" style="padding:18px 4px;text-align:left">' + esc(s('empty')) + '</div>'; return; }
       box.innerHTML = list.map(rowHtml).join('');
       fill(box, list);

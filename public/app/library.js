@@ -5,11 +5,11 @@
   'use strict';
   var J = G.JAI, $ = J.$, $$ = J.$$, esc = J.esc;
   var S = {
-    uz: { title: 'Hujjatlar', tabs: { yuklangan: 'Yuklanganlar', muharrir: 'Tahrirdagilar', natijalar: 'Natijalar' }, runsLead: 'Jadvalli tahlil, playbook tekshiruvi, da’vo arizasi loyihasi va agent topshiriqlari natijalari — 90 kun saqlanadi (ishga qo‘shilgani ish ochiq turguncha).', runsNone: 'Hali natija yo‘q.', st: { done: 'tayyor', failed: 'xato', cancelled: 'bekor qilingan', budget: 'limit tugadi', needs_input: 'savolingizni kutmoqda', queued: 'navbatda', running: 'bajarilmoqda' }, lead: 'Yuklagan hujjatlaringiz shu yerda — siz o‘chirmaguningizcha saqlanadi. Keyingi safar qayta yuklamasdan tanlang.',
+    uz: { emptyBtn: 'Hujjat yuklash va tekshirish', runsBtn: 'Bir nechta hujjatni solishtirish', title: 'Hujjatlar', tabs: { yuklangan: 'Yuklanganlar', muharrir: 'Tahrirdagilar', natijalar: 'Natijalar' }, runsLead: 'Jadvalli tahlil, playbook tekshiruvi, da’vo arizasi loyihasi va agent topshiriqlari natijalari — 90 kun saqlanadi (ishga qo‘shilgani ish ochiq turguncha).', runsNone: 'Hali natija yo‘q.', st: { done: 'tayyor', failed: 'xato', cancelled: 'bekor qilingan', budget: 'limit tugadi', needs_input: 'savolingizni kutmoqda', queued: 'navbatda', running: 'bajarilmoqda' }, lead: 'Yuklagan hujjatlaringiz shu yerda — siz o‘chirmaguningizcha saqlanadi. Keyingi safar qayta yuklamasdan tanlang.',
       sealed: 'Matnlar bazada shifrlangan holda saqlanadi.', notSealed: '', none: 'Hali hujjat yo‘q. Chatga yoki «Hujjat tahlili»ga fayl yuklang — u shu yerda qoladi.',
       pick: 'Hujjatlarimdan tanlash', choose: 'Tanlash', cancel: 'Bekor qilish', rename: 'Nomini o‘zgartirish', del: 'O‘chirish', delQ: 'Hujjat butunlay o‘chiriladi (matni ham). Davom etasizmi?',
       kinds: { text: 'Matnli', pdf: 'Skan PDF', image: 'Rasm' }, pages: '{n} bet', used: 'oxirgi ishlatilgan', added: 'qo‘shilgan', count: '{n} / {m} ta hujjat', search: 'Qidirish', max: 'Ko‘pi bilan {n} ta', edit: 'Muharrirda' },
-    ru: { title: 'Документы', tabs: { yuklangan: 'Загруженные', muharrir: 'В редакторе', natijalar: 'Результаты' }, runsLead: 'Результаты табличного анализа, проверки по playbook, проекта иска и задач агента — хранятся 90 дней (добавленные в дело — пока дело открыто).', runsNone: 'Результатов пока нет.', st: { done: 'готово', failed: 'ошибка', cancelled: 'отменено', budget: 'лимит исчерпан', needs_input: 'ждёт ответа', queued: 'в очереди', running: 'выполняется' }, lead: 'Загруженные документы хранятся здесь, пока вы их не удалите. В следующий раз выберите без повторной загрузки.',
+    ru: { emptyBtn: 'Загрузить и проверить документ', runsBtn: 'Сравнить несколько документов', title: 'Документы', tabs: { yuklangan: 'Загруженные', muharrir: 'В редакторе', natijalar: 'Результаты' }, runsLead: 'Результаты табличного анализа, проверки по playbook, проекта иска и задач агента — хранятся 90 дней (добавленные в дело — пока дело открыто).', runsNone: 'Результатов пока нет.', st: { done: 'готово', failed: 'ошибка', cancelled: 'отменено', budget: 'лимит исчерпан', needs_input: 'ждёт ответа', queued: 'в очереди', running: 'выполняется' }, lead: 'Загруженные документы хранятся здесь, пока вы их не удалите. В следующий раз выберите без повторной загрузки.',
       sealed: 'Тексты хранятся в базе в зашифрованном виде.', notSealed: '', none: 'Документов пока нет. Загрузите файл в чат или в «Анализ документа» — он останется здесь.',
       pick: 'Выбрать из моих документов', choose: 'Выбрать', cancel: 'Отмена', rename: 'Переименовать', del: 'Удалить', delQ: 'Документ будет удалён полностью (вместе с текстом). Продолжить?',
       kinds: { text: 'Текстовый', pdf: 'Скан PDF', image: 'Изображение' }, pages: '{n} стр.', used: 'последнее использование', added: 'добавлен', count: '{n} / {m} документов', search: 'Поиск', max: 'Не более {n}', edit: 'В редакторе' }
@@ -87,7 +87,8 @@
           (J.kbAdd ? '<button class="pill sm ghost" type="button" data-kb="' + esc(d.id) + '" title="' + esc(J.kbText('toKb')) + '" aria-label="' + esc(J.kbText('toKb')) + '">' + J.icon('layers') + '</button>' : '') +
           '<button class="pill sm ghost" type="button" data-rn="' + esc(d.id) + '" aria-label="' + esc(s('rename')) + '">' + J.icon('pen') + '</button>' +
           '<button class="pill sm ghost" type="button" data-del="' + esc(d.id) + '" aria-label="' + esc(s('del')) + '">' + J.icon('trash') + '</button></div>';
-      }).join('') : '<div class="empty-state">' + esc(s('none')) + '</div>';
+      // U2: an empty page says what goes here and offers the one step that fills it
+      }).join('') : (all.length ? '<div class="empty-state">' + esc(s('none')) + '</div>' : '<div class="empty-state st-empty"><p>' + esc(s('none')) + '</p><a class="pill sm" href="#/tahlil">' + esc(s('emptyBtn')) + '</a></div>');
       list.forEach(function (d) { var el = $('[data-id="' + d.id + '"] .lib-n', v); if (el) el.textContent = d.name || 'Hujjat'; });
       $$('[data-ed]', v).forEach(function (b) {
         b.onclick = function () { b.disabled = true; J.openLibraryInEditor(all.filter(function (x) { return x.id === b.dataset.ed; })[0]); };
@@ -132,7 +133,7 @@
       if (!document.body.contains(box)) return;
       if (!r.ok) { box.innerHTML = '<div class="empty-state">' + esc(r.status === 404 ? s('runsNone') : J.errMsg(r.data)) + '</div>'; return; }
       var list = (r.data.runs || []).filter(function (x) { return x.status !== 'awaiting_approval'; });
-      if (!list.length) { box.innerHTML = '<div class="empty-state" style="padding:18px 4px;text-align:left">' + esc(s('runsNone')) + '</div>'; return; }
+      if (!list.length) { box.innerHTML = '<div class="empty-state st-empty"><p>' + esc(s('runsNone')) + '</p><a class="pill sm" href="#/jadval">' + esc(s('runsBtn')) + '</a></div>'; return; }
       box.innerHTML = list.map(function (x, i) {
         return '<a class="fd-row" href="#" data-i="' + i + '"><span class="fd-ic">' + J.icon(x.workflow === 'tabular_review' ? 'layers' : 'spark') + '</span><span class="fd-t"><b></b><small class="muted"></small></span></a>';
       }).join('');

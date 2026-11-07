@@ -48,7 +48,10 @@
   function drawUsage() {
     var box = $('#usage'), b = J.balance();
     if (J.isStaff()) { box.innerHTML = '<div class="usage-h"><b>' + esc(t('usage.unlimited')) + '</b></div>'; return; }
-    if (!J.S.tariff || b.kind === 'none') {
+    // U2: no plan yet, the one-time Sinov still there - it starts with the first question; nothing to choose
+    if (J.trialWaiting && J.trialWaiting()) {
+      box.innerHTML = J.trialUsageHtml();
+    } else if (!J.S.tariff || b.kind === 'none') {
       box.innerHTML = '<div class="usage-h"><b>' + esc(t('usage.none')) + '</b></div><button class="pill sm" data-a="plans">' + esc(t('usage.upgrade')) + '</button>';
     } else {
       var c = J.svc('chat') || { used: 0, limit: 0, remaining: 0 }, pct = c.limit ? Math.min(100, Math.round(100 * c.used / c.limit)) : 0;
@@ -154,7 +157,9 @@
     J.loadSessions();
     // the editor is on every plan (D3): someone opening a shared document or its invite link is not stopped by the plan picker
     var editorPage = /^#\/muharrir\//.test(location.hash || '');
-    if (J.needsPlan() && !editorPage) J.openPlans({ forced: true });
+    // U2: the plan picker is forced only when there is nothing to start with (the Sinov used up / not offered);
+    // a new person asks their first question and the Sinov starts on the server then
+    if (J.needsPlan() && !editorPage && !(J.trialWaiting && J.trialWaiting())) J.openPlans({ forced: true });
     else if (J.trialEnded()) {
       var seen = null; try { seen = sessionStorage.getItem('jai-ended-shown'); } catch (e) {}
       if (!seen) { try { sessionStorage.setItem('jai-ended-shown', '1'); } catch (e) {} J.openPlans({ ended: true }); }

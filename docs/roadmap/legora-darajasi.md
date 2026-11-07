@@ -429,3 +429,7 @@ nima o'lchandi.
   saqlanadi). U5a PR: muharrirda kartani bosish = joyi och ko'k; Word
   1-to'plami (indekslar, oraliq, xat boshi, tozalash, sahifa uzilishi,
   topish/almashtirish, so'z/sahifa soni, masshtab, Word'da sahifa raqami).
+- 2026-11-07: #577 merge (U5a). U2 PR: birinchi kirishda tarif oynasi yo'q
+  (Sinov birinchi savolda serverda boshlanadi), "Nimadan boshlaysiz?" uchta
+  tugma bilan, alifbo paneli birinchi ishdan keyin va kontent ustida emas,
+  bo'sh sahifalarda bitta gap va bitta tugma.
