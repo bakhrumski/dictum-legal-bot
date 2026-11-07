@@ -78,7 +78,7 @@ Tomonlar yengib bo'lmaydigan kuch holatlarida javobgar bo'lmaydi.`;
     const core = read('core.js');
     assert.ok(/lawyer: \{ slug: 'yurist', nav: \[[^\]]*'#\/firma'/.test(core) && /firm: \{ slug: 'firma', nav: \[[^\]]*'#\/firma'/.test(core));
     assert.ok(/data-kb=/.test(read('library.js')) && /J\.kbAdd\(\{ kind: 'library'/.test(read('library.js')));
-    assert.ok(/J\.editorKb\(v, ed,/.test(read('editor.js')) && /panels = \[AI \|\| null, CHK, KB\]/.test(read('editor.js')));
+    assert.ok(/J\.editorKb\(v, ed,/.test(read('editor.js')) && /panels = \[AI \|\| null, CHK, KB(, ASK)?\]/.test(read('editor.js')));
     assert.ok(/\.kb-hit\{background:var\(--accent-soft\)/.test(read('app.css')), 'hits on light blue');
   });
 

@@ -1400,6 +1400,22 @@ Known state of the suites (Sept 2026):
   download has the page number in the footer (`htmlToDocx` `pageNumbers`, a
   PAGE field; drafts and opinions unchanged) and the spacing / indent / break.
   `tests/editor-word-set1.test.js`.
+  U5b (2026-11-07, frontend only, `public/app/editor-ask.js`; the owner's
+  answer 4 of the audit: one chat unit a question, kept with the document and
+  in Suhbatlar): "So'rash" in the editor's top bar (and "Shu joy haqida
+  so'rash" on an AI risk card) opens a side chat about the selected words or
+  the card's excerpt (shown on light blue), else the whole document. The
+  answer is the ordinary chain - `POST /api/legal-chat` streamed, unchanged:
+  the document's text as `documentText` (a question = 1 chat unit, document-job
+  chat_excerpt), the place quoted in the message; a 409 DOC_COST_CONFIRM shows
+  the price and only its `{ service: units }` is sent back (`isJob`); a spent
+  limit opens the plans. Each answer: "Izoh qilish" (a comment with the
+  answer on the place, marked by an editor - `CM.addFrom`; the place found
+  word for word by `J.editorFindQuote`) and "Matnga qo'shish" (plain
+  paragraphs under that paragraph, an editor only, Tahlil / Xulosa headings
+  left out). Saved to Suhbatlar ("📝 <title>", topic `editor:<id>`); this
+  browser remembers it and the same chat goes on (a chat of another document
+  is never taken). `tests/editor-ask.test.js`.
 - `src/workspace/` — Workspace: routes, authz, Supabase
   realtime/storage, Workspace AI. Since 2026-10-28 (owner, migration 025)
   any active paid plan (Silver, Gold, Platinum) owns one (`PLAN_CATALOG`
