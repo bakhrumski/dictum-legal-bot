@@ -444,3 +444,7 @@ nima o'lchandi.
   chat paneli (oddiy javob zanjiri, har savol 1 chat birligi, javob izoh yoki
   matn sifatida bir bosishda, Suhbatlarda saqlanadi). UX auditining barcha
   bosqichlari shu bilan tugaydi; keyingisi P2.
+- 2026-11-07: #581 merge (U5b; UX auditi tugadi). P2 PR (migratsiya 048):
+  mijoz portalida yurist va mijoz yozishmasi - sayt va bot, xabarlar
+  shifrlangan, yuristning xabari mijozga botda matni bilan keladi, mijoz
+  botdan "✉️ Yuristga yozish" bilan javob beradi; AI o'qimaydi.

@@ -1137,6 +1137,30 @@ Known state of the suites (Sept 2026):
   client per burst (`PORTAL_NOTIFY_DELAY_MS` 20 s, in memory): the matter's
   title and what changed with "Ochish" - never a note's or document's text.
   `PORTAL_TELEGRAM=off` stops the notices. `tests/telegram-portal.db.test.js`.
+  P2 (2026-11-07, migration 048, design §P2): one conversation per matter
+  between the lawyer side and its clients, apart from the Workspace room chat
+  (`matter_messages`, body sealed AAD `matter_messages.body:<matter>:<id>`;
+  `matter_message_reads` for unread counts). `portal.messages` / `sendMessage`
+  / `unread`: the lawyer side writes (whoever writes the matter; a viewer
+  reads), a client writes while the matter is open and reads it in the closed
+  matter's 30 days; anything else 404; <= 4 000 chars, `PORTAL_MSG_RATE` (30)
+  a sender a matter in 10 minutes; reading marks it read; a staff reader of a
+  client's words goes to the access log (E6b). Routes
+  `/api/matters/:id/portal/messages` and `/api/portal/:id/messages` (GET,
+  POST same-origin); the panel and the client's list carry `unread`. The
+  other side is told at once (`createNotifier` kind 'message', not batched): a
+  lawyer's message goes to the linked clients WITH its text ("✉️ Javob
+  yozish" `mpw_<id>`, "📂 Ochish"); a client's to the matter's owner and
+  whoever answered on the lawyer side, in their own Telegram, with a link to
+  the matter page. In the bot `mpw_` (the client's own open matter) puts the
+  chat in `portal_message` (30 min): the next text or voice note is sent as
+  the client's message (source 'telegram'), intercepted before the agent -
+  never a question, a request or an AI call; "bekor" leaves; the matter card
+  shows the last 3 messages and the write button. No AI reads or answers the
+  conversation, no unit. Account deletion replaces the client's words with
+  "[xabar o'chirilgan]" (design answer 7). Pages: "Yozishma" on the lawyer's
+  portal card (once a client joined) and on `#/portal/<id>` (mine on light
+  blue), "N ta yangi xabar" on the client's list. `tests/matter-messages.db.test.js`.
 - `src/agents/runs/` (2026-10-28, PR-B) — agent runs (migration 020): the
   claim draft, tabular and playbook routes are a service each (`prepare` no
   AI + reservation held with `meta.holdUntil` 45 min, `run` the harness,
