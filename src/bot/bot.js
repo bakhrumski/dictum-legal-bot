@@ -932,6 +932,13 @@ bot.onText(/\/cancel/, (msg) => {
   }
 });
 
+// P2: the portal's notifier for messages written in the bot (the lawyer side hears of them)
+let portalNotifier = null;
+function portalNotify() {
+  if (!portalNotifier) portalNotifier = require('./telegram-portal').createNotifier({ pool, getBot: () => bot });
+  return portalNotifier.notify;
+}
+
 // /me - Check link status
 // ── CustDev pilot feedback (src/bot/pilot-feedback.js, src/sales/pilot-workspace.js):
 // /fikr or the "💬 Fikr bildirish" button puts the chat in feedback mode; only
@@ -1105,7 +1112,7 @@ async function handleCallbackQuery(callbackQuery) {
 
   // the client portal in the bot (src/bot/telegram-portal.js): a client's matters, a matter, a
   // shared document as a file, and the invite's tap - each read checked by src/matters/portal.js
-  if (data === 'mpl' || data === 'mpj_y' || data === 'mpj_n' || /^mp[md]_[0-9a-f-]{36}$/.test(data)) {
+  if (data === 'mpl' || data === 'mpj_y' || data === 'mpj_n' || /^mp[mdw]_[0-9a-f-]{36}$/.test(data)) {
     const tp = require('./telegram-portal');
     const lang = /^ru/i.test(String(callbackQuery.from.language_code || '')) ? 'ru' : 'uz';
     const t = tp.T(lang);
@@ -1128,6 +1135,12 @@ async function handleCallbackQuery(callbackQuery) {
       } else if (data.startsWith('mpm_')) {
         const r = await tp.matterCard(pool, account.id, data.slice(4), lang);
         await bot.sendMessage(chatId, r.text, r.keyboard ? { reply_markup: r.keyboard } : {}).catch(() => {});
+      } else if (data.startsWith('mpw_')) {
+        // P2: the next message (text or voice) goes to the lawyer of this matter; "bekor" leaves
+        const s = await tp.startMessage(pool, account.id, data.slice(4));
+        if (!s.ok) { await bot.sendMessage(chatId, t.notFound).catch(() => {}); return; }
+        await require('../agents/telegram-agent').setConversationState(chatId, tp.MSG_STATE, { since: Date.now(), adminId: account.id, matterId: data.slice(4) });
+        await bot.sendMessage(chatId, t.askMsg(s.title)).catch(() => {});
       } else {
         const f = await tp.documentFile(pool, account.id, data.slice(4), lang);
         if (!f) { await bot.sendMessage(chatId, t.notFound).catch(() => {}); return; }
@@ -2374,6 +2387,31 @@ async function handleTelegramMessage(msg) {
     // Unsupported message type
     bot.sendMessage(chatId, 'Iltimos, matn, ovozli xabar, video yoki fayl yuboring.');
     return;
+  }
+
+  // ── Client portal P2 (src/bot/telegram-portal.js): after "✉️ Yuristga yozish" the next
+  // text or voice note is a message to the matter's lawyer - never a question, a request or
+  // an AI call; "bekor" leaves. The client's own matter only (checked again when sending).
+  if ((requestData.request_type === 'text' || requestData.voiceTranscribed) && msg.chat.type === 'private') {
+    const tp = require('./telegram-portal');
+    const telegramAgent = require('../agents/telegram-agent');
+    const conv = await telegramAgent.loadConversation(chatId).catch(() => null);
+    if (conv && conv.state === tp.MSG_STATE) {
+      await telegramAgent.setConversationState(chatId, 'idle', {}).catch(() => {});
+      if (tp.msgWaiting(conv)) {
+        const t = tp.T(/[\u0400-\u04ff]/u.test(String(requestData.request_text || '')) ? 'ru' : 'uz');
+        const text = String(requestData.request_text || '').trim();
+        if (tp.MSG_CANCEL.test(text)) { await bot.sendMessage(chatId, t.msgCancelled).catch(() => {}); return; }
+        try {
+          await tp.sendFromBot(pool, conv.context.adminId, conv.context.matterId, text, { notify: portalNotify() });
+          await bot.sendMessage(chatId, t.sent, { reply_markup: { inline_keyboard: [[{ text: t.open, callback_data: `mpm_${conv.context.matterId}` }]] } }).catch(() => {});
+        } catch (e) {
+          if (!(e && e.status)) console.warn('[BOT] portal message not sent:', e.message);
+          await bot.sendMessage(chatId, e && e.status && e.message ? e.message : t.msgFailed).catch(() => {});
+        }
+        return;
+      }
+    }
   }
 
   // ── Pilot feedback mode (src/bot/pilot-feedback.js): only the message right

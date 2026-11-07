@@ -25,6 +25,16 @@
  * (7), used once, revocable; a person who already reaches the matter as a
  * lawyer cannot accept it as a client. PORTAL_MAX_CLIENTS (10) a matter.
  * MATTER_PORTAL=off -> 503.
+ *
+ * P2 (2026-11-07, design §P2): one conversation per matter between the lawyer
+ * side (whoever writes the matter; a viewer reads) and its clients - apart
+ * from the Workspace room chat. Bodies sealed (AAD matter_messages.body:
+ * <matter>:<id>), MSG_MAX characters, MSG_RATE a sender a matter in ten
+ * minutes; no AI reads or answers it, no unit. A new message is told to the
+ * other side (notify 'message': the bot sends it to the clients; the lawyer
+ * side gets the client's message in their own Telegram). Reading marks it
+ * read for that person (matter_message_reads); a staff account opening a
+ * client's messages is in the access log (route side).
  */
 
 const crypto = require('crypto');
@@ -47,6 +57,10 @@ const fail = (status, code, message) => new MatterError(status, code, message);
 const NOT_FOUND = () => fail(404, 'not_found', 'Ish topilmadi');
 const clean = (v, max) => String(v == null ? '' : v).replace(/\s+/gu, ' ').trim().slice(0, max);
 const off = () => String(process.env.MATTER_PORTAL || '').toLowerCase() === 'off';
+const MSG_MAX = 4000;
+const MSG_RATE = () => Math.max(5, Number(process.env.PORTAL_MSG_RATE) || 30);
+const msgAad = (matterId, id) => `matter_messages.body:${matterId}:${id}`;
+const DELETED_TEXT = '[xabar o‘chirilgan]';
 
 function createPortal({ db, notify = null }) {
   if (!db) throw new Error('db is required');
@@ -104,6 +118,7 @@ function createPortal({ db, notify = null }) {
       deadlines: deadlines.rows.map(deadlineView),
       items: items.rows.map(i => itemView(i, false)),
       limits: { clients: MAX_CLIENTS(), items: MAX_ITEMS },
+      unread: (await unread(adminId, 'lawyer', [m.id]).catch(() => ({})))[m.id] || 0,
     };
   }
 
@@ -281,7 +296,8 @@ function createPortal({ db, notify = null }) {
         WHERE c.client_id = $1 AND c.removed_at IS NULL AND m.deleted_at IS NULL
           AND (m.status = 'open' OR m.closed_at IS NULL OR m.closed_at > now() - interval '${CLOSED_DAYS} days')
         ORDER BY m.client_stage_at DESC LIMIT 200`, [adminId]);
-    return r.rows.map(m => ({ id: m.id, title: m.title, status: m.status, stage: m.client_stage, stageAt: m.client_stage_at, lawyerName: m.lawyer || 'Yurist', closedAt: m.closed_at }));
+    const un = await unread(adminId, 'client').catch(() => ({}));
+    return r.rows.map(m => ({ id: m.id, title: m.title, status: m.status, stage: m.client_stage, stageAt: m.client_stage_at, lawyerName: m.lawyer || 'Yurist', closedAt: m.closed_at, unread: un[m.id] || 0 }));
   }
 
   /** One matter as the client sees it - only what was marked for the client. */
@@ -315,8 +331,71 @@ function createPortal({ db, notify = null }) {
     return { ok: true };
   }
 
+  // ---------- P2: messages ----------
+
+  /** The matter for a side: 'lawyer' (read is enough to read, write to send) or 'client'. */
+  async function sideMatter(matterId, adminId, side, need) {
+    if (side === 'client') return clientMatter(matterId, adminId);
+    return lawyerMatter(matterId, adminId, need);
+  }
+  const msgView = (r, me) => ({
+    id: r.id, side: r.side, mine: r.author_id === me, author: r.author_name || (r.side === 'client' ? 'Mijoz' : 'Yurist'),
+    text: privacy.open(r.body, msgAad(r.matter_id, r.id)), source: r.source, at: r.created_at,
+  });
+
+  /** The conversation (the newest MSG_LIST, oldest first); reading it marks it read for this person. */
+  async function messages(matterId, adminId, side) {
+    const m = await sideMatter(matterId, adminId, side, 'read');
+    const r = await db.query(
+      `SELECT * FROM (SELECT x.*, a.full_name AS author_name FROM matter_messages x LEFT JOIN admins a ON a.id = x.author_id
+                       WHERE x.matter_id = $1 ORDER BY x.created_at DESC LIMIT 200) t ORDER BY created_at`, [m.id]);
+    await db.query(`INSERT INTO matter_message_reads (matter_id, admin_id, read_at) VALUES ($1, $2, now())
+                    ON CONFLICT (matter_id, admin_id) DO UPDATE SET read_at = now()`, [m.id, adminId]);
+    return { matterId: m.id, messages: r.rows.map(x => msgView(x, adminId)),
+      // whose sealed words a staff reader saw (the route writes the access log)
+      clientAuthors: r.rows.filter(x => x.side === 'client' && x.author_id).map(x => x.author_id), max: MSG_MAX };
+  }
+
+  /** A message from one side; told to the other. source 'web' | 'telegram'. */
+  async function sendMessage(matterId, adminId, side, { text, source = 'web' } = {}) {
+    const m = await sideMatter(matterId, adminId, side, 'write');
+    if (side === 'client' && m.status !== 'open') throw fail(409, 'closed', 'Ish yopilgan - xabar yuborib bo‘lmaydi');
+    const body = String(text == null ? '' : text).replace(/\r\n?/gu, '\n').trim();
+    if (!body) throw fail(400, 'invalid', 'Xabar bo‘sh');
+    if (body.length > MSG_MAX) throw fail(413, 'too_long', `Xabar ${MSG_MAX} belgidan oshmasin`);
+    const recent = (await db.query(`SELECT count(*)::int AS n FROM matter_messages WHERE matter_id = $1 AND author_id = $2 AND created_at > now() - interval '10 minutes'`, [m.id, adminId])).rows[0].n;
+    if (recent >= MSG_RATE()) throw fail(429, 'rate', 'Juda ko‘p xabar - birozdan keyin yozing');
+    const c = await db.connect();
+    let row;
+    try {
+      await c.query('BEGIN');
+      row = (await c.query(`INSERT INTO matter_messages (matter_id, author_id, side, body, source) VALUES ($1, $2, $3, '', $4) RETURNING *`,
+        [m.id, adminId, side, source === 'telegram' ? 'telegram' : 'web'])).rows[0];
+      await c.query('UPDATE matter_messages SET body = $2 WHERE id = $1', [row.id, privacy.seal(body, msgAad(m.id, row.id))]);
+      await c.query(`INSERT INTO matter_message_reads (matter_id, admin_id, read_at) VALUES ($1, $2, now())
+                     ON CONFLICT (matter_id, admin_id) DO UPDATE SET read_at = now()`, [m.id, adminId]);
+      await c.query('COMMIT');
+    } catch (e) { await c.query('ROLLBACK').catch(() => {}); throw e; } finally { c.release(); }
+    tell(m.id, { kind: 'message', side, messageId: row.id, authorId: adminId, text: body, title: m.title, ownerId: m.owner_id });
+    return { id: row.id, at: row.created_at };
+  }
+
+  /** Unread messages from the other side: the lawyer's matters (by id) or the client's matters. */
+  async function unread(adminId, side, matterIds = null) {
+    const other = side === 'client' ? 'lawyer' : 'client';
+    const r = await db.query(
+      `SELECT x.matter_id, count(*)::int AS n FROM matter_messages x
+         LEFT JOIN matter_message_reads rd ON rd.matter_id = x.matter_id AND rd.admin_id = $1
+        WHERE x.side = $2 AND (rd.read_at IS NULL OR x.created_at > rd.read_at)
+          AND ${side === 'client'
+            ? 'x.matter_id IN (SELECT matter_id FROM matter_clients WHERE client_id = $1 AND removed_at IS NULL)'
+            : 'x.matter_id = ANY($3::uuid[])'}
+        GROUP BY x.matter_id`, side === 'client' ? [adminId, other] : [adminId, other, (matterIds || []).filter(isUuid)]);
+    const out = {}; for (const x of r.rows) out[x.matter_id] = x.n; return out;
+  }
+
   return { panel, invite, revokeInvite, removeClient, setStage, addDeadline, updateDeadline, removeDeadline, addItem, removeItem,
-    inviteInfo, accept, myMatters, clientView, clientItem, leave };
+    inviteInfo, accept, myMatters, clientView, clientItem, leave, messages, sendMessage, unread };
 }
 
 function mountPortalRoutes(app, { pool, requireAuth, requireSameOrigin, notify = null }) {
@@ -347,6 +426,13 @@ function mountPortalRoutes(app, { pool, requireAuth, requireSameOrigin, notify =
   app.post('/api/matters/:id/portal/deadlines', ...W, guard(async (req, res) => { res.status(201).json(await portal.addDeadline(req.params.id, me(req), b(req))); }));
   app.patch('/api/matters/:id/portal/deadlines/:deadlineId', ...W, guard(req => portal.updateDeadline(req.params.id, req.params.deadlineId, me(req), b(req))));
   app.delete('/api/matters/:id/portal/deadlines/:deadlineId', ...W, guard(req => portal.removeDeadline(req.params.id, req.params.deadlineId, me(req))));
+  // P2: the conversation with the clients (a staff reader of a client's words is in the access log)
+  app.get('/api/matters/:id/portal/messages', requireAuth, guard(async req => {
+    const out = await portal.messages(req.params.id, me(req), 'lawyer');
+    require('../privacy/access-log').note(pool, req, { table: 'matter_messages', owners: out.clientAuthors });
+    delete out.clientAuthors; return out;
+  }));
+  app.post('/api/matters/:id/portal/messages', ...W, guard(async (req, res) => { res.status(201).json(await portal.sendMessage(req.params.id, me(req), 'lawyer', { text: b(req).text })); }));
   app.post('/api/matters/:id/portal/items', ...W, guard(async (req, res) => { res.status(201).json(await portal.addItem(req.params.id, me(req), b(req))); }));
   app.delete('/api/matters/:id/portal/items/:itemId', ...W, guard(req => portal.removeItem(req.params.id, req.params.itemId, me(req))));
 
@@ -356,6 +442,8 @@ function mountPortalRoutes(app, { pool, requireAuth, requireSameOrigin, notify =
   app.post('/api/portal/invite/:token/accept', ...W, guard(req => portal.accept(req.params.token, me(req))));
   app.get('/api/portal/:matterId', requireAuth, guard(req => portal.clientView(req.params.matterId, me(req))));
   app.get('/api/portal/:matterId/items/:itemId', requireAuth, guard(req => portal.clientItem(req.params.matterId, req.params.itemId, me(req))));
+  app.get('/api/portal/:matterId/messages', requireAuth, guard(async req => { const out = await portal.messages(req.params.matterId, me(req), 'client'); delete out.clientAuthors; return out; }));
+  app.post('/api/portal/:matterId/messages', ...W, guard(async (req, res) => { res.status(201).json(await portal.sendMessage(req.params.matterId, me(req), 'client', { text: b(req).text })); }));
   app.post('/api/portal/:matterId/leave', ...W, guard(req => portal.leave(req.params.matterId, me(req))));
   return portal;
 }
@@ -363,6 +451,9 @@ function mountPortalRoutes(app, { pool, requireAuth, requireSameOrigin, notify =
 /** Account deletion: the person stops being a client anywhere (the matters' own records stay with their lawyers). */
 async function deleteAccountClientRows(db, adminId) {
   await db.query('DELETE FROM matter_clients WHERE client_id = $1', [adminId]);
+  // P2 (design answer 7): the person's messages stay as a line in the matter, their text replaced
+  await db.query(`UPDATE matter_messages SET body = $2 WHERE author_id = $1 AND side = 'client'`, [adminId, DELETED_TEXT])
+    .catch(e => { if (e.code !== '42P01') throw e; });
 }
 
 module.exports = { createPortal, mountPortalRoutes, deleteAccountClientRows, STAGES, CLOSED_DAYS };

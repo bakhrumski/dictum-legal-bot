@@ -1143,3 +1143,14 @@ html[lang=ru] .ed-doc hr[data-page-break]::after{content:"Разрыв стра�
 .ea-links{display:flex;gap:12px;margin-top:6px;font-size:12.5px}
 .ea-cost{padding:10px}
 @media print{body.ed-on .ed-ask{display:none!important}}
+
+/* P2 (portal.js): the conversation between the lawyer side and the client; mine on light blue, no stripes */
+.pt-tl{font-size:12.5px;margin:4px 0 8px}
+.pt-msgs{max-height:340px;overflow:auto;display:flex;flex-direction:column;gap:8px;padding:2px}
+.pt-m{max-width:86%;align-self:flex-start;background:var(--panel);border-radius:12px;padding:7px 10px}
+.pt-m.mine{align-self:flex-end;background:var(--accent-soft)}
+.pt-m small{font-size:11.5px;display:block}
+.pt-m p{margin:2px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px}
+.pt-mbox{display:flex;gap:8px;align-items:flex-end;margin-top:8px}
+.pt-mbox textarea{flex:1;min-width:0;resize:vertical}
+.pt-unread{margin-left:auto;flex:none}
