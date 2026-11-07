@@ -123,6 +123,10 @@
   /* birinchi marta: "matnlar yangi alifboda; eskisini xohlaysizmi?" (javobsiz qolsa yangi qoladi) */
   A.offer = function () {
     if (typeof document === 'undefined' || A.choice() || A.englishUi() || document.getElementById('jai-alpha-offer')) return;
+    // a page may hold the offer until the person has done something (the app: after the first work, U2)
+    if (typeof A.offerGate === 'function' && !A.offerGate()) return;
+    // and give it a place in the page instead of floating over it: { parent, after }
+    var host = typeof A.offerHost === 'function' ? A.offerHost() : null;
     var ru = /^ru/.test(document.documentElement.lang || '');
     var bar = document.createElement('div');
     bar.id = 'jai-alpha-offer';
@@ -146,6 +150,13 @@
     old.onclick = function () { A.save('old'); };
     x.onclick = function () { A.save('new', { noReload: true }); bar.remove(); };
     bar.appendChild(msg); bar.appendChild(old); bar.appendChild(x);
+    if (host && host.parent) {
+      // a row in the page: it moves the content down rather than covering it
+      bar.style.position = 'static'; bar.style.transform = 'none'; bar.style.left = 'auto'; bar.style.bottom = 'auto';
+      bar.style.width = 'auto'; bar.style.maxWidth = 'none'; bar.style.margin = narrow ? '6px 8px 0' : '8px 16px 0'; bar.style.boxShadow = 'none'; bar.style.zIndex = 'auto';
+      host.parent.insertBefore(bar, host.after ? host.after.nextSibling : host.parent.firstChild);
+      return;
+    }
     document.body.appendChild(bar);
   };
   /** the choice: this browser, and the account when signed in (src/adaptive: manual.alphabet) */

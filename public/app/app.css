@@ -1053,3 +1053,22 @@ html[lang=ru] .ed-doc hr[data-page-break]::after{content:"Разрыв стра�
 .ed-foot{align-items:center;flex-wrap:wrap}
 .ed-zoom{height:24px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--fg);font:inherit;font-size:12px;padding:0 4px}
 @media print{body.ed-on .ed-paper{zoom:1!important}}
+
+/* U2 (start.js): the first visit - one question with three big buttons; the rest after the first work */
+.home-wait .tasks,.home-wait .rv-pick,.home-wait .roles,.home-wait .tg-host,.home-wait .recent{visibility:hidden}
+.st-off{display:none!important}
+.st-box{margin-top:28px}
+.st-q{font-size:22px;font-weight:500;margin:0}
+.st-sub{margin:6px 0 16px;font-size:14px}
+.st-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.st-card{display:flex;flex-direction:column;align-items:flex-start;gap:8px;text-align:left;padding:18px;border:1px solid var(--line);border-radius:16px;background:var(--surface);color:var(--fg);font:inherit;cursor:pointer;min-height:150px}
+.st-card:hover{border-color:var(--cta)}
+.st-card:focus-visible{outline:2px solid var(--cta);outline-offset:2px}
+.st-card b{font-size:16px;font-weight:500}
+.st-card small{color:var(--muted);font-size:13.5px;line-height:1.45}
+.st-ic{width:40px;height:40px;border-radius:12px;background:var(--accent-soft);color:var(--cta-dark);display:grid;place-items:center}
+.st-ic .i{width:20px;height:20px}
+@media (max-width:900px){.st-grid{grid-template-columns:minmax(0,1fr)}.st-card{min-height:0;flex-direction:row;flex-wrap:wrap;align-items:center;padding:14px}.st-card small{flex-basis:100%}}
+.st-empty{display:flex;flex-direction:column;align-items:center;gap:12px}
+.st-empty p{margin:0}
+.usage-plans{font:inherit;font-size:12.5px;padding:0;margin-top:4px;align-self:flex-start;background:none;border:0;color:var(--cta);cursor:pointer;text-decoration:underline;text-underline-offset:2px}

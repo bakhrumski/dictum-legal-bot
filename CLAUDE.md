@@ -501,6 +501,22 @@ Known state of the suites (Sept 2026):
   | muharrir | natijalar`): uploaded documents, the editor's documents (the
   editor's back link opens that tab) and the person's agent results
   (`GET /api/agent/runs`). `tests/search.db.test.js`.
+- U2 of the UX audit (2026-11-07, frontend only, `public/app/start.js`): the
+  first visit asks nothing before the first question. The plan picker is
+  forced only when no Sinov is waiting (`J.trialWaiting`: kind none and
+  `trialAvailable`); the Sinov has no period and the server creates it on
+  first use (`resolveEntitlement` createTrial) - the tariff rules, the
+  free-access gate and the quotas are unchanged; the usage box reads "Sinov
+  0 / 5 · 5 ta bepul savol" with a "Tariflar" link. A person with nothing yet
+  (`/api/recent` empty) sees "Nimadan boshlaysiz?" - Savol berish (the home
+  composer, an example), Hujjatni tekshirish (`#/tahlil`), Hujjat yozish
+  (`#/tayyorlash`) - instead of the field chips, task cards, Telegram banner
+  and the empty list (hidden while the list loads; an unreadable list keeps
+  the old page; staff and role previews never). The alphabet offer waits for
+  the first work (`JAIAlphabet.offerGate`, a chat or any recent item) and in
+  the app is a row under the top bar (`offerHost`), never over the content;
+  the landing keeps the floating bar. Empty chats / uploaded documents /
+  results pages: one sentence and one button. `tests/first-visit.test.js`.
 - "Hujjatlarim" (2026-10-29, owner: every uploaded document stays for later
   actions until the person deletes it; migration 029): `document_scans` is the
   person's library - a text Word/PDF read by `/api/analyze/extract` (it now

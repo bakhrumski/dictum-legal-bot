@@ -31,7 +31,7 @@
         : (J.roleChosen() ? '<div class="rv-bar"><span class="rv-tag">' + esc(t('roles.label')) + ': <b>' + esc(t('role.' + rv)) + '</b></span><button type="button" class="link rv-change">' + esc(t('rv.change')) + '</button><a href="#/rol/hammasi">' + esc(t('rv.all')) + '</a></div>' : '') + chips;
       var lean = J.mount('<div class="home rh">' + bar +
         '<h1 class="hello"></h1><div class="cmp-host"></div><p class="hint">' + esc(t('cmp.hint')) + '</p>' +
-        '<div class="tasks"></div><div class="recent"><h3>' + esc(t('recent')) + '</h3><div class="rows"></div></div></div>');
+        '<div class="st-host" hidden></div><div class="tasks"></div><div class="recent"><h3>' + esc(t('recent')) + '</h3><div class="rows"></div></div></div>');
       $('.hello', lean).textContent = greet + (name ? ', ' + name : '') + '.';
       var lc = J.composer($('.cmp-host', lean), { menuDown: true, placeholder: t('rv.ph.' + rv), onSend: function (p) { J.startChat(p); } });
       J.homeComposer = lc;
@@ -58,7 +58,9 @@
         $$('.row', lean).forEach(function (r) { r.onclick = function () { J.go('#/c/' + r.dataset.id); }; });
       };
       // U1: "Davom ettirish" - the last items of every kind (find.js); the recent chats when it cannot load
-      if (J.recentBlock) J.recentBlock($('.recent', lean), { max: 5, fallback: function () { $('.recent h3', lean).textContent = t('recent'); drawLeanRecent(); } });
+      // U2: nothing yet -> "Nimadan boshlaysiz?" instead of the field chips, tasks and the empty list (start.js)
+      var leanFresh = freshHome(lean, lc, !preview);
+      if (J.recentBlock) J.recentBlock($('.recent', lean), { max: 5, onItems: leanFresh, fallback: function () { $('.recent h3', lean).textContent = t('recent'); drawLeanRecent(); } });
       else { drawLeanRecent(); J.on('sessions', function () { if (document.body.contains(lean)) drawLeanRecent(); }); }
       // the client's field: picked here, saved as their type (grants nothing), the view follows it
       var ch = $('.rv-change', lean); if (ch) ch.onclick = function () { var pk = $('.rv-pick', lean); pk.hidden = !pk.hidden; };
@@ -74,7 +76,7 @@
       '<div class="roles"><span class="kicker">' + esc(t('roles.label')) + '</span>' + ROLES.map(function (r) { return '<button class="chip' + (r === persona ? ' on' : '') + '" data-r="' + r + '">' + esc(t('role.' + r)) + '</button>'; }).join('') +
         // a client who opened every section can go back to their field's simpler view
         (J.S.user && J.S.user.role === 'user' && J.roleFull() ? '<a class="rv-back" href="#/rol/sodda">' + esc(t('rv.lean')) + '</a>' : '') + '</div>' +
-      '<div class="tasks"></div><div class="tg-host"></div>' +
+      '<div class="st-host" hidden></div><div class="tasks"></div><div class="tg-host"></div>' +
       '<div class="recent"><h3>' + esc(t('recent')) + '</h3><div class="rows"></div></div></div>');
     $('.hello', v).textContent = greet + (name ? ', ' + name : '') + '.';
     var cmp = J.composer($('.cmp-host', v), { menuDown: true, onSend: function (p) { J.startChat(p); } });
@@ -111,10 +113,32 @@
     }
     drawTasks();
     // U1: "Davom ettirish" - the last 8 items of every kind (find.js); the recent chats when it cannot load
-    if (J.recentBlock) J.recentBlock($('.recent', v), { max: 8, fallback: function () { $('.recent h3', v).textContent = t('recent'); drawRecent(); } });
+    var fullFresh = freshHome(v, cmp, true);
+    if (J.recentBlock) J.recentBlock($('.recent', v), { max: 8, onItems: fullFresh, fallback: function () { $('.recent h3', v).textContent = t('recent'); drawRecent(); } });
     else { drawRecent(); J.on('sessions', function () { if (document.body.contains(v)) drawRecent(); }); }
     cmp.focus();
   };
+
+  /**
+   * U2: a person with nothing yet (no chat, document, matter or result - GET /api/recent) sees one question,
+   * "Nimadan boshlaysiz?", instead of the field chips, the task cards and an empty list; the field is asked
+   * after the first work. Until the list is known those parts wait hidden (no flash). Staff and a role
+   * preview never see it. Returns the callback for recentBlock's items (null = the list could not load).
+   */
+  function freshHome(root, composer, allowed) {
+    var parts = $$('.tasks, .rv-pick, .roles, .tg-host, .recent', root);
+    var can = allowed && !J.isStaff() && J.startBlock;
+    if (!can) return null;
+    root.classList.add('home-wait');
+    return function (items) {
+      root.classList.remove('home-wait');
+      var fresh = Array.isArray(items) && items.length === 0;
+      if (!fresh) { if (Array.isArray(items) && items.length && J.markWorked) J.markWorked(); return; }
+      var host = $('.st-host', root);
+      J.startBlock(host, composer); host.hidden = false;
+      parts.forEach(function (el) { el.classList.add('st-off'); });
+    };
+  }
 
   /* ================= ROLLAR BO'YICHA KO'RINISH (#/rol) ================= */
   J.viewRoles = function () {
@@ -546,7 +570,10 @@
       var s = ($('input', v).value || '').toLowerCase();
       var list = (J.S.sessions || []).filter(function (x) { return !s || String(x.title || x.first_message || '').toLowerCase().indexOf(s) > -1; });
       $('.rows', v).innerHTML = list.length ? list.map(function (x) { return '<div class="row" data-id="' + esc(x.id) + '">' + J.icon('chat') + '<span>' + esc(x.title || x.first_message || '—') + '</span><small>' + esc(J.fmtDate(x.updated_at || x.created_at)) + '</small><button class="ib" data-del="' + esc(x.id) + '" title="' + esc(t('hi.del')) + '">' + J.icon('trash') + '</button></div>'; }).join('')
-        : '<div class="empty-state">' + esc(t('hist.empty')) + '</div>';
+        : ((J.S.sessions || []).length ? '<div class="empty-state">' + esc(t('hist.empty')) + '</div>'
+          // U2: no chat at all - one sentence and the one step
+          : '<div class="empty-state st-empty"><p>' + esc(t('hist.empty')) + '</p><button class="pill sm" type="button" data-a="first">' + esc(J.startText ? J.startText('ask') : t('new')) + '</button></div>');
+      var fb = $('[data-a=first]', v); if (fb) fb.onclick = function () { J.newChat(); };
       $$('.row', v).forEach(function (r) { r.onclick = function (e) { if (e.target.closest('[data-del]')) return; J.go('#/c/' + r.dataset.id); }; });
       $$('[data-del]', v).forEach(function (b) {
         b.onclick = async function () {
