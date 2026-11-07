@@ -534,6 +534,24 @@ Known state of the suites (Sept 2026):
   typing or sending; nothing runs by itself. `J.chatWithDoc` opens a new chat
   with the document (a service sent, else waiting in the box).
   `tests/doc-actions.test.js`.
+- U4 of the UX audit (2026-11-07, frontend only, `public/app/tools.js`): the
+  menu is five items for everyone - Savol (home and chats), Hujjatlar, Ishlar,
+  Asboblar, Advokatlar; staff add Navbat, an agent Mijozlarim, a portal client
+  Yuristdagi ishlarim, a master Boshqaruv; the menu no longer changes by role
+  ("Barcha bo'limlar" left the menu; `#/rol/*` routes and the lean home stay).
+  "Asboblar" (`#/asboblar`) holds every other section as a card - what it
+  does, an example, the price (or the lock: "Silver tarifidan" on Sinov /
+  none, "Tarifingizda yo'q" otherwise) - with the role view's sections first
+  (`J.ROLE_VIEWS[rv].nav` order); old routes (#/tahlil, #/jadval, #/playbook,
+  #/firma ...) open as before and mark "Asboblar" (`J.TOOL_ROUTES`). Phone
+  (<= 900 px): a bottom bar Savol / Hujjatlar / Ishlar / Ko'proq (opens the
+  side menu), hidden in the editor; the main area keeps room for it. Names:
+  Ko'nikma -> Tayyor buyruq(lar), Playbook -> Firma qoidalari bilan
+  tekshirish, Jadvalli tahlil -> Ko'p hujjatni solishtirish (page titles,
+  matter run labels; search still finds the old names). The usage box: "Bu
+  oy: N savol qoldi · M ta hujjat tahlili", "1 tahlil = 10 sahifagacha", the
+  end date, no "minutes not counted" line. "Shaxsiy / Jamoa" got tooltips.
+  `tests/menu-tools.test.js`.
 - "Hujjatlarim" (2026-10-29, owner: every uploaded document stays for later
   actions until the person deletes it; migration 029): `document_scans` is the
   person's library - a text Word/PDF read by `/api/analyze/extract` (it now

@@ -75,9 +75,9 @@
   };
 
   /* ---------- qidiruv oynasi ---------- */
-  var PAGES = [['#/', 'nav.home'], ['#/ishlar', 'nav.matters'], ['#/hujjatlarim', 'nav.docs'], ['#/tahlil', 'nav.analyze'], ['#/tayyorlash', 'nav.draft'],
+  var PAGES = [['#/', 'nav.ask'], ['#/ishlar', 'nav.matters'], ['#/hujjatlarim', 'nav.docs'], ['#/tahlil', 'nav.analyze'], ['#/tayyorlash', 'nav.draft'],
     ['#/konikmalar', 'nav.skills'], ['#/firma', 'nav.kb'], ['#/yozuvlar', 'nav.voice'], ['#/jamoa', 'nav.team'], ['#/advokatlar', 'nav.lawyers'],
-    ['#/suhbatlar', 'nav.history'], ['#/hisob', 'nav.account'], ['#/jadval', null, 'Jadvalli tahlil'], ['#/playbook', null, 'Playbook'], ['#/moslashish', null, 'Moslashish'], ['#/agent/dava', null, 'Da’vo arizasi']];
+    ['#/suhbatlar', 'nav.history'], ['#/hisob', 'nav.account'], ['#/asboblar', 'nav.tools'], ['#/jadval', null, 'Ko‘p hujjatni solishtirish'], ['#/jadval', null, 'Jadvalli tahlil'], ['#/playbook', null, 'Firma qoidalari bilan tekshirish'], ['#/playbook', null, 'Playbook'], ['#/moslashish', null, 'Moslashish'], ['#/agent/dava', null, 'Da’vo arizasi']];
   function fold(x) { return G.JAIAlphabet && G.JAIAlphabet.fold ? G.JAIAlphabet.fold(x) : String(x || '').toLowerCase(); }
   function pagesFor(q) {
     var words = fold(q).split(/\s+/).filter(Boolean);
