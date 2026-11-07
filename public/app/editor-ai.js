@@ -62,6 +62,8 @@
   }
 
   J.editorAiLabel = function () { return s('btn'); };
+  /** U5b: where these words stand in the document now ({ from, to } or null) - the same word-for-word rule */
+  J.editorFindQuote = function (ed, words) { return locate(ed, words); };
 
   /**
    * The panel. o: { id, canWrite, canRun, flush(), changed(), revision() }.
@@ -152,7 +154,9 @@
           (r.excerpt ? '<p class="ed-q"></p>' : '') + (r.excerpt && !at ? '<p class="ed-gone">' + esc(s('notFound')) + '</p>' : '') +
           '<p class="ed-ai-i"></p>' + (r.suggestion ? '<p class="ed-ai-sg"></p>' : '') +
           '<div class="ed-ai-prop" hidden></div>' +
-          '<div class="ed-ca">' + (at && r.replacement && o.canWrite && !done ? '<button type="button" class="link" data-a="prop">' + esc(s('propose')) + '</button>' : '') + '</div></div>');
+          '<div class="ed-ca">' + (at && r.replacement && o.canWrite && !done ? '<button type="button" class="link" data-a="prop">' + esc(s('propose')) + '</button>' : '') +
+          // U5b: ask about this place in the side chat (editor-ask.js)
+          (J.editorAskAt && r.excerpt ? '<button type="button" class="link" data-a="askat">' + esc(J.editorAskText('ask')) + '</button>' : '') + '</div></div>');
         $('.ed-ai-cl', card).textContent = r.clause || '';
         if (r.excerpt) $('.ed-q', card).textContent = '«' + r.excerpt + '»';
         $('.ed-ai-i', card).textContent = r.issue || '';
@@ -163,6 +167,7 @@
           card.addEventListener('click', function (e) { if (e.target.closest('button, a, textarea, input')) return; go(); });
           card.addEventListener('keydown', function (e) { if ((e.key === 'Enter' || e.key === ' ') && e.target === card) { e.preventDefault(); go(); } });
         }
+        var ab = $('[data-a=askat]', card); if (ab) ab.onclick = function () { if (J.editorAskAt) J.editorAskAt(r.excerpt); };
         var pb = $('[data-a=prop]', card);
         if (pb) pb.onclick = function () {
           var x = locate(ed, r.excerpt); if (!x) { J.toast(s('moved')); return; }

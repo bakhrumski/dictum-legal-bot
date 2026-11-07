@@ -149,6 +149,7 @@
       '<button class="pill sm ghost" type="button" data-a="share">' + J.icon('team') + '<span class="ed-shn">' + esc(s('sh').share) + '</span></button>' +
       (J.editorCheck ? '<button class="pill sm ghost" type="button" data-a="chk">' + J.icon('check') + '<span class="ed-chkn">' + esc(J.editorCheckLabel()) + '</span></button>' : '') +
       (J.editorAi ? '<button class="pill sm ghost" type="button" data-a="ai">' + J.icon('spark') + '<span class="ed-ain">' + esc(J.editorAiLabel()) + '</span></button>' : '') +
+      (J.editorAsk ? '<button class="pill sm ghost" type="button" data-a="ask">' + J.icon('chat') + '<span class="ed-askn">' + esc(J.editorAskLabel()) + '</span></button>' : '') +
       (J.editorKb ? '<button class="pill sm ghost" type="button" data-a="kb">' + J.icon('layers') + '<span class="ed-kbn">' + esc(J.editorKbLabel()) + '</span></button>' : '') +
       '<button class="pill sm ghost" type="button" data-a="cm">' + J.icon('chat') + '<span class="ed-cmn">' + esc(s('cm').title) + '</span></button>' +
       '<button class="pill sm ghost" type="button" data-a="ver">' + esc(s('versions')) + '</button>' +
@@ -447,11 +448,19 @@
     document.addEventListener('keydown', onKeys);
     G.addEventListener('hashchange', function offk() { G.removeEventListener('hashchange', offk); document.removeEventListener('keydown', onKeys); });
     /* one side panel at a time: comments, AI analysis, check, firm clauses */
-    var cmSide = $('.ed-side', v), panels = [AI || null, CHK, KB].filter(Boolean);
+    /* U5b: "Shu joy haqida so'rash" (editor-ask.js): the ordinary chat chain about the selected place, 1 chat unit a question */
+    var ASK = J.editorAsk ? J.editorAsk(v, ed, { id: id, title: function () { return titleIn.value || doc.title; }, canWrite: canWrite, canComment: canComment,
+      flush: function () { return canWrite ? flush() : Promise.resolve(); },
+      changed: function () { if (canWrite) { dirty = true; status('saving'); schedule(); } },
+      addComment: function (range, quote, body) { return CM.addFrom(range, quote, body); } }) : null;
+    // an AI / check card can open it on its own place (editor-ai.js, editor-check.js)
+    J.editorAskAt = ASK ? function (quote) { only(ASK); ASK.open({ quote: String(quote || '').slice(0, 1500) }); } : null;
+    var cmSide = $('.ed-side', v), panels = [AI || null, CHK, KB, ASK].filter(Boolean);
     var only = function (keep) { if (keep !== 'cm') cmSide.hidden = true; panels.forEach(function (p) { if (p !== keep) p.hide(); }); };
     if (AI) $('[data-a=ai]', v).onclick = function () { if (AI.el.hidden) { only(AI); AI.open(); } else AI.hide(); };
     if (CHK) $('[data-a=chk]', v).onclick = function () { if (CHK.el.hidden) { only(CHK); CHK.open(); } else CHK.hide(); };
     if (KB) $('[data-a=kb]', v).onclick = function () { if (KB.el.hidden) { only(KB); KB.open(); } else KB.hide(); };
+    if (ASK) $('[data-a=ask]', v).onclick = function () { if (ASK.el.hidden) { only(ASK); ASK.open(); } else ASK.hide(); };
     $('[data-a=cm]', v).addEventListener('click', function () { if (!cmSide.hidden) only('cm'); });
     /* toolbar by role: a reader keeps only the comment button (a commenter) or nothing */
     if (!canWrite) $$('[data-c]', bar).forEach(function (b) { if (b.dataset.c === 'find') return; if (b.dataset.c !== 'comment' || !canComment) b.hidden = true; });
@@ -622,6 +631,15 @@
     return {
       compose: compose,
       reload: function () { load(); },
+      /** U5b: an answer from "Shu joy haqida so'rash" as a comment - on the words asked about (an editor marks them;
+          a commenter's comment is found by its words), or a comment with no place */
+      addFrom: async function (range, quote, body) {
+        if (!can.canComment) return false;
+        var r = await J.api(base, { method: 'POST', body: { body: body, quote: quote || null } });
+        if (!r.ok) { J.toast(J.errMsg(r.data)); return false; }
+        if (can.canMark && range) { ed.chain().setTextSelection(range).setMark('comment', { id: r.data.id }).run(); changed(); }
+        tab = 'open'; await load(r.data.id); return true;
+      },
       // the cursor on commented words opens that comment in the panel
       follow: function () {
         var marks = ed.state.selection.$from.marks().filter(function (m) { return m.type.name === 'comment'; });

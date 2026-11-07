@@ -440,3 +440,7 @@ nima o'lchandi.
   (har bo'lim karta: nima qiladi, misol, narx), telefonda pastki panel,
   oddiy nomlar ("Tayyor buyruqlar", "Firma qoidalari bilan tekshirish",
   "Ko'p hujjatni solishtirish"), limit qutisi oddiy tilda.
+- 2026-11-07: #580 merge (U4). U5b PR: muharrirda "Shu joy haqida so'rash"
+  chat paneli (oddiy javob zanjiri, har savol 1 chat birligi, javob izoh yoki
+  matn sifatida bir bosishda, Suhbatlarda saqlanadi). UX auditining barcha
+  bosqichlari shu bilan tugaydi; keyingisi P2.
