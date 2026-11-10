@@ -110,6 +110,7 @@ async function complete(db, id, { handledBy, revoke = async () => {} } = {}) {
       // interview recordings made with this person as the client (CustDev stage 4): audio, transcripts and consents
       await db.query('DELETE FROM interview_recordings WHERE client_admin_id = $1', [adminId]).catch(() => {});
       await db.query(`DELETE FROM document_scans WHERE admin_id = $1`, [adminId]).catch(() => {});
+      await require('../rag/digest-store').removeForAccount(db, adminId);
       await db.query('DELETE FROM lex_monitor_settings WHERE admin_id = $1', [adminId]).catch(() => {});
       await db.query('DELETE FROM user_skills WHERE admin_id = $1', [adminId]).catch(() => {});
       await db.query('DELETE FROM lex_monitor_digests WHERE admin_id = $1', [adminId]).catch(() => {});

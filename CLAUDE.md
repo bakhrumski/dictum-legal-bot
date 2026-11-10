@@ -1799,6 +1799,23 @@ breve added the way the font builds Ă (OFL, no reserved name).
   Sifat; `ANSWER_RATING_MAX` 20 a person a day; no AI, no unit.
   `tests/quality-x5.test.js`.
 
+- X6 of the same audit (AI cost, quality unchanged): the long-document
+  digest is kept in the database (`src/rag/digest-store.js`, migration 050
+  `doc_digests`): keyed by the account, the sha256 of the exact text and
+  `VERSION` (bump it when the digest's prompt or shape changes), sealed (AAD
+  `doc_digests.digest:<admin>:<sha>:<version>`), `DOC_DIGEST_DAYS` 14, only a
+  digest with every part read whole; `digestLongDocumentDetailed` reads the
+  process memory, then the store, then calls the AI - so the next service on
+  the same document, or the same request after a deploy, skips the digest's
+  5-13 calls (each service still charges its own units). Removed with the
+  library document (`scan-store.deleteDoc`) and the account;
+  `DOC_DIGEST_STORE=off`. `identifyRelevantLaws` (the master's source
+  suggestions, never part of an answer) runs on `callCheapAI`. Not done from
+  the audit's list: helper calls on Luna instead of DeepSeek (C4 - it
+  reverses the owner's "DeepSeek first" decision), merging the cross-check
+  and the claim check (C5 / C7 - needs the reviewed set), span patches for
+  the opinion's citation fix (C3). `tests/digest-store.db.test.js`.
+
 ## Shell gotcha
 
 `pkill -f <pattern>` matches the shell running it when the pattern appears in

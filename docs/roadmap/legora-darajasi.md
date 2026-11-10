@@ -476,3 +476,6 @@ nima o'lchandi.
   bo'lak), tekshiruvchi uchun bitta qayta urinish, vebda bo'shab qolgan javob
   uchun limit qaytariladi va "Qayta urinish", bot javobi 2 500 tokengacha,
   ilova va botda "Javob noto'g'ri yoki to'liq emas" tugmasi.
+- 2026-11-10: #589 (X5) merge. X6 PR (migratsiya 050): uzun hujjat dayjesti
+  bazada shifrlangan holda saqlanadi (deploydan keyin ham, 14 kun), "manba
+  takliflari" arzon yo'lakda.
