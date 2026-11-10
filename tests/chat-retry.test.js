@@ -21,7 +21,7 @@ assert.ok(server.includes("res.on('close', () => clearInterval(beat));"));
 
 const chat = read('public/app/chat.js');
 assert.ok(/function retryBtn\(a, msg, shown, confirmedJob\)/.test(chat));
-assert.strictEqual((chat.match(/retryBtn\(a, msg, shown, confirmedJob\);/g) || []).length, 3, 'network, gateway and a cut stream');
+assert.strictEqual((chat.match(/retryBtn\(a, msg, shown, confirmedJob\);/g) || []).length, 4, 'network, gateway, a cut stream and an answer the claim guard emptied (X5)');
 assert.ok(chat.includes("C.history.push({ role: 'user', text: msg });\n        ask(msg, shown, confirmedJob);"));
 assert.ok(chat.includes('b.lastElementChild.textContent = text;') && !chat.includes("$('span:last-child', b).textContent = text"));
 for (const l of ['uz', 'ru', 'en']) assert.ok(/'err\.retry':'[^']+'/.test(read('public/app/i18n.js')), l);

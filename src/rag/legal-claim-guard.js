@@ -602,13 +602,21 @@ async function guardLegalAnswer({
   let pool = Array.isArray(chunks) ? chunks.slice() : [];
   let retrievals = 0;
   let verifierRan = false;
+  let verifierRetries = 0;
   let verifierReason = null;
   const results = new Map(); // id -> { verdict, topic, reason, needsFacts, deterministic }
 
   const check = async (pending) => {
     for (const c of pending) results.set(c.id, { ...(results.get(c.id) || {}), deterministic: deterministicSupport(c, pool) });
     if (typeof callAI !== 'function') { verifierReason = 'verifier_missing'; return; }
-    const v = await runVerifier({ question, claims: pending, chunks: pool, callAI, model, endpoint, opts, lang });
+    let v = await runVerifier({ question, claims: pending, chunks: pool, callAI, model, endpoint, opts, lang });
+    // X5 (Q4): a verifier that failed technically (a timeout, a cut or unreadable reply, a provider error) withheld every
+    // exact value of an answer that may have been right. One more try, with room for a longer reply; a second
+    // failure leaves the claims unverified as before - never passed.
+    if (!v.ok && v.reason !== 'no_evidence' && opts.verifierRetry !== false) {
+      verifierRetries++;
+      v = await runVerifier({ question, claims: pending, chunks: pool, callAI, model, endpoint, opts: { ...opts, verifierMaxTokens: Math.round((opts.verifierMaxTokens || 900) * 2) }, lang });
+    }
     if (!v.ok) { verifierReason = v.reason; return; }
     verifierRan = true;
     for (const c of pending) {
@@ -686,6 +694,7 @@ async function guardLegalAnswer({
     unconfirmed: unconfirmed.map(c => ({ id: c.id, kind: c.kind, articles: c.articles, verdict: c.verdict })),
     // claims the answer makes beyond what one check takes: neither confirmed nor withheld
     uncheckedClaims,
+    verifierRetries,
     retrievals,
     chunks: pool,
     reason: verifierRan ? null : verifierReason,

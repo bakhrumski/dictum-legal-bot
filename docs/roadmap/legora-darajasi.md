@@ -472,3 +472,7 @@ nima o'lchandi.
   foydalanuvchiga aytiladi, tekshirilmay qolgan da'volar sanaladi, iqtibos
   tekshiruvi ikkala lotin alifbosini bir xil o'qiydi, veb javoblari sifat
   yozuvi va Boshqaruvda "Javob sifati" ko'rinishi.
+- 2026-11-10: #588 (X4) merge. X5 PR: generatorga to'liq modda (birinchi 4
+  bo'lak), tekshiruvchi uchun bitta qayta urinish, vebda bo'shab qolgan javob
+  uchun limit qaytariladi va "Qayta urinish", bot javobi 2 500 tokengacha,
+  ilova va botda "Javob noto'g'ri yoki to'liq emas" tugmasi.
