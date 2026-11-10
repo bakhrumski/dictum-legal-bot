@@ -467,3 +467,8 @@ nima o'lchandi.
   o'tish kodi, master tekshiruvi, parollar, lex.uz host, loglar) merge. X2 PR:
   barcha /api yozuvlariga umumiy cross-site himoyasi, `/app/` sahifalariga
   Content-Security-Policy, Word / PDF "bomba" himoyasi.
+- 2026-11-10: #587 (X2) merge. X4 PR (sifat, AI chaqiruvi qo'shilmagan):
+  vektor qidiruvda `ivfflat.probes` 10, lex.uz javob bermagani ajratiladi va
+  foydalanuvchiga aytiladi, tekshirilmay qolgan da'volar sanaladi, iqtibos
+  tekshiruvi ikkala lotin alifbosini bir xil o'qiydi, veb javoblari sifat
+  yozuvi va Boshqaruvda "Javob sifati" ko'rinishi.

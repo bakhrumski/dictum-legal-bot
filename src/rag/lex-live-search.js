@@ -110,6 +110,8 @@ async function searchLexUz(query, opts = {}) {
     // the cache it may still read (the cache and the slots bound memory over
     // time, this bounds one question)
     readBudget = null,
+    // { searches, failed, deadline } shared by one answer's searches (src/rag/lex-live-status.js)
+    stats = null,
   } = opts;
   const startedAt = Date.now();
   const leftMs = () => (deadline ? deadline - Date.now() : Infinity);
@@ -124,11 +126,13 @@ async function searchLexUz(query, opts = {}) {
   console.log(`[LEX-LIVE] Searching lex.uz${actForm ? ` (${actForm})` : ''}: "${query.substring(0, 60)}"`);
 
   let html = '';
+  if (stats) stats.searches = (stats.searches || 0) + 1;
   try {
-    if (leftMs() <= 0) throw new Error('time limit reached before the search');
+    if (leftMs() <= 0) throw Object.assign(new Error('time limit reached before the search'), { deadline: true });
     html = await within(fetchCachedSearchPage(searchUrl), Math.min(SEARCH_TIMEOUT_MS, leftMs()));
   } catch (err) {
     console.warn(`[LEX-LIVE] Search page fetch failed: ${err.message}`);
+    if (stats) { stats.failed = (stats.failed || 0) + 1; if (err && err.deadline) stats.deadline = (stats.deadline || 0) + 1; }
   }
 
   let searchCandidates = html ? parseSearchCandidates(html) : [];

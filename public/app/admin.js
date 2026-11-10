@@ -254,11 +254,12 @@
   function viewAi() {
     shell('ai', function (body, again) {
       body.innerHTML = '<div class="filters"><span class="seg">' + [['day', 'adm.day'], ['month', 'adm.month']].map(function (p) { return '<button type="button" data-p="' + p[0] + '" class="' + (aiState.period === p[0] ? 'on' : '') + '">' + esc(t(p[1])) + '</button>'; }).join('') + '</span></div>' +
-        '<div class="ai-rep">' + skel() + '</div><h3 style="font-size:18px;margin:26px 0 12px">' + esc(t('adm.calls.t')) + '</h3>' +
+        '<div class="ai-rep">' + skel() + '</div><h3 style="font-size:18px;margin:26px 0 6px">' + esc(QL('h')) + '</h3><p class="muted" style="font-size:13px;margin:0 0 12px">' + esc(QL('lead')) + '</p><div class="ai-q">' + skel() + '</div>' +
+        '<h3 style="font-size:18px;margin:26px 0 12px">' + esc(t('adm.calls.t')) + '</h3>' +
         '<div class="filters"><select class="inp ai-days">' + [1, 7, 30, 90].map(function (d) { return '<option value="' + d + '"' + (d === aiState.days ? ' selected' : '') + '>' + d + ' ' + esc(t('adm.days')) + '</option>'; }).join('') + '</select>' +
         '<select class="inp ai-svc"><option value="">' + esc(t('adm.all')) + '</option>' + ['web', 'telegram', 'workspace'].map(function (s) { return '<option' + (s === aiState.service ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select></div><div class="ai-req">' + skel() + '</div>';
       $$('[data-p]', body).forEach(function (b) { b.onclick = function () { aiState.period = b.dataset.p; again(); }; });
-      $('.ai-days', body).onchange = function () { aiState.days = Number(this.value); loadReq(); };
+      $('.ai-days', body).onchange = function () { aiState.days = Number(this.value); loadReq(); loadQuality(); };
       $('.ai-svc', body).onchange = function () { aiState.service = this.value; loadReq(); };
       J.selects(body);
       J.api('/api/admin/ai-usage/report?period=' + aiState.period).then(function (r) {
@@ -276,6 +277,24 @@
           return '<tr>' + td(m.model) + td(m.provider) + td(n0(m.calls)) + td(usd(m.usd)) + td(n0(m.unk)) + '</tr>';
         })) + (r.data.note ? '<p class="note">' + esc(r.data.note) + '</p>' : '');
       });
+      // X4 (2026-11-10 audit, Q7): where answers degrade, from what the requests already record - no AI, no text
+      function loadQuality() {
+        var box = $('.ai-q', body); box.innerHTML = skel();
+        J.api('/api/admin/ai-usage/quality?days=' + aiState.days).then(function (r) {
+          if (!r.ok) { box.innerHTML = errBox(r); return; }
+          var sv = r.data.services || {}, names = Object.keys(sv);
+          if (!names.length) { box.innerHTML = '<p class="muted">' + esc(QL('none')) + '</p>'; return; }
+          var rows = ['withheldSome', 'unverified', 'unchecked', 'truncated', 'noSources', 'lexDown', 'lexPartial', 'crossCheckWeak', 'quotesRemoved', 'lowConfidence', 'notDelivered'];
+          var cell = function (x, k) { return x[k] ? x.share[k] + ' % (' + n0(x[k]) + ')' : '—'; };
+          box.innerHTML = table([QL('what')].concat(names.map(function (n) { return n + ' · ' + n0(sv[n].answers); })), rows.map(function (k) {
+            return '<tr>' + td(QL(k)) + names.map(function (n) { return td(cell(sv[n], k)); }).join('') + '</tr>';
+          })) + (function () {
+            var d = {}; names.forEach(function (n) { Object.keys(sv[n].degraded || {}).forEach(function (k) { d[k] = (d[k] || 0) + sv[n].degraded[k]; }); });
+            var ks = Object.keys(d); return ks.length ? '<p class="note">' + esc(QL('deg')) + ': ' + esc(ks.map(function (k) { return k + ' ' + d[k]; }).join(' · ')) + '</p>' : '';
+          })();
+        });
+      }
+      loadQuality();
       function loadReq() {
         var box = $('.ai-req', body); box.innerHTML = skel();
         J.api('/api/admin/ai-usage/requests?limit=100&days=' + aiState.days + (aiState.service ? '&service=' + encodeURIComponent(aiState.service) : '')).then(function (r) {
@@ -292,6 +311,18 @@
       loadReq();
     });
   }
+  var QS = {
+    uz: { h: 'Javob sifati', lead: 'Huquqiy javoblar zanjiri qayerda zaiflashgani — so‘rovlar yozuvidan, AI’siz. Bu yuridik to‘g‘rilik o‘lchovi emas. Davr pastdagi "kun" tanlovi bilan.', none: 'Bu davrda yozuv yo‘q (o‘lchov shu yangilanishdan keyingi javoblardan boshlanadi).', what: 'Ko‘rsatkich',
+      withheldSome: 'Ba’zi aniq qiymatlar olib tashlangan', unverified: 'Tekshiruvchi ishlamagan', unchecked: 'Tekshirilmay qolgan da’volar bor', truncated: 'Javob uzilgan', noSources: 'Manba topilmagan', lexDown: 'lex.uz javob bermagan', lexPartial: 'lex.uz qisman o‘qilgan',
+      crossCheckWeak: 'Lex.uz bilan solishtirish bajarilmagan', quotesRemoved: 'Iqtibos olib tashlangan', lowConfidence: 'Dastlabki deb belgilangan (bot)', notDelivered: 'Javob yetkazilmagan', deg: 'Zaiflashgan so‘rovlar' },
+    ru: { h: 'Качество ответов', lead: 'Где цепочка правовых ответов ослабевала — по записям запросов, без AI. Это не мера юридической правильности. Период — выбором «дней» ниже.', none: 'За период записей нет (измерение начинается с ответов после этого обновления).', what: 'Показатель',
+      withheldSome: 'Часть точных значений убрана', unverified: 'Проверяющая модель не сработала', unchecked: 'Остались непроверенные утверждения', truncated: 'Ответ оборван', noSources: 'Источник не найден', lexDown: 'lex.uz не ответил', lexPartial: 'lex.uz прочитан частично',
+      crossCheckWeak: 'Сверка с lex.uz не выполнена', quotesRemoved: 'Цитата убрана', lowConfidence: 'Помечен предварительным (бот)', notDelivered: 'Ответ не доставлен', deg: 'Ослабленные запросы' },
+    en: { h: 'Answer quality', lead: 'Where the legal-answer chain degraded — from the request records, no AI. Not a measure of legal correctness. The period follows the "days" picker below.', none: 'No records in this period (measurement starts with answers after this update).', what: 'Signal',
+      withheldSome: 'Some exact values withheld', unverified: 'Verifier did not run', unchecked: 'Claims left unchecked', truncated: 'Answer cut short', noSources: 'No source found', lexDown: 'lex.uz did not respond', lexPartial: 'lex.uz read in part',
+      crossCheckWeak: 'Cross-check with lex.uz not done', quotesRemoved: 'A quote removed', lowConfidence: 'Marked preliminary (bot)', notDelivered: 'Answer not delivered', deg: 'Degraded requests' }
+  };
+  function QL(k) { return (QS[J.lang] || QS.uz)[k] || QS.uz[k] || k; }
   function aiDetail(id) {
     var m = J.modal({ html: '<h2>' + esc(t('adm.req')) + '</h2><p class="sub num">' + esc(id) + '</p><div class="ai-d">' + skel() + '</div>' });
     J.api('/api/admin/ai-usage/requests/' + encodeURIComponent(id)).then(function (r) {

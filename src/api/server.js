@@ -1480,6 +1480,7 @@ app.get('/api/admin/top-questions', requireMasterAdmin, async (req, res) => {
 
 // Per-request AI usage and cost (master only): src/ai/usage-report.js.
 require('../ai/usage-report').mountUsageReportRoutes(app, { requireMasterAdmin, pool, ledger: usageLedger });
+require('../ai/quality-report').mountQualityReport(app, { requireMasterAdmin, pool }); // Q7: answer-quality shares, no AI
 
 // Telegram test account (src/bot/test-account.js): the configured mode, the
 // database link of the configured Telegram id, and its spend against the
@@ -5833,6 +5834,7 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
 
   let webResults = [];
   let lexLiveResults = [];
+  const lexStats = require('../rag/lex-live-status').newStats(); // what the live lex.uz searches could not read (Q8)
   if (needsOfficialSearch && !opts.noWebFallback) {
     const allowWeb = !opts.noWebFallback && webSearchAllowed(true);
     if (!allowWeb) console.log('[SOURCE-GUARD] Tavily web search skipped — lex.uz only');
@@ -5886,6 +5888,7 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
       results: await searchLexUz(step.query, {
         deadline,
         readBudget,
+        stats: lexStats,
         topic,
         scoreText: originalQuestion,
         includeRegistry: step.includeRegistry,
@@ -5894,7 +5897,7 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
         actForm: step.actForm,
         maxDocs: step.maxDocs,
         maxChars: 4000,
-      }).catch(() => []),
+      }).catch(() => { lexStats.failed++; return []; }),
     })));
     const [tavilyRes, lexGroups] = await Promise.all([
       allowWeb ? webSearch(query).catch(() => []) : Promise.resolve([]),
@@ -6112,9 +6115,12 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
     chunks: citationChunks.length,
     webResults: webResults.length,
     lexLiveResults: lexLiveResults.length,
+    // whether lex.uz was read at all: 'unreachable' / 'deadline' are told to the person (src/rag/lex-live-status.js)
+    lexLive: { status: require('../rag/lex-live-status').statusOf(lexStats), searches: lexStats.searches, failed: lexStats.failed },
     sources,
     strategy: route.strategy,
   };
+  if (['unreachable', 'deadline', 'partial'].includes(meta.lexLive.status)) usageLedger.degrade(`lex_${meta.lexLive.status}`);
 
   // ── Build STRICT citation table from chunk metadata ──
   // This is the AI's "allowed sources" cheat sheet — it can ONLY cite from here.
@@ -7794,6 +7800,7 @@ app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, t
         claimGuard: {
           status: claimGuard.status, withheld: claimGuard.withheld, unconfirmed: claimGuard.unconfirmed || [],
           retrievals: claimGuard.retrievals, reason: claimGuard.reason || null,
+          uncheckedClaims: claimGuard.uncheckedClaims || 0,
           truncated: claimGuard.truncated === true, removedHeadings: claimGuard.removedHeadings || [],
         },
       });
@@ -7840,6 +7847,11 @@ app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, t
     // cited articles' changes, whether our copy predates them, Plenum - no AI.
     const citator = await require('../citator/answer').citatorFor(pool, { reply: displayReply, chunks: ragChunks, lang: citationLanguage });
     if (citator.length) ragMeta = Object.assign({}, ragMeta || {}, { citator });
+    // Q8: lex.uz did not answer - the person is told the answer rests on our stored copy (and it is not cached)
+    const lexDown = !!require('../rag/lex-live-status').noticeFor(ragMeta && ragMeta.lexLive, citationLanguage);
+    if (lexDown) displayReply = require('../rag/lex-live-status').appendNotice(displayReply, ragMeta.lexLive, citationLanguage);
+    // Q7: what the answer ended as, for the quality view (statuses and counts only - never text)
+    usageLedger.annotate({ outcome: 'answer', legalCheck: require('../ai/quality-report').legalCheckOf(ragMeta, { reply: displayReply, failed: isFailedAnswer(displayReply) }) });
 
     // Enrichment: suggest the laws the AI cited that aren't yet in the corpus
     // (Master-Admin reviews → one-click ingest). Fire-and-forget; never blocks.
@@ -7866,7 +7878,7 @@ app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, t
     };
 
     // Store in the answer cache (fire-and-forget; failed answers never cached).
-    if (cacheKey && !isFailedAnswer(displayReply)) {
+    if (cacheKey && !isFailedAnswer(displayReply) && !lexDown) {
       pool.query(
         `INSERT INTO answer_cache (key, reply, provider, rag)
          VALUES ($1, $2, $3, $4)

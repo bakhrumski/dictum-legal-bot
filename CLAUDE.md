@@ -1755,6 +1755,29 @@ breve added the way the font builds Ă (OFL, no reserved name).
   `parsePdf` (at most `UPLOAD_PDF_MAX_PAGES` 1 500 pages; a longer one is
   413, never read in part). `tests/security-x2.test.js`.
 
+- X4 of the same audit (answer quality, no AI call added; the owner consented
+  to the answer-chain changes): the dense search runs with
+  `ivfflat.probes` = `RAG_IVFFLAT_PROBES` (10; pgvector's default is 1 of the
+  index's 50 lists) - `legal-corpus.withProbes`, `SET LOCAL` in a
+  transaction on one connection; `off`, a stub pool or a refused setting ->
+  the plain query. `src/rag/lex-live-status.js`: the live lex.uz searches of
+  one answer count into `stats` (`searchLexUz({ stats })`); `meta.lexLive`
+  is ok / partial / unreachable / deadline / none - unreachable and
+  deadline add one line to the answer (web and Telegram: it rests on our
+  stored copy) and the answer is not cached; all three bad states are
+  `usageLedger.degrade('lex_…')`. The claim guard counts claims past its
+  caps (`uncheckedClaims`; Telegram names them among the reasons of a
+  preliminary answer). Quote checks in the tabular / playbook review, the
+  claim draft and the document explanation fold both Latin alphabets
+  (`uz-alphabet.fold`; `normWithMap` keeps positions). The web chat records
+  what an answer ended as (`src/ai/quality-report.js` `legalCheckOf`:
+  statuses and counts, never text - until now only the bot did);
+  `GET /api/admin/ai-usage/quality?days=` (master) and "Javob sifati" on
+  Boshqaruv -> AI give the shares per service: withheld, verifier not run,
+  unchecked, cut, no source, lex.uz down, quotes removed, not delivered,
+  degraded reasons. Signals of where the chain degrades, not legal
+  correctness. `tests/quality-x4.test.js`.
+
 ## Shell gotcha
 
 `pkill -f <pattern>` matches the shell running it when the pattern appears in
