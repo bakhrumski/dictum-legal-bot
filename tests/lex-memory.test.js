@@ -91,7 +91,8 @@ const pin = (url) => ({ url, expectedTitle: TITLE });
     });
     await new Promise(r => server.listen(0, r));
     const base = `http://127.0.0.1:${server.address().port}`;
-    const { httpGet } = require('../src/rag/fetch-lex');
+    const { httpGet, allowHostForTests } = require('../src/rag/fetch-lex');
+    allowHostForTests(`127.0.0.1:${server.address().port}`); // httpGet reads lex.uz only; this is the test's own server
     await assert.rejects(httpGet(`${base}/declared`, 5, null, 100 * 1024), (e) => e.code === 'PAGE_TOO_LARGE');
     await assert.rejects(httpGet(`${base}/streamed`, 5, null, 100 * 1024), (e) => e.code === 'PAGE_TOO_LARGE');
     assert.strictEqual((await httpGet(`${base}/streamed`, 5, null, 0)).length, big.length);

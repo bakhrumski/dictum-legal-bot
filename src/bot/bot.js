@@ -742,7 +742,7 @@ function sendJoinPrompt(chatId) {
 // ========== ADMIN COMMANDS ==========
 
 // /link username password - Link Telegram account to admin
-const linkAttempts = new Map(); // telegram user id -> { n, at } (wrong /link passwords)
+const linkGuard = require('./link-guard').createLinkGuard(); // wrong /link passwords: per Telegram sender AND per target login
 bot.onText(/\/link(?:\s+(\S+)\s+(\S+))?/, async (msg, match) => {
   const chatId = msg.chat.id;
   const username = match[1];
@@ -756,17 +756,15 @@ bot.onText(/\/link(?:\s+(\S+)\s+(\S+))?/, async (msg, match) => {
     bot.sendMessage(chatId, "📋 Saytdagi akkauntni ulashning eng oson yo'li: juristai.uz/app/ ga o'z login yoki parolingiz bilan kiring va \"Telegram'ni ulash\" tugmasini bosing.\n\nYoki: /link <login> <parol>");
     return;
   }
-  // wrong passwords: at most 5 tries in 15 minutes per Telegram user
-  const tries = linkAttempts.get(msg.from.id) || { n: 0, at: Date.now() };
-  if (Date.now() - tries.at > 15 * 60e3) { tries.n = 0; tries.at = Date.now(); }
-  if (tries.n >= 5) {
+  // wrong passwords: at most 5 tries in 15 minutes per Telegram user and per login (src/bot/link-guard.js)
+  if (!linkGuard.allowed(msg.from.id, username)) {
     bot.sendMessage(chatId, "Juda ko'p urinish. 15 daqiqadan keyin qayta urining yoki saytda \"Telegram'ni ulash\" tugmasidan foydalaning.");
     return;
   }
 
   try {
     const result = await pool.query(
-      'SELECT id, password, full_name, role FROM admins WHERE username = $1',
+      'SELECT id, password, full_name, role, telegram_chat_id, telegram_user_id FROM admins WHERE username = $1',
       [username]
     );
 
@@ -775,11 +773,18 @@ bot.onText(/\/link(?:\s+(\S+)\s+(\S+))?/, async (msg, match) => {
 
     if (!isValid) {
       // one reply for an unknown login and a wrong password
-      tries.n++; linkAttempts.set(msg.from.id, tries);
+      linkGuard.failed(msg.from.id, username);
       bot.sendMessage(chatId, "❌ Login yoki parol noto'g'ri.");
       return;
     }
-    linkAttempts.delete(msg.from.id);
+    linkGuard.succeeded(msg.from.id);
+
+    // an account already linked to another Telegram is not moved by its password alone: for a master the sign-in's
+    // second factor goes to the linked Telegram, so that would hand over both factors at once
+    if (require('./link-guard').linkedElsewhere(admin, chatId, msg.from.id)) {
+      bot.sendMessage(chatId, "⚠️ Bu akkaunt boshqa Telegram hisobiga ulangan. Avval o'sha chatda /unlink qiling yoki saytga kirib \"Telegram'ni ulash\" tugmasidan foydalaning.");
+      return;
+    }
 
     // Check if this Telegram is already linked to another account (either column)
     const existingLink = await pool.query(

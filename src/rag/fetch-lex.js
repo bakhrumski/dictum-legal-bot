@@ -46,8 +46,22 @@ const LEX_BASE = 'https://lex.uz';
 // maxBytes: a page larger than this is not read at all - the download stops
 // there (2026-10-26: an 8 MB decree page, read while the live search held
 // other pages, took the 512 MB instance down). 0 = no limit (ingest).
+// a test's own local server (tests/lex-memory.test.js); set from code only, never from the environment or a request
+const testHosts = new Set();
+function allowHostForTests(host) { testHosts.add(String(host)); }
+
+/** A lex.uz address by its host (lex.uz or a subdomain), http or https - never by a substring of the URL. */
+function isLexUrl(url) {
+  try {
+    const u = new URL(String(url));
+    return (u.protocol === 'https:' || u.protocol === 'http:') && (u.hostname === 'lex.uz' || u.hostname.endsWith('.lex.uz') || testHosts.has(u.host)) && !u.username && !u.password;
+  } catch (_) { return false; }
+}
+
 function httpGet(url, maxRedirects = 5, signal = null, maxBytes = 0) {
   return new Promise((resolve, reject) => {
+    // only lex.uz is ever fetched here, on the first request and on every redirect (X1 of the 2026-11-10 audit, S9)
+    if (!isLexUrl(url)) return reject(Object.assign(new Error('Faqat lex.uz manzillari o‘qiladi'), { status: 400, code: 'not_lex' }));
     if (signal && signal.aborted) {
       const e = new Error('Aborted'); e.name = 'AbortError'; return reject(e);
     }
@@ -558,4 +572,4 @@ function formatForIngestion(doc, opts = {}) {
   return `${header}\n\n${doc.body}`;
 }
 
-module.exports = { fetchLexDocument, parseLexHtml, formatForIngestion, extractTitleMetadata, httpGet, inferDocLanguage, setPageObserver };
+module.exports = { isLexUrl, allowHostForTests, fetchLexDocument, parseLexHtml, formatForIngestion, extractTitleMetadata, httpGet, inferDocLanguage, setPageObserver };

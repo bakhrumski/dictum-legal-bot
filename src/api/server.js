@@ -506,12 +506,15 @@ function requireAuth(req, res, next) {
   }
 }
 
+// The session says who signed in; whether that account is STILL a master is read from the database on every master
+// request (X1 of the 2026-11-10 audit, S12: a role changed outside the API kept its old session for up to a day).
 function requireMasterAdmin(req, res, next) {
-  if (req.session.isAuthenticated && req.session.role === 'master') {
-    next();
-  } else {
-    res.status(403).json({ error: 'Master admin access required' });
+  if (!(req.session.isAuthenticated && req.session.role === 'master')) {
+    return res.status(403).json({ error: 'Master admin access required' });
   }
+  pool.query('SELECT role FROM admins WHERE id = $1', [req.session.adminId])
+    .then(r => (r.rows[0] && r.rows[0].role === 'master' ? next() : res.status(403).json({ error: 'Master admin access required' })))
+    .catch(e => { console.error('[AUTH] master check failed:', e.message); res.status(503).json({ error: 'unavailable' }); });
 }
 
 // Staff (master/lawyer/student) — client request files contain sensitive legal
@@ -3065,8 +3068,9 @@ app.get('/api/admins', requireStaff, async (req, res) => {
           ELSE false
         END AS is_active
       FROM admins
+      WHERE ($1::boolean OR role IN ('master', 'lawyer', 'student'))
       ORDER BY role DESC, full_name
-    `);
+    `, [req.session.role === 'master']);
 
     res.json(result.rows);
   } catch (error) {
@@ -3121,7 +3125,9 @@ app.post('/api/admins', requireMasterAdmin, async (req, res) => {
     if (existing.rows.length > 0) {
       return res.status(400).json({ error: 'Bu username allaqachon mavjud' });
     }
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const pw = require('../auth/credentials').validatePassword(password, password, username);
+    if (!pw.ok) return res.status(400).json({ error: pw.message, code: pw.error });
+    const hashedPassword = await bcrypt.hash(password, require('../auth/credentials').BCRYPT_COST);
     const result = await pool.query(
       'INSERT INTO admins (username, password, full_name, role) VALUES ($1, $2, $3, $4) RETURNING id, username, full_name, role, created_at',
       [username, hashedPassword, full_name, role]
@@ -3152,10 +3158,9 @@ app.put('/api/admins/:id', requireMasterAdmin, async (req, res) => {
     const before = (await pool.query('SELECT role FROM admins WHERE id = $1', [id])).rows[0];
     const roleChanged = before && before.role !== role;
     if (password && password.length > 0) {
-      if (password.length < 6) {
-        return res.status(400).json({ error: 'Parol kamida 6 ta belgidan iborat bo\'lishi kerak' });
-      }
-      const hashedPassword = await bcrypt.hash(password, 10);
+      const pw = require('../auth/credentials').validatePassword(password, password, username);
+      if (!pw.ok) return res.status(400).json({ error: pw.message, code: pw.error });
+      const hashedPassword = await bcrypt.hash(password, require('../auth/credentials').BCRYPT_COST);
       await pool.query(
         'UPDATE admins SET full_name = $1, username = $2, password = $3, role = $4 WHERE id = $5',
         [full_name, username, hashedPassword, role, id]
@@ -6648,7 +6653,7 @@ app.patch('/api/qa-korpus/:id', requireMasterAdmin, async (req, res) => {
     const sql = `UPDATE qa_korpus SET ${sets.join(', ')} WHERE id = $${p} RETURNING id, question, topic, LEFT(corrected_answer, 200) AS answer_preview`;
     const r = await pool.query(sql, params);
     if (r.rowCount === 0) return res.status(404).json({ error: 'not found' });
-    console.log(`[QA-KORPUS] patched #${id} — "${(r.rows[0].question || '').substring(0, 80)}"`);
+    console.log(`[QA-KORPUS] patched #${id}`);
     res.json({ updated: r.rows[0] });
   } catch (err) {
     console.error('[QA-KORPUS PATCH] failed:', err);
@@ -6663,7 +6668,7 @@ app.delete('/api/qa-korpus/:id', requireMasterAdmin, async (req, res) => {
     if (!Number.isFinite(id)) return res.status(400).json({ error: 'invalid id' });
     const r = await pool.query('DELETE FROM qa_korpus WHERE id = $1 RETURNING id, question', [id]);
     if (r.rowCount === 0) return res.status(404).json({ error: 'not found' });
-    console.log(`[QA-KORPUS] deleted #${id} — "${(r.rows[0].question || '').substring(0, 80)}"`);
+    console.log(`[QA-KORPUS] deleted #${id}`);
     res.json({ deleted: r.rows[0] });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -7266,7 +7271,7 @@ app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, t
             if (isFailedAnswer(korpusResult.answer)) {
               console.warn(`[Legal Chat] KORPUS VERBATIM id=${korpusResult.id} SKIPPED — answer contains failure phrase`);
             } else if (hasCriticalTermMismatch(message, korpusResult.question)) {
-              console.warn(`[Legal Chat] KORPUS VERBATIM id=${korpusResult.id} SKIPPED — question entity mismatch (user: "${message}" vs corpus: "${korpusResult.question}")`);
+              console.warn(`[Legal Chat] KORPUS VERBATIM id=${korpusResult.id} SKIPPED — question entity mismatch`);
             } else if (hasAnswerTopicMismatch(message, korpusResult.answer)) {
               console.warn(`[Legal Chat] KORPUS VERBATIM id=${korpusResult.id} SKIPPED — stored answer is on a different topic than the user question`);
             } else {
@@ -9434,7 +9439,7 @@ app.post('/api/rag/upload-document', requireMasterAdmin, docUpload.single('docum
 // Used by the manual URL ingest endpoint AND the one-click suggestion ingest.
 // Throws on failure; refuses to ingest a repealed (inactive) document.
 async function ingestLexUrl({ url, topic, law_name, adminId }) {
-  if (!url || !url.includes('lex.uz')) throw Object.assign(new Error('Faqat lex.uz havolalari qabul qilinadi'), { status: 400 });
+  if (!url || !require('../rag/fetch-lex').isLexUrl(url)) throw Object.assign(new Error('Faqat lex.uz havolalari qabul qilinadi'), { status: 400 });
   if (!topic) throw Object.assign(new Error('Soha (topic) tanlanmadi'), { status: 400 });
 
   const cleanUrl = url.split('#')[0];
@@ -10165,8 +10170,9 @@ app.post('/api/register', regUpload.single('document'), async (req, res) => {
       return res.status(400).json({ error: 'Barcha maydonlar to\'ldirilishi shart' });
     }
 
-    if (!password || password.length < 6) {
-      return res.status(400).json({ error: 'Parol kamida 6 ta belgi bo\'lishi kerak' });
+    { // the one password rule (src/auth/credentials.js): 10-72 bytes, not a published or trivial one
+      const pwRule = require('../auth/credentials').validatePassword(password, password, null);
+      if (!pwRule.ok) return res.status(400).json({ error: pwRule.message, code: pwRule.error });
     }
 
     const regType = type === 'lawyer' ? 'lawyer' : 'student';
@@ -10183,8 +10189,8 @@ app.post('/api/register', regUpload.single('document'), async (req, res) => {
     if (!verification_token || !verification_code) {
       return res.status(400).json({ error: 'Telegram tasdiqlash kodini kiriting' });
     }
-    const storedCode = verificationTokens.get(verification_token);
-    if (!storedCode || storedCode.code !== verification_code || Date.now() > storedCode.expiresAt) {
+    const storedCode = require('../auth/verify-code').checkCode(verificationTokens, verification_token, verification_code);
+    if (!storedCode) {
       return res.status(400).json({ error: 'Tasdiqlash kodi noto\'g\'ri yoki muddati o\'tgan. Qayta kod yuboring.' });
     }
     const applicantChatId = storedCode.chatId || null;
@@ -10555,8 +10561,9 @@ app.post('/api/register/common', require('../auth/same-origin').requireSameOrigi
     if (!first_name || !last_name) {
       return res.status(400).json({ error: 'Ism va familiyani kiriting' });
     }
-    if (!password || password.length < 6) {
-      return res.status(400).json({ error: 'Parol kamida 6 ta belgi bo\'lishi kerak' });
+    { // the one password rule (src/auth/credentials.js): 10-72 bytes, not a published or trivial one
+      const pwRule = require('../auth/credentials').validatePassword(password, password, null);
+      if (!pwRule.ok) return res.status(400).json({ error: pwRule.message, code: pwRule.error });
     }
     if (password !== password_confirm) {
       return res.status(400).json({ error: 'Parollar mos kelmaydi' });
@@ -10609,8 +10616,8 @@ app.post('/api/register/common', require('../auth/same-origin').requireSameOrigi
       if (!verification_token || !verification_code) {
         return res.status(400).json({ error: 'Tasdiqlash kodini kiriting' });
       }
-      const storedCode = verificationTokens.get(verification_token);
-      if (!storedCode || storedCode.code !== verification_code || Date.now() > storedCode.expiresAt) {
+      const storedCode = require('../auth/verify-code').checkCode(verificationTokens, verification_token, verification_code);
+      if (!storedCode) {
         return res.status(400).json({ error: 'Tasdiqlash kodi noto\'g\'ri yoki muddati o\'tgan' });
       }
       if (storedCode.channel === 'email' && storedCode.email !== cleanEmail) {
@@ -11199,9 +11206,8 @@ app.post('/api/password-recovery/reset', require('../auth/same-origin').requireS
     if (!token || !new_password) {
       return res.status(400).json({ error: 'Barcha maydonlarni to\'ldiring' });
     }
-    if (new_password.length < 6) {
-      return res.status(400).json({ error: 'Parol kamida 6 ta belgi bo\'lishi kerak' });
-    }
+    const pwRule = require('../auth/credentials').validatePassword(new_password, new_password, null);
+    if (!pwRule.ok) return res.status(400).json({ error: pwRule.message, code: pwRule.error });
 
     // A staff account's reset link from its own Telegram chat: single use,
     // 15 minutes, never for an ordinary account (src/auth/recovery.js)

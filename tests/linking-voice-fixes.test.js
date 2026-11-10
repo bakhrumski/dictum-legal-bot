@@ -43,7 +43,7 @@ const read = (p) => fs.readFileSync(path.join(__dirname, '..', p), 'utf8');
 
   await test('/link: private only, one reply for wrong login or password, 5 tries per 15 minutes, both columns checked', () => {
     assert.match(bot, /parolni guruhga yozmang/u);
-    assert.match(bot, /if \(tries\.n >= 5\)/u);
+    assert.match(bot, /linkGuard\.allowed\(msg\.from\.id, username\)/u); assert.strictEqual(require('../src/bot/link-guard').MAX, 5);
     assert.match(bot, /❌ Login yoki parol noto'g'ri\./u);
     assert.doesNotMatch(bot, /Username topilmadi/u);
     assert.match(bot, /\(telegram_chat_id = \$1 OR telegram_user_id = \$3\) AND id != \$2/u);

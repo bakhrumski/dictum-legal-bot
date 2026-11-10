@@ -1720,6 +1720,21 @@ breve added the way the font builds Ă (OFL, no reserved name).
   typed by the master): role user, no plan, Sinov as anyone, not a test
   entitlement.
 
+- Audit of 2026-11-10 (`docs/audit/2026-11-10-audit.md`), X1: `/link` counts
+  wrong passwords per Telegram sender AND per target login and never moves
+  an account already linked to another Telegram (`src/bot/link-guard.js`:
+  for a master the second factor goes there; the way is `/unlink` in the old
+  chat or the site's "Telegram'ni ulash"); the legacy registration code is
+  deleted after 5 wrong tries (`src/auth/verify-code.js`); `GET /api/admins`
+  gives customers to a master only (other staff get staff);
+  `requireMasterAdmin` reads the role from the database on every request
+  (503 when it cannot); staff and legacy passwords follow `validatePassword`
+  (10-72 bytes) with `BCRYPT_COST`; `fetch-lex.httpGet` reads lex.uz hosts
+  only, on every redirect (`isLexUrl`; a test's own server through
+  `allowHostForTests`, code only); a question is never written to the log;
+  `src/database/update-admin-password.js` (a default password) is removed.
+  `tests/security-x1.test.js`.
+
 ## Shell gotcha
 
 `pkill -f <pattern>` matches the shell running it when the pattern appears in

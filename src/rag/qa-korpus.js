@@ -318,7 +318,7 @@ async function upsertKorpus({ question, correctedAnswer, originalAiAnswer, topic
 
   const row = result.rows[0];
   const isUpdate = !row.is_insert;
-  console.log(`[QA-KORPUS] ${isUpdate ? 'Updated' : 'Inserted'} #${row.id}: "${question.substring(0, 60)}..." by ${createdByName || 'unknown'}`);
+  console.log(`[QA-KORPUS] ${isUpdate ? 'Updated' : 'Inserted'} #${row.id} by ${createdByName || 'unknown'}`);
   return { id: row.id, isUpdate };
 }
 
