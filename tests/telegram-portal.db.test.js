@@ -22,7 +22,7 @@ async function test(name, fn) {
   console.log('Client portal in the bot (P1c)');
   await test('wiring: /start mpi_, the buttons, the ishlarim button, the notifier in the routes', () => {
     const bot = fs.readFileSync(path.join(__dirname, '../src/bot/bot.js'), 'utf8');
-    assert.ok(bot.includes("if (/^mpi_/.test(param)) {") && bot.includes("data === 'mpl' || data === 'mpj_y' || data === 'mpj_n' || /^mp[md]_[0-9a-f-]{36}$/.test(data)"));
+    assert.ok(bot.includes("if (/^mpi_/.test(param)) {") && bot.includes("data === 'mpl' || data === 'mpj_y' || data === 'mpj_n' || /^mp[mdw]_[0-9a-f-]{36}$/.test(data)"));
     assert.ok(bot.includes("agentResult.meta.portalCount > 0"));
     assert.ok(fs.readFileSync(path.join(__dirname, '../src/agents/telegram-agent.js'), 'utf8').includes("intent.command.action === 'list' && !out.confirm ? await require('../bot/telegram-portal').clientCount(pool, account.id)"));
     assert.ok(fs.readFileSync(path.join(__dirname, '../src/api/server.js'), 'utf8').includes("notify: require('../bot/telegram-portal').createNotifier({ pool, getBot: () => require('../bot/bot').bot }).notify"));

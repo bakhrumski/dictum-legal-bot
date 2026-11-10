@@ -61,6 +61,17 @@ function T(lang) {
     own: R ? 'Это ваше дело (или дело вашей команды) - присоединяться как клиент не нужно.' : "Bu ish sizniki yoki jamoangizniki - mijoz sifatida qo'shilish shart emas.",
     joined: R ? '✅ Вы присоединились к делу.' : "✅ Siz ishga qo'shildingiz.",
     open: R ? '📂 Открыть' : '📂 Ochish',
+    // P2: messages between the client and the lawyer side
+    write: R ? '✉️ Написать юристу' : '✉️ Yuristga yozish', reply: R ? '✉️ Ответить' : '✉️ Javob yozish',
+    msgs: R ? 'Переписка' : 'Yozishma', me: R ? 'Вы' : 'Siz',
+    fromLawyer: (l, t) => (R ? `💬 ${l} пишет по делу «${t}»:` : `💬 ${l} «${t}» ishi bo'yicha yozdi:`),
+    fromClient: (c, t) => (R ? `💬 Клиент ${c} пишет по делу «${t}»:` : `💬 Mijoz ${c} «${t}» ishi bo'yicha yozdi:`),
+    answerOnSite: R ? '📂 Ответить на сайте' : '📂 Saytda javob berish',
+    askMsg: t => (R ? `✍️ Напишите сообщение юристу по делу «${t}» (текстом или голосом). «отмена» - выйти.`
+      : `✍️ «${t}» ishi bo'yicha yuristga xabaringizni yozing (matn yoki ovoz bilan). «bekor» - chiqish.`),
+    sent: R ? '✅ Отправлено юристу. Ответ придёт сюда.' : '✅ Yuristga yuborildi. Javob shu yerga keladi.',
+    msgCancelled: R ? 'Хорошо, сообщение не отправлено.' : "Yaxshi, xabar yuborilmadi.",
+    msgFailed: R ? 'Не удалось отправить. Попробуйте ещё раз позже.' : "Yuborib bo'lmadi. Birozdan keyin qayta urinib ko'ring.",
     news: R ? 'Новое в деле' : 'Ishingizda yangilik',
     ev: {
       stage: s => (R ? `этап: ${STAGE.ru[s] || s}` : `bosqich: ${STAGE.uz[s] || s}`),
@@ -116,10 +127,17 @@ async function matterCard(pool, adminId, matterId, lang = 'uz') {
   const notes = v.items.filter(x => x.kind === 'note');
   const docs = v.items.filter(x => x.kind === 'doc');
   if (notes.length) lines.push('', `${t.notes}:`, ...notes.map(n => `— ${n.text} (${fmtDate(n.createdAt)})`));
+  // P2: the last messages of the conversation (reading them marks them read)
+  try {
+    const conv = await createPortal({ db: pool }).messages(matterId, adminId, 'client');
+    const last = conv.messages.slice(-3);
+    if (last.length) lines.push('', `${t.msgs}:`, ...last.map(x => `${x.mine ? t.me : x.author} (${fmtDate(x.at)}): ${short(x.text, 300)}`));
+  } catch (e) { if (!(e && e.status === 404) && e.code !== '42P01') throw e; }
   if (docs.length) lines.push('', t.docs);
   let text = lines.join('\n');
   if (text.length > MSG_MAX) text = `${text.slice(0, MSG_MAX)}\n${t.cut}`;
   const rows = docs.slice(0, 10).map(d => ([{ text: `📄 ${short(d.title, 50)}`, callback_data: `mpd_${d.id}` }]));
+  if (v.status === 'open') rows.push([{ text: t.write, callback_data: `mpw_${v.id}` }]);
   rows.push([{ text: t.back, callback_data: 'mpl' }, { text: t.site, url: `${appBase()}/app/#/portal/${v.id}` }]);
   return { text, keyboard: { inline_keyboard: rows } };
 }
@@ -239,8 +257,39 @@ function createNotifier({ pool, getBot, delayMs = null }) {
         .catch(err => console.warn('[PORTAL-TG] notice not sent:', err.message));
     }
   }
+  /** P2: a message goes at once (never batched), its text with it - the conversation is the feature. */
+  async function deliverMessage(matterId, e) {
+    const bot = typeof getBot === 'function' ? getBot() : null;
+    if (!bot) return;
+    const t = T('uz');
+    const author = (await pool.query('SELECT full_name, telegram_username FROM admins WHERE id = $1', [e.authorId])).rows[0] || {};
+    const name = author.full_name || (author.telegram_username ? '@' + author.telegram_username : (e.side === 'client' ? 'Mijoz' : 'Yurist'));
+    const body = short(e.text, MSG_MAX - 200);
+    if (e.side === 'lawyer') {
+      const rows = (await pool.query(
+        `SELECT COALESCE(a.telegram_chat_id, a.telegram_user_id) AS chat FROM matter_clients c JOIN admins a ON a.id = c.client_id
+          WHERE c.matter_id = $1 AND c.removed_at IS NULL AND COALESCE(a.telegram_chat_id, a.telegram_user_id) IS NOT NULL`, [matterId])).rows;
+      for (const r of rows) {
+        await bot.sendMessage(String(r.chat), `${t.fromLawyer(name, short(e.title, 80))}\n\n${body}`,
+          { reply_markup: { inline_keyboard: [[{ text: t.reply, callback_data: `mpw_${matterId}` }, { text: t.open, callback_data: `mpm_${matterId}` }]] } })
+          .catch(err => console.warn('[PORTAL-TG] message not sent:', err.message));
+      }
+      return;
+    }
+    // a client's message: the matter's owner and whoever answered it on the lawyer side, in their own Telegram
+    const rows = (await pool.query(
+      `SELECT DISTINCT COALESCE(a.telegram_chat_id, a.telegram_user_id) AS chat FROM admins a
+        WHERE (a.id = $2 OR a.id IN (SELECT author_id FROM matter_messages WHERE matter_id = $1 AND side = 'lawyer' AND author_id IS NOT NULL))
+          AND COALESCE(a.telegram_chat_id, a.telegram_user_id) IS NOT NULL`, [matterId, e.ownerId])).rows;
+    for (const r of rows) {
+      await bot.sendMessage(String(r.chat), `${t.fromClient(name, short(e.title, 80))}\n\n${body}`,
+        { reply_markup: { inline_keyboard: [[{ text: t.answerOnSite, url: `${appBase()}/app/#/ishlar/${matterId}` }]] } })
+        .catch(err => console.warn('[PORTAL-TG] message not sent:', err.message));
+    }
+  }
   function notify(matterId, event) {
     if (notifyOff() || !ID.test(String(matterId || '')) || !event) return;
+    if (event.kind === 'message') { deliverMessage(matterId, event).catch(e => console.warn('[PORTAL-TG] message failed:', e.message)); return; }
     const p = pending.get(matterId) || { events: [], timer: null };
     p.events.push(event);
     if (p.timer) clearTimeout(p.timer);
@@ -251,4 +300,26 @@ function createNotifier({ pool, getBot, delayMs = null }) {
   return { notify, flush, pending };
 }
 
-module.exports = { T, PREFIX, accountOf, clientCount, listReply, matterCard, documentFile, inviteStart, inviteJoin, ensureAccount, hold, take, createNotifier };
+// ---------- P2: the client writes in the bot ----------
+const MSG_STATE = 'portal_message';
+const MSG_TTL_MIN = 30;
+const MSG_CANCEL = /^(?:bekor|bekor qil|отмена|стоп)[.!]?$/iu;
+/** Is this conversation waiting for a message to a matter (and not too old)? */
+function msgWaiting(conv, now = Date.now()) {
+  if (!conv || conv.state !== MSG_STATE) return false;
+  const since = Number(conv.context && conv.context.since);
+  return Number.isFinite(since) && now - since <= MSG_TTL_MIN * 60e3 && ID.test(String(conv.context.matterId || ''));
+}
+/** The "write" button: the matter must be the client's own (404 otherwise); returns { ok, title } or { ok: false }. */
+async function startMessage(pool, adminId, matterId) {
+  if (!ID.test(String(matterId || ''))) return { ok: false };
+  try { const v = await createPortal({ db: pool }).clientView(matterId, adminId); return v.status === 'open' ? { ok: true, title: v.title } : { ok: false }; }
+  catch (e) { if (e && e.status === 404) return { ok: false }; throw e; }
+}
+/** The next message, sent as the client's (the notifier tells the lawyer side). */
+async function sendFromBot(pool, adminId, matterId, text, { notify = null } = {}) {
+  return createPortal({ db: pool, notify }).sendMessage(matterId, adminId, 'client', { text, source: 'telegram' });
+}
+
+module.exports = { T, PREFIX, accountOf, clientCount, listReply, matterCard, documentFile, inviteStart, inviteJoin, ensureAccount, hold, take, createNotifier,
+  MSG_STATE, MSG_TTL_MIN, MSG_CANCEL, msgWaiting, startMessage, sendFromBot };

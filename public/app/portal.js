@@ -18,6 +18,8 @@
       myTitle: 'Yuristdagi ishlarim', myLead: 'Yuristingiz siz bilan ulashgan ishlar: bosqichi, muddatlari, izohlari va hujjatlari.', myNone: 'Hozircha siz bilan ulashilgan ish yo‘q. Yuristingiz taklif havolasini yuborsa, shu yerda ko‘rinadi.',
       lawyer: 'Yurist', history: 'Bosqichlar tarixi', fromLawyer: 'Yuristdan', docs: 'Hujjatlar', open: 'Ochish', leave: 'Bu ishdan chiqish', leaveQ: 'Bu ishni boshqa ko‘rmaysiz. Qayta qo‘shilish uchun yuristdan yangi havola kerak bo‘ladi.',
       closed: 'Ish yopilgan. U {d} gacha shu yerda ko‘rinadi.', back: 'Ishlarim',
+      msgs: 'Yozishma', msgLeadL: 'Mijoz bilan yozishma. Xabaringiz mijozga botda keladi; AI bu yozishmani o‘qimaydi.', msgLeadC: 'Yuristingiz bilan yozishma. Javob botda ham keladi.',
+      msgPh: 'Xabar yozing…', send: 'Yuborish', noMsgs: 'Hali xabar yo‘q.', you: 'Siz', viaTg: ' · Telegram', newMsgs: '{n} ta yangi xabar',
       invH: 'Ishga taklif', invP: '{l} sizni «{t}» ishiga mijoz sifatida taklif qildi. Qo‘shilsangiz, yurist sizga ko‘rsatgan narsalarni ko‘rasiz: ish bosqichi, muddatlar, izohlar va hujjatlar.', join: 'Qo‘shilish', joined: 'Siz ishga qo‘shildingiz', already: 'Siz bu ishga allaqachon qo‘shilgansiz.', goMatter: 'Ishni ochish' },
     ru: { nav: 'Мои дела у юриста', card: 'Портал клиента', lead: 'Клиент видит только отмеченное здесь: этап, отмеченные сроки, заметки для него и переданные документы. Внутренние записи, чаты и команда не видны.',
       stage: 'Этап', st: { received: 'Принято', in_progress: 'В работе', waiting_client: 'Ждём клиента', in_court: 'В суде / органе', done: 'Завершено' },
@@ -29,6 +31,8 @@
       myTitle: 'Мои дела у юриста', myLead: 'Дела, которыми с вами поделился юрист: этап, сроки, заметки и документы.', myNone: 'Пока с вами не поделились делом. Когда юрист пришлёт ссылку, оно появится здесь.',
       lawyer: 'Юрист', history: 'История этапов', fromLawyer: 'От юриста', docs: 'Документы', open: 'Открыть', leave: 'Выйти из дела', leaveQ: 'Вы больше не увидите это дело. Чтобы вернуться, нужна новая ссылка от юриста.',
       closed: 'Дело закрыто. Оно видно здесь до {d}.', back: 'Мои дела',
+      msgs: 'Переписка', msgLeadL: 'Переписка с клиентом. Ваше сообщение придёт клиенту в бот; AI эту переписку не читает.', msgLeadC: 'Переписка с вашим юристом. Ответ придёт и в бот.',
+      msgPh: 'Напишите сообщение…', send: 'Отправить', noMsgs: 'Сообщений пока нет.', you: 'Вы', viaTg: ' · Telegram', newMsgs: 'новых сообщений: {n}',
       invH: 'Приглашение в дело', invP: '{l} приглашает вас в дело «{t}» как клиента. Вы увидите то, что юрист вам покажет: этап, сроки, заметки и документы.', join: 'Присоединиться', joined: 'Вы присоединились к делу', already: 'Вы уже в этом деле.', goMatter: 'Открыть дело' },
     en: { nav: 'My matters with a lawyer', card: 'Client portal', lead: 'The client sees only what you mark here: the stage, marked deadlines, notes for them and shared documents. Internal notes, chats and the team stay hidden.',
       stage: 'Stage', st: { received: 'Received', in_progress: 'In progress', waiting_client: 'Waiting for the client', in_court: 'In court / with an authority', done: 'Done' },
@@ -40,6 +44,8 @@
       myTitle: 'My matters with a lawyer', myLead: 'Matters your lawyer shared with you: stage, deadlines, notes and documents.', myNone: 'No matter has been shared with you yet. When your lawyer sends a link, it shows here.',
       lawyer: 'Lawyer', history: 'Stage history', fromLawyer: 'From your lawyer', docs: 'Documents', open: 'Open', leave: 'Leave this matter', leaveQ: 'You will no longer see this matter. To come back you need a new link from the lawyer.',
       closed: 'The matter is closed. It stays here until {d}.', back: 'My matters',
+      msgs: 'Messages', msgLeadL: 'Messages with the client. Yours reach the client in the bot; no AI reads this conversation.', msgLeadC: 'Messages with your lawyer. Replies also come to the bot.',
+      msgPh: 'Write a message…', send: 'Send', noMsgs: 'No messages yet.', you: 'You', viaTg: ' · Telegram', newMsgs: '{n} new',
       invH: 'Invitation to a matter', invP: '{l} invites you to the matter «{t}» as the client. You will see what the lawyer shows you: the stage, deadlines, notes and documents.', join: 'Join', joined: 'You joined the matter', already: 'You are already in this matter.', goMatter: 'Open the matter' }
   };
   function s(k, v) { var d = S[J.lang] || S.uz, x = d[k] !== undefined ? d[k] : S.uz[k]; if (typeof x === 'string' && v) Object.keys(v).forEach(function (n) { x = x.replace('{' + n + '}', v[n]); }); return x; }
@@ -69,6 +75,45 @@
     $('[data-a=cp]', m.body).onclick = function () { navigator.clipboard.writeText(text || '').then(function () { J.toast(s('copied')); }); };
   }
 
+  /* ---------- P2: the conversation, the same on both sides (no AI reads it) ---------- */
+  /** host: an element; url: the messages endpoint; o: { canWrite, lead } */
+  function thread(host, url, o) {
+    host.innerHTML = '<div class="pt-thread"><b>' + esc(s('msgs')) + '</b><p class="muted pt-tl">' + esc(o.lead) + '</p><div class="pt-msgs"><div class="skel"></div></div>' +
+      (o.canWrite ? '<div class="pt-mbox"><textarea class="inp" rows="2" maxlength="4000" placeholder="' + esc(s('msgPh')) + '"></textarea><button class="pill sm" type="button" data-a="ptsend">' + esc(s('send')) + '</button></div>' : '') + '</div>';
+    var box = $('.pt-msgs', host);
+    async function load() {
+      var r = await api(url);
+      if (!document.body.contains(box)) return;
+      if (!r.ok) { box.innerHTML = '<p class="muted"></p>'; $('p', box).textContent = J.errMsg(r.data); return; }
+      var list = r.data.messages || [];
+      box.innerHTML = list.length ? list.map(function (m, k) {
+        return '<div class="pt-m' + (m.mine ? ' mine' : '') + '"><small class="muted" data-mh="' + k + '"></small><p data-mt="' + k + '"></p></div>';
+      }).join('') : '<p class="muted pt-empty">' + esc(s('noMsgs')) + '</p>';
+      list.forEach(function (m, k) {
+        // a person's words go in as text, never markup
+        $('[data-mh="' + k + '"]', box).textContent = (m.mine ? s('you') : m.author) + ' · ' + J.fmtDate(m.at) + ' ' + new Date(m.at).toTimeString().slice(0, 5) + (m.source === 'telegram' ? s('viaTg') : '');
+        $('[data-mt="' + k + '"]', box).textContent = m.text;
+      });
+      box.scrollTop = box.scrollHeight;
+    }
+    var btn = $('[data-a=ptsend]', host);
+    if (btn) {
+      var ta = $('textarea', host);
+      var send = async function () {
+        var text = ta.value.trim(); if (!text) { ta.focus(); return; }
+        btn.disabled = true;
+        var r = await api(url, { method: 'POST', body: { text: text } });
+        btn.disabled = false;
+        if (!r.ok) { J.toast(J.errMsg(r.data), 5000); return; }
+        ta.value = ''; load();
+      };
+      btn.onclick = send;
+      ta.addEventListener('keydown', function (e) { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); } });
+    }
+    load();
+    return { reload: load };
+  }
+
   /* ---------- the lawyer's card on the matter page ---------- */
   J.portalCard = function (host, M) {
     if (!host) return;
@@ -89,6 +134,7 @@
           return '<div class="pt-row"><span class="pt-rt muted">' + esc(i.note || '—') + '</span><small class="muted">' + esc(J.fmtDate(i.expiresAt)) + '</small>' + (w ? '<button class="pill sm ghost" type="button" data-rvi="' + esc(i.id) + '">' + esc(s('revoke')) + '</button>' : '') + '</div>';
         }).join('') : '') +
         (w ? '<div style="margin-top:10px"><button class="pill sm" type="button" data-a="ptinvite"' + (open ? '' : ' disabled title="' + esc(s('closedInv')) + '"') + '>' + J.icon('plus') + esc(s('invite')) + '</button></div>' : '') + '</div>' +
+        (P.clients.length ? '<div class="pt-sec pt-threadhost"></div>' : '') +
         '<div class="pt-sec"><b>' + esc(s('deadlines')) + '</b>' + (P.deadlines.length ? P.deadlines.map(function (d) {
           return '<div class="pt-row"><span class="num pt-date">' + esc(J.fmtDate(d.dueOn)) + '</span><span class="pt-rt" data-dl="' + esc(d.id) + '"></span>' +
             (w ? '<label class="pt-vis"><input type="checkbox" data-vis="' + esc(d.id) + '"' + (d.clientVisible ? ' checked' : '') + '> ' + esc(s('visible')) + '</label><button class="ib" type="button" data-rmd="' + esc(d.id) + '" title="' + esc(s('del')) + '">' + J.icon('x') + '</button>' : (d.clientVisible ? '<small class="muted">' + esc(s('visible')) + '</small>' : '')) + '</div>';
@@ -102,6 +148,8 @@
       P.clients.forEach(function (c, k) { $$('.pt-sec', host)[0].querySelectorAll('.pt-row .pt-rt')[k].textContent = c.name; });
       P.deadlines.forEach(function (d) { var el = $('[data-dl="' + d.id + '"]', host); if (el) el.textContent = d.title; });
       P.items.forEach(function (i) { var el = $('[data-it="' + i.id + '"]', host); if (el) el.textContent = i.title; });
+      var th = $('.pt-threadhost', host);
+      if (th) thread(th, base(M.id) + '/messages', { canWrite: w, lead: s('msgLeadL') + (P.unread ? ' ' + s('newMsgs', { n: P.unread }) : '') });
       if (!w) return;
       var sel = $('.pt-stage-sel', host);
       sel.onchange = async function () {
@@ -178,7 +226,7 @@
     if (!r.ok) { box.innerHTML = '<div class="empty-state">' + esc(J.errMsg(r.data)) + '</div>'; return; }
     var list = r.data.matters || [];
     box.innerHTML = list.length ? list.map(function (m) {
-      return '<a class="mt-item go" href="#/portal/' + esc(m.id) + '"><span class="mt-ic">' + J.icon('folder') + '</span><div class="mt-it"><b data-t="' + esc(m.id) + '"></b><small>' + esc(stageName(m.stage, true) + ' · ' + s('lawyer') + ': ') + '<span data-l="' + esc(m.id) + '"></span> · ' + esc(J.fmtDate(m.stageAt)) + '</small></div></a>';
+      return '<a class="mt-item go" href="#/portal/' + esc(m.id) + '"><span class="mt-ic">' + J.icon('folder') + '</span><div class="mt-it"><b data-t="' + esc(m.id) + '"></b><small>' + esc(stageName(m.stage, true) + ' · ' + s('lawyer') + ': ') + '<span data-l="' + esc(m.id) + '"></span> · ' + esc(J.fmtDate(m.stageAt)) + '</small></div>' + (m.unread ? '<span class="tag pt-unread">' + esc(s('newMsgs', { n: m.unread })) + '</span>' : '') + '</a>';
     }).join('') : '<div class="empty-state">' + esc(s('myNone')) + '</div>';
     list.forEach(function (m) { $('[data-t="' + m.id + '"]', box).textContent = m.title; $('[data-l="' + m.id + '"]', box).textContent = m.lawyerName; });
   };
@@ -197,10 +245,12 @@
       (P.deadlines.length ? '<div class="card"><h4>' + esc(s('deadlines')) + '</h4>' + P.deadlines.map(function (d) { return '<div class="pt-row"><span class="num pt-date">' + esc(J.fmtDate(d.dueOn)) + '</span><span class="pt-rt" data-dl="' + esc(d.id) + '"></span></div>'; }).join('') + '</div>' : '') +
       (notes.length ? '<div class="card"><h4>' + esc(s('fromLawyer')) + '</h4>' + notes.map(function (n) { return '<div class="pt-msg"><p data-n="' + esc(n.id) + '"></p><small class="muted">' + esc(J.fmtDate(n.createdAt)) + '</small></div>'; }).join('') + '</div>' : '') +
       (docs.length ? '<div class="card"><h4>' + esc(s('docs')) + '</h4>' + docs.map(function (d) { return '<button type="button" class="mt-item go pt-docrow" data-doc="' + esc(d.id) + '"><span class="mt-ic">' + J.icon('doc') + '</span><div class="mt-it"><b data-noalpha></b><small>' + esc((d.pages ? d.pages + ' b. · ' : '') + J.fmtDate(d.createdAt)) + '</small></div></button>'; }).join('') + '</div>' : '') +
+      '<div class="card pt-cthread"></div>' +
       (P.history.length > 1 ? '<details class="pt-hist"><summary>' + esc(s('history')) + '</summary><ul>' + P.history.map(function (h) { return '<li>' + esc(J.fmtDate(h.at) + ' — ' + stageName(h.stage, true)) + '</li>'; }).join('') + '</ul></details>' : '') +
       '<div style="margin-top:18px"><button class="pill sm ghost" type="button" data-a="leave">' + esc(s('leave')) + '</button></div>';
     $('.pt-title', body).textContent = P.title;
     $('.pt-lawyer', body).textContent = P.lawyerName;
+    thread($('.pt-cthread', body), '/api/portal/' + encodeURIComponent(id) + '/messages', { canWrite: P.status === 'open', lead: s('msgLeadC') });
     P.deadlines.forEach(function (d) { $('[data-dl="' + d.id + '"]', body).textContent = d.title; });
     notes.forEach(function (n) { $('[data-n="' + n.id + '"]', body).textContent = n.text; });
     docs.forEach(function (d) {
