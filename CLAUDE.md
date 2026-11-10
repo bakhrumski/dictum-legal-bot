@@ -1778,6 +1778,27 @@ breve added the way the font builds Ă (OFL, no reserved name).
   degraded reasons. Signals of where the chain degrades, not legal
   correctness. `tests/quality-x4.test.js`.
 
+- X5 of the same audit (answer quality; the owner consented): the first
+  `RAG_FULL_ARTICLE_TOP` (4) retrieved chunks go to the generator with up to
+  `RAG_FULL_ARTICLE_CHARS` (4 200) characters instead of 1 200 - the whole
+  article, as the claim guard already read it (0 = as before; about 3 000
+  more input tokens an answer). The claim guard's verifier gets ONE more try
+  after a technical failure (timeout, cut or unreadable reply, provider
+  error) with a doubled reply cap (`verifierRetries`; `options.verifierRetry
+  = false`); a second failure stays `unverified`, never passed. A web answer
+  left with no legal content after the guard (`substantive === false`) opens
+  with a line saying so, returns its unit (`refundUsage 'not_substantive'`),
+  is not cached or kept in the chat, and the page offers "Qayta urinish"
+  (`notSubstantive`; the bot has returned the credit since 2026-10-04). The
+  bot's answer cap is 2 500 tokens (`TG_ANSWER_MAX_TOKENS`, was 1 400).
+  "Javob noto'g'ri yoki to'liq emas" (`src/services/answer-rating.js`): a
+  flag under each AI answer in the app (`POST /api/answer-rating`: kind
+  wrong / incomplete, an optional line) and a button under each bot answer
+  (`afb`: the chat's last turn, never the button's data) write
+  `answer_feedback` (sealed; source `ai` / `telegram`), read in Boshqaruv ->
+  Sifat; `ANSWER_RATING_MAX` 20 a person a day; no AI, no unit.
+  `tests/quality-x5.test.js`.
+
 ## Shell gotcha
 
 `pkill -f <pattern>` matches the shell running it when the pattern appears in

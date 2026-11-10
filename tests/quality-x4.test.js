@@ -66,7 +66,7 @@ async function test(name, fn) {
     const out = await require('../src/rag/lex-live-search').searchLexUz('ijara shartnomasini bekor qilish', { deadline: Date.now() - 1, stats });
     assert.deepStrictEqual([out.length, stats.searches, stats.failed, stats.deadline], [0, 1, 1, 1]);
     assert.ok(server.includes('stats: lexStats,') && server.includes("statusOf(lexStats)") && server.includes('usageLedger.degrade(`lex_${meta.lexLive.status}`)'));
-    assert.ok(server.includes('if (cacheKey && !isFailedAnswer(displayReply) && !lexDown) {'), 'an answer given without lex.uz is not cached');
+    assert.ok(/if \(cacheKey && !isFailedAnswer\(displayReply\) && !lexDown\b/.test(server), 'an answer given without lex.uz is not cached');
     assert.ok(read('src', 'agents', 'telegram-agent.js').includes("require('../rag/lex-live-status').appendNotice(finalText, lexLive, lang)"));
   });
 

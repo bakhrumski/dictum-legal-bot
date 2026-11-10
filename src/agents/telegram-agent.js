@@ -106,7 +106,8 @@ const TG_LIMIT         = 3900;  // Telegram hard limit is 4096; leave headroom
 /** The Telegram answer cap (DeepSeek gets it x2, src/ai/deepseek.js). */
 function telegramAnswerMaxTokens(env = process.env) {
   const n = Number.parseInt(env.TG_ANSWER_MAX_TOKENS || '', 10);
-  return Number.isFinite(n) && n >= 300 && n <= 4000 ? n : 1400;
+  // X5 (Q10): 1 400 cut long answers on the fallback route (the web chat has 8 192); long answers are split into messages
+  return Number.isFinite(n) && n >= 300 && n <= 4000 ? n : 2500;
 }
 
 const DISCLAIMER = "\n\n_Javob SI tomonidan tayyorlandi va yuridik kuchga ega emas. Muhim masalalarda yurist bilan maslahatlashing._";

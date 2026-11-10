@@ -31,7 +31,7 @@ function legalCheckOf(ragMeta, { failed = false } = {}) {
     quotesRemoved: q ? count(q.removed) : 0,
     lexLive: m.lexLive ? m.lexLive.status : null,
     chunks: Number(m.chunks) || 0,
-    delivered: !failed,
+    delivered: !failed && !(g && g.substantive === false),
   };
 }
 

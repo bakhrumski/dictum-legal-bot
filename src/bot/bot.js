@@ -666,6 +666,11 @@ function agentActionKeyboard(agentResult) {
   if (agentResult.action === 'tool_open_page' && agentResult.meta && /^https:\/\//u.test(String(agentResult.meta.url || ''))) {
     return { inline_keyboard: [[{ text: agentResult.meta.lang === 'ru' ? '📱 Открыть' : '📱 Ochish', url: agentResult.meta.url }]] };
   }
+  // X5 (Q9): "this answer is wrong / incomplete" under a legal answer - one tap, read by a lawyer in Boshqaruv -> Sifat
+  if (agentResult.action === 'answered') {
+    const ru = agentResult.meta && agentResult.meta.lang === 'ru';
+    return { inline_keyboard: [[{ text: ru ? '👎 Ответ неверный или неполный' : "👎 Javob noto'g'ri yoki to'liq emas", callback_data: 'afb' }]] };
+  }
   if (agentResult.action === 'attorney_intake_started') return attorneyFieldKeyboard();
   if (agentResult.action === 'document_intake_started') return documentTypeKeyboard();
   if (agentResult.action === 'greeting' || agentResult.action === 'intake_cancelled') return serviceKeyboard();
@@ -1112,6 +1117,28 @@ async function handleCallbackQuery(callbackQuery) {
       await require('../sales/pilot-workspace').setRepliesOff(pool, { adminId: account.id, off: true });
       await bot.sendMessage(chatId, fb.TEXTS.repliesOff).catch(() => {});
     } catch (e) { console.warn('[BOT] pilot feedback button failed:', e.message); }
+    return;
+  }
+
+  // X5 (Q9): the person says the answer above is wrong or incomplete (src/services/answer-rating.js). The question and
+  // the answer are the chat's last turn - never read from the button; no AI, no unit.
+  if (data === 'afb') {
+    const ru = /^ru/i.test(String(callbackQuery.from.language_code || ''));
+    await bot.answerCallbackQuery(callbackQuery.id).catch(() => {});
+    try {
+      await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: callbackQuery.message.message_id }).catch(() => {});
+      const conv = await require('../agents/telegram-agent').loadConversation(chatId).catch(() => null);
+      const turns = (conv && conv.turns) || [];
+      const ai = [...turns].reverse().find(t => t && t.role === 'ai');
+      const q = ai ? turns.slice(0, turns.lastIndexOf(ai)).reverse().find(t => t && t.role === 'user') : null;
+      const account = await getLinkedAccount(pool, chatId, privateSenderId(callbackQuery)).catch(() => null);
+      const out = ai ? await require('../services/answer-rating').record(pool, {
+        adminId: account ? account.id : null, name: callbackQuery.from.first_name || '', kind: 'wrong',
+        question: q ? q.text : '', answer: ai.text, source: 'telegram' }) : { ok: false };
+      await bot.sendMessage(chatId, out.ok
+        ? (ru ? 'Спасибо — юрист посмотрит этот ответ.' : "Rahmat — bu javobni yurist ko'rib chiqadi.")
+        : (ru ? 'Не удалось отправить отзыв. Попробуйте позже.' : "Fikrni yuborib bo'lmadi. Birozdan keyin urinib ko'ring.")).catch(() => {});
+    } catch (e) { console.warn('[BOT] answer rating failed:', e.message); }
     return;
   }
 

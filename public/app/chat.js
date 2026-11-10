@@ -521,6 +521,29 @@
       return '<div class="srcs-c">' + parts.join(' · ') + stale + '</div>';
     }
     function aiBox() { var a = J.h('<div class="m-ai"></div>'); thread.appendChild(a); return a; }
+    /* X5 (2026-11-10 audit, Q9): "this answer is wrong / incomplete" - one tap and an optional line; a lawyer reads it in
+       Boshqaruv -> Sifat. Nothing else is asked. */
+    var RTS = {
+      uz: { btn: 'Javob noto‘g‘ri yoki to‘liq emas', h: 'Javobda nima noto‘g‘ri?', lead: 'Yurist ko‘rib chiqadi. Savolingiz va shu javob birga yuboriladi.', wrong: 'Noto‘g‘ri', incomplete: 'To‘liq emas', ph: 'Nimasi noto‘g‘ri (ixtiyoriy)', send: 'Yuborish', ok: 'Rahmat — yurist ko‘rib chiqadi' },
+      ru: { btn: 'Ответ неверный или неполный', h: 'Что не так в ответе?', lead: 'Юрист посмотрит. Ваш вопрос и этот ответ отправляются вместе.', wrong: 'Неверно', incomplete: 'Неполно', ph: 'Что именно не так (необязательно)', send: 'Отправить', ok: 'Спасибо — юрист посмотрит' },
+      en: { btn: 'The answer is wrong or incomplete', h: 'What is wrong with the answer?', lead: 'A lawyer will look at it. Your question and this answer are sent together.', wrong: 'Wrong', incomplete: 'Incomplete', ph: 'What exactly is wrong (optional)', send: 'Send', ok: 'Thank you — a lawyer will look at it' }
+    };
+    function RT(k) { return (RTS[J.lang] || RTS.uz)[k]; }
+    function rateAnswer(question, answer) {
+      var m = J.modal({ cls: 'sm', html: '<h2>' + esc(RT('h')) + '</h2><p class="muted" style="font-size:13.5px">' + esc(RT('lead')) + '</p>' +
+        '<div class="seg" style="margin:10px 0"><button type="button" class="on" data-k="wrong">' + esc(RT('wrong')) + '</button><button type="button" data-k="incomplete">' + esc(RT('incomplete')) + '</button></div>' +
+        '<textarea class="inp" rows="3" maxlength="500" style="width:100%" placeholder="' + esc(RT('ph')) + '"></textarea>' +
+        '<div class="btns" style="margin-top:12px;justify-content:flex-end"><button type="button" class="pill sm" data-a="send">' + esc(RT('send')) + '</button></div>' });
+      var kind = 'wrong';
+      $$('[data-k]', m.body).forEach(function (b) { b.onclick = function () { kind = b.dataset.k; $$('[data-k]', m.body).forEach(function (x) { x.classList.toggle('on', x === b); }); }; });
+      $('[data-a=send]', m.body).onclick = async function () {
+        var b = this; b.disabled = true;
+        var r = await J.api('/api/answer-rating', { method: 'POST', body: { kind: kind, question: String(question || '').slice(0, 1000), answer: String(answer || '').slice(0, 12000), comment: $('textarea', m.body).value.trim() } });
+        b.disabled = false;
+        if (!r.ok) { J.toast(J.errMsg(r.data), 5000); return; }
+        m.close(); J.toast(RT('ok'));
+      };
+    }
     function finishAi(a, data, question) {
       var r = J.md(data.reply || '', { answer: true }); a._sources = r.sources; a._raw = data.reply || '';
       var html = '<div class="md">' + r.html + '</div>';
@@ -535,7 +558,8 @@
       if (data.nextActions && data.nextActions.length) html += '<div class="next">' + data.nextActions.slice(0, 3).map(function (x, i) { return '<button class="chip" data-nx="' + i + '">' + J.icon('arrow') + esc(x.label || t('next.title')) + '</button>'; }).join('') + '</div>';
       html += '<div class="acts"><button class="ib" data-a="copy" title="' + esc(t('act.copy')) + '">' + J.icon('copy') + '</button><button class="ib" data-a="word" title="' + esc(t('act.word')) + '">' + J.icon('word') + '</button>' +
         (r.sources.length ? '<button class="ib" data-a="src" title="' + esc(t('act.sources')) + '">' + J.icon('book') + '</button>' : '') +
-        (J.addToMatter ? '<button class="ib" data-a="matter" title="' + esc(J.matterText('add')) + '">' + J.icon('folder') + '</button>' : '') + '</div>';
+        (J.addToMatter ? '<button class="ib" data-a="matter" title="' + esc(J.matterText('add')) + '">' + J.icon('folder') + '</button>' : '') +
+        '<button class="ib" data-a="rate" title="' + esc(RT('btn')) + '" aria-label="' + esc(RT('btn')) + '">' + J.icon('flag') + '</button></div>';
       var body = J.h('<div>' + html + '</div>');
       var note = $('.note', body); if (note) note.textContent = data.documentScope.note;
       // K4: which firm bands the answer was given, or why none
@@ -550,6 +574,7 @@
           else if (x.kind === 'document') { J.draftPrefill = { type: x.documentType || x.label, question: question, answer: data.reply, action: x.label, from: location.hash || '#/' }; J.go('#/tayyorlash?type=ai'); }
         };
       });
+      $('[data-a=rate]', body).onclick = function () { rateAnswer(question, data.reply || ''); };
       $('[data-a=copy]', body).onclick = function () { navigator.clipboard.writeText(J.plain(r.html)).then(function () { J.toast(t('act.copied')); }); };
       $('[data-a=word]', body).onclick = function () { J.exportWord((question || 'JuristAI').slice(0, 60), '<h2>' + esc(question || '') + '</h2>' + r.html); };
       $$('[data-a=src]', body).forEach(function (sb) { sb.onclick = function () { openSources(r.sources); }; });
@@ -656,7 +681,14 @@
       } catch (e) { if (e.name === 'AbortError') err = { error: '—' }; else err = err || { error: t('err.cut') }; }
       cmp.busy(false); C.ctrl = null;
       if (live) live.remove();
-      if (done) { var n = J.md(done.reply || '').sources.length; doneSteps(se, n); finishAi(a, done, shown); afterReply(done); scroll(); return; }
+      if (done) {
+        var n = J.md(done.reply || '').sources.length; doneSteps(se, n); finishAi(a, done, shown);
+        // X5 (Q6): what the claim guard left is not an answer - the unit was returned; it is not kept in the chat, and the
+        // same question goes again in one tap
+        if (done.notSubstantive) { C.history.pop(); J.refreshTariff(); retryBtn(a, msg, shown, confirmedJob); }
+        else afterReply(done);
+        scroll(); return;
+      }
       se.remove(); C.history.pop();
       var p2 = J.h('<p class="err"></p>'); p2.textContent = (err && err.error) || t('err.cut'); a.appendChild(p2);
       if (err && err.quotaRefunded) a.appendChild(J.h('<p class="muted" style="font-size:13px">↺</p>'));

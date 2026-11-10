@@ -1606,6 +1606,21 @@ async function notifyMastersInChat({ reporterId, reporterName, errorType, select
   );
 }
 
+// X5 (Q9): "this answer is wrong / incomplete" from the person who got it (src/services/answer-rating.js)
+app.post('/api/answer-rating', require('../auth/same-origin').requireSameOrigin, requireAuth, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  try {
+    const b = req.body || {};
+    const out = await require('../services/answer-rating').record(pool, {
+      adminId: req.session.adminId, name: req.session.fullName, kind: String(b.kind || ''), question: b.question, answer: b.answer, comment: b.comment, source: 'web' });
+    if (!out.ok) return res.status(out.code === 'too_many' ? 429 : 400).json({ error: out.code, message: out.code === 'too_many' ? 'Bugun juda ko‘p fikr yubordingiz - ertaga davom eting.' : 'Fikrni yuborib bo‘lmadi.' });
+    res.status(201).json({ ok: true });
+  } catch (e) {
+    console.error('[answer-rating]', e.message);
+    res.status(500).json({ error: 'failed', message: 'Fikrni yuborib bo‘lmadi.' });
+  }
+});
+
 app.post('/api/answer-feedback', requireAuth, async (req, res) => {
   try {
     const b = req.body || {};
@@ -6053,6 +6068,12 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
   // ── 5. Format context for prompt ──
   // Max chars per chunk: verified_qa gets more space, law text is trimmed
   const MAX_CHUNK_CHARS = 1200;
+  // X5 (2026-11-10 audit, Q1): 1 200 characters left about 400 of an article's own text after the matched part - an
+  // exception or a later part of the SAME article never reached the model, while the claim guard read the whole
+  // article and withheld what the answer could not have known. The best-ranked chunks now go whole.
+  // RAG_FULL_ARTICLE_TOP (4 chunks; 0 = as before), up to RAG_FULL_ARTICLE_CHARS (4 200) each.
+  const FULL_TOP = Math.min(8, Math.max(0, process.env.RAG_FULL_ARTICLE_TOP == null || process.env.RAG_FULL_ARTICLE_TOP === '' ? 4 : Number(process.env.RAG_FULL_ARTICLE_TOP) || 0));
+  const FULL_CHARS = Math.min(8000, Math.max(MAX_CHUNK_CHARS, Number(process.env.RAG_FULL_ARTICLE_CHARS) || 4200));
   const chunksText = goodChunks.map((r, i) => {
     const arts = getChunkArticleRefs(r).join(', ');
     const verifiedBadge = r.source_type === 'verified_qa'
@@ -6065,7 +6086,7 @@ async function retrieveLegalContext(query, topic, language = null, opts = {}) {
     const langTag = r.language === 'uz' ? ' [UZ]' : ' [RU]';
     const forceLabel = legalForceLabel(r, isUz ? 'uz' : 'ru', getChunkDocumentIdentifier(r));
     const categoryTag = r.category ? ` [${LEGAL_TOPICS[r.category] || r.category}]` : '';
-    const maxChars = r.source_type === 'verified_qa' ? 2000 : MAX_CHUNK_CHARS;
+    const maxChars = r.source_type === 'verified_qa' ? 2000 : (i < FULL_TOP ? FULL_CHARS : MAX_CHUNK_CHARS);
     const text = r.chunk_text.length > maxChars
       ? r.chunk_text.substring(0, maxChars) + '...'
       : r.chunk_text;
@@ -7800,7 +7821,9 @@ app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, t
         claimGuard: {
           status: claimGuard.status, withheld: claimGuard.withheld, unconfirmed: claimGuard.unconfirmed || [],
           retrievals: claimGuard.retrievals, reason: claimGuard.reason || null,
-          uncheckedClaims: claimGuard.uncheckedClaims || 0,
+          uncheckedClaims: claimGuard.uncheckedClaims || 0, verifierRetries: claimGuard.verifierRetries || 0,
+          // false: after withholding, no legal content was left (Q6)
+          substantive: claimGuard.substantive !== false,
           truncated: claimGuard.truncated === true, removedHeadings: claimGuard.removedHeadings || [],
         },
       });
@@ -7857,6 +7880,15 @@ app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, t
     // (Master-Admin reviews → one-click ingest). Fire-and-forget; never blocks.
     if (topic) generateSourceSuggestions(message, topic, displayReply).catch(() => {});
 
+    // X5 (Q6): the claim guard withheld so much that no legal content is left. The person is told so first, the unit is
+    // returned below and the page offers "Qayta urinish" - until now the web chat showed and charged it like any answer.
+    const hollowAnswer = !!(ragMeta && ragMeta.claimGuard && ragMeta.claimGuard.substantive === false) && !!String(displayReply || '').trim();
+    if (hollowAnswer) {
+      displayReply = (citationLanguage === 'ru'
+        ? '⚠️ Я не смог подтвердить по источнику основную часть ответа (статью, срок, сумму или расчёт), поэтому не выдаю его за ответ. Лимит за этот вопрос не списан. Попробуйте ещё раз или уточните вопрос.'
+        : '⚠️ Javobning asosiy qismini (modda, muddat, summa yoki hisob-kitob) manbada tasdiqlay olmadim, shuning uchun uni javob sifatida bermayman. Bu savol uchun limit sarflanmadi. Qayta urinib ko‘ring yoki savolni aniqroq yozing.')
+        + '\n\n' + displayReply;
+    }
     const usedDbs = (Array.isArray(databases) && databases.length > 0 ? databases : ['lex.uz']).concat(firmUsed ? ['Firma bazasi'] : []);
     const policyVersions = getLegalPolicyVersions();
     ragMeta = Object.assign({}, ragMeta || {}, { policyVersions });
@@ -7878,7 +7910,7 @@ app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, t
     };
 
     // Store in the answer cache (fire-and-forget; failed answers never cached).
-    if (cacheKey && !isFailedAnswer(displayReply) && !lexDown) {
+    if (cacheKey && !isFailedAnswer(displayReply) && !lexDown && !hollowAnswer) {
       pool.query(
         `INSERT INTO answer_cache (key, reply, provider, rag)
          VALUES ($1, $2, $3, $4)
@@ -7891,6 +7923,9 @@ app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, t
     // No answer text at all is a failed request: give the unit back.
     if (!String(displayReply || '').trim()) {
       Object.assign(responsePayload, tariffModule.refundUsage(res, 'empty_reply'));
+    } else if (hollowAnswer) {
+      // X5 (Q6): what is left after the claim guard is not an answer - the unit goes back (as in the bot since 2026-10-04)
+      Object.assign(responsePayload, { notSubstantive: true }, tariffModule.refundUsage(res, 'not_substantive'));
     }
     if (sse) {
       sse({ type: 'done', ...responsePayload });
