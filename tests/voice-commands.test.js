@@ -75,7 +75,7 @@ const V = { place: 'chat', voice: true };
       if (!f.endsWith('.js') || own.has(f)) continue;
       for (const m of fs.readFileSync(path.join(__dirname, f), 'utf8').matchAll(/["'`]([^"'`\n]{6,300})["'`]/gu)) if (/\s/u.test(m[1])) seen.add(m[1]);
     }
-    const sets = [['docs/quality/redaction-eval/cases.json', d => d.cases.map(c => c.question)], ['docs/quality/agent-eval/cases.json', d => d.cases.map(c => c.task)]];
+    const sets = [['docs/quality/redaction-eval/cases.json', d => d.cases.map(c => c.question)], ['docs/quality/agent-eval/cases.json', d => d.cases.map(c => c.task)], ['docs/quality/answer-eval/cases.json', d => d.cases.map(c => c.question)]];
     for (const [f, pick] of sets) for (const q of pick(JSON.parse(fs.readFileSync(path.join(__dirname, '..', f), 'utf8')))) seen.add(q);
     for (const q of ["Hujjatlarimni qanday tasdiqlatsam bo'ladi?", 'Ijara shartnomasini bekor qilish tartibi', "Yangi suhbat boshlash uchun pul to'lash kerakmi?", 'Advokatlar palatasiga qanday shikoyat qilaman?',
       "Akkauntimni o'chirsam ma'lumotlarim qoladimi?", 'Tariflar qachon oshadi', 'Мой лимит закончился, что делать?']) seen.add(q);

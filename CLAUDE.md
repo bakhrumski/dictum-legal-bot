@@ -1816,6 +1816,24 @@ breve added the way the font builds Ă (OFL, no reserved name).
   and the claim check (C5 / C7 - needs the reviewed set), span patches for
   the opinion's citation fix (C3). `tests/digest-store.db.test.js`.
 
+- X7 of the same audit (measurement, nothing in the server changes):
+  `docs/quality/answer-eval.md` - the legal answer's gold set.
+  `docs/quality/answer-eval/cases.json`: 67 synthetic questions (uz Latin,
+  Cyrillic, ru), each with expected acts by name, `articles` (empty - a
+  lawyer's only, never guessed), draft `mustSay` / `mustNotSay`, `gold`,
+  `reviewed: false`; a reviewed case must carry reviewer, date and gold.
+  `scripts/lib/answer-eval-score.js` (no AI: delivered, acts, articles,
+  structure, must_say, must_not_say, language, guard, quotes, lex) and
+  `scripts/answer-eval.js` (dry by default; live only through a running
+  server's `/api/legal-chat` as a master session with `ANSWER_EVAL_LIVE=yes`,
+  `--live`, `--approve <runSha>`, `ANSWER_EVAL_COOKIE`; `--redact on|off`
+  asks past the answer cache; `--compare a.json b.json` lists what got worse
+  / better, exit 3 when a reviewed case got worse). The lawyer reviews in a
+  spreadsheet, not JSON: `scripts/eval-review-sheet.js --set answer|agent
+  --out x.xlsx`, then `--apply x.xlsx [--write]` (a row is reviewed only
+  with "ha" + a name, the answer set also the right answer). Only reviewed
+  cases speak for quality; not run live yet. `tests/answer-eval.test.js`.
+
 ## Shell gotcha
 
 `pkill -f <pattern>` matches the shell running it when the pattern appears in
