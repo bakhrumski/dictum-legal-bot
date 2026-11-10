@@ -2587,6 +2587,12 @@ async function handleTelegramMessage(msg) {
         escalate: !!agentResult.escalate,
         lexCrossCheck: m.lexCrossCheck ? m.lexCrossCheck.status : null,
         claimGuard: m.claimGuard ? m.claimGuard.status : null,
+        // Q7: the same counts the web chat records (src/ai/quality-report.js)
+        withheld: m.claimGuard && Array.isArray(m.claimGuard.withheld) ? m.claimGuard.withheld.length : 0,
+        unchecked: m.claimGuard ? (m.claimGuard.uncheckedClaims || 0) : 0,
+        truncated: !!(m.claimGuard && m.claimGuard.truncated),
+        lexLive: m.lexLive || null,
+        chunks: typeof m.chunks === 'number' ? m.chunks : null,
         citationCheck: m.citationCheck || null,
         delivered: agentReplyDelivered,
       } : null,

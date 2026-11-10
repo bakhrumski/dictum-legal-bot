@@ -227,8 +227,11 @@ function extractCriticalClaims(answer = '', question = '', {
       basis.push({ text: sentence, kind: 'basis', facts: [], articles });
     }
   }
-  return [...numeric.slice(0, maxClaims), ...absence.slice(0, maxAbsenceClaims), ...basis.slice(0, maxBasisClaims)]
+  const out = [...numeric.slice(0, maxClaims), ...absence.slice(0, maxAbsenceClaims), ...basis.slice(0, maxBasisClaims)]
     .map((c, i) => ({ id: `c${i + 1}`, ...c }));
+  // claims past the caps are not sent to the verifier: counted, so the answer is never called fully checked (Q5)
+  out.unchecked = Math.max(0, numeric.length - maxClaims) + Math.max(0, absence.length - maxAbsenceClaims) + Math.max(0, basis.length - maxBasisClaims);
+  return out;
 }
 
 // ── Evidence ──────────────────────────────────────────────────────────────
@@ -673,6 +676,7 @@ async function guardLegalAnswer({
   const noCalc = NO_CALC.test(String(question || ''));
   const out = repaired.text + (withheld.length ? unverifiedBlock(withheld, lang, withheld.flatMap(c => c.needsFacts), { noCalc }) : '');
   const status = !verifierRan ? 'unverified' : (withheld.length ? 'partial' : 'verified');
+  const uncheckedClaims = Number(claims && claims.unchecked) || 0;
   return {
     text: out,
     status,
@@ -680,6 +684,8 @@ async function guardLegalAnswer({
     withheld: withheld.map(c => ({ id: c.id, kind: c.kind, topic: c.topic, verdict: c.verdict, deterministic: c.deterministic, articles: c.articles, normFound: c.normFound, method: c.method })),
     // basis claims kept although the verifier did not confirm them
     unconfirmed: unconfirmed.map(c => ({ id: c.id, kind: c.kind, articles: c.articles, verdict: c.verdict })),
+    // claims the answer makes beyond what one check takes: neither confirmed nor withheld
+    uncheckedClaims,
     retrievals,
     chunks: pool,
     reason: verifierRan ? null : verifierReason,

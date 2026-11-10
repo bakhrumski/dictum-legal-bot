@@ -47,7 +47,8 @@ const LIMITS = Object.freeze({
 const TYPES = Object.freeze(['text', 'yesno', 'date', 'amount', 'choice']);
 
 const clean = (v, max) => String(v == null ? '' : v).replace(/\s+/gu, ' ').trim().slice(0, max);
-const norm = (s) => String(s || '').toLocaleLowerCase('uz').replace(/[ʻʼ‘’`´']/gu, "'").replace(/[«»"“”„]/gu, '').replace(/\s+/gu, ' ').trim();
+// both Latin alphabets read alike (OʻRQ-1184: a document in Ö Ğ Ş Ç quoted back in the old letters is the same words)
+const norm = (s) => require('../../../public/js/uz-alphabet').fold(String(s || '').replace(/´/gu, "'")).replace(/[«»"“”„]/gu, '').replace(/\s+/gu, ' ').trim();
 
 function readInput(input = {}) {
   const columns = (Array.isArray(input.columns) ? input.columns : []).slice(0, LIMITS.columns).map((c, i) => {
@@ -81,12 +82,13 @@ function normWithMap(text) {
   const map = [];
   let space = false;
   for (let i = 0; i < src.length; i++) {
-    let ch = src[i];
+    const ch = src[i];
     if (/[«»"“”„]/u.test(ch)) continue;
     if (/\s/u.test(ch)) { space = out.length > 0; continue; }
     if (space) { out += ' '; map.push(i); space = false; }
-    if (/[\u02bb\u02bc\u2018\u2019`´']/u.test(ch)) ch = "'";
-    const low = ch.toLocaleLowerCase('uz');
+    // the same folding as norm(): apostrophe forms drop out, Ö Ğ Ş Ç read as o g sh ch (one source letter may give two)
+    if (/[\u02bb\u02bc\u2018\u2019`´']/u.test(ch)) continue;
+    const low = require('../../../public/js/uz-alphabet').fold(ch);
     for (const c of low) { out += c; map.push(i); }
   }
   return { out, map };

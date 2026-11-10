@@ -29,7 +29,8 @@ const TOPIC_OF = Object.freeze({ mehnat: 'mehnat', oilaviy: 'oila', mamuriy: 'ma
 const MAX_SOURCES = 8;
 
 const clean = (v, max = 2000) => String(v == null ? '' : v).replace(/\s+/gu, ' ').trim().slice(0, max);
-const norm = (s) => String(s || '').toLocaleLowerCase('uz').replace(/[ʻʼ‘’`´']/gu, "'").replace(/[«»"“”]/gu, '').replace(/\s+/gu, ' ').trim();
+// both Latin alphabets read alike (OʻRQ-1184)
+const norm = (s) => require('../../../public/js/uz-alphabet').fold(String(s || '').replace(/´/gu, "'")).replace(/[«»"“”]/gu, '').replace(/\s+/gu, ' ').trim();
 
 /** The facts a claim needs; returns { facts, missing: [{ field, question }] }. */
 function readIntake(input = {}) {

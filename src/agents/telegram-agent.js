@@ -581,7 +581,7 @@ async function generateAnswer(question, turns) {
     if (!topic && D.classifyLegalTopic) topic = await D.classifyLegalTopic(question, { forcePick: true });
   } catch (_) { /* topic is an optimization, not a requirement */ }
 
-  let ragContext = '', chunks = [];
+  let ragContext = '', chunks = [], lexLive = null;
   try {
     const r = await D.retrieveLegalContext(question, topic, null, {
       contextText: historyToText(turns),
@@ -593,6 +593,7 @@ async function generateAnswer(question, turns) {
     });
     ragContext = typeof r === 'string' ? r : (r.context || '');
     chunks = (r && r.chunks) || [];
+    lexLive = (r && r.meta && r.meta.lexLive) || null;
   } catch (e) {
     console.warn('[TG-AGENT] retrieval failed:', e.message);
   }
@@ -768,6 +769,8 @@ TELEGRAM FORMATI (majburiy):
   if (claimGuard.status === 'unverified') why("aniq qiymatlarni tekshiruvchi model ishlamadi", 'модель проверки точных значений не сработала');
   else if (claimGuard.status === 'partial') why("ba'zi aniq qiymatlar manba matnida tasdiqlanmadi (yuqoridagi izohga qarang)", 'некоторые точные значения не подтверждены текстом источника (см. примечание выше)');
   if (claimGuard.truncated === true) why('javob uzilib qoldi', 'ответ был прерван');
+  // Q5: more exact values than one check takes - the rest were not checked (said only when the answer is preliminary anyway)
+  if (Number(claimGuard.uncheckedClaims) > 0) why(`javobdagi ${claimGuard.uncheckedClaims} ta aniq da'vo tekshiruvdan o'tmadi (juda ko'p)`, `${claimGuard.uncheckedClaims} точных утверждений ответа не проверены (их слишком много)`);
   if (confidence === 'low') {
     console.log(`[TG-AGENT] low confidence — chunks=${chunks.length} unverified=[${unverified.join(', ')}] reasons=${lowReasons.length}`);
   }
@@ -784,6 +787,8 @@ TELEGRAM FORMATI (majburiy):
       if (note) finalText = `${finalText}\n\n${note}`;
     } catch (e) { console.warn('[TG-AGENT] citator:', e.message); }
   }
+  // Q8: lex.uz did not answer - the answer rests on our stored copy, and the person is told
+  finalText = require('../rag/lex-live-status').appendNotice(finalText, lexLive, lang);
 
   return {
     text: finalText,
@@ -801,6 +806,7 @@ TELEGRAM FORMATI (majburiy):
       // context); whether they say what the answer claims is semanticCheck
       citationCheck,
       semanticCheck: claimGuard.status,
+      lexLive: lexLive ? lexLive.status : null,
       lowReasons,
       lowReasonsRu,
       // the answer's language: the system lines around it follow it
@@ -809,6 +815,7 @@ TELEGRAM FORMATI (majburiy):
       claimGuard: {
         status: claimGuard.status,
         withheld: claimGuard.withheld,
+        uncheckedClaims: claimGuard.uncheckedClaims || 0,
         unconfirmed: claimGuard.unconfirmed || [],
         retrievals: claimGuard.retrievals,
         reason: claimGuard.reason || null,

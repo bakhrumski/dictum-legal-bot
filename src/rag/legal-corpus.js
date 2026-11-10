@@ -418,6 +418,37 @@ async function insertChunks(chunks) {
 // ========== DELETE BY DOC ==========
 
 /**
+ * X4 of the 2026-11-10 audit (Q2): the vector index is ivfflat with 50 lists, and pgvector scans
+ * ONE list by default (ivfflat.probes = 1) - a nearest article in a neighbouring list was never
+ * seen, most of all behind a category filter. The dense query now runs with RAG_IVFFLAT_PROBES
+ * (10) lists: `SET LOCAL` needs a transaction on one connection. 0 / off, a pool that cannot
+ * give a connection (test stubs) or any failure of the setting itself -> the plain query as before.
+ */
+function ivfflatProbes(env = process.env) {
+  const raw = String(env.RAG_IVFFLAT_PROBES == null ? '' : env.RAG_IVFFLAT_PROBES).trim().toLowerCase();
+  if (raw === 'off' || raw === '0') return 0;
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? Math.min(n, 200) : 10;
+}
+async function withProbes(pool, run, env = process.env) {
+  const probes = ivfflatProbes(env);
+  if (!probes || typeof pool.connect !== 'function') return run(pool);
+  let client;
+  try { client = await pool.connect(); } catch (_) { return run(pool); }
+  let began = false;
+  try {
+    try { await client.query('BEGIN'); began = true; await client.query(`SET LOCAL ivfflat.probes = ${probes}`); }
+    catch (_) { if (began) await client.query('ROLLBACK').catch(() => {}); began = false; return await run(client); }
+    const out = await run(client);
+    await client.query('COMMIT');
+    return out;
+  } catch (e) {
+    if (began) await client.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally { client.release(); }
+}
+
+/**
  * Delete all chunks for a given doc_id (used before re-ingestion).
  */
 async function deleteByDocId(docId) {
@@ -464,7 +495,7 @@ async function denseSearchByEmbedding(embeddingStr, opts = {}) {
     startIndex: 3,
   });
 
-  const result = await pool.query(`
+  const result = await withProbes(pool, (db) => db.query(`
     SELECT
       id,
       law_name,
@@ -488,7 +519,7 @@ async function denseSearchByEmbedding(embeddingStr, opts = {}) {
       AND embedding IS NOT NULL
     ORDER BY embedding <=> $1::vector
     LIMIT $2
-  `, [embeddingStr, limit, ...filterParams]);
+  `, [embeddingStr, limit, ...filterParams]));
 
   return result.rows.map((row) => ({
     ...row,
@@ -1385,7 +1416,7 @@ async function getIngestStats() {
   return result.rows[0];
 }
 
-module.exports = {
+module.exports = { ivfflatProbes, withProbes,
   keywordLengthNormFrom,
   initLegalCorpus,
   insertChunks,
