@@ -106,7 +106,7 @@ Tartib va PR bo'linishi dizayn hujjatining 9-bo'limida.
   ishlariga tegishlisi Telegram'ga yuboriladi (kuniga bitta yig'ma xabar).
   S4 (migratsiya 043, `src/monitor/`, AI'siz): ishlardagi aktlar har kuni
   tekshiriladi, kuniga bitta Telegram xabar; merge (#557).
-- [ ] Firma bilim bazasi: firmaning shablonlari va avvalgi hujjatlari, qidiruv
+- [~] Firma bilim bazasi: firmaning shablonlari va avvalgi hujjatlari, qidiruv
   bilan (Workspace xotirasidan kengaytiriladi); jamoaviy prompt va ko'nikma
   kutubxonasi. Dizayn (2026-11-04): `docs/design/firma-bilim-bazasi.md`
   (qabul qilingan, #558; firma = Workspace; K1 kutubxona va serverdagi
@@ -126,23 +126,32 @@ Tartib va PR bo'linishi dizayn hujjatining 9-bo'limida.
 
 ## 4-bosqich. Korporativ daraja
 
-- [ ] Mijoz portali: yurist va mijoz uchun umumiy ish, fayllar, savollar,
+- [~] Mijoz portali: yurist va mijoz uchun umumiy ish, fayllar, savollar,
   rollar, audit trail. Dizayn (2026-11-04, qoralama):
   `docs/design/mijoz-portali.md` - mijoz ishning alohida roli (tarifsiz),
   bot asosiy yo'l, P1 ko'rish -> P2 xabarlar -> P3 hujjat so'rovi ->
   P4 jurnal -> P5 "Tanishdim" (ixtiyoriy); qabul qilingan (2026-11-05,
   barcha takliflar). P1a (server: taklif, bosqich, muddatlar, mijozga
   ko'rinadiganlar, migratsiya 047) merge (#569). P1b (sahifalar) merge (#571).
-  P1c (botda mijozning ishlari, Telegram orqali qo'shilish, xabarnomalar) PR'da.
+  P1c (botda mijozning ishlari, Telegram orqali qo'shilish, xabarnomalar)
+  merge (#572). P2 (yozishma, migratsiya 048) merge (#582). P3 (hujjat
+  so'rovi va mijoz fayllari, migratsiya 049) PR #583. P4, P5 boshlanmagan.
 - [~] Ma'lumot himoyasi 1-bosqich (egasi, 2026-10-28, occlum.io tahlilidan keyin):
   `docs/design/shifrlash-1-bosqich.md` - bazada shifrlash, AI'ga yuborishdan
   oldin shaxsiy ma'lumotni yashirish, provayder siyosati, kirish jurnali.
   Qabul qilingan (#516). E1 #518, E2a #519, E2b #521, E3 #522; E4 (huquqiy
-  javob zanjirida yashirish, `REDACT_LEGAL_CHAT`, 20 savollik oldin/keyin)
-  PR'da; E5-E7 navbatda.
+  javob zanjirida yashirish, `REDACT_LEGAL_CHAT`, 20 savollik oldin/keyin),
+  E5 (Workspace), E6a / E6b (chatlar, navbat, kirish jurnali, "DeepSeek'ga
+  emas"), E7 (landing) - hammasi merge (#523-#528). `REDACT_LEGAL_CHAT`
+  egasi 20 savollik taqqoslashni o'qiguncha o'chiq.
 - [ ] Ma'lumot siyosati: hujjatlarni DeepSeek'ga yubormaslik opsiyasi
   (korporativ tarif), saqlash muddatlari, eksport va o'chirish.
 - [ ] SSO (korporativ mijoz so'rasa).
+
+Holat tekshiruvi (2026-11-10 auditi, `docs/audit/2026-11-10-audit.md`):
+asosiy bandlarning 15 / 22 tasi kodda to'liq, 6 tasi qisman; dizayn
+hujjatlaridagi kichik bosqichlarning 40 / 51 tasi bajarilgan. Muharrir
+(D1-D5) va UX auditi (U1-U5b) faqat jurnalda qayd etilgan - ular ham tugagan.
 
 ## Jurnal
 
