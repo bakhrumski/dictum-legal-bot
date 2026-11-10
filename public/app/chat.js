@@ -592,7 +592,8 @@
         p.files.map(function (f) { return '<span class="chip static">' + J.icon('doc') + '<span>' + esc(f.name) + '</span></span>'; }).join('');
       userBubble(shown, chipsHtml);
       C.history.push({ role: 'user', text: msg });
-      if (!C.title) C.title = shown.slice(0, 60);
+      // a chat about a document is named by the document: "Shartnoma.docx — Xavflar", not the same request line every time
+      if (!C.title) C.title = (p.files.length ? p.files[0].name + (text || skill ? ' — ' + (text || skill.name) : '') : shown).slice(0, 60);
       J.setTitle(C.title);
       scroll();
       await ask(msg, shown, null);

@@ -1042,6 +1042,15 @@
     $$('.av').forEach(function (el) { avio.observe(el); });
   } else $$('.av').forEach(function (el) { el.classList.add('go'); });
 
+  /* ---------- telefonda yopishgan "Bepul boshlash": birinchi ekrandan keyin chiqadi, yakuniy chaqiriqda yashirinadi ---------- */
+  (function () {
+    var m = $('#mcta'), hero = $('.hero'), end = $('#cta');
+    if (!m || !hero || !('IntersectionObserver' in window)) return;
+    var past = false, atEnd = false, draw = function () { m.classList.toggle('on', past && !atEnd); };
+    new IntersectionObserver(function (es) { past = !es[0].isIntersecting; draw(); }, { threshold: 0.15 }).observe(hero);
+    if (end) new IntersectionObserver(function (es) { atEnd = es[0].isIntersecting; draw(); }, { threshold: 0.3 }).observe(end);
+  })();
+
   /* ---------- tariflar ---------- */
   function renderTiers() {                               // qatorlar (belgi, nom, narx, muddat, tavsif, ro'yxat, tugma) barcha tariflarda bir chiziqda
     var box = $('#tiers'); if (!box) return;

@@ -124,6 +124,7 @@
       draw(r.data);
     }
     function draw(P) {
+      if (typeof M._onPortal === 'function') M._onPortal(P);
       var w = P.access === 'write', open = M.status === 'open';
       host.innerHTML = '<div class="card pt-card"><h4 style="margin:0">' + esc(s('card')) + '</h4><p class="muted" style="font-size:13px;margin:6px 0 12px">' + esc(s('lead')) + '</p>' +
         '<div class="field"><label>' + esc(s('stage')) + '</label>' + (w ? '<select class="inp pt-stage-sel">' + STAGES.map(function (st) { return '<option value="' + st + '"' + (st === P.stage ? ' selected' : '') + '>' + esc(stageName(st)) + '</option>'; }).join('') + '</select>' : '<div>' + esc(stageName(P.stage)) + '</div>') + '</div>' +

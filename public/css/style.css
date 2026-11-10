@@ -1624,3 +1624,18 @@ html.still .sk-wall{overflow-x:auto}
   .enc-stamp{position:static;margin-top:10px}
 }
 @media (prefers-reduced-motion:reduce){.enc-steps li.on .enc-dot{animation:none}.enc-bar.on i{animation:none;transform:none}}
+/* X3 (2026-11-10 auditi, W1 / W8 / W11): bosish maydoni, telefonda doim qo'l ostidagi tugma, alifbo paneli tugmani yopmaydi */
+@media (pointer:coarse){
+  .lang button{padding:11px 12px;font-size:12px}
+  .foot-cols a{padding:9px 0}
+  .sk-more{min-height:44px}
+}
+body:has(.hero) #jai-alpha-offer{bottom:auto!important;top:76px!important}
+.mcta{display:none}
+@media (max-width:720px){
+  .mcta{position:fixed;left:12px;right:12px;bottom:12px;z-index:60;display:block;transform:translateY(160%);transition:transform .3s}
+  .mcta.on{transform:none}
+  .mcta .pill{width:100%;justify-content:space-between;box-sizing:border-box;box-shadow:0 8px 24px rgba(0,0,0,.2)}
+  body:has(.mcta) .foot{padding-bottom:92px}
+}
+@media (prefers-reduced-motion:reduce){.mcta{transition:none}}

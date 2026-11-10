@@ -499,6 +499,10 @@
     };
   }
 
+  function tabText(k) {
+    var T = { uz: { ish: 'Ish materiallari', mijoz: 'Mijoz' }, ru: { ish: 'Материалы дела', mijoz: 'Клиент' }, en: { ish: 'Matter work', mijoz: 'Client' } };
+    return (T[J.lang] || T.uz)[k];
+  }
   J.viewMatter = function (id) {
     J.setTitle(s('title'));
     var v = J.mount('<div class="wrap narrow"><a class="mt-back" href="#/ishlar">' + J.icon('back') + esc(s('back')) + '</a><div class="mt-body"><div class="skel" style="width:60%;margin:20px 0"></div></div></div>');
@@ -582,6 +586,9 @@
         (w ? '<div class="mt-acts"><button class="pill sm ghost" data-a="edit" type="button">' + J.icon('pen') + esc(s('edit')) + '</button>' +
           '<button class="pill sm ghost" data-a="toggle" type="button">' + esc(M.status === 'open' ? s('close') : s('reopen')) + '</button>' +
           (own ? '<button class="pill sm ghost" data-a="del" type="button">' + J.icon('trash') + esc(s('del')) + '</button>' : '') + '</div>' : '') + '</div>' +
+        // X3 (2026-11-10 audit): two tabs instead of one long page - the matter's own work, and what its client sees and sends
+        (J.portalCard ? '<div class="seg mt-tabs" role="tablist"><button type="button" role="tab" data-tab="ish" class="on">' + esc(tabText('ish')) + '</button><button type="button" role="tab" data-tab="mijoz">' + esc(tabText('mijoz')) + '<span class="mt-tabn" hidden></span></button></div>' : '') +
+        '<div class="mt-pane" data-p="ish">' +
         (w && M.status === 'open' ? '<div class="card mt-start"><h4>' + esc(s('start')) + '</h4><div class="mt-starts">' +
           '<a class="chip" href="#/c/new" data-go="chat">' + J.icon('chat') + esc(s('startChat')) + '</a>' +
           '<a class="chip" href="#/jadval">' + J.icon('layers') + esc(s('startTable')) + '</a>' +
@@ -596,13 +603,30 @@
         '<div class="mt-items">' + (M.items.length ? M.items.map(itemRow).join('') : '<div class="empty-state">' + esc(s('noItems')) + '</div>') + '</div>' +
         // CustDev stage 4: interview recordings with consent, staff only (public/app/interviews.js)
         (own && J.interviewsCard && J.isStaff && J.isStaff() ? '<div class="mt-iv" style="margin-top:16px"></div>' : '') +
+        '</div>' +
         // the client portal (public/app/portal.js): what the matter's client sees
-        (J.portalCard ? '<div class="mt-pt" style="margin-top:16px"></div>' : '');
+        (J.portalCard ? '<div class="mt-pane" data-p="mijoz" hidden><div class="mt-pt"></div></div>' : '');
       $('.mt-head h2', body).textContent = M.title;
       $('.mt-summary', body).textContent = M.summary || '';
       M.items.forEach(function (i) { if (i.kind === 'note') { var p = $('[data-i="' + i.id + '"] .mt-note', body); if (p) p.textContent = i.note; } });
       setCurrent(M.status === 'open' && w ? M.id : '');
       if ($('.mt-iv', body)) J.interviewsCard($('.mt-iv', body), M);
+      // the tab: the one asked for in the link (#/ishlar/<id>?mijoz), else the last one opened in this tab, else the client's
+      // tab when a client's message waits unread
+      var tabKey = 'jai-mt-tab:' + M.id, chosen = null;
+      try { chosen = sessionStorage.getItem(tabKey); } catch (e) {}
+      var showTab = function (name, keep) {
+        $$('.mt-pane', body).forEach(function (el) { el.hidden = el.dataset.p !== name; });
+        $$('.mt-tabs [data-tab]', body).forEach(function (b) { b.classList.toggle('on', b.dataset.tab === name); b.setAttribute('aria-selected', b.dataset.tab === name ? 'true' : 'false'); });
+        if (keep) { chosen = name; try { sessionStorage.setItem(tabKey, name); } catch (e) {} }
+      };
+      $$('.mt-tabs [data-tab]', body).forEach(function (b) { b.onclick = function () { showTab(b.dataset.tab, true); }; });
+      if ($('.mt-tabs', body)) showTab(/\?mijoz$/.test(location.hash) ? 'mijoz' : (chosen || 'ish'));
+      M._onPortal = function (P) {
+        var n = $('.mt-tabn', body); if (!n) return;
+        n.hidden = !P.unread; n.textContent = P.unread || '';
+        if (P.unread && !chosen && !/\?mijoz$/.test(location.hash)) showTab('mijoz');
+      };
       if ($('.mt-pt', body)) J.portalCard($('.mt-pt', body), M);
 
       var chatGo = $('[data-go=chat]', body);
@@ -686,5 +710,5 @@
   };
 
   J.route(/^\/ishlar$/, function () { J.viewMatters(); });
-  J.route(/^\/ishlar\/([0-9a-f-]{36})$/, function (id) { J.viewMatter(id); });
+  J.route(/^\/ishlar\/([0-9a-f-]{36})(?:\?mijoz)?$/, function (id) { J.viewMatter(id); });
 })(window);
