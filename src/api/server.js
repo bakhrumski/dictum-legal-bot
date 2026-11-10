@@ -6383,11 +6383,12 @@ function extractLawMentions(text) {
 // final gate. This enrichment path mirrors the live retrieval hierarchy instead
 // of stopping at laws and codes.
 async function identifyRelevantLaws(question, topic) {
-  if (typeof callAI !== 'function') return [];
+  if (typeof callCheapAI !== 'function') return [];
   try {
     const label = LEGAL_TOPICS[topic] ? ` (soha: ${LEGAL_TOPICS[topic]})` : '';
     const prompt = `Quyidagi huquqiy savolga bevosita tatbiq etilishi mumkin bo'lgan O'zbekiston Respublikasining REAL, amaldagi normativ-huquqiy hujjatlarini sanab bering${label}. Qonun va kodeks bilan cheklanmang: tegishli Prezident qarori (PQ), Prezident farmoni (PF), Vazirlar Mahkamasi qarori (VMQ), nizom, tartib, yo'riqnoma va idoraviy buyruqni ham ko'ring. FAQAT hujjat NOMINI va ishonchingiz komil bo'lsa raqamini yozing — har birini yangi qatorda, maksimal 8 ta. Modda raqami, tushuntirish yoki izoh BERMANG. Bu faqat qidiruv gipotezasi; mavjud bo'lmagan hujjatni TO'QIB CHIQARMANG.\n\nSavol: ${question}`;
-    const res = await callAI([{ role: 'user', text: prompt }], { useSearch: false, maxTokens: 300, temperature: 0, endpoint: '/rag/source-suggestions' });
+    // X6 (C2): a list of act names for the master's review queue - it never reaches the answer, so the cheap lane
+    const res = await callCheapAI([{ role: 'user', text: prompt }], { useSearch: false, maxTokens: 300, temperature: 0, endpoint: '/rag/source-suggestions' });
     const text = (res && res.text) || '';
     return String(text)
       .split('\n')
@@ -7975,11 +7976,24 @@ async function digestLongDocumentDetailed(documentText, userId) {
     console.log(`[Doc Digest] reused for user ${userId} (${documentText.length} chars)`);
     return hit.digest;
   }
+  const remember = (digest) => {
+    if (DIGEST_CACHE.size >= 200) DIGEST_CACHE.delete(DIGEST_CACHE.keys().next().value);
+    DIGEST_CACHE.set(cacheKey, { at: Date.now(), digest });
+  };
+  // X6 (2026-11-10 audit, C1): the same person's digest of the same text, kept in the database (sealed) - it survives
+  // a deploy and serves the next service on that document for DOC_DIGEST_DAYS; src/rag/digest-store.js
+  const digestStore = require('../rag/digest-store');
+  const stored = userId ? await digestStore.get(pool, { adminId: userId, text: documentText }) : null;
+  if (stored) {
+    console.log(`[Doc Digest] reused from the store for user ${userId} (${documentText.length} chars)`);
+    remember(stored);
+    return stored;
+  }
   const digest = await require('../rag/document-explain').buildDigest(documentText, { callAI: callCheapAI, userId: userId || null });
   console.log(`[Doc Digest] ${documentText.length} chars -> ${digest.chunks} chunks -> ${digest.text.length}-char digest; failed ${digest.failed.length}, cut ${digest.truncated.length}`);
   if (userId && !digest.failed.length && !digest.truncated.length) {
-    if (DIGEST_CACHE.size >= 200) DIGEST_CACHE.delete(DIGEST_CACHE.keys().next().value);
-    DIGEST_CACHE.set(cacheKey, { at: Date.now(), digest });
+    remember(digest);
+    digestStore.put(pool, { adminId: userId, text: documentText, digest }).catch(() => {});
   }
   return digest;
 }

@@ -100,7 +100,10 @@ async function renameDoc(db, { adminId, id, name }) {
 /** Deleted for good (text and all); a matter that linked it shows it as no longer available. */
 async function deleteDoc(db, { adminId, id }) {
   if (!/^[0-9a-f-]{36}$/iu.test(String(id || ''))) return false;
+  // the document's digest (src/rag/digest-store.js) goes with it: read the text once more to find it
+  const doc = await getScan(db, { adminId, scanId: id }).catch(() => null);
   const r = await db.query('DELETE FROM document_scans WHERE id = $1 AND admin_id = $2 RETURNING id', [id, adminId]);
+  if (r.rowCount > 0 && doc && doc.text) await require('../rag/digest-store').removeForText(db, { adminId, text: doc.text });
   return r.rowCount > 0;
 }
 
