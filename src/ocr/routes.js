@@ -398,9 +398,8 @@ async function extractFileText(buf, { fileName = '', mimeType = '' } = {}) {
     return { kind: 'docx', text: docx.text, pages: null, chars, scanned: chars < 80 };
   }
   if (isPdf) {
-    const pdfParse = require('pdf-parse/lib/pdf-parse.js');
     const pageTexts = [];
-    const parsed = await pdfParse(new Uint8Array(buf), { pagerender: pageText(pageTexts) });
+    const parsed = await require('./upload-guard').parsePdf(new Uint8Array(buf), { pagerender: pageText(pageTexts) });
     const pagesRead = Array.from({ length: Math.max(pageTexts.length, parsed.numpages || 0) }, (_, i) => pageTexts[i] || '');
     const plain = pagesRead.join('\n').trim() || (parsed.text || '').trim();
     const text = plain && pageTexts.length ? markPages(pagesRead).trim() : plain;
@@ -538,14 +537,13 @@ function mountAnalyzerRoutes(app, deps) {
           ...(tableCheck ? { tableCheck } : {}),
           units: size ? size.units : null, docTicket: ledger ? ledger.signDocTicket({ text, chars, tables }) : null });
       }
-      const pdfParse = require('pdf-parse/lib/pdf-parse.js');
       const buf = fs.readFileSync(filePath);
       // each page's text in order, so the text carries "[Sahifa n]" marks
       // and an explanation can cite a page without inventing it
       const pageTexts = [];
       // own memory: a small Buffer from the shared pool made pdf.js read
       // the wrong bytes ("bad XRef entry") on PDFs under 4 KB
-      const parsed = await pdfParse(new Uint8Array(buf), { pagerender: pageText(pageTexts) });
+      const parsed = await require('./upload-guard').parsePdf(new Uint8Array(buf), { pagerender: pageText(pageTexts) });
       const pagesRead = Array.from({ length: Math.max(pageTexts.length, parsed.numpages || 0) }, (_, i) => pageTexts[i] || '');
       const plain = pagesRead.join('\n').trim() || (parsed.text || '').trim();
       const text = plain && pageTexts.length ? markPages(pagesRead).trim() : plain;
@@ -566,6 +564,8 @@ function mountAnalyzerRoutes(app, deps) {
       });
     } catch (e) {
       console.error('[ANALYZE] extract error:', e.message);
+      // a file refused by the upload guard (a PDF over the page limit, a Word file that unpacks too large)
+      if (e && e.status === 413) return res.status(413).json({ error: e.message, code: e.code });
       const corruptDocx = /central directory|zip file|end of central/i.test(String(e.message || ''));
       res.status(corruptDocx ? 422 : 500).json({
         error: corruptDocx

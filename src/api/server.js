@@ -347,6 +347,12 @@ app.use(cors((req, cb) => {
   cb(null, { origin: !origin || ALLOWED_ORIGINS.includes(origin), credentials: true });
 }));
 
+// X2 (2026-11-10 audit, S7): a write to /api that the browser says comes from another site is refused, on every route
+const crossSiteGuard = require('../auth/same-origin').createCrossSiteGuard({ allow: req => wordAddin.addinCorsAllowed(req), extraOrigins: ALLOWED_ORIGINS });
+app.use((req, res, next) => (req.path.startsWith('/api/') ? crossSiteGuard(req, res, next) : next()));
+// X2 (S6): a Content-Security-Policy on the new app's pages (src/auth/app-csp.js; APP_CSP=off | report)
+app.use('/app', require('../auth/app-csp').createAppCsp());
+
 // Body limits: uploads go through multer (multipart), so no JSON route needs
 // more than a couple of MB. The previous global 50mb limit was a memory-DoS
 // vector — any authed user could post 50MB JSON at every endpoint.
@@ -9305,15 +9311,15 @@ app.post('/api/rag/upload-document', requireMasterAdmin, docUpload.single('docum
     const origName = req.file.originalname.toLowerCase();
 
     if (mime === 'application/pdf' || origName.endsWith('.pdf')) {
-      const pdfParse = require('pdf-parse');
       const buffer = fs.readFileSync(filePath);
-      const parsed = await pdfParse(buffer);
+      const parsed = await require('../ocr/upload-guard').parsePdf(buffer);
       rawText = parsed.text;
     } else if (mime === 'text/plain' || origName.endsWith('.txt')) {
       rawText = fs.readFileSync(filePath, 'utf-8');
     } else if (origName.endsWith('.docx') || origName.endsWith('.doc')) {
       // Extract text from docx using mammoth if available, else raw buffer
       try {
+        require('../ocr/upload-guard').assertZipSafe(fs.readFileSync(filePath));
         const mammoth = require('mammoth');
         const result = await mammoth.extractRawText({ path: filePath });
         rawText = result.value;

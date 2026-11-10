@@ -31,7 +31,7 @@ async function pdfInfo(buf) {
   try {
     // a copy in its own memory: a small Node Buffer sits inside a shared
     // pool, and pdf.js reads the pool from its start ("bad XRef entry")
-    const parsed = await require('pdf-parse/lib/pdf-parse.js')(new Uint8Array(buf));
+    const parsed = await require('./upload-guard').parsePdf(new Uint8Array(buf));
     const pages = Number(parsed.numpages) || 0;
     if (!pages) return { error: 'no_pages' };
     return { pages, textChars: String(parsed.text || '').trim().length };

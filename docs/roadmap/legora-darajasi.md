@@ -462,3 +462,8 @@ nima o'lchandi.
   (bot qaysi so'rovga ekanini tugma bilan so'raydi); fayl shifrlangan, sha256
   bilan; hech narsa o'qimaydi (OCR / AI yo'q) - yurist "Nima qilaylik?" bilan
   odatdagi hujjat eshigiga beradi. Keyingisi P4 (jurnal).
+- 2026-11-10: #583 (P3), #584 (audit: `docs/audit/2026-11-10-audit.md`), #585
+  (X3: ilova va sayt, frontend), #586 (X1: xavfsizlik - /link, ro'yxatdan
+  o'tish kodi, master tekshiruvi, parollar, lex.uz host, loglar) merge. X2 PR:
+  barcha /api yozuvlariga umumiy cross-site himoyasi, `/app/` sahifalariga
+  Content-Security-Policy, Word / PDF "bomba" himoyasi.

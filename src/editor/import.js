@@ -104,6 +104,7 @@ function applyCommentRanges(html, comments) {
 /** What a .docx holds that the editor does not keep (codes). */
 async function docxNotes(buf) {
   const notes = [];
+  require('../ocr/upload-guard').assertZipSafe(buf);
   try {
     const zip = await JSZip.loadAsync(buf);
     const names = Object.keys(zip.files);
@@ -129,6 +130,7 @@ async function importFile(buf, { fileName = '', mimeType = '', extractFileText }
     if (buf.length < 4 || buf[0] !== 0x50 || buf[1] !== 0x4b) return { error: 'corrupt' };
     const mammoth = require('mammoth');
     // the file's comments, if any, ride along as markers (wordComments / applyCommentRanges)
+    require('../ocr/upload-guard').assertZipSafe(buf);
     let comments = null, input = buf;
     try {
       const zip = await JSZip.loadAsync(buf);
