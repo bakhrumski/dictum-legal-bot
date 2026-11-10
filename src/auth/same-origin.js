@@ -52,4 +52,28 @@ function isSameOrigin(req) {
   return !!from && allowedHosts(wrap).has(from);
 }
 
-module.exports = { requireSameOrigin, allowedHosts, isSameOrigin };
+/**
+ * X2 of the 2026-11-10 audit (S7): one guard over every state-changing /api request, on top of
+ * the stricter per-route requireSameOrigin. Most write routes relied on the SameSite=Lax cookie
+ * alone, which a page on a sibling subdomain (same site) is not stopped by. Here a write is
+ * refused when the browser itself says it comes from somewhere else: an Origin (or, without
+ * one, a Referer) that is not this site, or Origin "null". A request with neither header is
+ * let through - a browser always sends Origin on a cross-origin write, so such a request is
+ * a server-side client (Telegram's webhook, a script) that carries no victim's cookie.
+ * allow(req): requests that are allowed from another origin by design (the Word / Google Docs
+ * pane's token routes); extraOrigins: CORS_ORIGINS.
+ */
+function createCrossSiteGuard({ allow = null, extraOrigins = [] } = {}) {
+  const extra = new Set(extraOrigins.map(o => hostOf(o)).filter(Boolean));
+  return function guardCrossSite(req, res, next) {
+    if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
+    const origin = req.get('origin'), referer = req.get('referer');
+    if (!origin && !referer) return next();
+    if (typeof allow === 'function' && allow(req)) return next();
+    const from = origin ? (origin === 'null' ? null : hostOf(origin)) : hostOf(referer);
+    if (from && (allowedHosts(req).has(from) || extra.has(from))) return next();
+    return res.status(403).json({ error: 'cross_site', message: "So'rov JuristAI saytidan kelmadi." });
+  };
+}
+
+module.exports = { requireSameOrigin, allowedHosts, isSameOrigin, createCrossSiteGuard };

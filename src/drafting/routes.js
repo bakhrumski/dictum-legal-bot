@@ -143,6 +143,7 @@ function mountDraftingRoutes(app, deps) {
       }
       const mammoth = require('mammoth');
       try {
+        require('../ocr/upload-guard').assertZipSafe(fs.readFileSync(filePath));
         return ((await mammoth.extractRawText({ path: filePath })).value || '').trim();
       } catch (mammothError) {
         const error = new Error('DOCX faylini o‘qib bo‘lmadi. Fayl buzilmaganini tekshiring yoki Word’da qayta saqlang.');
@@ -150,8 +151,7 @@ function mountDraftingRoutes(app, deps) {
         throw error;
       }
     }
-    const pdfParse = require('pdf-parse');
-    const parsed = await pdfParse(fs.readFileSync(filePath));
+    const parsed = await require('../ocr/upload-guard').parsePdf(fs.readFileSync(filePath));
     return (parsed.text || '').trim();
   }
 

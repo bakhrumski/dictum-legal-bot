@@ -1735,6 +1735,26 @@ breve added the way the font builds Ă (OFL, no reserved name).
   `src/database/update-admin-password.js` (a default password) is removed.
   `tests/security-x1.test.js`.
 
+- X2 of the same audit: every state-changing `/api` request passes one guard
+  first (`same-origin.createCrossSiteGuard`, mounted before the body
+  parsers): an Origin - or, without one, a Referer - that is not this site
+  (`CORS_ORIGINS` and the Google Docs pane's token routes aside), or Origin
+  "null", is 403; a request with neither header is a server-side client and
+  passes (Telegram's webhook, scripts); the per-route `requireSameOrigin`
+  stays stricter. The new app's HTML pages carry a Content-Security-Policy
+  (`src/auth/app-csp.js`, before the static files): scripts from this site,
+  the pages' own inline boot scripts by sha256 (read at start), jsDelivr and
+  telegram.org; no inline or eval scripts, no objects; connections to this
+  site, its WebSocket and `SUPABASE_URL`; `APP_CSP=off | report`. Not on the
+  old dashboard, the landing or the Word pane. A new inline `<script>` in
+  `/app/*.html` is hashed by itself; an inline `onclick=` or a new external
+  script host would be blocked - add the host in `buildPolicy`.
+  `src/ocr/upload-guard.js`: a .docx whose own ZIP directory declares more
+  than 150 MB unpacked (`UPLOAD_ZIP_MAX_MB`), 5 000 entries or a 100 MB
+  entry is refused before any parser opens it; every PDF is parsed through
+  `parsePdf` (at most `UPLOAD_PDF_MAX_PAGES` 1 500 pages; a longer one is
+  413, never read in part). `tests/security-x2.test.js`.
+
 ## Shell gotcha
 
 `pkill -f <pattern>` matches the shell running it when the pattern appears in
