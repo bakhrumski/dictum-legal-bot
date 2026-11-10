@@ -8,21 +8,21 @@
 (function () {
   'use strict';
   var T = {
-    uz: { title: 'JuristAI’ga xush kelibsiz', sub: 'Telegram yoki Google bilan bir bosishda kiring. Yangi bo‘lsangiz, hisob avtomatik ochiladi.', busy: 'Kirilmoqda…', tgcancel: 'Telegram oynasi yopildi yoki xato berdi. Endi tugma kod orqali kiritadi: bot 6 raqamli kod yuboradi.', bycode: 'Telegram kodi orqali kirish', agree: 'Davom etib, Oferta va Maxfiylik siyosatiga rozilik bildirasiz.', tgfail: 'Telegram orqali kirib bo‘lmadi. Kod orqali urinib ko‘ring.', tg: 'Telegram orqali davom etish', google: 'Google orqali davom etish', gsoon: 'Google — tez orada',
+    uz: { title: 'JuristAI’ga xush kelibsiz', sub: 'Telegram yoki Google bilan bir bosishda kiring. Yangi bo‘lsangiz, hisob avtomatik ochiladi.', subTg: 'Telegram bilan bir bosishda kiring. Yangi bo‘lsangiz, hisob avtomatik ochiladi.', page: 'Kirish', busy: 'Kirilmoqda…', tgcancel: 'Telegram oynasi yopildi yoki xato berdi. Endi tugma kod orqali kiritadi: bot 6 raqamli kod yuboradi.', bycode: 'Telegram kodi orqali kirish', agree: 'Davom etib, Oferta va Maxfiylik siyosatiga rozilik bildirasiz.', tgfail: 'Telegram orqali kirib bo‘lmadi. Kod orqali urinib ko‘ring.', tg: 'Telegram orqali davom etish', google: 'Google orqali davom etish', gsoon: 'Google — tez orada',
       or: 'yoki', pw: 'Login va parol bilan kirish', user: 'Login', pass: 'Parol', enter: 'Kirish', back: 'Orqaga',
       s1: 'Telegram ochildi — botda «Start» ni bosing.', s2: 'Bot sizga 6 raqamli kod yuboradi.', s3: 'Kodni shu yerga kiriting.', wait: 'Kod kutilmoqda…', sent: 'Kod yuborildi. 6 raqamni kiriting (5 daqiqa amal qiladi).', expired: 'Muddat tugadi. Qayta urinib ko‘ring.', reopen: 'Telegramni qayta ochish', verify: 'Tasdiqlash',
       need6: '6 raqamli kodni to‘liq kiriting.', used: 'Bu qurilmada yoki Telegram hisobda Sinov allaqachon ishlatilgan. Kirish uchun mavjud hisobingizdan foydalaning.', err: 'Xatolik yuz berdi', net: 'Tarmoq xatosi',
       twofa: 'Telegramga yuborilgan tasdiqlash kodini kiriting.', secure: 'Xavfsizlik uchun kod faqat siz ochgan Telegram chatiga yuboriladi.',
       offer: 'Oferta', privacy: 'Maxfiylik', terms: 'Shartlar', 'side.t': 'Savol bering. Javobni manbasi bilan oling.', b: ['Har bir javob lex.uz moddasi bilan', 'Ulanish HTTPS orqali shifrlangan', 'Javob o‘zbek yoki rus tilida'],
       gerr: { google_disabled: 'Google orqali kirish hozircha yoqilmagan.', google_failed: 'Google orqali kirib bo‘lmadi. Qayta urinib ko‘ring.', google_cancelled: 'Google orqali kirish bekor qilindi.', sinov_used: 'Bu qurilmada Sinov allaqachon ishlatilgan.', google_account_not_found: 'Bu Google hisobiga bog‘langan akkaunt topilmadi.' } },
-    ru: { title: 'Добро пожаловать в JuristAI', sub: 'Войдите через Telegram или Google в одно касание. Если вы новый пользователь, аккаунт откроется автоматически.', busy: 'Входим…', tgcancel: 'Окно Telegram закрыто или выдало ошибку. Теперь кнопка входит по коду: бот пришлёт 6-значный код.', bycode: 'Войти по коду из Telegram', agree: 'Продолжая, вы соглашаетесь с Офертой и Политикой конфиденциальности.', tgfail: 'Не удалось войти через Telegram. Попробуйте по коду.', tg: 'Продолжить через Telegram', google: 'Продолжить через Google', gsoon: 'Google — скоро',
+    ru: { title: 'Добро пожаловать в JuristAI', sub: 'Войдите через Telegram или Google в одно касание. Если вы новый пользователь, аккаунт откроется автоматически.', subTg: 'Войдите через Telegram в одно касание. Если вы новый пользователь, аккаунт откроется автоматически.', page: 'Вход', busy: 'Входим…', tgcancel: 'Окно Telegram закрыто или выдало ошибку. Теперь кнопка входит по коду: бот пришлёт 6-значный код.', bycode: 'Войти по коду из Telegram', agree: 'Продолжая, вы соглашаетесь с Офертой и Политикой конфиденциальности.', tgfail: 'Не удалось войти через Telegram. Попробуйте по коду.', tg: 'Продолжить через Telegram', google: 'Продолжить через Google', gsoon: 'Google — скоро',
       or: 'или', pw: 'Войти по логину и паролю', user: 'Логин', pass: 'Пароль', enter: 'Войти', back: 'Назад',
       s1: 'Telegram открыт — нажмите «Start» в боте.', s2: 'Бот пришлёт 6-значный код.', s3: 'Введите код здесь.', wait: 'Ожидаем код…', sent: 'Код отправлен. Введите 6 цифр (действует 5 минут).', expired: 'Время истекло. Попробуйте снова.', reopen: 'Открыть Telegram снова', verify: 'Подтвердить',
       need6: 'Введите 6-значный код полностью.', used: 'Пробный доступ уже использован на этом устройстве или в этом Telegram-аккаунте. Войдите в существующий аккаунт.', err: 'Произошла ошибка', net: 'Ошибка сети',
       twofa: 'Введите код подтверждения, отправленный в Telegram.', secure: 'Для безопасности код приходит только в тот чат Telegram, который вы открыли.',
       offer: 'Оферта', privacy: 'Конфиденциальность', terms: 'Условия', 'side.t': 'Задайте вопрос. Получите ответ с источником.', b: ['Каждый ответ со статьёй lex.uz', 'Соединение зашифровано (HTTPS)', 'Ответы на узбекском или русском'],
       gerr: { google_disabled: 'Вход через Google пока не включён.', google_failed: 'Не удалось войти через Google. Попробуйте снова.', google_cancelled: 'Вход через Google отменён.', sinov_used: 'Пробный доступ уже использован на этом устройстве.', google_account_not_found: 'Аккаунт с этим Google не найден.' } },
-    en: { title: 'Welcome to JuristAI', sub: 'Continue with Telegram or Google in one tap. New here? Your account is created automatically.', busy: 'Signing in…', tgcancel: 'The Telegram window was closed or showed an error. The button now signs in by code: the bot sends a 6-digit code.', bycode: 'Sign in with a Telegram code', agree: 'By continuing you accept the Offer and the Privacy Policy.', tgfail: 'Telegram sign-in failed. Try with a code instead.', tg: 'Continue with Telegram', google: 'Continue with Google', gsoon: 'Google — coming soon',
+    en: { title: 'Welcome to JuristAI', sub: 'Continue with Telegram or Google in one tap. New here? Your account is created automatically.', subTg: 'Continue with Telegram in one tap. New here? Your account is created automatically.', page: 'Sign in', busy: 'Signing in…', tgcancel: 'The Telegram window was closed or showed an error. The button now signs in by code: the bot sends a 6-digit code.', bycode: 'Sign in with a Telegram code', agree: 'By continuing you accept the Offer and the Privacy Policy.', tgfail: 'Telegram sign-in failed. Try with a code instead.', tg: 'Continue with Telegram', google: 'Continue with Google', gsoon: 'Google — coming soon',
       or: 'or', pw: 'Sign in with login and password', user: 'Login', pass: 'Password', enter: 'Sign in', back: 'Back',
       s1: 'Telegram opened — press “Start” in the bot.', s2: 'The bot sends you a 6-digit code.', s3: 'Enter the code here.', wait: 'Waiting for the code…', sent: 'Code sent. Enter the 6 digits (valid for 5 minutes).', expired: 'Time is up. Please try again.', reopen: 'Open Telegram again', verify: 'Verify',
       need6: 'Enter the full 6-digit code.', used: 'The trial was already used on this device or Telegram account. Sign in to your existing account.', err: 'Something went wrong', net: 'Network error',
@@ -33,6 +33,7 @@
   var lang = 'uz'; try { lang = localStorage.getItem('lang') || (navigator.language || 'uz').slice(0, 2); } catch (e) {}
   if (!T[lang]) lang = 'uz';
   var L = T[lang];
+  document.title = L.page + ' — JuristAI';
   document.documentElement.lang = lang;
   try { document.documentElement.setAttribute('data-theme', localStorage.getItem('jai-theme') || 'light'); } catch (e) {}
   var $ = function (s, r) { return (r || document).querySelector(s); };
@@ -77,18 +78,18 @@
   function home(msg) {
     form.innerHTML = '<h1></h1><p class="sub"></p>' +
       '<button class="pill dark big" type="button" id="tgBtn">' + TG + '<span></span></button>' +
-      '<button class="pill ghost big" type="button" id="gBtn">' + GG + '<span></span></button>' +
+      (googleOn ? '<button class="pill ghost big" type="button" id="gBtn">' + GG + '<span></span></button>' : '') +
       '<p class="msg err" id="msg"></p><p class="agree"></p>' +
       '<div class="or"></div><div class="alt">' + (tgLogin ? '<button class="lnk" type="button" id="codeBtn"></button>' : '') + '<button class="lnk" type="button" id="pwBtn"></button></div>';
-    $('h1', form).textContent = L.title; $('.sub', form).textContent = L.sub;
-    $('#tgBtn span').textContent = L.tg; $('#gBtn span').textContent = googleOn ? L.google : L.gsoon;
-    $('#gBtn').disabled = !googleOn; if (!googleOn) $('#gBtn').style.opacity = '.55';
+    // Google is offered only when it is on: no dead "coming soon" button, and the line above names only what works
+    $('h1', form).textContent = L.title; $('.sub', form).textContent = googleOn ? L.sub : L.subTg;
+    $('#tgBtn span').textContent = L.tg; if (googleOn) $('#gBtn span').textContent = L.google;
     $('.or', form).textContent = L.or; $('#pwBtn').textContent = L.pw; $('.agree', form).textContent = L.agree;
     if ($('#codeBtn')) { $('#codeBtn').textContent = L.bycode; $('#codeBtn').onclick = telegram; }
     if (msg) $('#msg').textContent = msg;
     // a Telegram window that failed once (e.g. "Bot domain invalid") is not opened again in this tab: the code way works everywhere
     $('#tgBtn').onclick = tgLogin && !widgetFailed() ? telegramOneStep : telegram;
-    $('#gBtn').onclick = function () { if (fp) document.cookie = 'dfp=' + fp + '; path=/; SameSite=Lax; max-age=300'; location.href = '/auth/google?mode=register'; };
+    if (googleOn) $('#gBtn').onclick = function () { if (fp) document.cookie = 'dfp=' + fp + '; path=/; SameSite=Lax; max-age=300'; location.href = '/auth/google?mode=register'; };
     $('#pwBtn').onclick = password;
   }
 

@@ -128,6 +128,9 @@
     markNav();
     var team = /^\/jamoa/.test(h);
     $$('#scope button').forEach(function (b) { b.classList.toggle('on', (b.dataset.s === 'team') === team); });
+    // a citizen's view has no team to switch to: the switch shows for the other views and on the team pages themselves
+    var sc = document.getElementById('scope');
+    if (sc) sc.hidden = !team && !!J.roleView && J.roleView() === 'citizen';
   });
   J.on('sessions', drawHist);
   J.on('tariff', function () { drawUsage(); drawNav(); });

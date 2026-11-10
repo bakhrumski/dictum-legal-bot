@@ -1042,6 +1042,21 @@
     $$('.av').forEach(function (el) { avio.observe(el); });
   } else $$('.av').forEach(function (el) { el.classList.add('go'); });
 
+  /* ---------- telefonda yopishgan "Bepul boshlash": birinchi ekrandan keyin chiqadi, yakuniy chaqiriqda yashirinadi ---------- */
+  (function () {
+    var m = $('#mcta'), hero = $('.hero'), end = $('section.cta');
+    if (!m || !hero) return;
+    // by position, not by observer thresholds: shown once the hero has left the screen, hidden while the closing section is on it
+    var draw = function () {
+      var past = hero.getBoundingClientRect().bottom < window.innerHeight * 0.25;
+      var e = end ? end.getBoundingClientRect() : null, atEnd = !!e && e.top < window.innerHeight * 0.75 && e.bottom > 0;
+      m.classList.toggle('on', past && !atEnd);
+    };
+    var tick = false;
+    window.addEventListener('scroll', function () { if (tick) return; tick = true; requestAnimationFrame(function () { tick = false; draw(); }); }, { passive: true });
+    draw();
+  })();
+
   /* ---------- tariflar ---------- */
   function renderTiers() {                               // qatorlar (belgi, nom, narx, muddat, tavsif, ro'yxat, tugma) barcha tariflarda bir chiziqda
     var box = $('#tiers'); if (!box) return;

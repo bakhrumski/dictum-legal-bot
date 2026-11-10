@@ -167,7 +167,7 @@ uz: {
   "pfaq.q1":"Bepul tarifda nimalar bor?",
   "pfaq.a1":"Bir martalik sinov: 5 ta huquqiy savol, 1 ta hujjat tahlili va 1 ta yuridik xulosa. Har bir javob lex.uz manbasi bilan keladi. Limit yangilanmaydi, karta talab qilinmaydi.",
   "pfaq.q2":"Pullik tarifga qanday o‘taman?",
-  "pfaq.a2":"Onlayn to‘lov hali ulanmagan. Hozircha pullik tarifni administrator faollashtiradi — tarif ostidagi «Xabar berish» tugmasini bosing.",
+  "pfaq.a2":"Onlayn to‘lov hali ulanmagan. Hozircha pullik tarifni administrator faollashtiradi — tarif ostidagi «Telegram’da yozish» tugmasini bosing.",
   "pfaq.q3":"Tarifni bekor qilsa bo‘ladimi?",
   "pfaq.a3":"Ha, istalgan vaqtda bekor qilasiz.",
   "pfaq.q4":"Ma’lumotlarim xavfsizmi?",
@@ -337,13 +337,13 @@ uz: {
   'foot.disclaimer':'Eslatma: JuristAI javoblari ma’lumot xarakterida va rasmiy yuridik maslahat o‘rnini bosmaydi.',
   'price.title':'Sizga mos rejani tanlang',
   'price.sub':'Bepul boshlang, karta kerak emas. Istalgan vaqtda bekor qilasiz.',
-  "price.note":"Onlayn to‘lov hali ulanmagan. Pullik tarifni hozircha administrator faollashtiradi — «Xabar berish» tugmasini bosing.",
-  'price.soon':'Tez orada','price.notify':'Xabar berish','price.month':'so‘m / oy','price.free':'Bepul',
+  "price.note":"Onlayn to‘lov hali ulanmagan. Pullik tarifni hozircha administrator faollashtiradi — «Telegram’da yozish» tugmasini bosing.",
+  'price.soon':'Administrator orqali ulanadi','price.notify':'Telegram’da yozish','price.month':'so‘m / oy','price.free':'Bepul',
   "price.unit":"Hujjat birligi: 1 birlik — 10 sahifa va 40 000 belgigacha. Ish boshlanishidan oldin sarf ko‘rsatiladi. Limitlar 30 kunlik davr uchun.",
   "price.start":"Boshlash uchun",
   "price.trial":"Sinovni boshlash",
   "price.cur":"so‘m",
-  'price.tiers':[["Sinov", "Bepul", "Bir martalik", "Platformani sinab ko‘rish uchun.", ["5 ta huquqiy savol", "1 ta hujjat tahlili + 1 ta yuridik xulosa", "Har bir javob lex.uz manbasi bilan", "Yangilanmaydi · karta kerak emas"]], ["Silver", "199 000", "30 kun", "Yakka yuristlar, tadbirkorlar va kichik ofislar uchun.", ["150 ta huquqiy savol", "8 birlik hujjat tahlili", "8 birlik yuridik xulosa", "10 ta hujjat yaratish", "Ovozli yozuv va transkripsiya — daqiqa limiti keyin e’lon qilinadi", "Workspace yaratish va jamoani taklif qilish"]], ["Gold", "599 000", "30 kun", "Yuridik bo‘lim, HR va buxgalteriya uchun — Silver limitlarining 3 barobari.", ["450 ta huquqiy savol", "24 birlik hujjat tahlili", "24 birlik yuridik xulosa", "30 ta hujjat yaratish", "Ovozli yozuv va transkripsiya — daqiqa limiti keyin e’lon qilinadi", "Workspace yaratish va jamoani taklif qilish"]], ["Platinum", "999 000", "30 kun", "Kompaniyalar va advokatlik byurolari uchun — Silver limitlarining 5 barobari.", ["750 ta huquqiy savol", "40 birlik hujjat tahlili", "40 birlik yuridik xulosa", "50 ta hujjat yaratish", "Ovozli yozuv va transkripsiya — daqiqa limiti keyin e’lon qilinadi", "Workspace yaratish va jamoani taklif qilish"]]]
+  'price.tiers':[["Sinov", "Bepul", "Bir martalik", "Platformani sinab ko‘rish uchun.", ["5 ta huquqiy savol", "1 ta hujjat tahlili + 1 ta yuridik xulosa", "Har bir javob lex.uz manbasi bilan", "Yangilanmaydi · karta kerak emas"]], ["Silver", "199 000", "30 kun", "Yakka yuristlar, tadbirkorlar va kichik ofislar uchun.", ["150 ta huquqiy savol", "8 birlik hujjat tahlili (80 sahifagacha)", "8 birlik yuridik xulosa (80 sahifagacha)", "10 ta hujjat yaratish", "Ovozli yozuv va transkripsiya", "Workspace yaratish va jamoani taklif qilish"]], ["Gold", "599 000", "30 kun", "Yuridik bo‘lim, HR va buxgalteriya uchun — Silver limitlarining 3 barobari.", ["450 ta huquqiy savol", "24 birlik hujjat tahlili (240 sahifagacha)", "24 birlik yuridik xulosa (240 sahifagacha)", "30 ta hujjat yaratish", "Ovozli yozuv va transkripsiya", "Workspace yaratish va jamoani taklif qilish"]], ["Platinum", "999 000", "30 kun", "Kompaniyalar va advokatlik byurolari uchun — Silver limitlarining 5 barobari.", ["750 ta huquqiy savol", "40 birlik hujjat tahlili (400 sahifagacha)", "40 birlik yuridik xulosa (400 sahifagacha)", "50 ta hujjat yaratish", "Ovozli yozuv va transkripsiya", "Workspace yaratish va jamoani taklif qilish"]]]
 },
 ru: {
   'nav.features':'Возможности','nav.audience':'Для кого','nav.security':'Безопасность','nav.pricing':'Тарифы','nav.login':'Войти','nav.app':'В приложение',
@@ -512,7 +512,7 @@ ru: {
   "pfaq.q1":"Что входит в бесплатный тариф?",
   "pfaq.a1":"Единоразовый пробный доступ: 5 правовых вопросов, 1 анализ документа и 1 юридическое заключение. Каждый ответ приходит с источником на lex.uz. Лимит не обновляется, карта не нужна.",
   "pfaq.q2":"Как перейти на платный тариф?",
-  "pfaq.a2":"Онлайн-оплата ещё не подключена. Пока платный тариф активирует администратор — нажмите «Сообщить мне» под тарифом.",
+  "pfaq.a2":"Онлайн-оплата ещё не подключена. Пока платный тариф активирует администратор — нажмите «Написать в Telegram» под тарифом.",
   "pfaq.q3":"Можно ли отменить тариф?",
   "pfaq.a3":"Да, в любой момент.",
   "pfaq.q4":"Мои данные в безопасности?",
@@ -682,13 +682,13 @@ ru: {
   'foot.disclaimer':'Примечание: ответы JuristAI носят информационный характер и не заменяют официальную юридическую консультацию.',
   'price.title':'Выберите подходящий план',
   'price.sub':'Начните бесплатно, карта не нужна. Отменить можно в любой момент.',
-  "price.note":"Онлайн-оплата ещё не подключена. Платный тариф пока активирует администратор — нажмите «Сообщить мне».",
-  'price.soon':'Скоро','price.notify':'Сообщить мне','price.month':'сум / мес','price.free':'Бесплатно',
+  "price.note":"Онлайн-оплата ещё не подключена. Платный тариф пока активирует администратор — нажмите «Написать в Telegram».",
+  'price.soon':'Подключает администратор','price.notify':'Написать в Telegram','price.month':'сум / мес','price.free':'Бесплатно',
   "price.unit":"Единица документа: 1 единица — до 10 страниц и 40 000 знаков. Расход показывается до начала работы. Лимиты действуют 30 дней.",
   "price.start":"Для начала",
   "price.trial":"Начать пробный",
   "price.cur":"сум",
-  'price.tiers':[["Пробный", "Бесплатно", "Единоразово", "Чтобы попробовать платформу.", ["5 правовых вопросов", "1 анализ документа + 1 юридическое заключение", "Каждый ответ с источником на lex.uz", "Не обновляется · карта не нужна"]], ["Silver", "199 000", "30 дней", "Для частных юристов, предпринимателей и небольших офисов.", ["150 правовых вопросов", "8 единиц анализа документов", "8 единиц юридических заключений", "10 созданных документов", "Аудиозапись и расшифровка — лимит минут объявим позже", "Создание Workspace и приглашение команды"]], ["Gold", "599 000", "30 дней", "Для юридического отдела, HR и бухгалтерии — лимиты Silver × 3.", ["450 правовых вопросов", "24 единицы анализа документов", "24 единицы юридических заключений", "30 созданных документов", "Аудиозапись и расшифровка — лимит минут объявим позже", "Создание Workspace и приглашение команды"]], ["Platinum", "999 000", "30 дней", "Для компаний и адвокатских бюро — лимиты Silver × 5.", ["750 правовых вопросов", "40 единиц анализа документов", "40 единиц юридических заключений", "50 созданных документов", "Аудиозапись и расшифровка — лимит минут объявим позже", "Создание Workspace и приглашение команды"]]]
+  'price.tiers':[["Пробный", "Бесплатно", "Единоразово", "Чтобы попробовать платформу.", ["5 правовых вопросов", "1 анализ документа + 1 юридическое заключение", "Каждый ответ с источником на lex.uz", "Не обновляется · карта не нужна"]], ["Silver", "199 000", "30 дней", "Для частных юристов, предпринимателей и небольших офисов.", ["150 правовых вопросов", "8 единиц анализа документов (до 80 страниц)", "8 единиц юридических заключений (до 80 страниц)", "10 созданных документов", "Аудиозапись и расшифровка", "Создание Workspace и приглашение команды"]], ["Gold", "599 000", "30 дней", "Для юридического отдела, HR и бухгалтерии — лимиты Silver × 3.", ["450 правовых вопросов", "24 единицы анализа документов (до 240 страниц)", "24 единицы юридических заключений (до 240 страниц)", "30 созданных документов", "Аудиозапись и расшифровка", "Создание Workspace и приглашение команды"]], ["Platinum", "999 000", "30 дней", "Для компаний и адвокатских бюро — лимиты Silver × 5.", ["750 правовых вопросов", "40 единиц анализа документов (до 400 страниц)", "40 единиц юридических заключений (до 400 страниц)", "50 созданных документов", "Аудиозапись и расшифровка", "Создание Workspace и приглашение команды"]]]
 },
 en: {
   'nav.features':'Features','nav.audience':'Who it’s for','nav.security':'Security','nav.pricing':'Pricing','nav.login':'Log in','nav.app':'Open app',
@@ -857,7 +857,7 @@ en: {
   "pfaq.q1":"What does the free plan include?",
   "pfaq.a1":"A one-time trial: 5 legal questions, 1 document review and 1 legal opinion. Every answer comes with a lex.uz source. The limit does not renew and no card is needed.",
   "pfaq.q2":"How do I move to a paid plan?",
-  "pfaq.a2":"Online payment is not connected yet. For now an administrator activates paid plans — press “Notify me” under the plan.",
+  "pfaq.a2":"Online payment is not connected yet. For now an administrator activates paid plans — press “Message us on Telegram” under the plan.",
   "pfaq.q3":"Can I cancel a plan?",
   "pfaq.a3":"Yes, at any time.",
   "pfaq.q4":"Is my data safe?",
@@ -1027,12 +1027,12 @@ en: {
   'foot.disclaimer':'Note: JuristAI’s answers are for information only and do not replace formal legal advice.',
   'price.title':'Choose the plan that fits',
   'price.sub':'Start free, no card needed. Cancel at any time.',
-  "price.note":"Online payment is not connected yet. For now an administrator activates paid plans — press “Notify me”.",
-  'price.soon':'Coming soon','price.notify':'Notify me','price.month':'UZS / month','price.free':'Free',
+  "price.note":"Online payment is not connected yet. For now an administrator activates paid plans — press “Message us on Telegram”.",
+  'price.soon':'Activated by an administrator','price.notify':'Message us on Telegram','price.month':'UZS / month','price.free':'Free',
   "price.unit":"Document unit: 1 unit is up to 10 pages and 40,000 characters. Usage is shown before work starts. Limits apply per 30-day period.",
   "price.start":"To start",
   "price.trial":"Start the trial",
   "price.cur":"UZS",
-  'price.tiers':[["Trial", "Free", "One-time", "For trying the platform.", ["5 legal questions", "1 document review + 1 legal opinion", "Every answer cites lex.uz", "Does not renew · no card needed"]], ["Silver", "199 000", "30 days", "For solo lawyers, entrepreneurs and small offices.", ["150 legal questions", "8 units of document review", "8 units of legal opinions", "10 documents generated", "Voice recording and transcription — minute limit to be announced", "Create a Workspace and invite your team"]], ["Gold", "599 000", "30 days", "For legal departments, HR and accounting — 3× the Silver limits.", ["450 legal questions", "24 units of document review", "24 units of legal opinions", "30 documents generated", "Voice recording and transcription — minute limit to be announced", "Create a Workspace and invite your team"]], ["Platinum", "999 000", "30 days", "For companies and law firms — 5× the Silver limits.", ["750 legal questions", "40 units of document review", "40 units of legal opinions", "50 documents generated", "Voice recording and transcription — minute limit to be announced", "Create a Workspace and invite your team"]]]
+  'price.tiers':[["Trial", "Free", "One-time", "For trying the platform.", ["5 legal questions", "1 document review + 1 legal opinion", "Every answer cites lex.uz", "Does not renew · no card needed"]], ["Silver", "199 000", "30 days", "For solo lawyers, entrepreneurs and small offices.", ["150 legal questions", "8 units of document review (up to 80 pages)", "8 units of legal opinions (up to 80 pages)", "10 documents generated", "Voice recording and transcription", "Create a Workspace and invite your team"]], ["Gold", "599 000", "30 days", "For legal departments, HR and accounting — 3× the Silver limits.", ["450 legal questions", "24 units of document review (up to 240 pages)", "24 units of legal opinions (up to 240 pages)", "30 documents generated", "Voice recording and transcription", "Create a Workspace and invite your team"]], ["Platinum", "999 000", "30 days", "For companies and law firms — 5× the Silver limits.", ["750 legal questions", "40 units of document review (up to 400 pages)", "40 units of legal opinions (up to 400 pages)", "50 documents generated", "Voice recording and transcription", "Create a Workspace and invite your team"]]]
 }
 };

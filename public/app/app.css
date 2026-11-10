@@ -983,6 +983,10 @@ textarea.inp{height:auto;min-height:96px;padding:10px 13px;resize:vertical;line-
 .pt-stages li.past .pt-dot{background:var(--ok);border-color:var(--ok)}
 .pt-stages li.cur .pt-dot{background:var(--cta);border-color:var(--cta)}
 .pt-msg{padding:10px 12px;border-radius:12px;background:var(--accent-soft);margin-top:8px}
+/* X3: ish sahifasidagi ikki tab (matters.js) */
+.mt-tabs{margin:14px 0 4px}
+.mt-tabn{display:inline-block;min-width:18px;margin-left:6px;padding:0 5px;border-radius:99px;background:var(--cta);color:#fff;font-size:11.5px;line-height:18px;text-align:center}
+.mt-pane>.mt-pt{margin-top:12px}
 /* P3: hujjat so'rovlari va mijoz fayllari (portal-files.js) */
 .pf-req{margin-top:8px;padding:8px 12px;border:1px solid var(--line);border-radius:12px}
 .pf-req.done{opacity:.72}
