@@ -134,6 +134,7 @@
           return '<div class="pt-row"><span class="pt-rt muted">' + esc(i.note || '—') + '</span><small class="muted">' + esc(J.fmtDate(i.expiresAt)) + '</small>' + (w ? '<button class="pill sm ghost" type="button" data-rvi="' + esc(i.id) + '">' + esc(s('revoke')) + '</button>' : '') + '</div>';
         }).join('') : '') +
         (w ? '<div style="margin-top:10px"><button class="pill sm" type="button" data-a="ptinvite"' + (open ? '' : ' disabled title="' + esc(s('closedInv')) + '"') + '>' + J.icon('plus') + esc(s('invite')) + '</button></div>' : '') + '</div>' +
+        (P.clients.length ? '<div class="pt-sec pt-reqhost"></div>' : '') +
         (P.clients.length ? '<div class="pt-sec pt-threadhost"></div>' : '') +
         '<div class="pt-sec"><b>' + esc(s('deadlines')) + '</b>' + (P.deadlines.length ? P.deadlines.map(function (d) {
           return '<div class="pt-row"><span class="num pt-date">' + esc(J.fmtDate(d.dueOn)) + '</span><span class="pt-rt" data-dl="' + esc(d.id) + '"></span>' +
@@ -148,6 +149,8 @@
       P.clients.forEach(function (c, k) { $$('.pt-sec', host)[0].querySelectorAll('.pt-row .pt-rt')[k].textContent = c.name; });
       P.deadlines.forEach(function (d) { var el = $('[data-dl="' + d.id + '"]', host); if (el) el.textContent = d.title; });
       P.items.forEach(function (i) { var el = $('[data-it="' + i.id + '"]', host); if (el) el.textContent = i.title; });
+      var rq = $('.pt-reqhost', host);
+      if (rq && J.portalFiles) J.portalFiles(rq, { matterId: M.id, side: 'lawyer', canWrite: w });
       var th = $('.pt-threadhost', host);
       if (th) thread(th, base(M.id) + '/messages', { canWrite: w, lead: s('msgLeadL') + (P.unread ? ' ' + s('newMsgs', { n: P.unread }) : '') });
       if (!w) return;
@@ -245,11 +248,13 @@
       (P.deadlines.length ? '<div class="card"><h4>' + esc(s('deadlines')) + '</h4>' + P.deadlines.map(function (d) { return '<div class="pt-row"><span class="num pt-date">' + esc(J.fmtDate(d.dueOn)) + '</span><span class="pt-rt" data-dl="' + esc(d.id) + '"></span></div>'; }).join('') + '</div>' : '') +
       (notes.length ? '<div class="card"><h4>' + esc(s('fromLawyer')) + '</h4>' + notes.map(function (n) { return '<div class="pt-msg"><p data-n="' + esc(n.id) + '"></p><small class="muted">' + esc(J.fmtDate(n.createdAt)) + '</small></div>'; }).join('') + '</div>' : '') +
       (docs.length ? '<div class="card"><h4>' + esc(s('docs')) + '</h4>' + docs.map(function (d) { return '<button type="button" class="mt-item go pt-docrow" data-doc="' + esc(d.id) + '"><span class="mt-ic">' + J.icon('doc') + '</span><div class="mt-it"><b data-noalpha></b><small>' + esc((d.pages ? d.pages + ' b. · ' : '') + J.fmtDate(d.createdAt)) + '</small></div></button>'; }).join('') + '</div>' : '') +
+      '<div class="card pt-creqs" hidden></div>' +
       '<div class="card pt-cthread"></div>' +
       (P.history.length > 1 ? '<details class="pt-hist"><summary>' + esc(s('history')) + '</summary><ul>' + P.history.map(function (h) { return '<li>' + esc(J.fmtDate(h.at) + ' — ' + stageName(h.stage, true)) + '</li>'; }).join('') + '</ul></details>' : '') +
       '<div style="margin-top:18px"><button class="pill sm ghost" type="button" data-a="leave">' + esc(s('leave')) + '</button></div>';
     $('.pt-title', body).textContent = P.title;
     $('.pt-lawyer', body).textContent = P.lawyerName;
+    if (J.portalFiles) J.portalFiles($('.pt-creqs', body), { matterId: id, side: 'client' });
     thread($('.pt-cthread', body), '/api/portal/' + encodeURIComponent(id) + '/messages', { canWrite: P.status === 'open', lead: s('msgLeadC') });
     P.deadlines.forEach(function (d) { $('[data-dl="' + d.id + '"]', body).textContent = d.title; });
     notes.forEach(function (n) { $('[data-n="' + n.id + '"]', body).textContent = n.text; });

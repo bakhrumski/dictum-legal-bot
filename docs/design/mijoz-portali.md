@@ -161,8 +161,8 @@ muharrirdagi D3 ulashish kabi: bitta obyekt, bitta havola, istalgan akkaunt.
 | P1a | `matter_clients`, taklif, ruxsat tekshiruvi, bosqich va muddatlar (server) | `src/matters`, migratsiya | so'raladi |
 | P1b | `#/portal` sahifalari, ish sahifasida "Mijoz" kartasi | `public/app` | — |
 | P1c | Botda mijozning ishlari va xabarnomalar | `src/bot` | so'raladi |
-| P2 | Xabarlar (sayt va bot) | server, bot, sahifa | so'raladi |
-| P3 | Hujjat so'rovi va mijoz yuklashi | server, bot, sahifa | so'raladi |
+| P2 | Xabarlar (sayt va bot) | server, bot, sahifa | #582, qilindi |
+| P3 | Hujjat so'rovi va mijoz yuklashi | server, bot, sahifa | PR ochiq (2026-11-10) |
 | P4 | Jurnal va eksport | server, sahifa | so'raladi |
 | P5 | "Tanishdim / Roziman" | server, sahifa | so'raladi |
 

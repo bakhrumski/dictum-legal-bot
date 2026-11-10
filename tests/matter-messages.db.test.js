@@ -35,7 +35,7 @@ const read = (...p) => fs.readFileSync(path.join(__dirname, '..', ...p), 'utf8')
     assert.ok(src.includes("require('../privacy/access-log').note(pool, req, { table: 'matter_messages', owners: out.clientAuthors });"));
     assert.ok(!/callAI|callCheapAI|callOpenAI|getEmbedding/.test(src.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '')));
     const bot = read('src', 'bot', 'bot.js');
-    assert.ok(bot.includes("/^mp[mdw]_[0-9a-f-]{36}$/.test(data)"));
+    assert.ok(bot.includes("/^mp[mdwu]_[0-9a-f-]{36}$/.test(data)"));
     assert.ok(bot.includes('if (conv && conv.state === tp.MSG_STATE) {'));
     assert.ok(/tp\.MSG_STATE\) \{[\s\S]{0,400}tp\.msgWaiting\(conv\)[\s\S]{0,300}tp\.MSG_CANCEL\.test\(text\)/.test(bot), 'a stale mode is dropped; "bekor" leaves');
     assert.ok(bot.indexOf('tp.MSG_STATE) {') < bot.indexOf('// ── Autonomous agent: converse and answer without a human'), 'before the agent: never a question or an AI call');

@@ -983,6 +983,15 @@ textarea.inp{height:auto;min-height:96px;padding:10px 13px;resize:vertical;line-
 .pt-stages li.past .pt-dot{background:var(--ok);border-color:var(--ok)}
 .pt-stages li.cur .pt-dot{background:var(--cta);border-color:var(--cta)}
 .pt-msg{padding:10px 12px;border-radius:12px;background:var(--accent-soft);margin-top:8px}
+/* P3: hujjat so'rovlari va mijoz fayllari (portal-files.js) */
+.pf-req{margin-top:8px;padding:8px 12px;border:1px solid var(--line);border-radius:12px}
+.pf-req.done{opacity:.72}
+.pf-req .pt-row{flex-wrap:wrap}
+.pf-req .pt-rt{flex:1 1 170px}
+.pf-file{padding-left:4px;font-size:13.5px}
+.pf-file .pt-rt small{display:block;font-size:12px}
+.pf-done{background:var(--accent-soft)}
+.pt-creqs>b{display:block;font-size:15px;margin-bottom:4px}
 .pt-msg p{margin:0 0 4px;white-space:pre-wrap;overflow-wrap:anywhere}
 .pt-docrow{width:100%;background:none;border:0;border-bottom:1px solid var(--line);text-align:left;font:inherit;color:inherit}
 .pt-doc{white-space:pre-wrap;overflow-wrap:anywhere;max-height:60vh;overflow:auto;font-size:14px;line-height:1.55;margin-top:10px}

@@ -1161,6 +1161,37 @@ Known state of the suites (Sept 2026):
   "[xabar o'chirilgan]" (design answer 7). Pages: "Yozishma" on the lawyer's
   portal card (once a client joined) and on `#/portal/<id>` (mine on light
   blue), "N ta yangi xabar" on the client's list. `tests/matter-messages.db.test.js`.
+  P3 (2026-11-10, migration 049, design §P3, `src/matters/portal-files.js` as
+  `portal.files`, no AI, no OCR, no unit): the lawyer side opens a document
+  request (`matter_doc_requests`: title, optional date, open / done; removing
+  it leaves its files in the matter); a client uploads a file while the
+  matter is open - to a request or to the matter - on the site (multipart)
+  or by sending it to the bot. `matter_client_files` + the bytes apart in
+  `matter_client_file_data`, sealed (AAD `matter_client_files.data:<matter>:<id>`)
+  with the original's sha256; a download is opened, checked against it and
+  sent as an attachment (nosniff). 20 MB a file (`PORTAL_FILE_MAX_MB`), 200 a
+  matter, 2 GB over the matter's Workspace or the owner's own matters
+  (`PORTAL_FILES_MAX_BYTES`), a fixed type list (pdf, doc(x), xls(x), txt,
+  rtf, jpg, png, webp, heic), the same file twice 409, a file that already
+  looks sealed refused. A client sees and removes only their own files; the
+  lawyer side sees all (a viewer reads); anything else 404; a staff reader is
+  in the access log. Routes `/api/matters/:id/portal/requests[/:rid]`,
+  `.../files/:fid[/content]`, `/api/portal/:id/files[/:fid[/content]]`.
+  Nothing reads a file: the lawyer's "Nima qilaylik?" downloads it into the
+  ordinary document door (`J.readFile` -> U3's card) - a text PDF / Word lands
+  in the lawyer's own Hujjatlarim, a scan shows its OCR price first and counts
+  against the lawyer's limit. Bot: a document or photo sent in a private chat
+  by a client with an open request is held 15 min and asked about ("qaysi
+  so'rovga?": a button a request `mpu_<request>`, files sent within a minute
+  are one question, "Bu yurist uchun emas" `mpu_x` sends them on their
+  ordinary way) before the AI-analysis offer and the lawyer queue; the matter
+  card lists the open requests. Notices: a new / received request joins the
+  clients' batched message; an upload goes at once to the matter's owner and
+  the request's author (who, matter, file name - never the file). Account
+  deletion removes the person's uploaded files. Pages
+  (`public/app/portal-files.js`, `J.portalFiles`): "Mijozdan hujjat so'rash" on
+  the lawyer's card, "Yurist so'ragan hujjatlar" on `#/portal/<id>`.
+  `tests/matter-files.db.test.js`.
 - `src/agents/runs/` (2026-10-28, PR-B) — agent runs (migration 020): the
   claim draft, tabular and playbook routes are a service each (`prepare` no
   AI + reservation held with `meta.holdUntil` 45 min, `run` the harness,

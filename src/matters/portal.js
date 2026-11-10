@@ -35,6 +35,9 @@
  * side gets the client's message in their own Telegram). Reading marks it
  * read for that person (matter_message_reads); a staff account opening a
  * client's messages is in the access log (route side).
+ *
+ * P3 (2026-11-10, design §P3): document requests and the client's uploaded
+ * files - src/matters/portal-files.js (`portal.files`); routes below.
  */
 
 const crypto = require('crypto');
@@ -394,8 +397,11 @@ function createPortal({ db, notify = null }) {
     const out = {}; for (const x of r.rows) out[x.matter_id] = x.n; return out;
   }
 
+  // P3: document requests and the client's uploads (src/matters/portal-files.js)
+  const files = require('./portal-files').createPortalFiles({ db, lawyerMatter, clientMatter, tell });
+
   return { panel, invite, revokeInvite, removeClient, setStage, addDeadline, updateDeadline, removeDeadline, addItem, removeItem,
-    inviteInfo, accept, myMatters, clientView, clientItem, leave, messages, sendMessage, unread };
+    inviteInfo, accept, myMatters, clientView, clientItem, leave, messages, sendMessage, unread, files };
 }
 
 function mountPortalRoutes(app, { pool, requireAuth, requireSameOrigin, notify = null }) {
@@ -436,7 +442,40 @@ function mountPortalRoutes(app, { pool, requireAuth, requireSameOrigin, notify =
   app.post('/api/matters/:id/portal/items', ...W, guard(async (req, res) => { res.status(201).json(await portal.addItem(req.params.id, me(req), b(req))); }));
   app.delete('/api/matters/:id/portal/items/:itemId', ...W, guard(req => portal.removeItem(req.params.id, req.params.itemId, me(req))));
 
+  // P3: document requests and the files the clients sent (a staff reader of a client's file is in the access log)
+  const F = portal.files;
+  const sendFile = (res, f) => {
+    res.set({ 'Content-Type': f.mime, 'X-Content-Type-Options': 'nosniff', 'Content-Length': String(f.buffer.length),
+      'Content-Disposition': `attachment; filename="file"; filename*=UTF-8''${encodeURIComponent(f.name)}` });
+    res.end(f.buffer);
+  };
+  app.get('/api/matters/:id/portal/requests', requireAuth, guard(req => F.lawyerList(req.params.id, me(req))));
+  app.post('/api/matters/:id/portal/requests', ...W, guard(async (req, res) => { res.status(201).json(await F.addRequest(req.params.id, me(req), b(req))); }));
+  app.patch('/api/matters/:id/portal/requests/:requestId', ...W, guard(req => F.setRequest(req.params.id, req.params.requestId, me(req), b(req))));
+  app.delete('/api/matters/:id/portal/requests/:requestId', ...W, guard(req => F.removeRequest(req.params.id, req.params.requestId, me(req))));
+  app.get('/api/matters/:id/portal/files/:fileId/content', requireAuth, guard(async (req, res) => {
+    const f = await F.lawyerDownload(req.params.id, req.params.fileId, me(req));
+    require('../privacy/access-log').note(pool, req, { table: 'matter_client_files', owners: f.uploadedBy ? [f.uploadedBy] : [] });
+    sendFile(res, f);
+  }));
+  app.delete('/api/matters/:id/portal/files/:fileId', ...W, guard(req => F.lawyerRemove(req.params.id, req.params.fileId, me(req))));
+
   // the client's side
+  const upload = require('multer')({ storage: require('multer').memoryStorage(), limits: { fileSize: require('./portal-files').FILE_MAX_BYTES(), files: 1 } }).single('file');
+  const oneFile = (req, res, next) => upload(req, res, err => {
+    if (!err) return next();
+    res.set('Cache-Control', 'no-store');
+    if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'too_large', message: `Fayl ${Math.round(require('./portal-files').FILE_MAX_BYTES() / 1048576)} MB dan oshmasin` });
+    res.status(400).json({ error: 'invalid', message: 'Faylni qabul qilib bo‘lmadi' });
+  });
+  app.get('/api/portal/:matterId/files', requireAuth, guard(req => F.clientList(req.params.matterId, me(req))));
+  app.post('/api/portal/:matterId/files', ...W, oneFile, guard(async (req, res) => {
+    // multer reads a multipart name as latin1; the browser sent UTF-8
+    const name = req.file ? Buffer.from(String(req.file.originalname || ''), 'latin1').toString('utf8') : '';
+    res.status(201).json(await F.upload(req.params.matterId, me(req), { buffer: req.file && req.file.buffer, name, requestId: b(req).requestId || null }));
+  }));
+  app.get('/api/portal/:matterId/files/:fileId/content', requireAuth, guard(async (req, res) => { sendFile(res, await F.clientDownload(req.params.matterId, req.params.fileId, me(req))); }));
+  app.delete('/api/portal/:matterId/files/:fileId', ...W, guard(req => F.clientRemove(req.params.matterId, req.params.fileId, me(req))));
   app.get('/api/portal', requireAuth, guard(async req => ({ matters: await portal.myMatters(me(req)) })));
   app.get('/api/portal/invite/:token', requireAuth, guard(req => portal.inviteInfo(req.params.token, me(req))));
   app.post('/api/portal/invite/:token/accept', ...W, guard(req => portal.accept(req.params.token, me(req))));
@@ -454,6 +493,8 @@ async function deleteAccountClientRows(db, adminId) {
   // P2 (design answer 7): the person's messages stay as a line in the matter, their text replaced
   await db.query(`UPDATE matter_messages SET body = $2 WHERE author_id = $1 AND side = 'client'`, [adminId, DELETED_TEXT])
     .catch(e => { if (e.code !== '42P01') throw e; });
+  // P3: the files the person uploaded as a client go with the account
+  await require('./portal-files').deleteAccountFiles(db, adminId);
 }
 
 module.exports = { createPortal, mountPortalRoutes, deleteAccountClientRows, STAGES, CLOSED_DAYS };
