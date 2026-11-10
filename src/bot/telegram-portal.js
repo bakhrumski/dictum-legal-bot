@@ -72,12 +72,25 @@ function T(lang) {
     sent: R ? '✅ Отправлено юристу. Ответ придёт сюда.' : '✅ Yuristga yuborildi. Javob shu yerga keladi.',
     msgCancelled: R ? 'Хорошо, сообщение не отправлено.' : "Yaxshi, xabar yuborilmadi.",
     msgFailed: R ? 'Не удалось отправить. Попробуйте ещё раз позже.' : "Yuborib bo'lmadi. Birozdan keyin qayta urinib ko'ring.",
+    // P3: document requests and the client's files
+    reqs: R ? 'Юрист просит документы - отправьте файл прямо в этот чат:' : "Yurist so'ragan hujjatlar - faylni shu chatga yuboring:",
+    until: d => (R ? `до ${d}` : `${d} gacha`),
+    askFile: R ? '📎 Для какого запроса юриста этот файл?' : '📎 Bu fayl yuristning qaysi so‘roviga?',
+    notRequest: R ? 'Это не для юриста' : 'Bu yurist uchun emas',
+    fileSaved: (n, q) => (R ? `✅ Файл «${n}» отправлен юристу${q ? ` (запрос: ${q})` : ''}. Он хранится в зашифрованном виде.` : `✅ «${n}» fayli yuristga yuborildi${q ? ` (so‘rov: ${q})` : ''}. U shifrlangan holda saqlanadi.`),
+    fileGone: R ? 'Время вышло - отправьте файл ещё раз.' : 'Vaqt tugadi - faylni qayta yuboring.',
+    fileBig: R ? 'Файл больше 20 МБ - загрузите его на сайте.' : 'Fayl 20 MB dan katta - uni saytda yuklang.',
+    fileFailed: R ? 'Не удалось получить файл. Попробуйте ещё раз позже.' : "Faylni olib bo'lmadi. Birozdan keyin qayta urinib ko'ring.",
+    fromClientFile: (c, t, n, q) => (R ? `📎 Клиент ${c} загрузил файл в дело «${t}»: ${n}${q ? `\nЗапрос: ${q}` : ''}` : `📎 Mijoz ${c} «${t}» ishiga fayl yukladi: ${n}${q ? `\nSo‘rov: ${q}` : ''}`),
+    openMatter: R ? '📂 Открыть дело' : '📂 Ishni ochish',
     news: R ? 'Новое в деле' : 'Ishingizda yangilik',
     ev: {
       stage: s => (R ? `этап: ${STAGE.ru[s] || s}` : `bosqich: ${STAGE.uz[s] || s}`),
       note: R ? 'новая заметка от юриста' : 'yuristdan yangi izoh',
       doc: t => (R ? `новый документ: ${t}` : `yangi hujjat: ${t}`),
       deadline: (t, d) => (R ? `срок: ${d} - ${t}` : `muddat: ${d} - ${t}`),
+      request: (t, d) => (R ? `юрист просит документ: ${t}${d ? ` (до ${d})` : ''} - отправьте файл в этот чат` : `yurist hujjat so'radi: ${t}${d ? ` (${d} gacha)` : ''} - faylni shu chatga yuboring`),
+      requestDone: t => (R ? `документ принят: ${t}` : `hujjat qabul qilindi: ${t}`),
     },
   };
 }
@@ -133,6 +146,13 @@ async function matterCard(pool, adminId, matterId, lang = 'uz') {
     const last = conv.messages.slice(-3);
     if (last.length) lines.push('', `${t.msgs}:`, ...last.map(x => `${x.mine ? t.me : x.author} (${fmtDate(x.at)}): ${short(x.text, 300)}`));
   } catch (e) { if (!(e && e.status === 404) && e.code !== '42P01') throw e; }
+  // P3: what the lawyer asked for - the file is sent to this chat, the bot asks which request it is for
+  if (v.status === 'open') {
+    try {
+      const open = (await createPortal({ db: pool }).files.clientList(matterId, adminId)).requests.filter(q => q.status === 'open');
+      if (open.length) lines.push('', t.reqs, ...open.map(q => `• ${q.title}${q.dueOn ? ` (${t.until(fmtDate(q.dueOn))})` : ''}${q.files.length ? ` - ✓ ${q.files.length}` : ''}`));
+    } catch (e) { if (!(e && e.status === 404) && e.code !== '42P01') throw e; }
+  }
   if (docs.length) lines.push('', t.docs);
   let text = lines.join('\n');
   if (text.length > MSG_MAX) text = `${text.slice(0, MSG_MAX)}\n${t.cut}`;
@@ -247,7 +267,9 @@ function createNotifier({ pool, getBot, delayMs = null }) {
       const line = e.kind === 'stage' ? (e === lastStage ? t.ev.stage(e.stage) : null)
         : e.kind === 'note' ? t.ev.note
         : e.kind === 'doc' ? t.ev.doc(short(e.title, 80))
-        : e.kind === 'deadline' ? t.ev.deadline(short(e.title, 80), fmtDate(e.dueOn)) : null;
+        : e.kind === 'deadline' ? t.ev.deadline(short(e.title, 80), fmtDate(e.dueOn))
+        : e.kind === 'request' ? t.ev.request(short(e.title, 80), e.dueOn ? fmtDate(e.dueOn) : '')
+        : e.kind === 'request_done' ? t.ev.requestDone(short(e.title, 80)) : null;
       if (line && !seen.has(line)) { seen.add(line); lines.push(`• ${line}`); }
     }
     if (!lines.length) return;
@@ -287,8 +309,26 @@ function createNotifier({ pool, getBot, delayMs = null }) {
         .catch(err => console.warn('[PORTAL-TG] message not sent:', err.message));
     }
   }
+  /** P3: a client's upload is told to the lawyer side at once: who, which matter, the file's name - never the file. */
+  async function deliverUpload(matterId, e) {
+    const bot = typeof getBot === 'function' ? getBot() : null;
+    if (!bot) return;
+    const t = T('uz');
+    const author = (await pool.query('SELECT full_name, telegram_username FROM admins WHERE id = $1', [e.authorId])).rows[0] || {};
+    const name = author.full_name || (author.telegram_username ? '@' + author.telegram_username : '');
+    const rows = (await pool.query(
+      `SELECT DISTINCT COALESCE(a.telegram_chat_id, a.telegram_user_id) AS chat FROM admins a
+        WHERE a.id = ANY($1::int[]) AND COALESCE(a.telegram_chat_id, a.telegram_user_id) IS NOT NULL`,
+      [[e.ownerId, e.requestBy].filter(x => Number.isInteger(x))])).rows;
+    for (const r of rows) {
+      await bot.sendMessage(String(r.chat), t.fromClientFile(name, short(e.title, 80), short(e.name, 80), e.request ? short(e.request, 80) : ''),
+        { reply_markup: { inline_keyboard: [[{ text: t.openMatter, url: `${appBase()}/app/#/ishlar/${matterId}` }]] } })
+        .catch(err => console.warn('[PORTAL-TG] upload notice not sent:', err.message));
+    }
+  }
   function notify(matterId, event) {
     if (notifyOff() || !ID.test(String(matterId || '')) || !event) return;
+    if (event.kind === 'upload') { deliverUpload(matterId, event).catch(e => console.warn('[PORTAL-TG] upload notice failed:', e.message)); return; }
     if (event.kind === 'message') { deliverMessage(matterId, event).catch(e => console.warn('[PORTAL-TG] message failed:', e.message)); return; }
     const p = pending.get(matterId) || { events: [], timer: null };
     p.events.push(event);
@@ -321,5 +361,68 @@ async function sendFromBot(pool, adminId, matterId, text, { notify = null } = {}
   return createPortal({ db: pool, notify }).sendMessage(matterId, adminId, 'client', { text, source: 'telegram' });
 }
 
-module.exports = { T, PREFIX, accountOf, clientCount, listReply, matterCard, documentFile, inviteStart, inviteJoin, ensureAccount, hold, take, createNotifier,
+// ---------- P3: a file sent to the bot by a client with an open document request ----------
+
+const FILE_MAX = 20 * 1024 * 1024; // also the Bot API's own download limit
+const heldFiles = new Map(); // telegram user id -> { msg, file, at }
+/** What a message carries as a file: a document, or the largest size of a photo. */
+function fileOf(msg = {}) {
+  if (msg.document) return { fileId: msg.document.file_id, name: msg.document.file_name || 'fayl', size: msg.document.file_size || 0 };
+  if (Array.isArray(msg.photo) && msg.photo.length) { const p = msg.photo[msg.photo.length - 1]; return { fileId: p.file_id, name: `rasm-${msg.message_id || Date.now()}.jpg`, size: p.file_size || 0 }; }
+  return null;
+}
+/**
+ * A file from a client who has open requests: held HOLD_MS for this Telegram user and the
+ * question "which request?" - one button a request (`mpu_<request>`) and "not for the lawyer"
+ * (`mpu_x`, the file then goes its ordinary way). null: nothing to ask (no open request).
+ */
+async function fileOffer(pool, adminId, msg, lang = 'uz') {
+  const file = fileOf(msg);
+  if (!file || !msg.from) return null;
+  let open;
+  try { open = await createPortal({ db: pool }).files.openRequestsOf(adminId); } catch (e) { if (e.code === '42P01') return null; throw e; }
+  if (!open.length) return null;
+  const t = T(lang);
+  // several files sent together (an album, pages of one document): one question for all of them
+  const prev = heldFiles.get(String(msg.from.id));
+  if (prev && Date.now() - prev.at < 60000 && prev.items.length < 10) { prev.items.push({ msg, file }); return { silent: true }; }
+  heldFiles.set(String(msg.from.id), { items: [{ msg, file }], at: Date.now() });
+  const many = new Set(open.map(q => q.matterId)).size > 1;
+  const rows = open.slice(0, 8).map(q => ([{ text: short(`${q.title}${many ? ` · ${q.matterTitle}` : ''}`, 60), callback_data: `mpu_${q.id}` }]));
+  rows.push([{ text: t.notRequest, callback_data: 'mpu_x' }]);
+  return { text: t.askFile, keyboard: { inline_keyboard: rows } };
+}
+function takeFile(telegramUserId) {
+  const h = heldFiles.get(String(telegramUserId)); heldFiles.delete(String(telegramUserId));
+  return h && Date.now() - h.at <= HOLD_MS ? h : null;
+}
+/** The held files into the request's matter: downloaded from Telegram, sealed by portal-files. { text, matterId } */
+async function fileToRequest(pool, bot, adminId, requestId, held, { notify = null, lang = 'uz', download = null } = {}) {
+  const t = T(lang);
+  if (!held || !held.items.length) return { text: t.fileGone };
+  const portal = createPortal({ db: pool, notify });
+  const matterId = await portal.files.requestMatter(requestId);
+  if (!matterId) return { text: t.notFound };
+  const lines = [];
+  let title = '';
+  for (const { file } of held.items) {
+    if (file.size > FILE_MAX) { lines.push(`${short(file.name, 60)}: ${t.fileBig}`); continue; }
+    let buffer;
+    try {
+      buffer = download ? await download(file.fileId) : Buffer.from(await (await fetch(await bot.getFileLink(file.fileId))).arrayBuffer());
+    } catch (e) { console.warn('[PORTAL-TG] file not downloaded:', e.message); lines.push(`${short(file.name, 60)}: ${t.fileFailed}`); continue; }
+    try {
+      const f = await portal.files.upload(matterId, adminId, { buffer, name: file.name, requestId, source: 'telegram' });
+      if (!title) { const q = (await portal.files.clientList(matterId, adminId)).requests.find(x => x.id === requestId); title = q ? short(q.title, 80) : ''; }
+      lines.push(t.fileSaved(f.name, title));
+    } catch (e) {
+      if (!(e && e.status)) throw e;
+      if (e.status === 404) return { text: t.notFound };
+      lines.push(`${short(file.name, 60)}: ${e.message}`);
+    }
+  }
+  return { text: lines.join('\n'), matterId };
+}
+
+module.exports = { fileOf, fileOffer, takeFile, fileToRequest, T, PREFIX, accountOf, clientCount, listReply, matterCard, documentFile, inviteStart, inviteJoin, ensureAccount, hold, take, createNotifier,
   MSG_STATE, MSG_TTL_MIN, MSG_CANCEL, msgWaiting, startMessage, sendFromBot };

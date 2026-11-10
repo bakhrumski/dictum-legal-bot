@@ -1112,7 +1112,7 @@ async function handleCallbackQuery(callbackQuery) {
 
   // the client portal in the bot (src/bot/telegram-portal.js): a client's matters, a matter, a
   // shared document as a file, and the invite's tap - each read checked by src/matters/portal.js
-  if (data === 'mpl' || data === 'mpj_y' || data === 'mpj_n' || /^mp[mdw]_[0-9a-f-]{36}$/.test(data)) {
+  if (data === 'mpl' || data === 'mpj_y' || data === 'mpj_n' || data === 'mpu_x' || /^mp[mdwu]_[0-9a-f-]{36}$/.test(data)) {
     const tp = require('./telegram-portal');
     const lang = /^ru/i.test(String(callbackQuery.from.language_code || '')) ? 'ru' : 'uz';
     const t = tp.T(lang);
@@ -1129,6 +1129,19 @@ async function handleCallbackQuery(callbackQuery) {
       }
       const account = await tp.accountOf(pool, chatId, callbackQuery.from.id);
       if (!account) { await bot.sendMessage(chatId, t.noLink).catch(() => {}); return; }
+      if (data.startsWith('mpu_')) {
+        // P3: the file the client sent a moment ago - to a lawyer's request, or on its ordinary way
+        await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: callbackQuery.message.message_id }).catch(() => {});
+        const held = tp.takeFile(callbackQuery.from.id);
+        if (data === 'mpu_x') {
+          if (!held) { await bot.sendMessage(chatId, t.fileGone).catch(() => {}); return; }
+          for (const it of held.items) await handleTelegramMessage({ ...it.msg, _portalSkip: true }).catch(e => console.warn('[BOT] held file not handled:', e.message));
+          return;
+        }
+        const out = await tp.fileToRequest(pool, bot, account.id, data.slice(4), held, { notify: portalNotify(), lang });
+        await bot.sendMessage(chatId, out.text, out.matterId ? { reply_markup: { inline_keyboard: [[{ text: t.open, callback_data: `mpm_${out.matterId}` }]] } } : {}).catch(() => {});
+        return;
+      }
       if (data === 'mpl') {
         const r = await tp.listReply(pool, account.id, lang);
         await bot.sendMessage(chatId, r.text, r.keyboard ? { reply_markup: r.keyboard } : {}).catch(() => {});
@@ -2184,6 +2197,20 @@ async function handleTelegramMessage(msg) {
   }
 
   // ---- REGULAR USER: Process as legal request ----
+
+  // ── Client portal P3 (src/bot/telegram-portal.js): a file from a client whose lawyer asked
+  // for a document - the bot asks which request it is for (or "not for the lawyer": the file
+  // then goes on below as any other). No AI, no OCR, no unit; nothing is read.
+  if ((msg.document || msg.photo) && msg.chat.type === 'private' && !msg._portalSkip) {
+    try {
+      const tp = require('./telegram-portal');
+      const account = await tp.accountOf(pool, chatId, msg.from && msg.from.id);
+      if (account) {
+        const offer = await tp.fileOffer(pool, account.id, msg, /^ru/i.test(String((msg.from && msg.from.language_code) || '')) ? 'ru' : 'uz');
+        if (offer) { if (!offer.silent) await bot.sendMessage(chatId, offer.text, { reply_markup: offer.keyboard }).catch(() => {}); return; }
+      }
+    } catch (e) { console.warn('[BOT] portal file offer failed:', e.message); }
+  }
 
   // Check if user is blocked
   try {

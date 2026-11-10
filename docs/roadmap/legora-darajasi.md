@@ -448,3 +448,8 @@ nima o'lchandi.
   mijoz portalida yurist va mijoz yozishmasi - sayt va bot, xabarlar
   shifrlangan, yuristning xabari mijozga botda matni bilan keladi, mijoz
   botdan "✉️ Yuristga yozish" bilan javob beradi; AI o'qimaydi.
+- 2026-11-10: #582 merge (P2). P3 PR (migratsiya 049): yurist mijozdan hujjat
+  so'raydi (nomi, muddati), mijoz faylni saytda yoki botga yuborib yuklaydi
+  (bot qaysi so'rovga ekanini tugma bilan so'raydi); fayl shifrlangan, sha256
+  bilan; hech narsa o'qimaydi (OCR / AI yo'q) - yurist "Nima qilaylik?" bilan
+  odatdagi hujjat eshigiga beradi. Keyingisi P4 (jurnal).

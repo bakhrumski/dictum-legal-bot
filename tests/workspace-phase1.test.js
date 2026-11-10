@@ -368,6 +368,7 @@ function transactionalPool(handler) {
       '20261104_046_workspace_kb.sql',
       '20261105_047_matter_portal.sql',
       '20261107_048_matter_messages.sql',
+      '20261110_049_matter_client_files.sql',
     ]);
     assert.strictEqual(stripOuterTransaction('BEGIN;\nSELECT 1;\nCOMMIT;'), 'SELECT 1;');
   });
