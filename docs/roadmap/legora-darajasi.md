@@ -73,7 +73,8 @@ Tartib va PR bo'linishi dizayn hujjatining 9-bo'limida.
 - [x] PR-E (#499): Parallel qadamlar, `needs_input`
   dan keyin davom ettirish.
 - [x] PR-F (#501): Telegram: ish holati bitta xabarda yangilanadi, tasdiq tugmalari.
-  Botdagi da'vo agenti hali run emas (keyingi qadam).
+  Botdagi da'vo agenti 2026-11-11 dan run (X8a): ulangan akkaunt uchun navbatda,
+  deploydan keyin davom etadi.
 - [~] PR-G: Agent baholash to'plami (`docs/quality/agent-eval.md`): har bir
   workflow uchun yurist ko'rib chiqqan 20–30 holat; har PR'da stub bilan.
 
@@ -485,3 +486,9 @@ nima o'lchandi.
   sha bilan), ikki hisobotni solishtirish, yurist uchun Excel jadval (javob
   va agent to'plamlari). Hech bir savol hali tasdiqlanmagan; jonli
   yurgizilmagan.
+- 2026-11-11: #591 (X7) merge. X8a PR: botdagi da'vo arizasi agenti ulangan
+  akkaunt uchun `agent_runs` navbatida ishlaydi (deploy yoki jarayon
+  o'lganda bajarilgan qadamlar qayta ishlamaydi, natija saytda ham
+  saqlanadi); Boshqaruv -> AI da "Agent ishlari" jadvali (muvaffaqiyat,
+  savol bergani, to'xtash sababi va qadami, vaqt, bir ishga ma'lum narx).
+  Worker'ni alohida jarayonga ajratish qilinmadi (infratuzilma qarori).

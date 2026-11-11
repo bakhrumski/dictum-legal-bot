@@ -1206,7 +1206,7 @@ Known state of the suites (Sept 2026):
   outputs are emptied when the run ends; results kept 90 days or while a
   matter links them. `/api/agent/runs[/:id[/events|/cancel]]` (own only,
   404 otherwise). `AGENT_RUNS=off` runs in the request as before; the
-  Telegram claim agent is not a run yet (PR-F).
+  Telegram claim agent is a run since X8a (2026-11-11, below).
 - Planner agent (2026-10-28, PR-D): `src/agents/tools/index.js` (matter_context,
   doc_excerpt, lex_search, answer, verify - wrappers of existing code),
   `src/agents/planner.js` (one cheap call, not charged; the server checks the
@@ -1833,6 +1833,32 @@ breve added the way the font builds Ă (OFL, no reserved name).
   --out x.xlsx`, then `--apply x.xlsx [--write]` (a row is reviewed only
   with "ha" + a name, the answer set also the right answer). Only reviewed
   cases speak for quality; not run live yet. `tests/answer-eval.test.js`.
+
+- X8a of the same audit (agent reliability and metrics). G6: a da'vo arizasi
+  ordered in the bot by a LINKED account is an agent run (`claim_draft`,
+  channel `telegram`): the bot reserves the draft unit with a 45-minute
+  hold and a request id, reads the fields (`claimAgent.prepare`, missing
+  facts asked as before with the unit released) and queues the run
+  (`setClaimRuns` from server.js; input `telegram: { chatId, messageId,
+  kind: 'claim', docType, details }`); the worker runs the web executor
+  with checkpoints and settles the unit (committed when a draft came out,
+  as on the site); the bot's notifier (`claimRunProgress` / `claimRunDone`
+  in bot.js, chosen by `isClaimRun`; planner runs keep
+  `src/bot/agent-runs.js`) edits the status message and sends the .docx
+  and the basis - it never commits or releases; a file Telegram refused is
+  named as kept under Hujjatlar -> Natijalar. A Telegram user with no
+  account, a master's /testmode, an unlimited job (no job key), a refused
+  queue (too many runs, no table) or `AGENT_RUNS=off` draft in the bot
+  process as before (`runFacts`). The wait for missing facts
+  (`claimAwait`) is still in memory. Not done: the worker in its own
+  process (an infrastructure decision). G7: `src/agents/runs/metrics.js`,
+  `GET /api/admin/agent-runs/metrics?days=` (master, `no-store`) - per
+  workflow and channel: runs, success = done / (done + failed + limit),
+  asked a question, stop reasons as fixed codes (never the stored error
+  text), the step runs stopped at, median / p90 seconds, taken-over runs,
+  average known cost with the runs holding unknown-cost calls counted
+  apart (never $0); "Agent ishlari" on Boshqaruv -> AI.
+  `tests/agent-x8.db.test.js`.
 
 ## Shell gotcha
 

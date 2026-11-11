@@ -75,7 +75,7 @@ function deps({ facts = null } = {}) {
 
   await test('bot wiring: claims go to the agent; a question releases the unit and the next message resumes; delivery commits', () => {
     const bot = fs.readFileSync(path.join(__dirname, '../src/bot/bot.js'), 'utf8');
-    assert.match(bot, /if \(o\.slug === 'claim' && claimAgent\) return runClaimAgent\(chatId, from, o, job\);/u);
+    assert.match(bot, /if \(o\.slug === 'claim' && claimAgent\) return runClaimAgent\(chatId, from, o, job, /u);
     assert.match(bot, /ledger\.release\(job\.jobKey, 'claim_needs_input'\)/u);
     assert.match(bot, /Birlik hali yechilmadi/u);
     assert.match(bot, /await resumeClaimAgent\(msg\)\) return;/u);

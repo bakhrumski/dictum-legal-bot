@@ -255,11 +255,12 @@
     shell('ai', function (body, again) {
       body.innerHTML = '<div class="filters"><span class="seg">' + [['day', 'adm.day'], ['month', 'adm.month']].map(function (p) { return '<button type="button" data-p="' + p[0] + '" class="' + (aiState.period === p[0] ? 'on' : '') + '">' + esc(t(p[1])) + '</button>'; }).join('') + '</span></div>' +
         '<div class="ai-rep">' + skel() + '</div><h3 style="font-size:18px;margin:26px 0 6px">' + esc(QL('h')) + '</h3><p class="muted" style="font-size:13px;margin:0 0 12px">' + esc(QL('lead')) + '</p><div class="ai-q">' + skel() + '</div>' +
+        '<h3 style="font-size:18px;margin:26px 0 6px">' + esc(GL('h')) + '</h3><p class="muted" style="font-size:13px;margin:0 0 12px">' + esc(GL('lead')) + '</p><div class="ai-ag">' + skel() + '</div>' +
         '<h3 style="font-size:18px;margin:26px 0 12px">' + esc(t('adm.calls.t')) + '</h3>' +
         '<div class="filters"><select class="inp ai-days">' + [1, 7, 30, 90].map(function (d) { return '<option value="' + d + '"' + (d === aiState.days ? ' selected' : '') + '>' + d + ' ' + esc(t('adm.days')) + '</option>'; }).join('') + '</select>' +
         '<select class="inp ai-svc"><option value="">' + esc(t('adm.all')) + '</option>' + ['web', 'telegram', 'workspace'].map(function (s) { return '<option' + (s === aiState.service ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select></div><div class="ai-req">' + skel() + '</div>';
       $$('[data-p]', body).forEach(function (b) { b.onclick = function () { aiState.period = b.dataset.p; again(); }; });
-      $('.ai-days', body).onchange = function () { aiState.days = Number(this.value); loadReq(); loadQuality(); };
+      $('.ai-days', body).onchange = function () { aiState.days = Number(this.value); loadReq(); loadQuality(); loadAgents(); };
       $('.ai-svc', body).onchange = function () { aiState.service = this.value; loadReq(); };
       J.selects(body);
       J.api('/api/admin/ai-usage/report?period=' + aiState.period).then(function (r) {
@@ -295,6 +296,26 @@
         });
       }
       loadQuality();
+      // X8 (2026-11-10 audit, G7): where agent runs succeed, stop and what one costs - run records only, no text
+      function loadAgents() {
+        var box = $('.ai-ag', body); box.innerHTML = skel();
+        J.api('/api/admin/agent-runs/metrics?days=' + aiState.days).then(function (r) {
+          if (!r.ok) { box.innerHTML = errBox(r); return; }
+          var gs = r.data.groups || [];
+          if (!gs.length) { box.innerHTML = '<p class="muted">' + esc(GL('none')) + '</p>'; return; }
+          var wf = GL('wf'), dash = function (v, suf) { return v == null ? '—' : v + (suf || ''); };
+          var pairs = function (o) { return Object.keys(o || {}).map(function (k) { return (GL('why')[k] || k) + ' ' + o[k]; }).join(' · '); };
+          box.innerHTML = table([GL('c_wf'), GL('c_runs'), GL('c_ok'), GL('c_ask'), GL('c_stop'), GL('c_time'), GL('c_cost')], gs.map(function (g) {
+            var stop = [pairs(g.reasons), Object.keys(g.stoppedAt || {}).length ? GL('at') + ': ' + Object.keys(g.stoppedAt).map(function (k) { return k + ' ' + g.stoppedAt[k]; }).join(', ') : ''].filter(Boolean).join(' · ');
+            var cost = g.avgKnownCostUsd == null ? '—' : usd(g.avgKnownCostUsd) + (g.unknownCostRuns ? ' (' + GL('unk') + ' ' + n0(g.unknownCostRuns) + ')' : '');
+            return '<tr>' + td((wf[g.workflow] || g.workflow) + ' · ' + g.channel) +
+              td(n0(g.runs) + (g.live || g.awaitingApproval ? ' (' + GL('open') + ' ' + n0(g.live + g.awaitingApproval) + ')' : '')) +
+              td(g.successPct == null ? '—' : g.successPct + ' % (' + n0(g.done) + ')') + td(g.needsInput ? g.needsInputPct + ' % (' + n0(g.needsInput) + ')' : '—') +
+              td(stop || '—') + td(dash(g.medianSec, ' s') + (g.p90Sec == null ? '' : ' / ' + g.p90Sec + ' s') + (g.resumed ? ' · ' + GL('res') + ' ' + n0(g.resumed) : '')) + td(cost) + '</tr>';
+          }));
+        });
+      }
+      loadAgents();
       function loadReq() {
         var box = $('.ai-req', body); box.innerHTML = skel();
         J.api('/api/admin/ai-usage/requests?limit=100&days=' + aiState.days + (aiState.service ? '&service=' + encodeURIComponent(aiState.service) : '')).then(function (r) {
@@ -323,6 +344,21 @@
       crossCheckWeak: 'Cross-check with lex.uz not done', quotesRemoved: 'A quote removed', lowConfidence: 'Marked preliminary (bot)', notDelivered: 'Answer not delivered', deg: 'Degraded requests' }
   };
   function QL(k) { return (QS[J.lang] || QS.uz)[k] || QS.uz[k] || k; }
+  var GS = {
+    uz: { h: 'Agent ishlari', lead: 'Agent ishlari qayerda tugaydi va qayerda to‘xtaydi — ish yozuvlaridan, AI’siz, matnsiz. Muvaffaqiyat = tayyor / (tayyor + xato + limit); bekor qilingan va javob kutayotganlari hisobga kirmaydi. Narx — ma’lum qismi.', none: 'Bu davrda agent ishi yo‘q.',
+      c_wf: 'Ish turi · kanal', c_runs: 'Ishlar', c_ok: 'Muvaffaqiyat', c_ask: 'Savol bergan', c_stop: 'To‘xtash sababi', c_time: 'Vaqt (o‘rta / 90 %)', c_cost: 'Bir ishga narx', open: 'ochiq', at: 'qadam', unk: 'narxi noma’lum chaqiruvli ishlar', res: 'qayta olingan',
+      wf: { claim_draft: 'Da’vo arizasi', tabular_review: 'Ko‘p hujjatni solishtirish', playbook_review: 'Firma qoidalari', planned: 'Agent topshirig‘i' },
+      why: { error: 'xato', step_failed: 'qadam bajarilmadi', attempts: 'urinishlar tugadi', limit: 'limit', timeout: 'vaqt', cancelled: 'bekor qilingan', unknown_workflow: 'noma’lum tur' } },
+    ru: { h: 'Работы агента', lead: 'Где работы агента завершаются и где останавливаются — по записям работ, без AI, без текста. Успех = готово / (готово + ошибка + лимит); отменённые и ждущие ответа не считаются. Стоимость — известная часть.', none: 'За период работ агента нет.',
+      c_wf: 'Вид · канал', c_runs: 'Работы', c_ok: 'Успех', c_ask: 'Задал вопрос', c_stop: 'Причина остановки', c_time: 'Время (медиана / 90 %)', c_cost: 'Стоимость работы', open: 'открыто', at: 'шаг', unk: 'работ с вызовами неизвестной цены', res: 'подхвачено заново',
+      wf: { claim_draft: 'Исковое заявление', tabular_review: 'Сравнение документов', playbook_review: 'Правила фирмы', planned: 'Задача агента' },
+      why: { error: 'ошибка', step_failed: 'шаг не выполнен', attempts: 'попытки исчерпаны', limit: 'лимит', timeout: 'время', cancelled: 'отменено', unknown_workflow: 'неизвестный вид' } },
+    en: { h: 'Agent runs', lead: 'Where agent runs end and where they stop — from the run records, no AI, no text. Success = done / (done + failed + limit); cancelled and waiting runs are not counted. Cost is the known part.', none: 'No agent runs in this period.',
+      c_wf: 'Workflow · channel', c_runs: 'Runs', c_ok: 'Success', c_ask: 'Asked a question', c_stop: 'Why it stopped', c_time: 'Time (median / p90)', c_cost: 'Cost per run', open: 'open', at: 'step', unk: 'runs with calls of unknown cost', res: 'taken over',
+      wf: { claim_draft: 'Statement of claim', tabular_review: 'Compare documents', playbook_review: 'Firm rules', planned: 'Agent task' },
+      why: { error: 'error', step_failed: 'step failed', attempts: 'attempts spent', limit: 'limit', timeout: 'time', cancelled: 'cancelled', unknown_workflow: 'unknown workflow' } }
+  };
+  function GL(k) { return (GS[J.lang] || GS.uz)[k] || GS.uz[k] || k; }
   function aiDetail(id) {
     var m = J.modal({ html: '<h2>' + esc(t('adm.req')) + '</h2><p class="sub num">' + esc(id) + '</p><div class="ai-d">' + skel() + '</div>' });
     J.api('/api/admin/ai-usage/requests/' + encodeURIComponent(id)).then(function (r) {
