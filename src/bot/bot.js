@@ -195,12 +195,17 @@ const alphabetPrefs = require('./alphabet').createAlphabetPrefs({ db: pool });
 require('./alphabet').wrapBot(bot, alphabetPrefs);
 
 // agent tasks given in the bot report their steps and end here (src/bot/agent-runs.js, PR-F)
-require('../agents/runs/notify').setTelegramNotifier(require('./agent-runs').createTelegramRunNotifier({
+const plannerRunNotifier = require('./agent-runs').createTelegramRunNotifier({
   bot, pool,
   setConversationState: (...a) => require('../agents/telegram-agent').setConversationState(...a),
   splitForTelegram: (text) => require('../agents/telegram-agent').splitForTelegram(text),
   registry: { get: (id) => { const s = require('../agents/planner-routes').plannerService(); return s ? s.registry.get(id) : null; } },
-}));
+});
+require('../agents/runs/notify').setTelegramNotifier({
+  // a queued da'vo arizasi (G6) has its own messages; every other run is a planner task
+  progress: run => (isClaimRun(run) ? claimRunProgress(run) : plannerRunNotifier.progress(run)),
+  done: (run, status, result) => (isClaimRun(run) ? claimRunDone(run, status, result) : plannerRunNotifier.done(run, status, result)),
+});
 bot.getMe().then((info) => {
   if (!info || String(info.username).toLowerCase() !== LEGAL_BOT_USERNAME.toLowerCase()) {
     console.error(`[BOT] TELEGRAM_BOT_TOKEN must belong to @${LEGAL_BOT_USERNAME}; received @${info && info.username ? info.username : 'unknown'}`);
@@ -329,11 +334,15 @@ async function startAiDraft(chatId, from) {
   }
   const ledger = require('../rag/tariff-ledger');
   const who = await telegramIdentity({ chat: { id: chatId, type: 'private' }, from });
+  const queueClaim = o.slug === 'claim' && !!claimAgent && !!claimRuns && !!who.adminId;
+  const claimRequestId = queueClaim ? require('crypto').randomUUID() : null;
   let job;
   try {
     job = await masterDraftTest(chatId, from)
       ? { allowed: true, jobKey: null, testMode: true }
-      : await ledger.reserve({ adminId: who.adminId || null, telegramUserId: who.telegramUserId || from.id, service: 'draft', units: 1, channel: 'telegram', endpoint: '/tg/draft' });
+      : await ledger.reserve({ adminId: who.adminId || null, telegramUserId: who.telegramUserId || from.id, service: 'draft', units: 1, channel: 'telegram', endpoint: '/tg/draft',
+        // a claim that becomes an agent run is settled by the worker, perhaps after a deploy: its unit is held like a web run's
+        ...(queueClaim ? { requestId: claimRequestId, meta: { holdUntil: new Date(Date.now() + 45 * 60e3).toISOString() } } : {}) });
   } catch (e) {
     console.warn('[TG-DRAFT] reserve failed:', e.message);
     await bot.sendMessage(chatId, "Limitni hozir tekshirib bo'lmadi. Birozdan keyin qayta urinib ko'ring.").catch(() => {});
@@ -346,7 +355,7 @@ async function startAiDraft(chatId, from) {
   }
   draftOffers.delete(chatId);
   // a da'vo arizasi goes through the claim agent (src/agents/telegram-claim.js)
-  if (o.slug === 'claim' && claimAgent) return runClaimAgent(chatId, from, o, job);
+  if (o.slug === 'claim' && claimAgent) return runClaimAgent(chatId, from, o, job, queueClaim && job.jobKey ? { adminId: who.adminId, requestId: claimRequestId } : null);
   await bot.sendChatAction(chatId, 'upload_document').catch(() => {});
   try {
     const r = await draftGenerator(o.docType, o.details);
@@ -380,13 +389,19 @@ async function deliverDraft(chatId, o, html, job, { caption = null } = {}) {
 // facts it still needs are asked for (the unit is released, nothing is
 // charged) and the person's next message in this chat resumes it.
 let claimAgent = null;
+// G6 (2026-11-11): with a run store (setClaimRuns) a linked account's claim is queued as an agent run and
+// worked by src/agents/runs/worker.js - the bot only reads the fields and, at the end, delivers the file.
+let claimRuns = null;
 const claimAwait = new Map(); // chatId -> { o, from, at }
-async function runClaimAgent(chatId, from, o, job) {
+const CLAIM_FAIL_TEXT = "Da'vo arizasini tayyorlab bo'lmadi, birlik qaytarildi. Birozdan keyin qayta urinib ko'ring yoki saytda (Hujjat tayyorlash → Da'vo arizasi agenti) tayyorlang.";
+const CLAIM_CAPTION = "📄 Da'vo arizasi loyihasi (agent). Moddalar faqat lex.uz'da tasdiqlangan iqtiboslardan; [qavs ichidagi] joylarni to'ldiring. Bu AI loyiha, yuridik xulosa emas.";
+const claimView = (done, current, head = "⚖️ Da'vo arizasi agenti ishlamoqda (1–2 daqiqa):") => [head, ...done.map(l => `✅ ${l}`), current ? `⏳ ${current}` : ''].filter(Boolean).join('\n');
+async function runClaimAgent(chatId, from, o, job, queue = null) {
   const ledger = require('../rag/tariff-ledger');
   const done = [];
   let current = "Ma'lumotlarni tekshirish";
   let status = null, lastEdit = 0, editing = Promise.resolve();
-  const view = () => ["⚖️ Da'vo arizasi agenti ishlamoqda (1–2 daqiqa):", ...done.map(l => `✅ ${l}`), current ? `⏳ ${current}` : ''].filter(Boolean).join('\n');
+  const view = () => claimView(done, current);
   try { status = await bot.sendMessage(chatId, view()); } catch (_) { status = null; }
   const onStep = (e) => {
     if (e.type !== 'step') return;
@@ -400,7 +415,26 @@ async function runClaimAgent(chatId, from, o, job) {
   };
   let r;
   try {
-    r = await claimAgent.run(o.details, { lang: /[\u0400-\u04ff]/u.test(o.details) ? 'ru' : 'uz', onStep });
+    const prep = await claimAgent.prepare(o.details, { lang: /[\u0400-\u04ff]/u.test(o.details) ? 'ru' : 'uz' });
+    if (prep.missing.length) r = { status: 'needs_input', missing: prep.missing };
+    else {
+      if (queue && claimRuns) {
+        try {
+          await claimRuns.store.create({
+            adminId: queue.adminId, workflow: 'claim_draft', channel: 'telegram', requestId: queue.requestId,
+            jobs: [{ jobKey: job.jobKey, service: 'draft' }],
+            input: { input: prep.facts, ctx: { unlimited: !!job.unlimited },
+              telegram: { chatId, messageId: status ? status.message_id : null, kind: 'claim', docType: o.docType, details: String(o.details || '').slice(0, 6000) } },
+          });
+          if (claimRuns.kick) claimRuns.kick();
+          return; // the worker settles the unit; claimRunDone delivers
+        } catch (e) {
+          // too many runs, no table, the database said no: draft it here as before
+          console.warn('[TG-CLAIM] not queued, running in the bot:', e.message);
+        }
+      }
+      r = await claimAgent.runFacts(prep.facts, { onStep });
+    }
   } catch (e) {
     r = { status: 'failed', error: e.message };
   }
@@ -415,18 +449,50 @@ async function runClaimAgent(chatId, from, o, job) {
   if (r.status !== 'done') {
     console.error('[TG-CLAIM] agent failed:', r.error || r.stoppedAt || r.status);
     if (job && job.jobKey) await ledger.release(job.jobKey, 'claim_failed').catch(() => {});
-    await bot.sendMessage(chatId, "Da'vo arizasini tayyorlab bo'lmadi, birlik qaytarildi. Birozdan keyin qayta urinib ko'ring yoki saytda (Hujjat tayyorlash → Da'vo arizasi agenti) tayyorlang.").catch(() => {});
+    await bot.sendMessage(chatId, CLAIM_FAIL_TEXT).catch(() => {});
     return;
   }
-  if (status) await bot.editMessageText(["⚖️ Da'vo arizasi agenti:", ...done.map(l => `✅ ${l}`)].join('\n'), { chat_id: chatId, message_id: status.message_id }).catch(() => {});
+  if (status) await bot.editMessageText(claimView(done, null, "⚖️ Da'vo arizasi agenti:"), { chat_id: chatId, message_id: status.message_id }).catch(() => {});
   try {
-    await deliverDraft(chatId, o, r.html, null, { caption: "📄 Da'vo arizasi loyihasi (agent). Moddalar faqat lex.uz'da tasdiqlangan iqtiboslardan; [qavs ichidagi] joylarni to'ldiring. Bu AI loyiha, yuridik xulosa emas." });
+    await deliverDraft(chatId, o, r.html, null, { caption: CLAIM_CAPTION });
     if (job && job.jobKey) await ledger.commit(job.jobKey).catch((e) => console.error('[TG-CLAIM] commit failed:', e.message));
     await bot.sendMessage(chatId, require('../agents/telegram-claim').resultText(r), { disable_web_page_preview: true }).catch(() => {});
   } catch (e) {
     console.error('[TG-CLAIM] delivery failed:', e.message);
     if (job && job.jobKey) await ledger.release(job.jobKey, 'claim_not_delivered').catch(() => {});
     await bot.sendMessage(chatId, "Faylni yuborib bo'lmadi, birlik qaytarildi. Qayta urinib ko'ring.").catch(() => {});
+  }
+}
+
+// A queued claim's Telegram side (src/agents/runs/notify.js calls these for a run whose input says kind 'claim').
+const isClaimRun = run => !!(run && run.workflow === 'claim_draft' && run.input && run.input.telegram && run.input.telegram.kind === 'claim');
+async function claimRunSteps(runId) {
+  const r = await pool.query('SELECT label, status FROM agent_run_steps WHERE run_id = $1 ORDER BY started_at', [runId]);
+  return r.rows.filter(x => x.status === 'ok').map(x => x.label).filter(Boolean);
+}
+async function claimRunProgress(run) {
+  const tg = run.input.telegram;
+  if (!tg.messageId) return;
+  await bot.editMessageText(claimView(await claimRunSteps(run.id), 'Keyingi qadam'), { chat_id: tg.chatId, message_id: tg.messageId }).catch(() => {});
+}
+async function claimRunDone(run, status, result) {
+  const tg = run.input.telegram;
+  const body = (result && result.body) || {};
+  const steps = await claimRunSteps(run.id).catch(() => []);
+  const edit = head => (tg.messageId ? bot.editMessageText(claimView(steps, null, head), { chat_id: tg.chatId, message_id: tg.messageId }).catch(() => {}) : null);
+  if (status !== 'done' || !body.draftHtml) {
+    await edit(status === 'cancelled' ? "⏹ Da'vo arizasi agenti: bekor qilindi." : "⚠️ Da'vo arizasi agenti: tugamadi.");
+    await bot.sendMessage(tg.chatId, status === 'cancelled' ? "Bekor qilindi, birlik qaytarildi." : CLAIM_FAIL_TEXT).catch(() => {});
+    return;
+  }
+  await edit("⚖️ Da'vo arizasi agenti:");
+  try {
+    // the worker has settled the unit (the draft exists and is kept); here it is only handed over
+    await deliverDraft(tg.chatId, { docType: tg.docType || "Da'vo arizasi", details: tg.details || '' }, body.draftHtml, null, { caption: CLAIM_CAPTION });
+    await bot.sendMessage(tg.chatId, require('../agents/telegram-claim').resultText({ basis: body.basis || [], warnings: body.warnings || [], dropped: body.droppedQuotes || 0 }), { disable_web_page_preview: true }).catch(() => {});
+  } catch (e) {
+    console.error('[TG-CLAIM] delivery of a finished run failed:', e.message);
+    await bot.sendMessage(tg.chatId, `Loyiha tayyor, lekin faylni bu yerga yuborib bo'lmadi. U saqlangan: ${appBase()}/app/#/hujjatlarim?natijalar — o'sha yerdan oching.`).catch(() => {});
   }
 }
 /** The person's answer to the agent's questions: added to the order, and the agent runs again. true when handled. */
@@ -2860,6 +2926,6 @@ function getRequestTypeLabel(type) {
 }
 
 // Export bot for use in other modules
-module.exports = { bot, getBot: () => bot, checkChannelMembership, channelGateOnError: CHANNEL_GATE_ON_ERROR, setClaimAgent: (a) => { claimAgent = a && typeof a.run === 'function' ? a : null; }, setDraftGenerator: (fn) => { draftGenerator = typeof fn === 'function' ? fn : null; }, setDocumentAnalyzer: (fn) => { documentAnalyzer = typeof fn === 'function' ? fn : null; }, isChannelMember, channelLink, normalizeChannel, REQUIRED_CHANNEL, INSTAGRAM_URL };
+module.exports = { bot, getBot: () => bot, checkChannelMembership, channelGateOnError: CHANNEL_GATE_ON_ERROR, setClaimAgent: (a) => { claimAgent = a && typeof a.run === 'function' ? a : null; }, setClaimRuns: (r) => { claimRuns = r && r.store ? r : null; }, setDraftGenerator: (fn) => { draftGenerator = typeof fn === 'function' ? fn : null; }, setDocumentAnalyzer: (fn) => { documentAnalyzer = typeof fn === 'function' ? fn : null; }, isChannelMember, channelLink, normalizeChannel, REQUIRED_CHANNEL, INSTAGRAM_URL };
 
 console.log('Bot ishlamoqda...');

@@ -14,6 +14,14 @@
  * word for word, the draft citing only that basis, the mechanical check.
  *
  * deps: callAI, callCheapAI, retrieve(query, topic), generateDraftHtml.
+ *
+ * Since 2026-11-11 (audit X8 / G6) a linked account's order is queued as an
+ * agent run (`claim_draft`, channel telegram): the bot reads the fields here
+ * (`prepare`), the worker runs the same workflow with checkpoints and the
+ * bot's notifier delivers the file - so a deploy in the middle no longer
+ * loses the work, and the result is also under Hujjatlar on the site. An
+ * unlinked Telegram user, a master's test mode or AGENT_RUNS=off run here in
+ * the bot process as before (`runFacts`).
  */
 
 const { runWorkflow, parseJson } = require('./harness');
@@ -51,15 +59,14 @@ async function extractFacts(text, { callCheapAI, lang = 'uz' }) {
 function createTelegramClaimAgent(deps) {
   const workflow = createClaimDraftWorkflow();
 
-  /**
-   * run(text, { onStep }) -> { status: 'needs_input', missing, facts }
-   *                        | { status: 'done', html, basis, warnings, dropped, trace }
-   *                        | { status: 'failed', stoppedAt, trace }
-   */
-  async function run(text, { lang = 'uz', onStep = null } = {}) {
+  /** The claim's fields read from the text (one cheap call) and what is still missing. No unit, nothing drafted. */
+  async function prepare(text, { lang = 'uz' } = {}) {
     const { facts } = await extractFacts(text, { callCheapAI: deps.callCheapAI || deps.callAI, lang });
-    const intake = readIntake(facts);
-    if (intake.missing.length) return { status: 'needs_input', missing: intake.missing, facts };
+    return { facts, missing: readIntake(facts).missing };
+  }
+
+  /** The workflow on facts already read (prepare): the same result shape as run. */
+  async function runFacts(facts, { onStep = null } = {}) {
     const out = await runWorkflow(workflow, facts, {
       deps: { callAI: deps.callAI, callCheapAI: deps.callCheapAI || deps.callAI, retrieve: deps.retrieve, generateDraftHtml: deps.generateDraftHtml },
       budget: { maxSteps: 8, maxMs: Number(process.env.AGENT_MAX_MS) || 150000 },
@@ -73,7 +80,18 @@ function createTelegramClaimAgent(deps) {
     return { status: out.status === 'needs_input' ? 'needs_input' : 'failed', missing: s.intake ? s.intake.missing : [], stoppedAt: out.stoppedAt || null, trace: out.trace };
   }
 
-  return { run };
+  /**
+   * run(text, { onStep }) -> { status: 'needs_input', missing, facts }
+   *                        | { status: 'done', html, basis, warnings, dropped, trace }
+   *                        | { status: 'failed', stoppedAt, trace }
+   */
+  async function run(text, { lang = 'uz', onStep = null } = {}) {
+    const prep = await prepare(text, { lang });
+    if (prep.missing.length) return { status: 'needs_input', missing: prep.missing, facts: prep.facts };
+    return runFacts(prep.facts, { onStep });
+  }
+
+  return { run, prepare, runFacts };
 }
 
 /** The bot's text after a delivered draft: the checked basis with links, then the warnings. Plain text. */

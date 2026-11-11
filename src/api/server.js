@@ -1481,6 +1481,7 @@ app.get('/api/admin/top-questions', requireMasterAdmin, async (req, res) => {
 // Per-request AI usage and cost (master only): src/ai/usage-report.js.
 require('../ai/usage-report').mountUsageReportRoutes(app, { requireMasterAdmin, pool, ledger: usageLedger });
 require('../ai/quality-report').mountQualityReport(app, { requireMasterAdmin, pool }); // Q7: answer-quality shares, no AI
+require('../agents/runs/metrics').mountRunMetrics(app, { requireMasterAdmin, pool }); // G7: agent run success, stops, cost - no AI, no text
 
 // Telegram test account (src/bot/test-account.js): the configured mode, the
 // database link of the configured Telegram id, and its spend against the
@@ -12025,6 +12026,8 @@ async function runMigrations() {
           store: runStore, executors, attachTestBudget: (adminId) => require('../ai/test-budget').attach(adminId),
         });
         agentRunWorker.start();
+        // G6: a da'vo arizasi ordered in the bot by a linked account is an agent run too (it outlives a deploy)
+        try { require('../bot/bot').setClaimRuns({ store: runStore, kick: runs.kick }); } catch (_) { /* the bot is not running */ }
         console.log(`[AGENT] run worker ${agentRunWorker.workerId} started`);
       }
     } catch (e) { console.log('[AGENT] Mount skipped:', e.message); }
