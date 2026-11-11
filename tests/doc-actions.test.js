@@ -27,9 +27,9 @@ console.log('document actions (U3)');
 const da = read('public', 'app', 'docact.js');
 const chat = read('public', 'app', 'chat.js');
 
-test('the card: six actions, each with its price; the editor only for a document kept in the library', () => {
-  assert.ok(da.includes("var ORDER = ['explain', 'risk', 'ask', 'editor', 'playbook', 'compare'];"));
-  assert.ok(/if \(k === 'ask'\) return s\('q1'\);\s*if \(k === 'editor'\) return s\('free'\);\s*if \(k === 'compare'\) return s\('perDoc'\);\s*return s\('units', \{ n: unitsOf\(f\) \}\);/.test(da));
+test('the card: seven actions (the full contract check since 2026-11-11), each with its price; the editor only for a document kept in the library', () => {
+  assert.ok(da.includes("var ORDER = ['explain', 'risk', 'full', 'ask', 'editor', 'playbook', 'compare'];"));
+  assert.ok(/if \(k === 'ask'\) return s\('q1'\);\s*if \(k === 'editor'\) return s\('free'\);\s*if \(k === 'compare'\) return s\('perDoc'\);\s*if \(k === 'full'\) return s\('unitsFrom', \{ n: unitsOf\(f\) \}\);\s*return s\('units', \{ n: unitsOf\(f\) \}\);/.test(da));
   assert.ok(da.includes("if (!libId(f)) keys = keys.filter(function (k) { return k !== 'editor'; });"));
   assert.ok(/Math\.ceil\(Math\.max\(\(\(f && f\.pages\) \|\| 0\) \/ 10, \(\(f && f\.chars\) \|\| 0\) \/ 40000\)\)/.test(da), 'the same size rule as the ledger (docUnits)');
   assert.ok(da.includes('$(\'.da-f\', el).textContent = f.name'), 'the file name goes in as text');

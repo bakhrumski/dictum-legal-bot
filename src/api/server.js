@@ -12013,6 +12013,17 @@ async function runMigrations() {
         retrieve: (query, topic) => retrieveLegalContext(query, topic, null, {}),
         runs,
       });
+      // G2 (2026-11-11): "Shartnomani to'liq tekshirish" - the analysis, the firm rules and the law in one run
+      try {
+        const ar = require('../agents/agent-routes');
+        executors.contract_review = require('../agents/contract-routes').mountContractRoutes(app, {
+          requireAuth, requireSameOrigin: sameOrigin, callAI, ledger: require('../rag/tariff-ledger'), pool, runs,
+          analyze: (text, { adminId = null } = {}) => require('../ocr/routes').analyzeDocumentText(text, { callAI, digestLongDocument, adminId, forEditor: true, endpoint: '/api/agent/contract-review' }),
+          retrieve: (query, topic) => retrieveLegalContext(query, topic, null, {}),
+          serve: ar.serve, executorFor: ar.executorFor, scanDocuments: ar.scanDocuments,
+          editorStore: require('../editor/store').createEditorStore({ db: pool }),
+        }).executor;
+      } catch (e) { console.log('[AGENT] contract review not mounted:', e.message); }
       if (runStore) {
         require('../agents/runs/routes').mountRunRoutes(app, { requireAuth, requireSameOrigin: sameOrigin, store: runStore, kick: runs.kick });
         // the planner agent (PR-D): a checked plan, approved with its price, run by the worker
