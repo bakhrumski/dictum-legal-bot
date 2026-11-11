@@ -498,3 +498,8 @@ nima o'lchandi.
   tahlil + qoidalar), har qism alohida hisoblanadi; "Muharrirda takliflar
   bilan ochish" hujjatni takliflari tayyor holda ochadi. Jonli AI bilan
   sinalmagan.
+- 2026-11-11: #593 (X8b) merge. Ovoz PR (egasi): ovozli javob ElevenLabs
+  orqali (`src/ai/tts.js`, kalit va ovoz qo'yilguncha VoiceLab), ovozni
+  matnga aylantirish sukut bo'yicha Gemini 3.5 Transcribe (VoiceLab zaxira).
+  Jonli sinalmagan; ElevenLabs modeli o'zbekchani qanday o'qishi egasi
+  tomonidan quloq bilan tekshiriladi (`/api/admin/tts/preview`).

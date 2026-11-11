@@ -62,13 +62,20 @@ function resp(status, body, headers = {}) {
 
   console.log('stt engine choice');
   const stt = require(path.join(__dirname, '..', 'src', 'ai', 'stt'));
-  await test('STT_PROVIDER unset: VoiceLab alone, as before (no new fallback)', () => {
+  await test('STT_PROVIDER unset: Gemini first when its key is set (owner, 2026-11-11), VoiceLab behind it; no Gemini key: VoiceLab alone', () => {
     delete process.env.STT_PROVIDER; delete process.env.STT_FALLBACK;
-    process.env.VOICELAB_API_KEY = 'vl'; delete process.env.VOICELAB_STT;
-    assert.deepStrictEqual(stt.chain(), ['voicelab']);
+    process.env.VOICELAB_API_KEY = 'vl'; process.env.GEMINI_API_KEY = 'g';
+    assert.deepStrictEqual(stt.chain(), ['gemini', 'voicelab']);
+    assert.strictEqual(stt.primary(), 'gemini');
     delete process.env.VOICELAB_API_KEY;
-    assert.deepStrictEqual(stt.chain(), [], 'no VoiceLab key: off, even with a Gemini key');
+    assert.deepStrictEqual(stt.chain(), ['gemini'], 'Gemini alone is enough');
+    delete process.env.GEMINI_API_KEY; process.env.VOICELAB_API_KEY = 'vl';
+    assert.deepStrictEqual(stt.chain(), ['voicelab'], 'no Gemini key: as before');
+    process.env.GEMINI_API_KEY = 'g'; process.env.STT_PROVIDER = 'voicelab';
+    assert.deepStrictEqual(stt.chain(), ['voicelab', 'gemini'], 'STT_PROVIDER=voicelab puts it back first');
+    delete process.env.STT_PROVIDER; delete process.env.VOICELAB_API_KEY;
   });
+
   await test('STT_PROVIDER=gemini: Gemini first, VoiceLab as fallback unless STT_FALLBACK=off', () => {
     process.env.STT_PROVIDER = 'gemini'; process.env.VOICELAB_API_KEY = 'vl';
     assert.deepStrictEqual(stt.chain(), ['gemini', 'voicelab']);

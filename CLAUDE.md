@@ -843,6 +843,26 @@ Known state of the suites (Sept 2026):
   transcoded to OGG/Opus with `ffmpeg-static` so Telegram shows a voice
   bubble, else sent as WAV audio. Master-only checks:
   `/api/admin/voicelab/voices?language=uz`, `/api/admin/voicelab/tts?text=…`.
+  Since 2026-11-11 (owner: ElevenLabs for voice messages, Gemini for
+  transcription) the engines are chosen by two small modules. `src/ai/tts.js`:
+  ElevenLabs (`src/ai/elevenlabs-speech.js`: `ELEVENLABS_API_KEY` +
+  `ELEVENLABS_VOICE_ID`, model `ELEVENLABS_TTS_MODEL` default `eleven_v3`,
+  `language_code` sent only with `ELEVENLABS_TTS_LANGUAGE`, MP3 transcoded to
+  OGG/Opus, ledger row `elevenlabs/<model>` with characters and an unknown
+  dollar cost) once it is configured, VoiceLab until then and as the
+  fallback (`TTS_PROVIDER`, `TTS_FALLBACK=off`, `ELEVENLABS_TTS=off`); the
+  bot's `sendVoiceReply` uses it; a master hears an engine first with
+  `GET /api/admin/tts/preview?text=&provider=&voice=&model=&language=`.
+  The answer's text goes to api.elevenlabs.io. Which ElevenLabs model reads
+  Uzbek well was NOT checked here (its docs are unreachable from this
+  environment) - the owner judges by ear. `src/ai/stt.js`: with
+  `STT_PROVIDER` unset, Gemini 3.5 Transcribe first whenever
+  `GEMINI_API_KEY` is set (it is, for OCR) and VoiceLab behind it;
+  `STT_PROVIDER=voicelab` puts VoiceLab back first. The Gemini reply parser
+  was never checked against a live call (`/api/admin/stt/compare` shows the
+  raw reply); a failure falls to VoiceLab. Moslashish names Google and
+  ElevenLabs (USA) for voice; the interview consent says "Google yoki
+  VoiceLab, DeepSeek". `tests/tts.test.js`, `tests/gemini-transcribe.test.js`.
 - Telegram: a linked staff account's own messages (role master, lawyer or
   student — `src/bot/telegram-roles.js`) are never treated as questions. A
   linked customer (role `user`) or an unknown role is an ordinary user. An

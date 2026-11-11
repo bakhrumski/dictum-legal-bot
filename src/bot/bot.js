@@ -40,7 +40,7 @@ async function telegramIdentity(msgOrQuery) {
 }
 
 // Voice notes become typed questions when an STT engine is on (src/ai/stt.js:
-// VoiceLab by default, Gemini 3.5 Transcribe with STT_PROVIDER=gemini).
+// Gemini 3.5 Transcribe when its key is set, VoiceLab behind it; src/ai/stt.js).
 function voiceToTextEnabled() {
   try { return require('../ai/stt').sttEnabled(); } catch (_) { return false; }
 }
@@ -2054,10 +2054,10 @@ bot.on('pre_checkout_query', async (query) => {
 
 // ========== MAIN MESSAGE HANDLER ==========
 
-// Speak an answer back as a Telegram voice note (VoiceLab TTS). OGG/Opus shows
-// as a voice bubble; if transcoding was unavailable the WAV goes as audio.
+// Speak an answer back as a Telegram voice note (src/ai/tts.js: ElevenLabs when configured, else VoiceLab).
+// OGG/Opus shows as a voice bubble; if transcoding was unavailable the MP3 / WAV goes as audio.
 async function sendVoiceReply(chatId, text) {
-  const speech = require('../ai/voicelab-speech');
+  const speech = require('../ai/tts');
   if (!speech.ttsEnabled()) return;
   await bot.sendChatAction(chatId, 'record_voice').catch(() => {});
   const spoken = await speech.synthesize(text);
@@ -2065,7 +2065,7 @@ async function sendVoiceReply(chatId, text) {
   if (spoken.format === 'ogg') {
     await bot.sendVoice(chatId, spoken.audio, {}, { filename: 'javob.ogg', contentType: 'audio/ogg' });
   } else {
-    await bot.sendAudio(chatId, spoken.audio, { title: 'JuristAI javobi' }, { filename: 'javob.wav', contentType: 'audio/wav' });
+    await bot.sendAudio(chatId, spoken.audio, { title: 'JuristAI javobi' }, { filename: `javob.${spoken.format}`, contentType: speech.MIME[spoken.format] || 'audio/mpeg' });
   }
 }
 
@@ -2432,7 +2432,7 @@ async function handleTelegramMessage(msg) {
       return;
     }
 
-    // VoiceLab STT: a transcribed voice note becomes an ordinary question for
+    // STT (src/ai/stt.js): a transcribed voice note becomes an ordinary question for
     // the agent below — same grounding, same quota. The audio stays attached
     // for the human queue. Any failure leaves the old path untouched: the note
     // goes to the queue as '[Ovozli xabar]'.
@@ -2460,7 +2460,7 @@ async function handleTelegramMessage(msg) {
           return;
         }
       } catch (sttErr) {
-        console.warn('[BOT] VoiceLab STT failed, voice note goes to the human queue:', sttErr.message);
+        console.warn('[BOT] STT failed, voice note goes to the human queue:', sttErr.message);
       }
     }
   }
@@ -2615,7 +2615,7 @@ async function handleTelegramMessage(msg) {
             if (!partDelivered) allReplyPartsDelivered = false;
           }
           agentReplyDelivered = allReplyPartsDelivered;
-          // Asked by voice → also answered by voice (VoiceLab TTS, in the
+          // Asked by voice → also answered by voice (src/ai/tts.js, in the
           // configured voice). Sent in the background: the text answer is
           // already delivered, and a TTS failure must not touch it or the
           // quota bookkeeping below.

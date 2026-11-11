@@ -1012,6 +1012,31 @@ app.get('/api/admin/voicelab/voices', requireMasterAdmin, async (req, res) => {
   }
 });
 
+// The engine the bot speaks with (src/ai/tts.js), played in the browser so the model and voice can be judged by ear:
+//   GET /api/admin/tts/preview?text=...&provider=elevenlabs|voicelab&voice=<id>&model=<id>&language=uz
+app.get('/api/admin/tts/preview', requireMasterAdmin, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  try {
+    const tts = require('../ai/tts');
+    const text = String(req.query.text || 'Assalomu alaykum! Men JuristAI yordamchisiman. Savolingizni yozing yoki ovozli xabar yuboring.').slice(0, 2500);
+    const provider = ['elevenlabs', 'voicelab'].includes(String(req.query.provider)) ? String(req.query.provider) : undefined;
+    const out = await usageLedger.runWithRequest({ service: 'admin', kind: 'tts preview', userId: req.session.adminId }, async (scope) => {
+      try {
+        return await tts.synthesize(text, { provider, voiceId: req.query.voice ? String(req.query.voice) : undefined,
+          modelId: req.query.model ? String(req.query.model) : undefined, language: req.query.language ? String(req.query.language) : undefined });
+      } finally { await usageLedger.finishRequest(scope).catch(() => {}); }
+    });
+    if (!out) return res.status(400).json({ error: "Matn bo'sh" });
+    res.set('Content-Type', tts.MIME[out.format] || 'application/octet-stream');
+    res.set('X-TTS-Provider', out.provider);
+    if (out.model) res.set('X-TTS-Model', String(out.model));
+    if (out.characters != null) res.set('X-TTS-Characters', String(out.characters));
+    res.send(out.audio);
+  } catch (e) {
+    res.status(e && /not configured|missing/u.test(e.message) ? 503 : 502).json({ error: String(e.message || e).substring(0, 300), engines: require('../ai/tts').chain() });
+  }
+});
+
 app.get('/api/admin/voicelab/tts', requireMasterAdmin, async (req, res) => {
   try {
     const speech = require('../ai/voicelab-speech');
