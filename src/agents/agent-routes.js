@@ -349,7 +349,7 @@ function mountAgentRoutes(app, { requireAuth, requireSameOrigin, callAI, callChe
   return { executors };
 }
 
-module.exports = { mountAgentRoutes, mountTabularRoute, mountPlaybookRoutes, claimService, tabularService, playbookService, executorFor };
+module.exports = { mountAgentRoutes, mountTabularRoute, mountPlaybookRoutes, claimService, tabularService, playbookService, executorFor, serve, scanDocuments };
 
 /**
  *   POST /api/agent/tabular-review          { documents: [{ name, text | scanId }], columns: [{ label, type, options? }], async? }

@@ -8,40 +8,43 @@
   var J = G.JAI, $ = J.$, $$ = J.$$, esc = J.esc;
   var S = {
     uz: { title: 'Nima qilaylik?', close: 'Yopish', free: 'bepul', q1: '1 savol', units: '{n} birlik hujjat tahlili', unitsHint: '1 birlik = 10 sahifagacha; narx boshlashdan oldin ko‘rsatiladi',
-      perDoc: 'har hujjatga 1 savol', drop: 'Faylni shu yerga tashlang', reading: 'O‘qilmoqda…', act: 'Nima qilaylik?',
+      perDoc: 'har hujjatga 1 savol', unitsFrom: '{n} birlikdan', drop: 'Faylni shu yerga tashlang', reading: 'O‘qilmoqda…', act: 'Nima qilaylik?',
       a: {
         explain: ['Oddiy tilda tushuntirish', 'Asosiy mazmun, majburiyatlar va muddatlar'],
         risk: ['To‘liq tahlil (xavflar)', 'Xavfli bandlar, yetishmayotgan shartlar, tavsiyalar'],
         ask: ['Savol berish', 'Hujjat haqida o‘z savolingizni yozasiz'],
         editor: ['Muharrirda ochish', 'Word kabi tahrirlash, izoh va versiyalar'],
+        full: ['Shartnomani to‘liq tekshirish', 'Xatarlar, firma qoidalari va qonun — bitta tekshiruvda, takliflar muharrirda'],
         playbook: ['Firma qoidalari bilan tekshirish', 'Sizning shartlaringizga mos-mos emasligi'],
         compare: ['Boshqa hujjatlar bilan solishtirish', 'Bir nechta hujjat bir jadvalda']
       }, askPh: 'Hujjat haqida savolingizni yozing…' },
     ru: { title: 'Что сделать?', close: 'Закрыть', free: 'бесплатно', q1: '1 вопрос', units: '{n} ед. анализа документа', unitsHint: '1 единица = до 10 страниц; цена показывается до начала',
-      perDoc: '1 вопрос за документ', drop: 'Перетащите файл сюда', reading: 'Читаем…', act: 'Что сделать?',
+      perDoc: '1 вопрос за документ', unitsFrom: 'от {n} ед.', drop: 'Перетащите файл сюда', reading: 'Читаем…', act: 'Что сделать?',
       a: {
         explain: ['Объяснить простым языком', 'Главное, обязанности и сроки'],
         risk: ['Полный анализ (риски)', 'Опасные пункты, недостающие условия, рекомендации'],
         ask: ['Задать вопрос', 'Свой вопрос по документу'],
         editor: ['Открыть в редакторе', 'Правка как в Word, комментарии и версии'],
+        full: ['Полная проверка договора', 'Риски, правила фирмы и закон — за одну проверку, предложения в редакторе'],
         playbook: ['Проверить по правилам фирмы', 'Соответствие вашим условиям'],
         compare: ['Сравнить с другими документами', 'Несколько документов в одной таблице']
       }, askPh: 'Напишите вопрос по документу…' },
     en: { title: 'What should we do?', close: 'Close', free: 'free', q1: '1 question', units: '{n} document analysis unit(s)', unitsHint: '1 unit = up to 10 pages; the price is shown before it starts',
-      perDoc: '1 question per document', drop: 'Drop a file here', reading: 'Reading…', act: 'What to do?',
+      perDoc: '1 question per document', unitsFrom: 'from {n} unit(s)', drop: 'Drop a file here', reading: 'Reading…', act: 'What to do?',
       a: {
         explain: ['Explain in plain words', 'Key points, obligations and deadlines'],
         risk: ['Full review (risks)', 'Risky clauses, missing terms, recommendations'],
         ask: ['Ask a question', 'Your own question about the document'],
         editor: ['Open in the editor', 'Edit like Word, comments and versions'],
+        full: ['Full contract check', 'Risks, firm rules and the law in one check, proposals in the editor'],
         playbook: ['Check against firm rules', 'Whether it meets your terms'],
         compare: ['Compare with other documents', 'Several documents in one table']
       }, askPh: 'Write your question about the document…' }
   };
   function s(k, v) { var d = S[J.lang] || S.uz, x = d[k] !== undefined ? d[k] : S.uz[k]; if (typeof x === 'string' && v) Object.keys(v).forEach(function (n) { x = x.replace('{' + n + '}', v[n]); }); return x; }
   J.docActText = s;
-  var ORDER = ['explain', 'risk', 'ask', 'editor', 'playbook', 'compare'];
-  var ICON = { explain: 'doc', risk: 'scan', ask: 'chat', editor: 'pen', playbook: 'check', compare: 'layers' };
+  var ORDER = ['explain', 'risk', 'full', 'ask', 'editor', 'playbook', 'compare'];
+  var ICON = { explain: 'doc', risk: 'scan', full: 'spark', ask: 'chat', editor: 'pen', playbook: 'check', compare: 'layers' };
 
   /** The library id of a read file (the server keeps every read document: /api/analyze/extract docId, OCR scanId). */
   function libId(f) { return (f && (f.docId || f.scanId)) || null; }
@@ -55,6 +58,7 @@
     if (k === 'ask') return s('q1');
     if (k === 'editor') return s('free');
     if (k === 'compare') return s('perDoc');
+    if (k === 'full') return s('unitsFrom', { n: unitsOf(f) });
     return s('units', { n: unitsOf(f) });
   }
 
@@ -71,7 +75,7 @@
       (opts.onClose ? '<button type="button" class="ib da-x" aria-label="' + esc(s('close')) + '">' + J.icon('x') + '</button>' : '') + '</div>' +
       '<div class="da-list">' + keys.map(function (k) {
         return '<button type="button" class="da-row" data-da="' + k + '"><span class="da-ic">' + J.icon(ICON[k]) + '</span><span class="da-t"><b>' + esc(A[k][0]) + '</b><small>' + esc(A[k][1]) + '</small></span><span class="da-c">' + esc(cost(k, f)) + '</span></button>';
-      }).join('') + '</div>' + (keys.some(function (k) { return k === 'explain' || k === 'risk' || k === 'playbook'; }) ? '<p class="da-note muted">' + esc(s('unitsHint')) + '</p>' : '') + '</div>');
+      }).join('') + '</div>' + (keys.some(function (k) { return k === 'explain' || k === 'risk' || k === 'playbook' || k === 'full'; }) ? '<p class="da-note muted">' + esc(s('unitsHint')) + '</p>' : '') + '</div>');
     $('.da-f', el).textContent = f.name || '';
     $$('[data-da]', el).forEach(function (b) { b.onclick = function () { handlers[b.dataset.da](f); }; });
     var x = $('.da-x', el); if (x) x.onclick = function () { opts.onClose(); };
@@ -92,6 +96,8 @@
     editor: function (f) { if (J.openLibraryInEditor) J.openLibraryInEditor({ id: libId(f), name: f.name }); },
     playbook: function (f) { J.docHandoff = asPageDoc(f); J.go('#/playbook'); },
     compare: function (f) { J.docHandoff = asPageDoc(f); J.go('#/jadval'); },
+    /** G2: the full check of a contract - the document travels by its library id (the editor opens it from there) */
+    full: function (f) { if (J.contractWithDoc) J.contractWithDoc(f); },
     /** a chat with this document: a service (explain / risk) is sent at once, a question waits in the box */
     chat: function (f, skillId) { if (J.chatWithDoc) J.chatWithDoc(f, skillId || null); }
   };
@@ -105,6 +111,7 @@
       risk: function () { close(); J.docGo.chat(f, 'risk'); },
       ask: function () { close(); J.docGo.chat(f, null); },
       editor: function () { close(); J.docGo.editor(f); },
+      full: function () { close(); J.docGo.full(f); },
       playbook: function () { close(); J.docGo.playbook(f); },
       compare: function () { close(); J.docGo.compare(f); }
     });

@@ -201,17 +201,19 @@ function createRunStore({ db, maxActivePerUser = Number(process.env.AGENT_RUNS_A
   }
 
   /** Row tags of the person's own finished table (result.body.tags); false for anything else. */
-  async function setTags(id, adminId, tags) {
+  /** Fields merged into a finished run's result body (read, opened, changed, sealed and written back only while unchanged). */
+  async function patchBody(id, adminId, workflow, patch) {
     if (!isUuid(id)) return false;
-    const cur = await db.query(`SELECT result FROM agent_runs WHERE id = $1 AND admin_id = $2 AND workflow = 'tabular_review' AND result IS NOT NULL`, [id, adminId]);
+    const cur = await db.query('SELECT result FROM agent_runs WHERE id = $1 AND admin_id = $2 AND workflow = $3 AND result IS NOT NULL', [id, adminId, workflow]);
     if (!cur.rows[0]) return false;
     const result = privacy.openJson(cur.rows[0].result, AAD.result(id));
     if (!result || typeof result !== 'object' || !result.body || typeof result.body !== 'object') return false;
     const r = await db.query(
       `UPDATE agent_runs SET result = $3::jsonb WHERE id = $1 AND admin_id = $2 AND result IS NOT DISTINCT FROM $4::jsonb RETURNING id`,
-      [id, adminId, sealCol('result', id, { ...result, body: { ...result.body, tags: tags || {} } }), JSON.stringify(cur.rows[0].result)]);
+      [id, adminId, sealCol('result', id, { ...result, body: { ...result.body, ...(patch || {}) } }), JSON.stringify(cur.rows[0].result)]);
     return r.rowCount > 0;
   }
+  const setTags = (id, adminId, tags) => patchBody(id, adminId, 'tabular_review', { tags: tags || {} });
 
   /** The person's own run row, plan and price included (never to the page as is). */
   async function row(id, adminId) {
@@ -275,7 +277,7 @@ function createRunStore({ db, maxActivePerUser = Number(process.env.AGENT_RUNS_A
     return r.rowCount;
   }
 
-  return { create, claim, heartbeat, saveStep, checkpoints, finish, resume, requestCancel, approve, row, setTelegram, setTags, isCancelled, cancelledQueued, get, list, sweep };
+  return { create, claim, heartbeat, saveStep, checkpoints, finish, resume, requestCancel, approve, row, setTelegram, setTags, patchBody, isCancelled, cancelledQueued, get, list, sweep };
 }
 
 /** Account deletion: the person's runs and their steps go. */

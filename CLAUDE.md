@@ -1860,6 +1860,38 @@ breve added the way the font builds Ă (OFL, no reserved name).
   apart (never $0); "Agent ishlari" on Boshqaruv -> AI.
   `tests/agent-x8.db.test.js`.
 
+- X8b of the same audit (G2, the first ready chain): "Shartnomani to'liq
+  tekshirish" - `src/agents/workflows/contract-review.js` (graph, 2 at
+  once): `validate` -> `analysis` (the website's analysis with the editor's
+  fields, `shape`) beside `rules` (the playbook review nested, only when
+  rules were chosen) -> `law` (lex.uz retrieval for the first 3 compliance
+  remarks, then one call that picks a source and quotes it; a quote not in
+  the source word for word is dropped and counted; one source a remark) ->
+  `report`. analysis, rules and law are optional steps: one part failing
+  leaves the other delivered; neither -> failed. `src/agents/contract-routes.js`:
+  `POST /api/agent/contract-review/quote` (no AI, nothing reserved: parts
+  analysis + rules, each the contract's analysis units), `POST
+  /api/agent/contract-review` (an agent run through `serve`; two `analysis`
+  jobs with `meta.part`, a scan's held units adopted for the analysis part;
+  each part committed only when it came out, else released; nothing out ->
+  502; a second reservation that does not fit releases the first), `POST
+  .../:runId/editor` (no AI, no unit: the contract read again from the
+  person's own library by the run's `docRef.scanId`, only while its sha256
+  is the text the run read; an editor document plus a `doc_editor_analyses`
+  row from `editorResult` - the analysis's proposals, a differing rule as a
+  replacement on the contract's words, a missing rule as a clause to add,
+  both worded "Firma qoidasi (qonun emas)"; the run remembers
+  `editorDocId` through `store.patchBody`, so a second tap opens the same
+  document). The law lookup takes no unit; a remark with a quote says the
+  words are in that act, one without is named as the AI's own view.
+  `CONTRACT_REVIEW=off`. Page `public/app/contract.js`: `#/shartnoma` (the
+  contract, optional rules - firm / own / built-in, the price before the
+  button) and `#/shartnoma/<runId>` (steps while it runs, then the report;
+  a reload keeps it); doors: the Asboblar card, "Nima qilaylik?" (`full`,
+  the document by its library id: `J.contractWithDoc`), Hujjatlar ->
+  Natijalar, search and a matter's item. Not run with live AI.
+  `tests/contract-review.db.test.js`.
+
 ## Shell gotcha
 
 `pkill -f <pattern>` matches the shell running it when the pattern appears in

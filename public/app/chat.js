@@ -258,7 +258,7 @@
         explain: function () { closeDa(); pick('explain'); submit(); },
         risk: function () { closeDa(); pick('risk'); submit(); },
         ask: function () { closeDa(); ta.placeholder = J.docActText('askPh'); ta.focus(); },
-        editor: J.docGo.editor, playbook: J.docGo.playbook, compare: J.docGo.compare
+        full: J.docGo.full, editor: J.docGo.editor, playbook: J.docGo.playbook, compare: J.docGo.compare
       }, { inline: true, onClose: closeDa });
       el.insertBefore(daCard, chips.nextSibling);
     }

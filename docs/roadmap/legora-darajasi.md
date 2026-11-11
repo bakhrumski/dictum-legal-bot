@@ -492,3 +492,9 @@ nima o'lchandi.
   saqlanadi); Boshqaruv -> AI da "Agent ishlari" jadvali (muvaffaqiyat,
   savol bergani, to'xtash sababi va qadami, vaqt, bir ishga ma'lum narx).
   Worker'ni alohida jarayonga ajratish qilinmadi (infratuzilma qarori).
+- 2026-11-11: #592 (X8a) merge. X8b PR: "Shartnomani to'liq tekshirish"
+  (`#/shartnoma`) - bitta ishda AI tahlil, firma qoidalari va qonunchilikdan
+  so'zma-so'z iqtibos; narx boshlashdan oldin ko'rinadi (tahlil birliklari:
+  tahlil + qoidalar), har qism alohida hisoblanadi; "Muharrirda takliflar
+  bilan ochish" hujjatni takliflari tayyor holda ochadi. Jonli AI bilan
+  sinalmagan.

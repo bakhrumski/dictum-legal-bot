@@ -35,6 +35,7 @@
     if (x.kind === 'matter') return J.go('#/ishlar/' + x.id);
     if (x.kind === 'run') {
       if (x.meta && x.meta.workflow === 'tabular_review') return J.go('#/jadval/' + x.id);
+      if (x.meta && x.meta.workflow === 'contract_review') return J.go('#/shartnoma/' + x.id);
       if (J.openRun) return J.openRun(x.id, J.itemTitle(x));
     }
   };
