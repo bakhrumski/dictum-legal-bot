@@ -479,3 +479,9 @@ nima o'lchandi.
 - 2026-11-10: #589 (X5) merge. X6 PR (migratsiya 050): uzun hujjat dayjesti
   bazada shifrlangan holda saqlanadi (deploydan keyin ham, 14 kun), "manba
   takliflari" arzon yo'lakda.
+- 2026-11-10: #590 (X6) merge. X7 PR: huquqiy javob etalon to'plami
+  (`docs/quality/answer-eval.md`): 67 sintetik savol, AI'siz baholovchi,
+  veb-chat yo'li orqali runner (dry standart; jonli faqat egasi tasdiqlagan
+  sha bilan), ikki hisobotni solishtirish, yurist uchun Excel jadval (javob
+  va agent to'plamlari). Hech bir savol hali tasdiqlanmagan; jonli
+  yurgizilmagan.

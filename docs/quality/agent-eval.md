@@ -30,7 +30,10 @@ huquqiy jihatdan to'g'ri yoki noto'g'riligini faqat yurist aytadi.
 
 ## Yurist ko'rib chiqishi (keyingi qadam)
 
-Barcha 24 holat hozir `"reviewed": false`. Yurist har bir holat uchun:
+Barcha 24 holat hozir `"reviewed": false`. Yurist JSON'ni emas, Excel
+jadvalni to'ldiradi (2026-11-10, `docs/quality/answer-eval.md`):
+`node scripts/eval-review-sheet.js --set agent --out agent.xlsx`, keyin
+`--apply agent.xlsx --write`. Yurist har bir holat uchun:
 1. topshiriqni tekshiradi, kerak bo'lsa aniqlashtiradi;
 2. kutilgan aktlarni tasdiqlaydi yoki o'zgartiradi, moddalarni qo'shadi
    (moddalar hozircha qo'yilmagan, taxmin qilinmadi);
