@@ -6,7 +6,7 @@
  *   consent      who consented, when, how (said at the start of the recording,
  *                or in writing) and the uploader's confirmation that the
  *                person was told: the recording is transcribed and sent to AI
- *                providers (VoiceLab, DeepSeek) and the audio is deleted after
+ *                providers (Google or VoiceLab, DeepSeek) and the audio is deleted after
  *                INTERVIEW_AUDIO_DAYS. Without all of it nothing is stored.
  *   transcript   speech to text (src/ai/stt.js, the usage ledger's stt rows),
  *                in chunks of INTERVIEW_CHUNK_SEC when the recording is longer
@@ -46,7 +46,7 @@ function openRec(rec) {
 const CONSENT_METHODS = Object.freeze(['verbal_recording', 'written']);
 const STAFF = Object.freeze(['master', 'student', 'lawyer']);
 const SUMMARY_LABEL = 'AI xulosasi, transkript bilan tekshiring';
-const CONSENT_TEXT = "Yozuv matnga aylantiriladi va AI provayderlariga (VoiceLab, DeepSeek) yuboriladi; audio {days} kundan keyin o'chiriladi, transkript qoladi.";
+const CONSENT_TEXT = "Yozuv matnga aylantiriladi va AI provayderlariga (Google yoki VoiceLab, DeepSeek) yuboriladi; audio {days} kundan keyin o'chiriladi, transkript qoladi.";
 
 const num = (v, d) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : d);
 function limits(env = process.env) {

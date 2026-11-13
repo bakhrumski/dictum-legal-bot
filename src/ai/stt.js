@@ -3,29 +3,31 @@
 /**
  * Which engine turns speech into text.
  *
- *   STT_PROVIDER=voicelab  (default) VoiceLab, as before this file
- *   STT_PROVIDER=gemini    Gemini 3.5 Transcribe (src/ai/gemini-transcribe.js)
- *   STT_FALLBACK=off       no second engine when the first fails (with
- *                          STT_PROVIDER set, the other engine is the fallback
- *                          when it is configured)
+ *   STT_PROVIDER unset     Gemini 3.5 Transcribe (src/ai/gemini-transcribe.js)
+ *                          when GEMINI_API_KEY is set - the owner's choice of
+ *                          2026-11-11 - with VoiceLab behind it; no Gemini
+ *                          key: VoiceLab alone, as before
+ *   STT_PROVIDER=gemini | voicelab   that engine first
+ *   STT_FALLBACK=off       no second engine when the first fails (default:
+ *                          the other engine, when it is configured)
  *
- * Unset STT_PROVIDER keeps production exactly as it was. Each engine's call
- * is its own row in the usage ledger, so both costs stay visible.
+ * Each engine's call is its own row in the usage ledger, so both costs stay
+ * visible. The audio leaves for the engine that reads it (Gemini: Google).
  */
 
 const voicelab = require('./voicelab-speech');
 const gemini = require('./gemini-transcribe');
 
-function primary() {
-  return String(process.env.STT_PROVIDER || 'voicelab').trim().toLowerCase() === 'gemini' ? 'gemini' : 'voicelab';
-}
 function available(name) { return name === 'gemini' ? gemini.hasKey() : voicelab.sttEnabled(); }
+function primary() {
+  const want = String(process.env.STT_PROVIDER || '').trim().toLowerCase();
+  if (want === 'voicelab' || want === 'gemini') return want;
+  return gemini.hasKey() ? 'gemini' : 'voicelab';
+}
 function fallbackOn() { return String(process.env.STT_FALLBACK || '').trim().toLowerCase() !== 'off'; }
 
 /** The engines to try, in order. */
 function chain() {
-  // STT_PROVIDER unset: VoiceLab alone, exactly as before (no new fallback)
-  if (!String(process.env.STT_PROVIDER || '').trim()) return available('voicelab') ? ['voicelab'] : [];
   const first = primary();
   const second = first === 'gemini' ? 'voicelab' : 'gemini';
   return [first, fallbackOn() ? second : null].filter(n => n && available(n));
