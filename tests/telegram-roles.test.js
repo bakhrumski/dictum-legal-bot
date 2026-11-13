@@ -114,7 +114,8 @@ async function callback(chatId, data) {
   await flush();
 }
 const reset = () => { sent.length = 0; callbacks.length = 0; agentCalls.length = 0; agentReply = { handled: true, reply: 'Huquqiy javob', action: 'greeting' }; };
-const textsTo = (chatId) => sent.filter(s => s.chatId === chatId).map(s => s.text);
+// the bot writes the 2026 alphabet by default (src/bot/alphabet.js); the checks read the old one
+const textsTo = (chatId) => sent.filter(s => s.chatId === chatId).map(s => (typeof s.text === 'string' ? require('../public/js/uz-alphabet').toOld(s.text) : s.text));
 const ADMIN_NOTICE = /admin sifatida ulangansiz/u;
 
 const USER = 101, PLAIN = 102, LAWYER = 103, STUDENT = 104, MASTER = 105, ODD = 106, EMPTY = 107;
@@ -146,6 +147,23 @@ accounts.set(EMPTY, { id: 6, full_name: 'Bosh rol', username: 'bosh_rol', role: 
     assert.strictEqual(roles.dashboardUrl({ NODE_ENV: 'production', APP_URL: 'https://juristai.uz/' }), 'https://juristai.uz/dashboard.html');
     assert.strictEqual(roles.dashboardUrl({ DASHBOARD_URL: 'https://juristai.uz/dashboard.html' }), 'https://juristai.uz/dashboard.html');
     assert.strictEqual(roles.dashboardUrl({}), 'http://localhost:3000/dashboard.html', 'development keeps the local server');
+  });
+
+  await test('staff links open the request itself in the app queue (2026-11-03)', () => {
+    const prod = { NODE_ENV: 'production' };
+    assert.strictEqual(roles.queueUrl(42, prod), 'https://juristai.uz/app/#/navbat/42');
+    assert.strictEqual(roles.queueUrl(null, prod), 'https://juristai.uz/app/#/navbat');
+    assert.strictEqual(roles.queueUrl('x1', prod), 'https://juristai.uz/app/#/navbat', 'not an id -> the queue');
+    assert.strictEqual(roles.queueUrl(7, { DASHBOARD_URL: 'https://juristai.uz/dashboard.html' }), 'https://juristai.uz/app/#/navbat/7');
+    assert.strictEqual(roles.queueUrl(7, { RENDER: 'true', DASHBOARD_URL: 'http://localhost:3000' }), 'https://juristai.uz/app/#/navbat/7');
+    assert.strictEqual(roles.appUrl('#/tahlil', prod), 'https://juristai.uz/app/#/tahlil');
+    const fs = require('fs'), path = require('path');
+    const bot = fs.readFileSync(path.join(__dirname, '../src/bot/bot.js'), 'utf8');
+    const server = fs.readFileSync(path.join(__dirname, '../src/api/server.js'), 'utf8');
+    assert.ok(bot.includes('Tasdiqlash: ${queueUrl(pending.requestId)}'));
+    assert.ok(bot.includes('📋 Ochish: ${queueUrl(result.requestId)}'));
+    assert.ok(server.includes("{ text: '📋 Navbatda ochish', url: openUrl }"));
+    assert.ok(!/dashboardga kiring|Dashboard orqali javob|📊 Dashboard/.test(bot + server), 'no staff message sends people to the old dashboard');
   });
 
   await test('1. a linked customer\'s legal question goes to the agent, which owns the daily quota', async () => {
@@ -236,7 +254,7 @@ accounts.set(EMPTY, { id: 6, full_name: 'Bosh rol', username: 'bosh_rol', role: 
     assert.ok(textsTo(USER).some(t => /🔑 Foydalanuvchi[\s\S]*oddiy foydalanuvchi sifatida/u.test(t)), textsTo(USER).join(' | '));
     reset();
     await message({ chatId: LAWYER, text: '/me' });
-    assert.ok(textsTo(LAWYER).some(t => /🔑 Yurist[\s\S]*bildirishnomalar keladi/u.test(t)));
+    assert.ok(textsTo(LAWYER).some(t => /🔑 Ekspert[\s\S]*bildirishnomalar keladi/u.test(t)));
   });
 
   await test('an account linked by telegram_user_id only (registration / site) is recognised: master gets /testmode, a user stays a user', async () => {

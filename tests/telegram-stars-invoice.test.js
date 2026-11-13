@@ -59,8 +59,11 @@ test('invoices issued before the change (v1) are honoured at the legacy offer', 
 
 test('the bot builds, checks and credits from the payload offer, and refunds', () => {
   const bot = read('src/bot/bot.js');
-  assert.ok(/starsInvoice\.buildAnswerInvoicePayload\(/.test(bot));
-  assert.ok(/pre_checkout_query[\s\S]{0,200}starsInvoice\.matchesOffer\(\s*readAnswerOffer\(query\.invoice_payload/.test(bot));
+  // the 1-Star answer pack is retired (2026-10-21): new invoices are one-time
+  // services (src/bot/one-time-sales.js); invoices already issued are honoured
+  assert.ok(!/starsInvoice\.buildAnswerInvoicePayload\(/.test(bot), 'the old pack is no longer issued');
+  assert.ok(/oneTimeSales\.sendInvoice\(chatId, callbackQuery\.from\.id, 'chat5', 1\)/.test(bot), 'an old button opens the question pack');
+  assert.ok(/pre_checkout_query[\s\S]{0,400}starsInvoice\.matchesOffer\(\s*readAnswerOffer\(query\.invoice_payload/.test(bot));
   assert.ok(/credits: offer\.credits,/.test(bot), 'grant uses the invoice credits');
   assert.ok(!/grantPaidAnswers\(\{[^}]*credits: PAID_ANSWER_CREDITS/.test(bot), 'no grant at the current env value');
   assert.ok(/_request\('refundStarPayment'/.test(bot));

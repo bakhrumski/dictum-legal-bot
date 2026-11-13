@@ -1,0 +1,505 @@
+# JuristAI → Legora darajasi: yo'l xaritasi
+
+Boshlangan: 2026-10-27, egasining topshirig'i: "Oxirgi bosqichga olib borishimiz
+kerak". Bu fayl yo'lning yagona ro'yxati. Har bir ish tugaganda shu yerda
+belgilanadi: PR raqami, sana, nima o'lchangani. Yangi sessiya ishni shu fayldan
+davom ettiradi.
+
+Belgilar: `[ ]` boshlanmagan · `[~]` ishlanmoqda (PR ochiq) · `[x]` staging'da ·
+`[-]` egasi bekor qildi (sababi yoziladi).
+
+Har bir PR uchun qoidalar CLAUDE.md "Working agreement"dagidek:
+- `src/**`, `migrations/**`, tariflar va DB o'zgarishi faqat PR orqali va
+  egasining roziligi bilan merge qilinadi.
+- `/api/legal-chat` egasining roziligisiz o'zgarmaydi.
+- Jonli bazaga Claude yozmaydi.
+
+## Taqqoslash (2026-10-27)
+
+Legora haqidagi ma'lumot uchinchi tomon sharhlari va press-relizlardan olingan,
+legora.com hujjatlari bevosita o'qilmagan. JuristAI haqidagisi repodagi koddan.
+
+| Yo'nalish | Legora | JuristAI (2026-10-27) |
+|---|---|---|
+| Agent | Rejani o'zi tuzadi, sub-agentlar parallel ishlaydi | `src/agents/harness.js`: qat'iy qadamlar, ketma-ket, bitta HTTP so'rov ichida (≤150 s) |
+| Workflow'lar | Ko'p, firma o'zi tuzadi | 3 ta: da'vo arizasi, jadvalli tahlil, playbook |
+| Tabular Review | Minglab hujjat, real vaqtda hamkorlik, teglar | 20 hujjat × 10 savol, so'zma-so'z iqtibos tekshiruvi, CSV; natija saqlanmaydi |
+| Word | Savol-javob, playbook, izoh va redline asosida tahrir | `public/word/`: savol-javob, Track Changes bilan tahrir, hujjatda izohlar, o'ng tugma menyusi. Playbook Word'da yo'q |
+| Outlook | Xat zanjiri, javob loyihasi | Yo'q. O'rnida Telegram bot (ovoz bilan), bu bizning ustunligimiz |
+| Tadqiqot | Ko'p yurisdiksiya, ontologiya, citator | lex.uz jonli qidiruv (2 bosqich), relevance hakami, kalit qator, istisno birinchi. Sud amaliyoti yo'q |
+| Monitoring | Qonunchilik o'zgarishlari | Yo'q |
+| Ish (matter) / Lists | Natijalar loyihada, manbaga bog'langan | Yo'q. Chatlar alohida, agent natijalari saqlanmaydi. Workspace (Platinum) vazifalar uchun |
+| Portal | Mijoz bilan umumiy makon, audit | Yurist navbati bor, mijoz portali yo'q |
+| Firma bilimi | Hujjatlar ombori, prompt kutubxonasi | Shaxsiy playbook'lar, ko'nikmalar; Workspace xotirasi (faqat Platinum) |
+| Natija formatlari | Word, Excel, PowerPoint | Word, CSV |
+| Ishonch | Manbaga havola | Bizda kuchliroq: so'zma-so'z iqtibos, claim guard, qamrov, "tasdiqlanmadi" belgisi |
+
+O'zgarmas tamoyillar:
+1. Ishonch mexanizmlari tezlik uchun bo'shatilmaydi. Agent qanchalik avtonom
+   bo'lmasin, yakuniy natija tekshiruvdan (iqtibos, claim guard) o'tadi.
+2. Narx chegarasi va tasdiqsiz avtonom ish bo'lmaydi.
+3. Legora ko'r-ko'rona nusxalanmaydi: bozor O'zbekiston (Telegram, ovoz,
+   lex.uz, o'zbek tili).
+
+## 0-bosqich. Dizayn
+
+- [x] Matter va agent_runs + reja tuzuvchi agent dizayni:
+  `docs/design/matter-va-agent-runs.md` (#491, 2026-10-28). Egasi
+  tavsiyalarni qabul qildi (8-bo'lim).
+
+## 1-bosqich. Asos (Matter, uzoq ishlar, reja tuzuvchi)
+
+Tartib va PR bo'linishi dizayn hujjatining 9-bo'limida.
+
+- [x] PR-A: `matters`, `matter_items` (migratsiya 019) va API (#494, 2026-10-28). UI hali yo'q.
+- [x] PR-B (#495): `agent_runs` va `agent_run_steps` (migratsiya 020), DB'dagi
+  navbat va worker. Mavjud 3 ta workflow run sifatida ishlaydi, eski route'lar
+  javob shaklini saqlaydi.
+- [x] PR-C (#496): Matter UI (`/app/#/ishlar`): ro'yxat, ish sahifasi, "ishga
+  qo'shish" tugmalari (chat, jadval, playbook, loyiha).
+- [x] PR-D (#497): Vositalar reestri va reja tuzuvchi agent. Avval faqat master
+  uchun (`AGENT_PLANNER=master`). Reja va narxni tasdiqlash shu PR'da
+  (PR-E'dan oldinga olindi).
+- [x] PR-V (#498): Ishlarni ovoz bilan boshqarish: Telegram'da ulangan akkaunt
+  orqali va ilova ichida (egasi, 2026-10-28). `src/matters/commands.js`.
+  Keyingi qadam: ovoz bilan agent topshirig'i (reja → tasdiq) - PR-F bilan.
+- [~] Ovozli buyruqlar 2-daraja (egasi, 2026-10-29): `docs/design/ovozli-buyruqlar-2.md`
+  - chatda va Ishlar buyruq qatorida gapirilgan buyruq tasdiq tugmasi bilan
+  bajariladi (AI'siz katalog, pul / o'chirish / yuborish ovoz bilan emas).
+  Qabul qilingan (egasi barcha takliflarni qabul qildi). 1-daraja (#520, #529) tayyor.
+  V1 (#531), V2 (#532), V3 (#533), V4 (#535), V5 (#537) tayyor. Keyingi qadam:
+  Telegram'dagi ochish buyruqlari havola o'rniga natijani botning o'zida
+  ko'rsatsin (masalan, "hujjatlarim" - ro'yxat va amal tugmalari).
+- [x] PR-E (#499): Parallel qadamlar, `needs_input`
+  dan keyin davom ettirish.
+- [x] PR-F (#501): Telegram: ish holati bitta xabarda yangilanadi, tasdiq tugmalari.
+  Botdagi da'vo agenti 2026-11-11 dan run (X8a): ulangan akkaunt uchun navbatda,
+  deploydan keyin davom etadi.
+- [~] PR-G: Agent baholash to'plami (`docs/quality/agent-eval.md`): har bir
+  workflow uchun yurist ko'rib chiqqan 20–30 holat; har PR'da stub bilan.
+
+## 2-bosqich. Mavjudini Legora tajribasiga yaqinlashtirish
+
+- [~] Tabular Review: 100+ hujjat run sifatida (fon navbati); ustun turlari
+  (ha/yo'q, sana, summa, tanlov); teglar; Excel eksport; natija ishda saqlanadi.
+  #504 merge (2026-10-28): 100 hujjat (`TABULAR_MAX_DOCS`, <= 200), tanlov
+  ustuni, qator teglari, Excel, fonda ishlash va bosqichlar. Jonli AI bilan
+  100 hujjatda sinalmagan.
+- [~] Word: playbook tahlili Word ichida (izoh va Track Changes bilan), "ishga
+  saqlash". #505 merge (2026-10-28); haqiqiy Word'da sinalmagan.
+- [x] Natijalar: Excel (jadval), PowerPoint (ish bo'yicha qisqa taqdimot).
+  Jadval Excel'i #504, ish taqdimoti va Excel'i #508 (2026-10-28). Haqiqiy
+  PowerPoint'da ochib ko'rilmagan.
+
+## 3-bosqich. Raqobat ustunligi
+
+- [~] Sud amaliyoti korpusi: Oliy sud Plenumi qarorlari, keyin ochiq sud
+  qarorlari. Manba va litsenziya avval tekshiriladi. Dizayn (2026-11-03):
+  `docs/design/sud-amaliyoti.md` (qoralama; Plenum qarorlari lex.uz'da
+  "Oliy sudi" organi va "Qaror" turi bilan topiladi; S1 korpus, S2 javobda,
+  S3 citator, S4 monitoring). Qabul qilingan (#553). S1 (Plenum korpusi,
+  migratsiya 041, Boshqaruv -> "Sud amaliyoti") merge (#554). S2 (javobda
+  Plenum bandi, Tahlil ichida bitta qator, AI'siz tanlov) merge (#555).
+- [~] Citator: akt amaldami, qachon o'zgargan, qaysi Plenum qarori unga
+  tayangan. Javobda "o'zgargan" belgisi chiqadi. S3 (migratsiya 042,
+  `src/citator/`, AI'siz) merge (#556).
+- [~] Monitoring: lex.uz'dagi yangi va o'zgargan aktlar; foydalanuvchi
+  ishlariga tegishlisi Telegram'ga yuboriladi (kuniga bitta yig'ma xabar).
+  S4 (migratsiya 043, `src/monitor/`, AI'siz): ishlardagi aktlar har kuni
+  tekshiriladi, kuniga bitta Telegram xabar; merge (#557).
+- [~] Firma bilim bazasi: firmaning shablonlari va avvalgi hujjatlari, qidiruv
+  bilan (Workspace xotirasidan kengaytiriladi); jamoaviy prompt va ko'nikma
+  kutubxonasi. Dizayn (2026-11-04): `docs/design/firma-bilim-bazasi.md`
+  (qabul qilingan, #558; firma = Workspace; K1 kutubxona va serverdagi
+  ko'nikmalar, K2 shifrlangan hujjatlar va blind index qidiruvi, K3 Workspace
+  AI, K4 chat, K5 embedding keyin). K1a (ko'nikmalar serverda, migratsiya
+  044) merge (#559). K1b (firma kutubxonasi: shablon, playbook, ko'nikma,
+  migratsiya 045) merge (#561). K2a (firma hujjatlari: shifrlangan bandlar,
+  blind index qidiruvi, migratsiya 046, server) merge (#562). K2b (sahifa
+  #/firma, Hujjatlarim tugmasi, muharrirdagi "Firma bandlari") merge (#563).
+  K3 (Workspace AI firma hujjatlarini "qonun emas" belgisi bilan ko'radi)
+  merge (#564). K4 (oddiy chatda "Firma bazasi" manbasi, egasining roziligi
+  bilan) merge (#565). K5 (embedding) dizayn bo'yicha o'lchovdan keyin.
+- [~] Adaptiv akkaunt va platformaning o'zini yaxshilashi (egasi, 2026-10-28):
+  dizayn `docs/design/adaptiv-akkaunt.md` (#509, qabul qilingan), PR A1-A8.
+  Birinchi qismi: shaxsiy ovoz glossariysi (#507). A1 (signallar va profil)
+  #510; A2 ("Moslashish" sahifasi) #511.
+
+## 4-bosqich. Korporativ daraja
+
+- [~] Mijoz portali: yurist va mijoz uchun umumiy ish, fayllar, savollar,
+  rollar, audit trail. Dizayn (2026-11-04, qoralama):
+  `docs/design/mijoz-portali.md` - mijoz ishning alohida roli (tarifsiz),
+  bot asosiy yo'l, P1 ko'rish -> P2 xabarlar -> P3 hujjat so'rovi ->
+  P4 jurnal -> P5 "Tanishdim" (ixtiyoriy); qabul qilingan (2026-11-05,
+  barcha takliflar). P1a (server: taklif, bosqich, muddatlar, mijozga
+  ko'rinadiganlar, migratsiya 047) merge (#569). P1b (sahifalar) merge (#571).
+  P1c (botda mijozning ishlari, Telegram orqali qo'shilish, xabarnomalar)
+  merge (#572). P2 (yozishma, migratsiya 048) merge (#582). P3 (hujjat
+  so'rovi va mijoz fayllari, migratsiya 049) PR #583. P4, P5 boshlanmagan.
+- [~] Ma'lumot himoyasi 1-bosqich (egasi, 2026-10-28, occlum.io tahlilidan keyin):
+  `docs/design/shifrlash-1-bosqich.md` - bazada shifrlash, AI'ga yuborishdan
+  oldin shaxsiy ma'lumotni yashirish, provayder siyosati, kirish jurnali.
+  Qabul qilingan (#516). E1 #518, E2a #519, E2b #521, E3 #522; E4 (huquqiy
+  javob zanjirida yashirish, `REDACT_LEGAL_CHAT`, 20 savollik oldin/keyin),
+  E5 (Workspace), E6a / E6b (chatlar, navbat, kirish jurnali, "DeepSeek'ga
+  emas"), E7 (landing) - hammasi merge (#523-#528). `REDACT_LEGAL_CHAT`
+  egasi 20 savollik taqqoslashni o'qiguncha o'chiq.
+- [ ] Ma'lumot siyosati: hujjatlarni DeepSeek'ga yubormaslik opsiyasi
+  (korporativ tarif), saqlash muddatlari, eksport va o'chirish.
+- [ ] SSO (korporativ mijoz so'rasa).
+
+Holat tekshiruvi (2026-11-10 auditi, `docs/audit/2026-11-10-audit.md`):
+asosiy bandlarning 15 / 22 tasi kodda to'liq, 6 tasi qisman; dizayn
+hujjatlaridagi kichik bosqichlarning 40 / 51 tasi bajarilgan. Muharrir
+(D1-D5) va UX auditi (U1-U5b) faqat jurnalda qayd etilgan - ular ham tugagan.
+
+## Jurnal
+
+Har bir merge shu yerga bir qator bo'lib yoziladi: sana, PR, nima qilindi,
+nima o'lchandi.
+
+- 2026-10-28: #491 merge: yo'l xaritasi va dizayn hujjati.
+- 2026-10-28: #494 merge (PR-A): migratsiya 019, `/api/matters`. Lokal
+  Postgres'da `tests/matters.db.test.js` (7 ta) va boot smoke (anonim so'rov
+  401/403) o'tdi. Shu kuni #493 merge: keyingi qadam tugmalari (MChJ
+  savoliga jarima shikoyati chiqqan edi).
+- 2026-10-28: PR-B ochildi: migratsiya 020, run store, worker, checkpoint'lar.
+  3 ta workflow run orqali ishlaydi. Lokal Postgres'da
+  `tests/agent-runs.db.test.js` 9 ta testdan o'tdi (3 marta ketma-ket).
+  Testlar: deploy simulyatsiyasi (o'lgan worker, lease, davom ettirish,
+  tugagan qadam qayta ishlamadi), 3 urinishdan keyin birliklar qaytishi,
+  bekor qilish, bir kishiga bittadan ish, eski javob shakli. Boot smoke ham
+  o'tdi: worker ishga tushdi va SIGTERM'da toza to'xtadi.
+- 2026-10-28: #495 merge (PR-B). #496 merge (PR-C, frontend): ishlar
+  ro'yxati, ish sahifasi, "Ishga qo'shish", 202 kuzatuvi; lokal server va
+  haqiqiy API bilan 1280 / 390 px'da tekshirildi; barcha modallar 390 px'da
+  ekrandan chiqmaydigan qilindi.
+- 2026-10-28: PR-D ochildi: vositalar reestri (5 ta), reja tuzuvchi, server
+  tekshiruvi, tasdiq va narx, `planned` run. `tests/agent-planner.test.js`
+  (8) va `tests/agent-planner.db.test.js` (5) o'tdi; ish sahifasidagi agent
+  kartasi stub javoblar bilan 1280 / 390 px'da tekshirildi. Haqiqiy AI bilan
+  hali ishga tushirilmadi (bu yerda kalit yo'q).
+- 2026-10-28: PR-V ochildi: ishlar uchun ovozli va matnli buyruqlar (uz / ru):
+  ro'yxat, yangi ish, yozuv, ko'rsatish, yopish va qayta ochish (tasdiq
+  bilan). Telegram'da (ulangan akkaunt, ovozli xabar STT orqali) va
+  ilovada (🎙 tugma, diktovka). `tests/matter-commands.test.js` (6): test
+  fayllaridagi 6 384 ta satrdan birortasi buyruq deb olinmadi.
+  `tests/matters.db.test.js`ga route testi qo'shildi (8). Ilova 1280 / 390
+  px'da Chromium soxta mikrofoni bilan tekshirildi (STT stub). Haqiqiy
+  Telegram va haqiqiy STT bilan sinalmagan.
+- 2026-10-28: #497 (PR-D) va #498 (PR-V) merge. #498 PR-D ustiga qurilgani
+  uchun squash'dan keyin konflikt berdi; PR-V commit'i yangi staging ustiga
+  cherry-pick qilinib, CI'dan qayta o'tkazildi.
+- 2026-10-28: PR-E ochildi: harness grafi (qadam `after`ga ko'ra, bir
+  vaqtda <= 3), `ask_user` vositasi va `needs_input`dan davom etish
+  (birlik qaytariladi, javob bilan qayta band qilinadi). Test ikki qadam
+  bir vaqtda tugaganda natija yo'qolish xatosini topdi (tuzatildi).
+  `agent-planner.test.js` 12, `agent-planner.db.test.js` 6 ta test.
+- 2026-10-28: #499 (PR-E) merge. Egasining skrinshoti: ovozli "Yangi ish
+  och." nomsiz edi - #500 nomni so'raydigan qildi.
+- 2026-10-28: PR-F ochildi: botda "agent: <topshiriq>" (matn yoki ovoz) ->
+  reja va narx tugmalari -> bitta status xabari qadamlar bilan yangilanadi
+  -> javob; agent savoli chatga keladi, keyingi xabar javob ("yo'q" ham
+  javob, faqat "bekor" to'xtatadi). Planner servisga ajratildi (web va bot
+  bir xil). Chat va xabar run qatorida, deploy'dan keyin ham shu chatga
+  yoziladi. Haqiqiy Telegram bilan sinalmagan.
+- 2026-10-28: #500 (nomsiz "yangi ish och") va #501 (PR-F) merge; #502
+  (frontend): mikrofon yozayotganda qizil nuqta, ovoz balandligi ustunlari
+  va vaqt (chat va Ishlar buyruq satri), soxta mikrofon bilan tekshirildi.
+- 2026-10-28: PR-G ochildi: 24 ta sintetik holat (hammasi
+  `reviewed: false`), AI'siz baholovchi, runner (dry standart; jonli -
+  server API orqali master sessiyasi, run sha tasdig'i bilan). Yurist
+  ko'rib chiqmaguncha sifat haqida xulosa yo'q.
+- 2026-10-28: #503 (PR-G) merge. 2-bosqich, jadval PR ochildi:
+  - 100 tagacha hujjat. Run faqat ustunlar va har hujjatning savollarga mos
+    qismlarini saqlaydi; har 10 hujjat alohida qadam (checkpoint).
+  - Run'ning o'z chegaralari: hujjat soni + 8 chaqiruv, har hujjatga $0.05
+    (kamida $1), 15 s (20 daqiqagacha).
+  - Chegara yoki bekor qilish o'rtada to'xtatsa, o'qilgan qatorlar
+    ko'rsatiladi va haqi olinadi, qolganining birliklari qaytariladi.
+  - Tanlov ustuni (2-8 variant). Variantdan tashqari javob "Topilmadi"
+    bo'ladi.
+  - Qator teglari run natijasida saqlanadi (`PUT /api/agent/runs/:id/tags`).
+  - Excel (Jadval, Iqtiboslar, Izoh).
+  - Sahifa: fayllar 3 tadan o'qiladi; 10 dan ortiq hujjat fonda ishlaydi,
+    `#/jadval/<runId>` bosqichlarni ko'rsatadi; teglar bo'yicha filtr.
+  - Brauzerda 1280 va 390 px'da tekshirildi, AI javobi bazaga tayyor
+    yozilgan. Haqiqiy AI bilan 100 hujjat sinalmagan: vaqt va narx
+    o'lchanmagan.
+- 2026-10-28: #504 (jadval) merge. Word playbook PR ochildi:
+  - Word va Google Docs panelida "Playbook" bloki: tayyor yoki o'z playbook
+    tanlanadi, shartnoma saytdagi xizmatga yuboriladi (tahlil birligi
+    shartnoma hajmiga qarab).
+  - Farq, yo'q va noaniq qoidalar hoshiyada izoh bo'ladi. Iqtibosi server
+    topgan "farq" bandi uchun taklif Track Changes bilan kiritiladi.
+  - Qoida izohda "Qoida:" deb yoziladi, hech qachon "Asos:" emas: playbook
+    qonun emas.
+  - "Ishga saqlash": mavjud ishga yoki yangi ishga.
+  - Panel tokeni ochadigan yangi yo'llar: `GET /api/playbooks`,
+    `POST /api/agent/playbook-review`, `GET /api/agent/runs/:id`,
+    `GET/POST /api/matters`, `POST /api/matters/:id/items`.
+  - Token so'rovi same-origin tekshiruvidan o'tadi: brauzer tokenni o'zi
+    yubormaydi, shuning uchun uni boshqa saytdan soxtalashtirib bo'lmaydi.
+  - Brauzerda 320 va 450 px'da soxta hujjat muhiti bilan tekshirildi.
+    Haqiqiy Word va Google Docs'da sinalmagan.
+- 2026-10-28: #505 (Word playbook) va #506 (ovozli buyruq tasdig'i, glossariy)
+  merge; #507 ochildi (har akkauntning o'z glossariysi). Ish eksporti PR
+  ochildi:
+  - Ish sahifasida "Yuklab olish: PowerPoint / Excel".
+  - Taqdimot faqat ishda bor narsadan yig'iladi: muqova, tarkib, yozuvlar,
+    har bog'langan natija (jadval, playbook, da'vo loyihasining asosi,
+    agent javobining Xulosasi), chatlar. Oxirgi slayd: bu AI material,
+    yakuniy xulosa emas.
+  - Excel: ish, elementlar, har jadval va playbook natijasi alohida varaqda.
+  - AI chaqirilmaydi, birlik yechilmaydi. Ish ko'ruvchisi ham yuklab oladi,
+    begonaga 404.
+  - PPTX `jszip` bilan yig'iladi: `pptxgenjs` npm'dagi "https" paketiga
+    bog'liq, shuning uchun qo'shilmadi.
+  - `python-pptx` o'qidi, LibreOffice Impress ochdi va PDF'ga aylantirdi.
+    Haqiqiy PowerPoint'da ochib ko'rilmagan.
+- 2026-10-28: #507 (shaxsiy glossariy, migratsiya 021) va #508 (ish taqdimoti
+  va Excel) merge. #507 CI'da Workspace to'plami yiqilgan edi: migratsiyalar
+  ro'yxatini tekshiradigan testga 021 qo'shilmagan; qo'shildi. #508 #507
+  ustiga rebase qilindi (versiya qatorlari). Adaptiv akkaunt dizayn hujjati
+  ochildi (`docs/design/adaptiv-akkaunt.md`, egasining savollari 9-bo'limda).
+- 2026-10-28: #509 (adaptiv dizayn) merge. Egasining javoblari: standart
+  yoqiq, A/B ha, yurist navbatini egasi ko'radi (haftasiga 5 soat), firma
+  profili ha, Telegram ha. Signallar ro'yxati va muddat A1 PR'ida ko'rsatildi.
+  A1 PR ochildi:
+  - migratsiya 022 (`user_signals`, `user_profile`), `src/adaptive/profile.js`;
+  - veb-chat (javob yuborilgandan keyin), Telegram (bog'langan akkaunt) va
+    agent run'lari signal yozadi;
+  - profil AI'siz hisoblanadi, 180 kundan eski signallar o'chadi, akkaunt
+    o'chirilganda profil ham o'chadi;
+  - `GET /api/adaptive/profile` faqat o'qish uchun. Profil hali hech qayerda
+    ishlatilmaydi.
+- 2026-10-28: #510 (A1) merge. A2 PR ochildi:
+  - `#/moslashish` sahifasi: JuristAI biladigan sohalar, aktlar va xizmatlar
+    (har birini olib tashlash yoki qaytarish mumkin);
+  - javob uzunligi, alifbo, odamning o'z tarafi (sohaga qarab, faqat odam
+    tanlaydi);
+  - oxirgi 30 signal jadvali, to'xtatish va hammasini tozalash.
+  - Brauzerda 1280 va 390 px'da tekshirildi.
+- 2026-10-28: #511 (A2, "Moslashish" sahifasi) va #512 (yangi lotin alifbosi,
+  OʻRQ-1184: standart yangi, eski tanlov bilan; Golos Text'dagi Ğ breve
+  xatosi tuzatildi) merge. #512 #511 ustidan rebase qilindi.
+- 2026-10-28: #507-#513 merge (glossariy, ish eksporti, adaptiv A1/A2,
+  2026 alifbosi, CustDev pilot 1-2-bosqich). Egasi: "Workspace ni barcha
+  tarif uchun och" va pilot uchun 1-variant. Yangi PR: migratsiya 025 -
+  Workspace'ni har qanday faol pullik tarif (Silver, Gold, Platinum) egasi
+  ochadi; `workspaces.internal` - master tarifsiz ochadigan ichki (xodimlar)
+  Workspace, a'zolari faqat master / student / lawyer, mijoz hech qachon
+  a'zo bo'lmaydi, bayroq yaratilgandan keyin o'zgarmaydi.
+- 2026-10-28: #514 merge (Workspace hamma pullik tarifga, ichki Workspace).
+  #515 ochildi: mijoz turi va bir bosishda pilot (migratsiya 026), CustDev
+  3-bosqich - pilot Workspace vazifalari va Telegram fikrlari (027), 4-bosqich -
+  rozilik bilan intervyu yozuvlari (028).
+- 2026-10-28: #515 merge (mijoz turi, CustDev 3-4-bosqichlar). Ma'lumot
+  himoyasi 1-bosqich dizayni ochildi (`docs/design/shifrlash-1-bosqich.md`).
+- 2026-10-29: #516 (ma'lumot himoyasi dizayni, qabul qilindi), #517 (hujjat
+  tayyorlash: suhbatga qaytish, fayldan shablon) va #518 (E1, shifrlash
+  moduli) merge. E2a PR: "Hujjatlarim" (har bir yuklangan hujjat egasi
+  o'chirmaguncha) va shifrlangan saqlash.
+- 2026-10-29: #522 (E3, AI'ga yuborishdan oldin yashirish) merge. E4 PR:
+  `/api/legal-chat` (oqim ham), `/api/rag/*`, gibrid zanjir va Telegram bot
+  uchun yashirish - `REDACT_LEGAL_CHAT=on` bo'lmaguncha o'chiq (egasi 20
+  savollik solishtirishni ko'rgach yoqiladi), master `X-JAI-Redact` bilan
+  bitta so'rovda yoqib/o'chirib solishtiradi (`scripts/redaction-eval.js`);
+  `answer_cache.reply` shifrlanadi.
+- 2026-10-29: #523 (E4) merge. E5 PR: Workspace matnlari va fayllari bazada /
+  Storage'da shifrlanadi, fayl server orqali yuklab olinadi; Workspace AI
+  yangi javobni yakunlashdagi xato tuzatildi. Agentlar ro'yxati va taklif
+  havolasi - alohida PR (#524).
+- 2026-10-29: #524 (agent taklif havolasi) va #525 (E5) merge. E6a PR: web
+  chatlar, murojaatlar navbati va AI tahlil arxivi shifrlanadi, xodim
+  qidiruvi ko'r indeks bilan; o'rganish to'plamlariga shaxsiy ma'lumot
+  yashirilib yoziladi.
+- 2026-10-29: E6b PR: kirish jurnali (xodim boshqa odam ma'lumotini ochganda
+  qator, Boshqaruv → "Kirish jurnali") va "DeepSeek'ka yuborilmasin" tanlovi
+  (Moslashish); landingda provayderlar rost yozildi.
+- 2026-10-29: #526 (E6a) va #527 (E6b) merge. E7 PR: landingdagi "Ma'lumotingiz
+  qanday himoyalanadi" animatsiyasi - faqat serverda shifrlash va yashirish
+  yoqiq bo'lganda ko'rinadi.
+- 2026-10-29: #528 (E7) va #529 (buyruq qatori mikrofoni bir ko'rinishda)
+  merge. Ovozli buyruqlar 2-darajasi dizayni ochildi
+  (`docs/design/ovozli-buyruqlar-2.md`).
+- 2026-10-29: #530 (ovozli buyruqlar 2-daraja dizayni) qabul qilindi va merge.
+  V1 PR: AI'siz buyruqlar katalogi va `POST /api/voice/command/parse` / `run`.
+- 2026-10-29: #531 (V1), #532 (V2: chatdagi karta), #533 (V3: Ishlar buyruq
+  qatori) va #534 (har rol uchun alohida ko'rinish, `#/rol`, egasining UX
+  ko'rigi uchun) merge.
+- 2026-10-30: V4 PR: ochiq suhbatdagi amallar ovoz bilan - javobni nusxalash,
+  Word'ga yuklash, suhbatni ishga biriktirish (nomi aytilsa o'sha ochiq ishga,
+  aks holda tanlash oynasi), "shu hujjatni tahlil qil" (tahlil sahifasi
+  hujjat bilan, narx tasdig'i o'z joyida). Faqat chatda, faqat gapirilganda,
+  amal qiladigan narsa bo'lsagina karta chiqadi.
+- 2026-10-30: #535 (V4) va #536 (ingliz interfeysi yangi alifboga
+  o'girilmaydi; nomsiz "yangi ish och" nomni so'rab davom etadi) merge.
+  V5 PR: Telegram'da ilova sahifasi buyruqlari havola va tugma bilan
+  javob oladi (botda hech narsa bajarilmaydi); `voice_command_events`
+  (migration 035, faqat kodlar - matn ham, akkaunt ham yo'q) va
+  Boshqaruv -> "Ovozli buyruqlar" haftalik ko'rinishi.
+- 2026-10-30: #537 (V5) va #538 (har mijoz o'z rolining ko'rinishini
+  avtomatik ko'radi; "Barcha bo'limlar" bilan to'liq ko'rinish) merge.
+  Egasining qoidasi: har bir o'zgarish odamga aniq yengillik berishi kerak
+  (CLAUDE.md, "Working agreement"). V5 ning Telegram havolasi bu qoidaga
+  to'liq javob bermaydi: odam baribir botdan chiqadi.
+- 2026-10-30: #539 (hujjatlar, "har o'zgarish yengillik berishi kerak"
+  qoidasi) merge. Telegram'da "hujjatlarim" ro'yxati PR (#540). Hujjat
+  muharriri (Word kabi, birgalikda tahrir, AI tahlil va imlo tekshiruvi)
+  dizayni ochildi: `docs/design/hujjat-muharriri.md` (qoralama, egasining
+  9-bo'limdagi javoblarini kutadi).
+- 2026-10-30: #540 (Telegram'da "hujjatlarim") va #541 (muharrir dizayni)
+  merge; egasi takliflarni qabul qildi (barcha tariflar, havola orqali
+  ulashish, yangi paketlar, imlo — AI limitidan + o'z tuzatuvchimiz). D1 PR:
+  bir kishilik muharrir — AI loyiha / Word / PDF / Hujjatlarim hujjati A4
+  sahifada, asboblar paneli, avtosaqlash, versiyalar, Word va PDF.
+- 2026-11-01: #542 (muharrir D1) merge. D2 PR: hujjat izohlari — yon panel
+  (ochiq / hal qilingan, javob, tahrir, o'chirish), izohlangan so'z och-ko'k;
+  Word fayldagi izohlar muallifi, sanasi, javoblari bilan ochiladi va Word'ga
+  ochiq izohlar Word izohi bo'lib qaytadi. Jamoadosh izohlarni D3 da ko'radi.
+- 2026-11-01: #543 (muharrir D2, izohlar) merge. D3 PR: havola orqali
+  ulashish (tahrirlaydi / izoh qoldiradi / faqat o'qiydi), o'z serverimizdagi
+  WebSocket orqali real vaqtda birga tahrir (Yjs), boshqalarning kursori va
+  ismi, izohlar hammada darhol yangilanadi; muharrir sahifasida tarif tanlash
+  oynasi majburan chiqmaydi.
+- 2026-11-01: #544 (muharrir D3: havola orqali ulashish, jonli birga tahrir)
+  merge.
+- 2026-11-02: #545 (eski dashboard faqat master uchun; bepul foydalanish
+  so'rovnomasi ilovaga ko'chdi) merge.
+- 2026-11-03: #546 (to'ldirilgan hujjat bitta yozuvda, kenglik bo'yicha tekis,
+  1 sm chekinish, imzo va sana o'z qatorida), #547 (inson navbati ilovada:
+  `#/navbat`), #548 (xodimlarga Telegram havolasi murojaatning o'zini
+  ochadi), #549 (muharrir D4: AI tahlil paneli), #550 (muharrir D5:
+  tekshiruv — bepul qoidalar va AI imlo), #551 (navbat: tartib, tezkor
+  filtrlar, sana guruhlari), #552 (navbat: ko'pini birdan biriktirish,
+  yopish, qayta ochish, "Turi" filtri; migratsiya 040) merge. Muharrir
+  dizaynining D1–D5 bosqichlari tugadi.
+- 2026-11-03: 3-bosqich boshlandi: sud amaliyoti dizayni
+  (`docs/design/sud-amaliyoti.md`, qoralama).
+- 2026-11-03: #553 (sud amaliyoti dizayni) merge; egasi takliflarni qabul
+  qildi (S2 ga rozilik, S1 → S4, uchala tahrir, S5 keyin). S1 PR: Plenum
+  qarorlari korpusi lex.uz'dan, AI'siz (lokal sinovda 217 qaror, 0 o'qilmagan).
+- 2026-11-03: #554 (S1) merge. S2 PR: javobda Plenum bandi (sayt va Telegram),
+  (kodeks, modda) juftlari va kam uchraydigan so'z ildizlari bo'yicha, AI'siz;
+  20 sintetik savolning 11 tasiga band tanlandi (yurist ko'rmagan).
+- 2026-11-03: #555 (S2) merge. S3 PR: citator - "Manbalar" ostida akt
+  holati, keltirilgan moddaning o'zgarish sanasi va akti, bizdagi nusxa
+  eskirganmi, Plenum; Telegram'da faqat ogohlantirishlar.
+- 2026-11-03: #556 (S3) merge. S4 PR: monitoring - ochiq ishlardagi aktlar
+  har kuni lex.uz bilan solishtiriladi; o'zgarish bo'lsa, kuniga bitta
+  Telegram xabar (ish nomi, akt, nima o'zgardi, havola), o'z kaliti bilan.
+- 2026-11-04: #557 (S4 monitoring) merge; sud amaliyoti dizaynining S1-S4
+  bosqichlari tugadi (S5 keyinga). Keyingi band: firma bilim bazasi dizayni
+  (`docs/design/firma-bilim-bazasi.md`, qoralama).
+- 2026-11-04: #558 (firma bilim bazasi dizayni) merge; egasi takliflarni qabul
+  qildi (firma = Workspace, K3 ga rozilik, 2 000 hujjat / 2 GB, K1a birinchi).
+  K1a PR: chat ko'nikmalari serverda, hamma qurilmada.
+- 2026-11-04: #559 (K1a) merge. K1b PR: firma kutubxonasi - o'z shabloni,
+  playbook'i va ko'nikmasini Workspace'ga ulashish, versiyalar, viewer faqat
+  o'qiydi. Alohida PR #560: bepul yordam kanali @bakhrom_abdimuminov.
+- 2026-11-04: #560 (kanal @bakhrom_abdimuminov) va #561 (K1b) merge. K2a PR:
+  firma hujjatlari serverda - qo'shish, shifrlangan bandlar, so'z bo'yicha
+  qidiruv (sahifa va band bilan); UI K2b da.
+- 2026-11-04: #562 (K2a) merge. K2b PR: "Firma bazasi" sahifasi, Hujjatlarim
+  va muharrirdan qo'shish, muharrirda bandni topib qo'yish; kirill / lotin va
+  4 harfli so'zlar; sinov to'plamida 20 tadan 19 topildi.
+- 2026-11-04: #563 (K2b) merge. K3 PR: Workspace AI javobida firma bandlari
+  (<= 5 band / 8 000 belgi, "FIRMA HUJJATI (qonun emas)"), iqtibos firma
+  bandida so'zma-so'z tekshiriladi; qonun manbalari va claim guard o'zgarmadi.
+- 2026-11-04: #564 (K3) merge. K4 PR: chatda "Firma bazasi" tugmasi
+  (faqat hujjati bor Workspace bo'lsa), server a'zolikni tekshiradi, bandlar
+  "qonun emas" bilan promptga va iqtibos tekshiruviga; bunday javob keshga
+  yozilmaydi; javob ostida qaysi hujjat va band ishlatilgani.
+- 2026-11-04: #565 (K4) merge: chatda "Firma bazasi" manbasi. Mijoz portali
+  dizayni (qoralama) PR'da.
+- 2026-11-05: #566 (kanal tekshiruvi: xato "obuna emas" emas, /kanal) va #568
+  (Telegram orqali kirish: to'g'ri domen, xatodan keyin kod) merge. Mijoz
+  portali dizayni qabul qilindi (#567).
+- 2026-11-06: #569 (P1a), #571 (P1b), #570 (chatda "Qayta urinish", uzilgan
+  tahlil uchun limit yechilmaydi) merge. P1c PR: mijoz ishini botda ko'radi,
+  Telegram havolasi bilan qo'shiladi, o'zgarishda bitta xabar oladi.
+- 2026-11-06: #572 (P1c, mijozning ishi botda) merge. Egasi: roadmap'dan oldin
+  UI/UX audit ("platforma labirintga o'xshaydi"). Audit qoralamasi:
+  `docs/design/ux-audit-2026-11.md` (U1 qidiruv va "Davom ettirish", U2
+  birinchi kirish, U3 hujjat uchun bitta eshik, U4 menyu, U5 muharrir);
+  javoblar 8-bo'limda kutilmoqda. P2 shundan keyin. #573: "п." dan keyin gap
+  uzilishi va javob tili tuzatildi.
+- 2026-11-06: #573 merge ("п." dan keyin gap uzilmaydi; javob tili). UI/UX
+  audit qabul qilindi (#574, barcha takliflar); tartib U1 → U5a → U2–U4 →
+  U5b, keyin P2. U1 boshlandi.
+- 2026-11-06: U1 PR (server: `src/search/routes.js` - `GET /api/search`,
+  `GET /api/recent`, nomlar bo'yicha, AI yo'q; sahifa: chap paneldagi
+  "Qidirish" + Ctrl/⌘K, bosh sahifada "Davom ettirish", "Hujjatlar"
+  uch oynada - Yuklanganlar / Tahrirdagilar / Natijalar). Merge egasining
+  roziligi bilan.
+- 2026-11-06: #576 merge (deploy paytida ochiq javob kutiladi, tugamagani
+  `SERVER_RESTART` bilan aytiladi, limit qaytariladi; muharrir avval
+  saqlanadi). U5a PR: muharrirda kartani bosish = joyi och ko'k; Word
+  1-to'plami (indekslar, oraliq, xat boshi, tozalash, sahifa uzilishi,
+  topish/almashtirish, so'z/sahifa soni, masshtab, Word'da sahifa raqami).
+- 2026-11-07: #577 merge (U5a). U2 PR: birinchi kirishda tarif oynasi yo'q
+  (Sinov birinchi savolda serverda boshlanadi), "Nimadan boshlaysiz?" uchta
+  tugma bilan, alifbo paneli birinchi ishdan keyin va kontent ustida emas,
+  bo'sh sahifalarda bitta gap va bitta tugma.
+- 2026-11-07: #578 merge (U2). U3 PR: hujjat uchun bitta eshik - "Nima
+  qilaylik?" kartasi (chat, bosh sahifa, Hujjatlar; har amal narxi va natijasi
+  bilan; Playbook / Jadval / muharrir hujjat bilan ochiladi).
+- 2026-11-07: #579 merge (U3). U4 PR: menyu 5 band + "Asboblar" sahifasi
+  (har bo'lim karta: nima qiladi, misol, narx), telefonda pastki panel,
+  oddiy nomlar ("Tayyor buyruqlar", "Firma qoidalari bilan tekshirish",
+  "Ko'p hujjatni solishtirish"), limit qutisi oddiy tilda.
+- 2026-11-07: #580 merge (U4). U5b PR: muharrirda "Shu joy haqida so'rash"
+  chat paneli (oddiy javob zanjiri, har savol 1 chat birligi, javob izoh yoki
+  matn sifatida bir bosishda, Suhbatlarda saqlanadi). UX auditining barcha
+  bosqichlari shu bilan tugaydi; keyingisi P2.
+- 2026-11-07: #581 merge (U5b; UX auditi tugadi). P2 PR (migratsiya 048):
+  mijoz portalida yurist va mijoz yozishmasi - sayt va bot, xabarlar
+  shifrlangan, yuristning xabari mijozga botda matni bilan keladi, mijoz
+  botdan "✉️ Yuristga yozish" bilan javob beradi; AI o'qimaydi.
+- 2026-11-10: #582 merge (P2). P3 PR (migratsiya 049): yurist mijozdan hujjat
+  so'raydi (nomi, muddati), mijoz faylni saytda yoki botga yuborib yuklaydi
+  (bot qaysi so'rovga ekanini tugma bilan so'raydi); fayl shifrlangan, sha256
+  bilan; hech narsa o'qimaydi (OCR / AI yo'q) - yurist "Nima qilaylik?" bilan
+  odatdagi hujjat eshigiga beradi. Keyingisi P4 (jurnal).
+- 2026-11-10: #583 (P3), #584 (audit: `docs/audit/2026-11-10-audit.md`), #585
+  (X3: ilova va sayt, frontend), #586 (X1: xavfsizlik - /link, ro'yxatdan
+  o'tish kodi, master tekshiruvi, parollar, lex.uz host, loglar) merge. X2 PR:
+  barcha /api yozuvlariga umumiy cross-site himoyasi, `/app/` sahifalariga
+  Content-Security-Policy, Word / PDF "bomba" himoyasi.
+- 2026-11-10: #587 (X2) merge. X4 PR (sifat, AI chaqiruvi qo'shilmagan):
+  vektor qidiruvda `ivfflat.probes` 10, lex.uz javob bermagani ajratiladi va
+  foydalanuvchiga aytiladi, tekshirilmay qolgan da'volar sanaladi, iqtibos
+  tekshiruvi ikkala lotin alifbosini bir xil o'qiydi, veb javoblari sifat
+  yozuvi va Boshqaruvda "Javob sifati" ko'rinishi.
+- 2026-11-10: #588 (X4) merge. X5 PR: generatorga to'liq modda (birinchi 4
+  bo'lak), tekshiruvchi uchun bitta qayta urinish, vebda bo'shab qolgan javob
+  uchun limit qaytariladi va "Qayta urinish", bot javobi 2 500 tokengacha,
+  ilova va botda "Javob noto'g'ri yoki to'liq emas" tugmasi.
+- 2026-11-10: #589 (X5) merge. X6 PR (migratsiya 050): uzun hujjat dayjesti
+  bazada shifrlangan holda saqlanadi (deploydan keyin ham, 14 kun), "manba
+  takliflari" arzon yo'lakda.
+- 2026-11-10: #590 (X6) merge. X7 PR: huquqiy javob etalon to'plami
+  (`docs/quality/answer-eval.md`): 67 sintetik savol, AI'siz baholovchi,
+  veb-chat yo'li orqali runner (dry standart; jonli faqat egasi tasdiqlagan
+  sha bilan), ikki hisobotni solishtirish, yurist uchun Excel jadval (javob
+  va agent to'plamlari). Hech bir savol hali tasdiqlanmagan; jonli
+  yurgizilmagan.
+- 2026-11-11: #591 (X7) merge. X8a PR: botdagi da'vo arizasi agenti ulangan
+  akkaunt uchun `agent_runs` navbatida ishlaydi (deploy yoki jarayon
+  o'lganda bajarilgan qadamlar qayta ishlamaydi, natija saytda ham
+  saqlanadi); Boshqaruv -> AI da "Agent ishlari" jadvali (muvaffaqiyat,
+  savol bergani, to'xtash sababi va qadami, vaqt, bir ishga ma'lum narx).
+  Worker'ni alohida jarayonga ajratish qilinmadi (infratuzilma qarori).
+- 2026-11-11: #592 (X8a) merge. X8b PR: "Shartnomani to'liq tekshirish"
+  (`#/shartnoma`) - bitta ishda AI tahlil, firma qoidalari va qonunchilikdan
+  so'zma-so'z iqtibos; narx boshlashdan oldin ko'rinadi (tahlil birliklari:
+  tahlil + qoidalar), har qism alohida hisoblanadi; "Muharrirda takliflar
+  bilan ochish" hujjatni takliflari tayyor holda ochadi. Jonli AI bilan
+  sinalmagan.
+- 2026-11-11: #593 (X8b) merge. Ovoz PR (egasi): ovozli javob ElevenLabs
+  orqali (`src/ai/tts.js`, kalit va ovoz qo'yilguncha VoiceLab), ovozni
+  matnga aylantirish sukut bo'yicha Gemini 3.5 Transcribe (VoiceLab zaxira).
+  Jonli sinalmagan; ElevenLabs modeli o'zbekchani qanday o'qishi egasi
+  tomonidan quloq bilan tekshiriladi (`/api/admin/tts/preview`).

@@ -1,6 +1,6 @@
 # JuristAI universal legal research playbook
 
-Playbook-Version: 1.4.0
+Playbook-Version: 1.5.0
 
 Bu hujjat O'zbekiston huquqi bo'yicha maslahat va tadqiqotning majburiy ichki ish tartibidir. U `core-legal-constitution.md`ga bo'ysunadi, huquqiy manba emas va foydalanuvchiga ko'rsatilmaydi. Konstitutsiyadagi umumiy manba, aniqlik, iqtibos, til, xavfsizlik va noaniqlik qoidalari bu yerda takrorlanmaydi.
 
@@ -53,7 +53,7 @@ Javobdan oldin har bir asosiy huquqiy xulosa tegishli hujjat, aniq norma, Lex.uz
 
 ## 6. Javob shartnomasi
 
-Maslahat javobi oqimli paragraflarda va odatda uch qismda yoziladi: **Huquqiy asos** tatbiq etiladigan normalarni, **Tahlil** ularning faktlarga qo'llanishini, **Xulosa** esa aniq natijani beradi. Bullet nuqtalar (•, ·, *, ●) va raqamli ro'yxatlar ishlatilmaydi; zarur amaliy sanash uchun qisqa tireli ro'yxat mumkin.
+Maslahat javobi oqimli paragraflarda va ikki qismda yoziladi: **Tahlil** hal qiluvchi normadan boshlanib, uni faktlarga qo'llaydi (har bir norma bir marta keltiriladi); **Xulosa** esa savolga to'g'ridan-to'g'ri javob va keyingi qadamni 1-2 gapda beradi, Tahlilni takrorlamaydi. Alohida "Huquqiy asos" bo'limi yozilmaydi. Bullet nuqtalar (•, ·, *, ●) va raqamli ro'yxatlar ishlatilmaydi; zarur amaliy sanash uchun qisqa tireli ro'yxat mumkin.
 
 Har bir norma konstitutsiyadagi yagona iqtibos uslubida o'sha huquqiy da'vo gapining ichida beriladi. Hujjatning to'liq nomi bilan birga uning Lex.uz'da tasdiqlangan rasmiy raqami ham yoziladi: qonun — `O'RQ-XXX`, Prezident qarori — `PQ-XXX`, Prezident farmoni — `PF-XXX`, Vazirlar Mahkamasi qarori — `VMQ-XXX`. Har bir shunday iqtibos Lex.uz'dagi aynan qo'llangan norma bilan bog'lanishi shart; norma raqamisiz asosli hujjat eslatmasi kamida hujjatning rasmiy Lex.uz sahifasiga bog'lanadi. Xom URL, `lex.uz:` prefiksi yoki alohida `Manbalar` bo'limi yozilmaydi. Maxsus norma topilgan bo'lsa, u kengroq umumiy hujjatdan oldin tushuntiriladi.
 

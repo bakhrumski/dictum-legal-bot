@@ -124,7 +124,7 @@ test('live Lex titles link natural Uzbek law-name variants', () => {
     chunk_text: "47-modda. Ta'lim oluvchilarning huquqlari.",
   };
   const linked = linkCitationsInMarkdown(answer, [chunk], 'uz');
-  assert.match(linked, /\[\*\*Ta'lim to'g'risida, 47-modda, tegishli qism\*\*\]\(https:\/\/lex\.uz\/uz\/docs\/-5013007#:~:text=/u);
+  assert.match(linked, /\[\*\*Ta'lim to'g'risida, 47-modda\*\*\]\(https:\/\/lex\.uz\/uz\/docs\/-5013007#:~:text=/u);
 });
 
 test('grouped law provisions are rendered as separate grounded links', () => {
@@ -140,8 +140,8 @@ test('grouped law provisions are rendered as separate grounded links', () => {
   }));
   const linked = linkCitationsInMarkdown(answer, chunks, 'uz');
   assert.strictEqual((linked.match(/\[\*\*Ma'muriy javobgarlik/gu) || []).length, 2);
-  assert.match(linked, /281-modda, tegishli qism/u);
-  assert.match(linked, /294-modda, tegishli qism/u);
+  assert.match(linked, /281-modda/u);
+  assert.match(linked, /294-modda/u);
   assert.strictEqual((linked.match(/\]\(https:\/\/lex\.uz\/docs\/-97664#:~:text=/gu) || []).length, 2);
 });
 
@@ -153,7 +153,7 @@ test('existing Markdown citations are normalized to the canonical named style', 
     source_url: 'https://lex.uz/uz/docs/6257288',
   };
   const linked = linkCitationsInMarkdown(answer, [chunk]);
-  assert.match(linked, /\[\*\*Mehnat kodeksi, 253-modda, tegishli qism\*\*\]/u);
+  assert.match(linked, /\[\*\*Mehnat kodeksi, 253-modda\*\*\]/u);
   assert.doesNotMatch(linked, /https:\/\/lex\.uz\/docs\/111111/u);
 });
 
@@ -175,14 +175,16 @@ test('raw Lex attributions and the separate Manbalar footer are removed', () => 
     source_url: 'https://lex.uz/uz/docs/6257288',
   };
   const normalized = normalizeLegalAnswerCitations(answer, [chunk]);
-  assert.match(normalized, /\[\*\*Mehnat kodeksi, 253-modda, tegishli qism\*\*\]/u);
+  assert.match(normalized, /\[\*\*Mehnat kodeksi, 253-modda\*\*\]/u);
   assert.doesNotMatch(normalized, /Manbalar|lex\.uz:/u);
 });
 
 test('canonical exact links survive cached answers without RAG chunks', () => {
-  const cached = 'Tahlil\n[**Mehnat kodeksi, 161-modda, tegishli qism**](https://lex.uz/uz/docs/6257288#6261450)ga ko‘ra bo‘shatish asoslangan bo‘lishi kerak.';
-  const normalized = normalizeLegalAnswerCitations(cached, []);
-  assert.strictEqual(normalized, cached);
+  // an answer cached before 2026-10-27 still carries "tegishli qism"; a new one has the article alone
+  for (const cached of [
+    'Tahlil\n[**Mehnat kodeksi, 161-modda, tegishli qism**](https://lex.uz/uz/docs/6257288#6261450)ga ko‘ra bo‘shatish asoslangan bo‘lishi kerak.',
+    'Tahlil\n[**Mehnat kodeksi, 161-modda**](https://lex.uz/uz/docs/6257288#6261450)ga ko‘ra bo‘shatish asoslangan bo‘lishi kerak.',
+  ]) assert.strictEqual(normalizeLegalAnswerCitations(cached, []), cached);
 });
 
 test('structural ingest preserves article and qism element IDs', () => {
@@ -283,8 +285,8 @@ test('dashboard renders citations with one canonical named style', () => {
   \`);`, context);
   assert.strictEqual((context.rendered.match(/class="law-citation-link"/gu) || []).length, 2);
   assert.strictEqual((context.rendered.match(/class="legal-source-url"/gu) || []).length, 0);
-  assert.match(context.rendered, /Yo'l harakati qoidalari, 7-band, tegishli band/u);
-  assert.match(context.rendered, /Ma'muriy javobgarlik to'g'risidagi kodeks, 135-modda, tegishli qism/u);
+  assert.match(context.rendered, /Yo'l harakati qoidalari, 7-band/u);
+  assert.match(context.rendered, /Ma'muriy javobgarlik to'g'risidagi kodeks, 135-modda/u);
   assert.match(context.rendered, /https:\/\/lex\.uz\/docs\/-5953883#-5954624/u);
   assert.match(context.rendered, /https:\/\/lex\.uz\/docs\/-97664#-1781411/u);
 });
@@ -421,7 +423,7 @@ test('a Cabinet decision citation includes VMQ number and exact clickable band',
       chunk_text: '41. Bir fanga ajratilgan auditoriya soatining 25 foizi va undan ortiq soatni sababsiz qoldirgan talaba.',
     }]
   );
-  assert.match(normalized, /\[\*\*Oliy ta'lim[\s\S]+\(VMQ-824\), 41-band, tegishli band\*\*\]\(https:\/\/lex\.uz\/uz\/docs\/-5193564#:~:text=/u);
+  assert.match(normalized, /\[\*\*Oliy ta'lim[\s\S]+\(VMQ-824\), 41-band\*\*\]\(https:\/\/lex\.uz\/uz\/docs\/-5193564#:~:text=/u);
   assert.match(normalized, /\)ga ko'ra/u);
 });
 
@@ -437,7 +439,7 @@ test("a law citation includes its O'RQ number and exact clickable article", () =
       chunk_text: "48-modda. Ta'lim oluvchilarning majburiyatlari.",
     }]
   );
-  assert.match(normalized, /\[\*\*Ta'lim to'g'risida \(O'RQ-637\), 48-modda, tegishli qism\*\*\]\(https:\/\/lex\.uz\/uz\/docs\/-5013007#:~:text=/u);
+  assert.match(normalized, /\[\*\*Ta'lim to'g'risida \(O'RQ-637\), 48-modda\*\*\]\(https:\/\/lex\.uz\/uz\/docs\/-5013007#:~:text=/u);
 });
 
 test('a PQ shorthand is expanded to the full official title and linked provision', () => {
@@ -453,7 +455,7 @@ test('a PQ shorthand is expanded to the full official title and linked provision
       chunk_text: "2. Belgilansinki, malakali mutaxassislar uchun alohida tartib qo'llanadi.",
     }]
   );
-  assert.match(normalized, /\[\*\*O'zbekiston Respublikasi hududida[\s\S]+\(PQ-4008\), 2-band, tegishli band\*\*\]\(https:\/\/lex\.uz\/docs\/-4045557#:~:text=/u);
+  assert.match(normalized, /\[\*\*O'zbekiston Respublikasi hududida[\s\S]+\(PQ-4008\), 2-band\*\*\]\(https:\/\/lex\.uz\/docs\/-4045557#:~:text=/u);
 });
 
 test('a Presidential decree citation includes its PF number and Lex link', () => {
@@ -469,7 +471,7 @@ test('a Presidential decree citation includes its PF number and Lex link', () =>
       chunk_text: "1. O'zbekiston — 2030 strategiyasi tasdiqlansin.",
     }]
   );
-  assert.match(normalized, /\[\*\*O'zbekiston — 2030 strategiyasi to'g'risida \(PF-158\), 1-band, tegishli band\*\*\]\(https:\/\/lex\.uz\/docs\/-6600413#:~:text=/u);
+  assert.match(normalized, /\[\*\*O'zbekiston — 2030 strategiyasi to'g'risida \(PF-158\), 1-band\*\*\]\(https:\/\/lex\.uz\/docs\/-6600413#:~:text=/u);
 });
 
 test('a grounded act mention without a locator links to its official Lex document', () => {
@@ -486,20 +488,20 @@ test('a grounded act mention without a locator links to its official Lex documen
 });
 
 test('existing Lex links receive the official identifier across URL language variants', () => {
-  const answer = "[**Ta'lim to'g'risida, 48-modda, tegishli qism**](https://lex.uz/uz/docs/-5013007#-5013954) qo'llanadi.";
+  const answer = "[**Ta'lim to'g'risida, 48-modda**](https://lex.uz/uz/docs/-5013007#-5013954) qo'llanadi.";
   const normalized = normalizeLegalAnswerCitations(answer, [{
     law_name: "Ta'lim to'g'risida",
     document_number: "O'RQ-637",
     source_url: 'https://lex.uz/docs/-5013007',
   }]);
-  assert.match(normalized, /\[\*\*Ta'lim to'g'risida \(O'RQ-637\), 48-modda, tegishli qism\*\*\]/u);
+  assert.match(normalized, /\[\*\*Ta'lim to'g'risida \(O'RQ-637\), 48-modda\*\*\]/u);
 });
 
 test('an adjacent document-root link and exact provision link collapse into one citation', () => {
   const title = "Tashqi reklama va ijtimoiy axborotning aylanish sohasidagi munosabatlarni tartibga solishni yanada takomillashtirish chora-tadbirlari to'g'risida";
   const normalized = normalizeLegalAnswerCitations(
     `Ushbu tartib [${title} (VMQ-428)](https://lex.uz/docs/-6591657)”gi ` +
-    `[${title} (VMQ-428), 3-band, tegishli band](https://lex.uz/docs/-6591657#:~:text=3.%20Vazirlar) ` +
+    `[${title} (VMQ-428), 3-band](https://lex.uz/docs/-6591657#:~:text=3.%20Vazirlar) ` +
     `bilan joriy etilgan.`,
     [{
       law_name: title,
@@ -511,7 +513,7 @@ test('an adjacent document-root link and exact provision link collapse into one 
     }]
   );
   assert.strictEqual((normalized.match(/lex\.uz\/docs\/-6591657/gu) || []).length, 1);
-  assert.match(normalized, /\[(?:\*\*)?Tashqi reklama[\s\S]+\(VMQ-428\), 3-band, tegishli band(?:\*\*)?\]\(https:\/\/lex\.uz\/docs\/-6591657#:~:text=/u);
+  assert.match(normalized, /\[(?:\*\*)?Tashqi reklama[\s\S]+\(VMQ-428\), 3-band(?:\*\*)?\]\(https:\/\/lex\.uz\/docs\/-6591657#:~:text=/u);
   assert.doesNotMatch(normalized, /\)”gi\s+\[/u);
 });
 
@@ -561,7 +563,7 @@ test('2026-10-01 production answer: one clean Latin link per citation, article l
   assert.ok(!out.includes('(798) (798)'), 'the number is not repeated');
   assert.ok(!out.includes('lex.uz/uz/docs/6257288'), 'the original edition is not linked');
   // A code has no number of its own (owner): no "(798)" next to it.
-  assert.match(out, /\[\*\*Mehnat kodeksi, 561-modda, tegishli qism\*\*\]\(https:\/\/lex\.uz\/docs\/-6257288#:~:text=561-modda\)/u);
+  assert.match(out, /\[\*\*Mehnat kodeksi, 561-modda\*\*\]\(https:\/\/lex\.uz\/docs\/-6257288#:~:text=561-modda\)/u);
   assert.ok(!out.includes('tasdiqlash'), "the approving law's title is dropped with the aside");
 });
 
@@ -719,4 +721,51 @@ test('an item link marks the whole item up to the next one; a bare article in th
   assert.ok(/526-modda \(manbasi ko'rsatilmagan\)/u.test(linkBareArticleRefs('[**A**](https://lex.uz/docs/-6257288) va [**B**](https://lex.uz/docs/-4422250). Bu 526-modda bilan.', two, 'uz')), 'two acts hold it: still marked');
 });
 
+test('a title written before its own link is said once; the model\'s disclaimer sentence at a paragraph end goes; test mode names why the claim check did not run (2026-10-13)', () => {
+  const { tidyAroundLinks } = require('../src/rag/citation-utils');
+  const T = 'Raqamli texnologiyalar sohasida “IT-visa” berish tartibi to‘g‘risida';
+  assert.strictEqual(tidyAroundLinks(`Masalalar ${T} ([${T} (VMQ-734)](https://lex.uz/docs/-7851775)) bilan.`), `Masalalar [${T} (VMQ-734)](https://lex.uz/docs/-7851775) bilan.`);
+  const other = "Boshqa matn ([**Mehnat kodeksi (O'RQ-798)**](https://lex.uz/docs/-1)) qoladi.";
+  assert.strictEqual(tidyAroundLinks(other), other, 'another text before the bracket stays');
+  const { stripModelDisclaimer } = require('../src/agents/telegram-agent');
+  assert.strictEqual(stripModelDisclaimer('Xulosa: murojaat qiling. Javob AI tahliliga asoslanadi; muhim qaror uchun litsenziyalangan yuristga murojaat qiling.\n\n💬 x'), 'Xulosa: murojaat qiling.\n\n💬 x');
+  assert.strictEqual(stripModelDisclaimer('Javob berish muddati 10 kun; yurist bilan kelishing.'), 'Javob berish muddati 10 kun; yurist bilan kelishing.');
+  const src = require('fs').readFileSync(require('path').join(__dirname, '../src/agents/telegram-agent.js'), 'utf8');
+  assert.ok(/guardMeta\.status === 'unverified' && guardMeta\.reason/u.test(src) && /testModeNote\(testAccount, currentRequestSpend\(\)\)\}\$\{guardWhy\}/u.test(src), 'only under a test-mode answer');
+});
+
 console.log(`\n${passed} citation deep-link tests passed.\n`);
+
+test('an LLC question gets company documents, never a complaint against a fine (2026-10-28)', () => {
+  const question = 'MChJga yangi ishtirokchi qabul qilish uchun qanday hujjatlar kerak?';
+  const answer = "Asosiy hujjatlar — umumiy yig'ilish bayonnomasi, yangilangan ustav va ta'sis shartnomasi. Ro'yxatga olish tartibini Vazirlar Mahkamasi qarori bilan tekshiring.";
+  const actions = buildLegalNextActions({ question, answer, topic: '' });
+  const labels = actions.map(a => a.label).join(' | ');
+  assert.match(labels, /Umumiy yig'ilish qarori/u);
+  assert.match(labels, /ishtirokchining jamiyatga kirish/u);
+  assert.doesNotMatch(labels, /jarima|shikoyat|da'vo/iu);
+  assert.strictEqual(actions[0].inputSchema, 'corporate-decision');
+  assert.strictEqual(actions[0].serviceSlug, 'legal-document');
+  assert.strictEqual(actions[actions.length - 1].kind, 'attorney');
+});
+
+test('a meeting "bayonnoma" in the answer does not decide the branch; an offence still does', () => {
+  const fine = buildLegalNextActions({ question: 'YPX inspektori jarima soldi, nima qilay?', answer: '', topic: '' });
+  assert.match(fine[0].label, /jarima ustidan shikoyat/u);
+  const minutes = buildLegalNextActions({ question: "Umumiy yig'ilish bayonnomasini kim imzolaydi?", answer: '', topic: '' });
+  assert.doesNotMatch(minutes.map(a => a.label).join(' '), /jarima/u);
+});
+
+test('an informational question is not offered a claim or a complaint', () => {
+  const labels = buildLegalNextActions({ question: 'Pasport qanday olinadi?', answer: '', topic: '' }).map(a => a.label).join(' | ');
+  assert.doesNotMatch(labels, /da'vo|shikoyat|talabnoma/iu);
+  const tax = buildLegalNextActions({ question: "Mol-mulk solig'i imtiyozi kimga beriladi?", answer: '', topic: 'soliq' }).map(a => a.label).join(' | ');
+  assert.doesNotMatch(tax, /shikoyat/iu);
+  const debt = buildLegalNextActions({ question: 'Qarz berdim, qaytarmayapti', answer: '', topic: 'fuqarolik' }).map(a => a.label).join(' | ');
+  assert.match(debt, /da'vo arizasi/iu);
+});
+
+test('the bot opens a company document as "other" with its own name', () => {
+  const bot = fs.readFileSync(path.join(__dirname, '../src/bot/bot.js'), 'utf8');
+  assert.match(bot, /action\.serviceSlug === 'legal-document'\s*\?\s*'other'/u);
+});

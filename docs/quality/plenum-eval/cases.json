@@ -1,0 +1,26 @@
+{
+  "note": "S2 Plenum selection, synthetic questions. `norms` stands in for what retrieval would find (act name as the corpus writes it, articles). Not reviewed by a lawyer; no article number here is a claim about the law - each is the article a lawyer would check first, to be corrected in review.",
+  "reviewed": false,
+  "cases": [
+    { "id": "mk-1", "lang": "uz", "q": "Ish beruvchi meni ogohlantirmasdan ishdan bo'shatdi, ishga tiklanish uchun sudga murojaat qilsam bo'ladimi?", "norms": [["O'zbekiston Respublikasining Mehnat kodeksi", ["161", "162"]]] },
+    { "id": "mk-2", "lang": "uz", "q": "Majburiy progul uchun o'rtacha ish haqini undirish mumkinmi?", "norms": [["O'zbekiston Respublikasining Mehnat kodeksi", ["275", "276"]]] },
+    { "id": "mk-3", "lang": "uz", "q": "Xodimga moddiy zararni to'liq qoplash majburiyati qachon yuklatiladi?", "norms": [["O'zbekiston Respublikasining Mehnat kodeksi", ["343", "344"]]] },
+    { "id": "fk-1", "lang": "uz", "q": "Shartnoma bo'yicha neustoyka juda katta, sud uni kamaytirishi mumkinmi?", "norms": [["O'zbekiston Respublikasining Fuqarolik kodeksi (1-qism)", ["326", "333"]]] },
+    { "id": "fk-2", "lang": "uz", "q": "Da'vo muddati o'tib ketgan bo'lsa, qarzni undirish mumkinmi?", "norms": [["O'zbekiston Respublikasining Fuqarolik kodeksi (1-qism)", ["150", "153", "159"]]] },
+    { "id": "fk-3", "lang": "uz", "q": "Bitimni haqiqiy emas deb topish va mulkni qaytarish tartibi qanday?", "norms": [["O'zbekiston Respublikasining Fuqarolik kodeksi (1-qism)", ["113", "114", "116"]]] },
+    { "id": "fk-4", "lang": "uz", "q": "Ma'naviy zararni qoplash miqdori qanday belgilanadi?", "norms": [["O'zbekiston Respublikasining Fuqarolik kodeksi (1-qism)", ["1021", "1022"]]] },
+    { "id": "fk-5", "lang": "uz", "q": "Meros qabul qilish muddatini o'tkazib yuborganman, tiklash mumkinmi?", "norms": [["O'zbekiston Respublikasining Fuqarolik kodeksi (1-qism)", ["1144", "1145"]]] },
+    { "id": "ok-1", "lang": "uz", "q": "Ota bolaga aliment to'lamayapti, alimentni qanday undirsam bo'ladi?", "norms": [["O'zbekiston Respublikasining Oila kodeksi", ["96", "99"]]] },
+    { "id": "ok-2", "lang": "uz", "q": "Nikohdan ajralishda er-xotinning umumiy mulki qanday bo'linadi?", "norms": [["O'zbekiston Respublikasining Oila kodeksi", ["23", "27"]]] },
+    { "id": "jk-1", "lang": "uz", "q": "Firibgarlik bilan pul olgan shaxsga qanday jazo tayinlanadi?", "norms": [["O'zbekiston Respublikasining Jinoyat kodeksi", ["168"]]] },
+    { "id": "jk-2", "lang": "uz", "q": "Qasddan badanga og'ir shikast yetkazganlik uchun javobgarlik qanday?", "norms": [["O'zbekiston Respublikasining Jinoyat kodeksi", ["104"]]] },
+    { "id": "jk-3", "lang": "uz", "q": "Jazoni o'tashdan muddatidan ilgari shartli ozod qilish qachon qo'llaniladi?", "norms": [["O'zbekiston Respublikasining Jinoyat kodeksi", ["73"]]] },
+    { "id": "fpk-1", "lang": "uz", "q": "Sud buyrug'ini bekor qilish uchun qanday ariza beriladi?", "norms": [["O'zbekiston Respublikasining Fuqarolik protsessual kodeksi", ["167", "174"]]] },
+    { "id": "ujk-1", "lang": "uz", "q": "Uy-joydan chiqarish uchun sud qanday asoslarni tekshiradi?", "norms": [["O'zbekiston Respublikasining Uy-joy kodeksi", ["105", "107"]]] },
+    { "id": "mjtk-1", "lang": "uz", "q": "Ma'muriy jarima ustidan shikoyat qilish muddati qancha?", "norms": [["O'zbekiston Respublikasining Ma'muriy javobgarlik to'g'risidagi kodeksi", ["315", "320"]]] },
+    { "id": "ru-1", "lang": "ru", "q": "Можно ли восстановиться на работе после увольнения без предупреждения?", "norms": [["Трудовой кодекс Республики Узбекистан", ["161", "162"]]] },
+    { "id": "ru-2", "lang": "ru", "q": "Может ли суд уменьшить неустойку по договору поставки?", "norms": [["Гражданский кодекс Республики Узбекистан", ["326", "333"]]] },
+    { "id": "ru-3", "lang": "ru", "q": "Как взыскать алименты на несовершеннолетнего ребёнка?", "norms": [["Семейный кодекс Республики Узбекистан", ["96", "99"]]] },
+    { "id": "none-1", "lang": "uz", "q": "IT Park rezidenti bo'lish uchun qanday hujjatlar kerak?", "norms": [["Vazirlar Mahkamasining qarori", ["5", "17"]]] }
+  ]
+}

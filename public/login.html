@@ -7,7 +7,9 @@
 <meta name="description" content="JuristAI hisobingizga kiring — Telegram orqali, bir necha soniyada.">
 <meta name="robots" content="noindex">
 <meta name="theme-color" content="#070a14">
-<link rel="icon" href="/favicon-256.png">
+<link rel="icon" href="/favicon.svg?v=2" type="image/svg+xml">
+<link rel="icon" href="/favicon-32.png?v=2" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2">
 <!-- One typeface, self-hosted: css/fonts.css -->
 <link rel="preload" href="/fonts/space-grotesk/space-grotesk-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/space-grotesk/space-grotesk-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -204,7 +206,7 @@
           <div class="recovery-step" id="recoveryStep3">
             <div class="form-group has-icon">
               <svg class="input-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M18 8h-1V6c0-2.8-2.2-5-5-5S7 3.2 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.7 1.4-3.1 3.1-3.1s3.1 1.4 3.1 3.1v2z"/></svg>
-              <input type="password" id="recoveryNewPassword" placeholder="yangi parol (kamida 6 belgi)" minlength="6" required autocomplete="new-password">
+              <input type="password" id="recoveryNewPassword" placeholder="yangi parol (kamida 10 belgi)" minlength="10" required autocomplete="new-password">
             </div>
             <div class="form-group has-icon">
               <svg class="input-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M18 8h-1V6c0-2.8-2.2-5-5-5S7 3.2 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.7 1.4-3.1 3.1-3.1s3.1 1.4 3.1 3.1v2z"/></svg>
@@ -387,7 +389,10 @@
         function setRegType(type) {
             document.querySelector('.register-form').setAttribute('data-type', type);
             document.querySelectorAll('.type-toggle button').forEach(b => b.classList.remove('active'));
-            event.target.classList.add('active');
+            // the clicked button, without relying on the non-standard global `event` (Firefox)
+            document.querySelectorAll('.type-toggle button').forEach(function (b) {
+                if ((b.getAttribute('onclick') || '').indexOf("'" + type + "'") > -1) b.classList.add('active');
+            });
             document.getElementById('privacyCheck').checked = false;
             document.getElementById('ofertaCheck').checked = false;
             document.getElementById('privacyError').style.display = 'none';
@@ -575,7 +580,8 @@
                     }
                     try { localStorage.setItem('jai-login-method', 'password'); } catch (_) {}
                     if (data.twofa) { show2faStep(data.token); return; }
-                    window.location.href = '/dashboard.html';
+                    // keep ?redirect= and workspace invites, as the Telegram flow does
+                    window.location.href = (typeof postAuthDestination === 'function') ? postAuthDestination('/app/') : '/app/';
                 } else {
                     errorDiv.textContent = data.error || 'Kirish xato';
                     if (data.botUrl) {
@@ -624,7 +630,7 @@
                         body: JSON.stringify({ token: token, code: code })
                     });
                     var d = await r.json();
-                    if (r.ok && d.success) { window.location.href = '/dashboard.html'; return; }
+                    if (r.ok && d.success) { window.location.href = (typeof postAuthDestination === 'function') ? postAuthDestination('/app/') : '/app/'; return; }
                     if (d.expired) { location.reload(); return; }
                     document.getElementById('twofaErr').textContent = d.error || 'Kod noto\'g\'ri';
                     btn.disabled = false; btn.textContent = 'Tasdiqlash';
@@ -677,6 +683,11 @@
             }
         })();
 
+        // Password recovery state (declared BEFORE the page-load IIFE below, which
+        // writes recoveryToken for ?recover= links; a later `let` threw a TDZ error)
+        let recoveryToken = '';
+        let recoveryUsername = '';
+
         // Handle ?recover=TOKEN and ?error= in URL on page load
         (function() {
             const params = new URLSearchParams(window.location.search);
@@ -716,9 +727,6 @@
             if (err) history.replaceState({}, '', '/login.html');
         })();
 
-        // Password recovery state
-        let recoveryToken = '';
-        let recoveryUsername = '';
 
         // Telegram-based recovery (no username needed — bot identifies by telegram_user_id)
         let _tgRecovPollInterval = null;
@@ -874,8 +882,8 @@
             mainError.textContent = '';
             mainError.classList.remove('show');
 
-            if (newPass.length < 6) {
-                errorEl.textContent = 'Parol kamida 6 ta belgi bo\'lishi kerak';
+            if (newPass.length < 10) {
+                errorEl.textContent = 'Parol kamida 10 ta belgi bo\'lishi kerak';
                 errorEl.style.display = 'block';
                 return;
             }
@@ -1000,6 +1008,7 @@
                 otpError.style.display = 'block';
                 return;
             }
+            var verifyBtnHtml = verifyBtn.innerHTML;
             verifyBtn.disabled = true;
             verifyBtn.textContent = '...';
             try {
@@ -1010,18 +1019,18 @@
                 });
                 const data = await resp.json();
                 if (resp.ok) {
-                    window.location.href = postAuthDestination(data.redirect || '/dashboard.html');
+                    window.location.href = postAuthDestination(data.redirect || '/app/');
                 } else {
                     otpError.textContent = data.error || 'Xatolik yuz berdi';
                     otpError.style.display = 'block';
                     verifyBtn.disabled = false;
-                    verifyBtn.textContent = '✓';
+                    verifyBtn.innerHTML = verifyBtnHtml;
                 }
             } catch(err) {
                 otpError.textContent = 'Xatolik: ' + err.message;
                 otpError.style.display = 'block';
                 verifyBtn.disabled = false;
-                verifyBtn.textContent = '✓';
+                verifyBtn.innerHTML = verifyBtnHtml;
             }
         }
 
@@ -1079,6 +1088,7 @@
                 otpError.style.display = 'block';
                 return;
             }
+            var verifyBtnHtml = verifyBtn.innerHTML;
             verifyBtn.disabled = true;
             verifyBtn.textContent = '...';
             try {
@@ -1089,20 +1099,20 @@
                 });
                 const data = await resp.json();
                 if (resp.ok) {
-                    window.location.href = postAuthDestination(data.redirect || '/dashboard.html');
+                    window.location.href = postAuthDestination(data.redirect || '/app/');
                 } else {
                     otpError.textContent = data.error === 'sinov_used'
                         ? 'Bu qurilmada yoki Telegram hisobda Sinov tarifi allaqachon ishlatilgan.'
                         : (data.error || 'Xatolik yuz berdi');
                     otpError.style.display = 'block';
                     verifyBtn.disabled = false;
-                    verifyBtn.textContent = '✓';
+                    verifyBtn.innerHTML = verifyBtnHtml;
                 }
             } catch(err) {
                 otpError.textContent = 'Xatolik: ' + err.message;
                 otpError.style.display = 'block';
                 verifyBtn.disabled = false;
-                verifyBtn.textContent = '✓';
+                verifyBtn.innerHTML = verifyBtnHtml;
             }
         }
 </script>

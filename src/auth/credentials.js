@@ -206,6 +206,8 @@ async function setCredentials(pool, { adminId, sid, login: rawLogin, password, c
       `DELETE FROM user_sessions WHERE (sess->>'adminId') = $1::text AND ($2::text IS NULL OR sid <> $2)`,
       [String(adminId), sid ? String(sid) : null]);
     await client.query('COMMIT');
+    // other sessions ended above; the account's Word / Google Docs panels too
+    try { await require('../addin/word-addin').revokeAllForAdmin(client, adminId); } catch (e) { console.error('[CREDENTIALS] add-in revoke failed:', e.message); }
     return { status: 200, ok: true, login: r.rows[0].username };
   } catch (e) {
     await client.query('ROLLBACK').catch(() => {});

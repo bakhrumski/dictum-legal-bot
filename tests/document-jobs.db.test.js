@@ -167,6 +167,13 @@ const used = async (user) => {
       commitUsage(out);
     });
     assert.deepStrictEqual(cut, { analysis: 'committed', opinion: 'released' });
+    // 2026-11-05: the stream was cut before its first word - nothing is charged
+    const silent = await twoService(user, async (out) => {
+      out.headersSent = true;
+      out.writableFinished = false;
+      tiers.commitUsage(out);
+    });
+    assert.deepStrictEqual(silent, { analysis: 'released', opinion: 'released' });
     const failedRun = await twoService(user, async (out) => { out.status(502).json({ error: 'AI xizmati javob bermadi' }); });
     assert.deepStrictEqual(failedRun, { analysis: 'released', opinion: 'released' });
     assert.deepStrictEqual(await used(user), { chat: 0, analysis: 2, opinion: 0 });

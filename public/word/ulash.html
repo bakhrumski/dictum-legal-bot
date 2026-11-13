@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<link rel="icon" href="/favicon.svg?v=2" type="image/svg+xml">
+<link rel="icon" href="/favicon-32.png?v=2" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Word'ni ulash — JuristAI</title>
+<link rel="stylesheet" href="/app/fonts.css">
+<link rel="stylesheet" href="/word/taskpane.css?v=2">
+<style>
+  body{display:flex;min-height:100vh;align-items:center;justify-content:center;padding:24px}
+  .box{width:min(440px,100%);background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:28px}
+  .brand{display:block;margin-bottom:22px}
+  input.codein{width:100%;font:600 24px/1 ui-monospace,Consolas,monospace;letter-spacing:.2em;text-transform:uppercase;text-align:center;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--soft);margin:6px 0 14px}
+  .ok{color:var(--ok);font-weight:500}
+  .foot{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="box">
+  <span class="brand"><img class="wm wm-l" src="/word/assets/wordmark-light.png" alt="JuristAI" width="67" height="22"><img class="wm wm-d" src="/word/assets/wordmark-dark.png" alt="" aria-hidden="true" width="67" height="22"></span>
+  <div id="vLoad"><p class="muted">Yuklanmoqda…</p></div>
+  <div id="vAsk" hidden>
+    <h1>Word'ni ulash</h1>
+    <p class="muted">Word'dagi JuristAI paneli <b id="acc"></b> akkauntiga ulanadi va shu akkaunt tarifi bilan ishlaydi. O'zingizning Word panelingizda ko'rinib turgan 6 belgili kodni kiriting.</p>
+    <p class="muted" style="font-size:12.5px">Kodni kimdir sizga xabar yoki havola orqali yuborgan bo'lsa, kiritmang: u sizning akkauntingizni o'z kompyuteriga ulab oladi.</p>
+    <input class="codein" id="code" maxlength="8" autocomplete="off" spellcheck="false" aria-label="Ulash kodi" placeholder="ABC123">
+    <button type="button" class="pill wide" id="go">Tasdiqlash</button>
+    <p class="err" id="err" hidden></p>
+  </div>
+  <div id="vDone" hidden>
+    <h1 class="ok">Ulandi</h1>
+    <p class="muted">Word'ga qayting — panel bir necha soniyada ochiladi. Bu oynani yopishingiz mumkin.</p>
+  </div>
+  <div class="foot" id="foot" hidden>
+    <span id="conn"></span>
+    <button type="button" class="link" id="revoke" hidden>Barcha Word ulanishlarini uzish</button>
+  </div>
+</div>
+<script src="/word/ulash.js?v=2"></script>
+</body>
+</html>
