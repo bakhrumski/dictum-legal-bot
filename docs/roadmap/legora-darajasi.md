@@ -509,3 +509,5 @@ nima o'lchandi.
   borgan) - raqam bo'yicha topilgan hujjat nomi javobda yozilgan nomga mos
   kelmasa, havola qo'yilmaydi; reyestrdagi qonunning yalang'och raqami
   "O'RQ-N" deb o'qiladi.
+- 2026-11-21: #595 merge. Keyingi PR: lex.uz'da boshqa hujjatga tegishli
+  bo'lib chiqqan raqam javob matnidan ham olib tashlanadi (nom qoladi).

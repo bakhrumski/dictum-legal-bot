@@ -75,6 +75,39 @@ const SENTENCE = n => `Bu shartlar O'zbekiston Respublikasining "Valyuta tartibg
     assert.strictEqual(cu.getChunkDocumentIdentifier({ law_name: 'Biror qaror', document_number: '684', source_url: 'https://lex.uz/docs/-999999999' }), '684', 'an act outside the registry keeps its number as it came');
   });
 
+  await test('the wrong number leaves the text too: with its brackets, out of a fuller bracket, or bare; the title and everything else stay', async () => {
+    const out = await h.hydrateMentionedOfficialActChunks(SENTENCE(1010), [], { search: async () => [act(TEACHERS, 1010, 7000001)] });
+    assert.deepStrictEqual(out.removed, ["O'RQ-1010"]);
+    assert.strictEqual(out.answer, SENTENCE(1010).replace(" (O'RQ-1010)", ''));
+    assert.match(out.answer, /"Valyuta tartibga solish to'g'risida"gi Qonuni talablariga muvofiq/u);
+    const M = [{ identifier: "O'RQ-1010", named: "Valyuta tartibga solish to'g'risida" }];
+    const strip = t => h.stripMismatchedIdentifiers(t, M).answer;
+    assert.strictEqual(strip(`"Valyuta tartibga solish to'g'risida"gi Qonun (O'RQ-1010, 20-modda) bo'yicha.`), `"Valyuta tartibga solish to'g'risida"gi Qonun (20-modda) bo'yicha.`);
+    assert.strictEqual(strip(`"Valyuta tartibga solish to'g'risida"gi Qonun O'RQ-1010-son talablariga ko'ra.`), `"Valyuta tartibga solish to'g'risida"gi Qonun talablariga ko'ra.`);
+    assert.strictEqual(strip(`«Valyuta tartibga solish to'g'risida»gi Qonun (O‘RQ–1010) va boshqalar.`), `«Valyuta tartibga solish to'g'risida»gi Qonun (O‘RQ–1010) va boshqalar.`.replace(' (O‘RQ–1010)', ''), 'any written form of the same number');
+    const elsewhere = `Pedagoglar haqidagi O'RQ-1010 alohida hujjat. "Valyuta tartibga solish to'g'risida"gi Qonun (O'RQ-1010) esa boshqa.`;
+    assert.strictEqual(strip(elsewhere), `Pedagoglar haqidagi O'RQ-1010 alohida hujjat. "Valyuta tartibga solish to'g'risida"gi Qonun esa boshqa.`, 'the same number written about its own act is left alone');
+  });
+
+  await test('nothing is removed when the number is right, unknown to lex.uz, or stands with no title', async () => {
+    const right = await h.hydrateMentionedOfficialActChunks(SENTENCE(573), [], { search: async () => [act(CURRENCY, 573, 4562834)] });
+    assert.deepStrictEqual([right.removed, right.answer], [[], SENTENCE(573)]);
+    const unknown = await h.hydrateMentionedOfficialActChunks(SENTENCE(1010), [], { search: async () => [] });
+    assert.deepStrictEqual([unknown.removed, unknown.answer, unknown.unresolved], [[], SENTENCE(1010), ["O'RQ-1010"]], 'a number lex.uz did not show is not proof of an error');
+    const bare = "Bu masala O'RQ-1010 bilan tartibga solinadi.";
+    const noTitle = await h.hydrateMentionedOfficialActChunks(bare, [], { search: async () => [act(TEACHERS, 1010, 7000001)] });
+    assert.deepStrictEqual([noTitle.removed, noTitle.answer], [[], bare]);
+  });
+
+  await test('every answer path goes on with the cleaned text', () => {
+    const fs = require('fs'), path = require('path');
+    const read = f => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
+    assert.match(read('src/api/server.js'), /if \(mentionedActs\.removed && mentionedActs\.removed\.length\) displayReply = mentionedActs\.answer;/u);
+    assert.match(read('src/api/server.js'), /mentionedActs\.removed\.length\) analysis = mentionedActs\.answer;/u);
+    assert.strictEqual((read('src/agents/telegram-agent.js').match(/hydrated\.removed\.length\) (?:korpusAnswer|text) = hydrated\.answer;/gu) || []).length, 2);
+    assert.match(read('src/workspace/legal-answer-generator.js'), /mentionedActs\.removed\.length\) reply = mentionedActs\.answer;/u);
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);
 })();

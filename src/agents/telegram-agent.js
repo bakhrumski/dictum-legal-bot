@@ -622,6 +622,7 @@ async function generateAnswer(question, turns) {
     if (D.hydrateMentionedOfficialActChunks) {
       const hydrated = await D.hydrateMentionedOfficialActChunks(korpusAnswer, chunks, { topic });
       chunks = hydrated.chunks;
+      if (hydrated.removed && hydrated.removed.length) korpusAnswer = hydrated.answer;
       korpusRepealed = hydrated.repealed || [];
     }
     if (D.hydrateLexAnchors) await D.hydrateLexAnchors(chunks, korpusAnswer);
@@ -682,6 +683,7 @@ TELEGRAM FORMATI (majburiy):
   if (D.hydrateMentionedOfficialActChunks) {
     const hydrated = await D.hydrateMentionedOfficialActChunks(text, chunks, { topic });
     chunks = hydrated.chunks;
+    if (hydrated.removed && hydrated.removed.length) text = hydrated.answer; // a number that belongs to another act
     repealedActs = hydrated.repealed || [];
   }
   let lexCrossCheck = { status: 'skipped', checked: false };
