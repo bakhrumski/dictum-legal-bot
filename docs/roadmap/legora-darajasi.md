@@ -503,3 +503,9 @@ nima o'lchandi.
   matnga aylantirish sukut bo'yicha Gemini 3.5 Transcribe (VoiceLab zaxira).
   Jonli sinalmagan; ElevenLabs modeli o'zbekchani qanday o'qishi egasi
   tomonidan quloq bilan tekshiriladi (`/api/admin/tts/preview`).
+- 2026-11-21: #594 (ovoz) merge qilingan. Havola PR: javobdagi qonun raqami
+  boshqa hujjatga bog'lanib qolishi tuzatildi (egasi: "Valyuta tartibga
+  solish to'g'risida"gi Qonun havolasi pedagoglar haqidagi qonunga olib
+  borgan) - raqam bo'yicha topilgan hujjat nomi javobda yozilgan nomga mos
+  kelmasa, havola qo'yilmaydi; reyestrdagi qonunning yalang'och raqami
+  "O'RQ-N" deb o'qiladi.
