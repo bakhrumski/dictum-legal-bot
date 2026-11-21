@@ -17,7 +17,7 @@
 // a.role IN ('master', 'lawyer', 'student')).
 const STAFF_ROLES = Object.freeze(['master', 'lawyer', 'student']);
 
-const ROLE_LABELS = Object.freeze({ master: 'Admin', lawyer: 'Yurist', student: 'Student', user: 'Foydalanuvchi' });
+const ROLE_LABELS = Object.freeze({ master: 'Admin', lawyer: 'Ekspert', student: 'Student', user: 'Foydalanuvchi' });
 
 function normalizeRole(role) {
   return typeof role === 'string' ? role.trim().toLowerCase() : '';
@@ -99,7 +99,28 @@ function dashboardUrl(env = process.env) {
   return /\/[^/]+\.html$/iu.test(new URL(base).pathname) ? base : `${base}/dashboard.html`;
 }
 
+/** The site's origin for links: the same choice as dashboardUrl, path dropped. */
+function siteOrigin(env = process.env) {
+  return new URL(dashboardUrl(env)).origin;
+}
+
+/** A page of the new app (public/app/), e.g. appUrl('#/tahlil'). */
+function appUrl(hash = '', env = process.env) {
+  const h = String(hash || '').replace(/^#?\/?/u, '');
+  return `${siteOrigin(env)}/app/${h ? `#/${h}` : ''}`;
+}
+
+/**
+ * A staff message's link (2026-11-03, owner): the request itself in the
+ * app's queue (public/app/queue.js), so one tap opens it to answer; the
+ * queue when there is no request id. The old dashboard is the master's only.
+ */
+function queueUrl(requestId, env = process.env) {
+  const id = parseInt(requestId, 10);
+  return appUrl(Number.isInteger(id) && id > 0 ? `navbat/${id}` : 'navbat', env);
+}
+
 module.exports = {
   STAFF_ROLES, ROLE_LABELS, normalizeRole, isStaffRole, isMasterRole, roleLabel,
-  getLinkedAccount, privateSenderId, chatRoute, dashboardUrl,
+  getLinkedAccount, privateSenderId, chatRoute, dashboardUrl, siteOrigin, appUrl, queueUrl,
 };

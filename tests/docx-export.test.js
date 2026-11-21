@@ -83,7 +83,7 @@ async function test(name, fn) {
 
   await test('the export routes send .docx, not HTML as .doc', () => {
     const routes = fs.readFileSync(path.join(__dirname, '..', 'src', 'drafting', 'routes.js'), 'utf8');
-    assert.ok(/const docx = await htmlToDocx\(stripEmbeddedFonts\(body\), \{ title, lang \}\);/.test(routes));
+    assert.ok(/const docx = await htmlToDocx\(stripEmbeddedFonts\(body\), \{ title, lang, legal: true \}\);/.test(routes));
     assert.ok(/filename="\$\{baseName\}\.docx"/.test(routes));
     const sender = routes.slice(routes.indexOf('async function sendExport'), routes.indexOf('async function sendExport') + 1500);
     assert.ok(!/application\/msword/.test(sender), 'the export sender no longer sends HTML as msword');

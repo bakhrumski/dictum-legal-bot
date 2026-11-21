@@ -1,0 +1,10 @@
+BEGIN;
+DROP TABLE IF EXISTS public.matter_client_items;
+DROP TABLE IF EXISTS public.matter_deadlines;
+DROP TABLE IF EXISTS public.matter_client_invites;
+DROP TABLE IF EXISTS public.matter_clients;
+DROP TABLE IF EXISTS public.matter_stage_history;
+ALTER TABLE public.matters DROP COLUMN IF EXISTS closed_at;
+ALTER TABLE public.matters DROP COLUMN IF EXISTS client_stage_at;
+ALTER TABLE public.matters DROP COLUMN IF EXISTS client_stage;
+COMMIT;

@@ -8,6 +8,11 @@ const {
 
 const OFFICIAL_ID_RE = /(?<![\p{L}\p{N}])(O['`\u2018\u2019\u02bb\u02bc]?RQ|PQ|PF|VMQ|VM|\u040e\u0420\u049a|\u041f\u049a|\u041f\u0424|\u0412\u041c\u049a|\u0412\u041c|\u0417\u0420\u0423|\u041f\u041f|\u0423\u041f)\s*[-\u2013\u2014]?\s*(\d{1,6}(?:-[IVXLCDM]+)?)(?![\p{L}\p{N}])/giu;
 
+// Words that say nothing about WHICH act is meant (by their start, so every case form counts): the 2026-11-21
+// answer linked "Valyuta tartibga solish to'g'risida"gi Qonun to a law on teachers because the sentence and that
+// law's title shared only "Respublikasining" - twice in the title, so it counted as two matching words.
+const GENERIC = /^(?:ozbek|respublika|togris|qaror|farmon|qonun|kodeks|haqida|kiritish|ozgart|qoshimcha|munosabat|bilan|hamda|uchun|yilda|tegishli|mazkur|ushbu|tasdiql|chora|tadbir|nizom|узбек|республик|закон|постановлен|указ|кодекс|внесен|изменен|дополнен)/u;
+
 function normalizeWords(value = '') {
   return String(value || '')
     .toLocaleLowerCase('uz')
@@ -17,10 +22,31 @@ function normalizeWords(value = '') {
     .replace(/https?:\/\/\S+/giu, ' ')
     .replace(/[^a-z\u0430-\u044f\u04510-9\s]/giu, ' ')
     .split(/\s+/u)
-    .filter((word) => word.length >= 4 && ![
-      'ozbekiston', 'respublikasi', 'togrisida', 'qarori', 'farmoni',
-      'qonuni', 'yildagi', 'tegishli', 'mazkur', 'ushbu',
-    ].includes(word));
+    .filter((word) => word.length >= 4 && !GENERIC.test(word));
+}
+
+/** Word starts (5 letters), each once: "valyuta" and "valyutani" are one word, a word repeated in a title counts once. */
+const stems = (value) => new Set(normalizeWords(value).map(word => word.slice(0, 5)));
+function sharedStems(a, b) {
+  const other = stems(b);
+  let n = 0;
+  for (const st of stems(a)) if (other.has(st)) n++;
+  return n;
+}
+
+/**
+ * The title the answer itself gives the act, when it names one right before the number:
+ * `"Valyuta tartibga solish to'g'risida"gi Qonuni (O'RQ-573)` -> "Valyuta tartibga solish to'g'risida".
+ * '' when no quoted title stands within 200 characters before the number in the same sentence.
+ */
+function namedTitleBefore(text = '', index = 0) {
+  const before = String(text || '').slice(Math.max(0, index - 200), index);
+  const sentence = before.slice(Math.max(before.lastIndexOf('. '), before.lastIndexOf('\n')) + 1);
+  const quoted = [...sentence.matchAll(/[\u00ab"\u201c\u201e]([^\u00ab\u00bb"\u201c\u201d\u201e]{6,180})[\u00bb"\u201d]/gu)];
+  const last = quoted[quoted.length - 1];
+  // the title must lead up to the number: only the act's form word, a bracket or a comma may stand between them
+  if (!last || sentence.length - (last.index + last[0].length) > 60) return '';
+  return last[1].replace(/\s+/gu, ' ').trim();
 }
 
 function sentenceAround(value = '', index = 0, matchLength = 0) {
@@ -49,6 +75,7 @@ function extractOfficialActMentions(value = '', limit = 6) {
     mentions.push({
       identifier,
       context: sentenceAround(text, match.index, match[0].length),
+      named: namedTitleBefore(text, match.index),
       raw: match[0],
     });
   }
@@ -68,23 +95,26 @@ function resultMatchesMention(result = {}, mention = {}, { allowInactive = false
   if (!result || !result.url || resultIdentifier(result) !== mention.identifier) return false;
   if (!allowInactive && result.metadata && result.metadata.is_active === false) return false;
 
+  const title = result.title || result.lawName || '';
+  // The answer names the act by its title: the act found by the number must be that act. A number the model
+  // gave to the wrong law (or a number that restarted) is not linked, whatever else the sentence shares with it.
+  if (mention.named) {
+    const need = Math.min(2, stems(mention.named).size);
+    return need > 0 && sharedStems(mention.named, title) >= need;
+  }
+
   const contextYears = new Set(String(mention.context || '').match(/(?:19|20)\d{2}/gu) || []);
   const adoptionYear = String((result.metadata && result.metadata.adoption_date) || '').match(/(?:19|20)\d{2}/u);
   if (contextYears.size > 0 && (!adoptionYear || !contextYears.has(adoptionYear[0]))) return false;
 
-  const contextWords = new Set(normalizeWords(mention.context));
-  const titleWords = normalizeWords(result.title || result.lawName || '');
-  const overlap = titleWords.filter((word) => contextWords.has(word)).length;
   // Decision numbers restart over time. Without either a matching year or at
-  // least two title terms, linking a bare VMQ/PQ/PF number could point to an
+  // least two distinct title terms, linking a bare VMQ/PQ/PF number could point to an
   // entirely different act that happens to share the number.
-  return contextYears.size > 0 || overlap >= Math.min(2, titleWords.length || 2);
+  return contextYears.size > 0 || sharedStems(title, mention.context) >= Math.min(2, stems(title).size || 2);
 }
 
 function resultScore(result = {}, mention = {}) {
-  const contextWords = new Set(normalizeWords(mention.context));
-  const overlap = normalizeWords(result.title || result.lawName || '')
-    .filter((word) => contextWords.has(word)).length;
+  const overlap = sharedStems(result.title || result.lawName || '', mention.named || mention.context);
   const year = String((result.metadata && result.metadata.adoption_date) || '').match(/(?:19|20)\d{2}/u);
   const yearMatch = year && String(mention.context || '').includes(year[0]) ? 100 : 0;
   return yearMatch + overlap * 10 + Number(result.searchRankScore || 0) / 10000;
@@ -116,6 +146,48 @@ function adaptResult(result, identifier, index = 0, topic = null) {
   };
 }
 
+/**
+ * Take a number out of the answer where lex.uz holds ANOTHER act under it than the title written right before
+ * it (2026-11-21, owner: the wrong number must not stay in the text either). Only that occurrence - the one
+ * standing after the named title - is removed: "(O'RQ-1010)" with its brackets, "O'RQ-1010, " inside a bracket
+ * that says more ("(O'RQ-1010, 20-modda)" -> "(20-modda)"), or the bare number. The title itself stays.
+ */
+function stripMismatchedIdentifiers(answer = '', mismatched = []) {
+  let text = String(answer || '');
+  const removed = [];
+  for (const m of mismatched || []) {
+    const hits = [];
+    let match;
+    OFFICIAL_ID_RE.lastIndex = 0;
+    while ((match = OFFICIAL_ID_RE.exec(text))) {
+      if (normalizeOfficialDocumentIdentifier(`${match[1]}-${match[2]}`) !== m.identifier) continue;
+      if (namedTitleBefore(text, match.index) !== m.named) continue;
+      hits.push({ index: match.index, length: match[0].length });
+    }
+    for (const hit of hits.reverse()) {
+      let start = hit.index, end = hit.index + hit.length;
+      const son = text.slice(end).match(/^-son(?:li)?/iu);
+      if (son) end += son[0].length;
+      const before = text.slice(0, start), after = text.slice(end);
+      const open = before.match(/\(\s*$/u), close = after.match(/^\s*\)/u), comma = after.match(/^\s*,\s*/u);
+      if (open && close) {
+        // "(O'RQ-1010)": the bracket goes with it, and the space that led to it
+        start -= open[0].length; end += close[0].length;
+        const lead = text.slice(0, start).match(/[ \t]+$/u);
+        if (lead) start -= lead[0].length;
+      } else if (open && comma) {
+        end += comma[0].length;                       // "(O'RQ-1010, 20-modda)" -> "(20-modda)"
+      } else {
+        const lead = before.match(/,?[ \t]+$/u);     // "... Qonuni O'RQ-1010 talablariga" -> "... Qonuni talablariga"
+        if (lead) start -= lead[0].length;
+      }
+      text = text.slice(0, start) + text.slice(end);
+      removed.push(m.identifier);
+    }
+  }
+  return { answer: text, removed: [...new Set(removed)] };
+}
+
 async function hydrateMentionedOfficialActChunks(answer = '', chunks = [], opts = {}) {
   const existing = Array.isArray(chunks) ? [...chunks] : [];
   const maxMentions = Math.max(0, Math.min(6, Number(opts.maxMentions || 4)));
@@ -127,6 +199,8 @@ async function hydrateMentionedOfficialActChunks(answer = '', chunks = [], opts 
   // Mentions whose only lex.uz match is not in force (2026-10-01: O'RQ-310
   // was dropped here silently). The caller tells the user.
   const repealed = [];
+  // A number the answer put next to one act's title while lex.uz holds another act under it: never linked.
+  const mismatched = [];
   const search = typeof opts.search === 'function' ? opts.search : searchLexUz;
 
   for (const mention of mentions) {
@@ -164,6 +238,8 @@ async function hydrateMentionedOfficialActChunks(answer = '', chunks = [], opts 
           });
         } else {
           unresolved.push(mention.identifier);
+          const other = mention.named && (Array.isArray(results) ? results : []).find((result) => result && result.url && resultIdentifier(result) === mention.identifier);
+          if (other) mismatched.push({ identifier: mention.identifier, named: mention.named, found: String(other.lawName || other.title || '').slice(0, 200) });
         }
       }
       continue;
@@ -175,11 +251,15 @@ async function hydrateMentionedOfficialActChunks(answer = '', chunks = [], opts 
     sourceKeys.add(key);
   }
 
-  return { chunks: existing, added, unresolved, repealed };
+  // a number lex.uz holds under another act leaves the answer; `answer` is the text to go on with
+  const stripped = stripMismatchedIdentifiers(answer, mismatched);
+  return { chunks: existing, added, unresolved, repealed, mismatched, answer: stripped.answer, removed: stripped.removed };
 }
 
 module.exports = {
   extractOfficialActMentions,
   resultMatchesMention,
+  namedTitleBefore,
+  stripMismatchedIdentifiers,
   hydrateMentionedOfficialActChunks,
 };

@@ -162,11 +162,24 @@ function citedArticles(sentence = '') {
   return [...out].filter(Boolean);
 }
 
+// A point after these is an abbreviation, not a sentence's end (2026-11-06: a
+// Russian analysis cited "п. 3.4", the split made "3.4 ..." a sentence of its
+// own, it was withheld as a claim and "По п." was left behind): clause, article,
+// part, paragraph, chapter, page, number (never a whole word such as "yil",
+// which ends sentences) - and a single letter (an initial, "т. е.", "b.").
+const ABBREV_END = /(?:^|[\s(«"“'])(?:пп?|ст|стт|ч|абз|подп|гл|разд|стр|прил|рис|см|гг|ул|им|№|art|cl|pp|\p{L})\.$/iu;
 function sentences(text = '') {
-  // Keep list items and lines apart; split sentences inside a line.
+  // Keep list items and lines apart; split sentences inside a line, but not after an abbreviation.
   return String(text || '')
     .split(/\n+/u)
-    .flatMap(line => line.split(/(?<=[.!?…])\s+(?=[\p{Lu}*«"(\d])/u))
+    .flatMap((line) => {
+      const out = [];
+      for (const part of line.split(/(?<=[.!?…])\s+(?=[\p{Lu}*«"(\d])/u)) {
+        if (out.length && ABBREV_END.test(out[out.length - 1])) out[out.length - 1] += ` ${part}`;
+        else out.push(part);
+      }
+      return out;
+    })
     .map(s => s.trim())
     .filter(Boolean);
 }
@@ -214,8 +227,11 @@ function extractCriticalClaims(answer = '', question = '', {
       basis.push({ text: sentence, kind: 'basis', facts: [], articles });
     }
   }
-  return [...numeric.slice(0, maxClaims), ...absence.slice(0, maxAbsenceClaims), ...basis.slice(0, maxBasisClaims)]
+  const out = [...numeric.slice(0, maxClaims), ...absence.slice(0, maxAbsenceClaims), ...basis.slice(0, maxBasisClaims)]
     .map((c, i) => ({ id: `c${i + 1}`, ...c }));
+  // claims past the caps are not sent to the verifier: counted, so the answer is never called fully checked (Q5)
+  out.unchecked = Math.max(0, numeric.length - maxClaims) + Math.max(0, absence.length - maxAbsenceClaims) + Math.max(0, basis.length - maxBasisClaims);
+  return out;
 }
 
 // ── Evidence ──────────────────────────────────────────────────────────────
@@ -279,6 +295,16 @@ function buildEvidence(claims = [], chunks = [], maxChars = DEFAULTS.maxEvidence
     ordered.push(c);
   };
   for (const claim of claims) for (const c of chunksForArticles(chunks, claim.articles)) add(c);
+  // a claim that a rule does not apply is decided by an exception: the sources
+  // that hold one go first, before the limit cuts them off (2026-10-27: an IT
+  // Park answer's "no confirmation is required" was not confirmed - VMQ-589,
+  // whose band 17 says exactly that, came after 14 000 characters of others)
+  if (claims.some(c => c.kind === 'absence')) {
+    const { EXCEPTION_MARK } = require('./lex-live-search');
+    const pool = chunks.filter(isEvidenceChunk);
+    for (const c of pool.filter(c => /^SAVOLGA ENG YAQIN QATOR/u.test(chunkText(c)))) add(c);
+    for (const c of pool.filter(c => EXCEPTION_MARK.test(chunkText(c)))) add(c);
+  }
   for (const c of chunks.filter(isEvidenceChunk)) add(c);
   let out = '';
   for (let i = 0; i < ordered.length; i++) {
@@ -302,7 +328,7 @@ Har bir da'voning "kind" maydoni bor:
 - absence: da'vo "qonunda bunday norma yo'q / nazarda tutilmagan" deydi.
 
 Har bir da'vo uchun faqat MANBALAR matniga qarab hukm chiqaring:
-- "supported": manbada aynan shu qiymat (muddat, summa, foiz, stavka) aynan shu holatga va aynan shu taraflarga nisbatan aytilgan; basis uchun - keltirilgan modda matni aynan shu vaziyatga va shu taraflarga tegishli va da'vo uni to'g'ri bayon qilgan; absence uchun - manbaning o'zi bunday norma yo'qligini yoki istisnoni aniq aytgan.
+- "supported": manbada aynan shu qiymat (muddat, summa, foiz, stavka) aynan shu holatga va aynan shu taraflarga nisbatan aytilgan; basis uchun - keltirilgan modda matni aynan shu vaziyatga va shu taraflarga tegishli va da'vo uni to'g'ri bayon qilgan; absence uchun - manbaning o'zi bunday norma yo'qligini yoki istisnoni aniq aytgan (masalan, "...olmasdan turib ... jalb etish", "talab qilinmaydi", "ozod etiladi", "...huquqiga ega" - shu taraf uchun bo'lsa, talab yo'qligi haqidagi da'vo "supported"; "SAVOLGA ENG YAQIN QATOR" belgisi bilan berilgan qatorni ham o'qing).
 - "contradicted": manbada boshqa qiymat yoki boshqa holat/taraf uchun aytilgan, yoki da'vo taraflarni teskari yozgan (masalan, kim kimga zarar yetkazgani, kim talab qilayotgani almashgan), yoki hisoblash usuli manbadagidan farq qiladi; basis uchun - modda boshqa subyekt yoki boshqa holatga oid (masalan, savoldagi ish beruvchi yuridik shaxs, modda esa yakka tartibdagi tadbirkor ish beruvchi haqida), yoki da'vo modda mazmunini noto'g'ri bayon qilgan; absence uchun - manbada shu masala bo'yicha norma bor.
 - "not_found": manbada bu da'voni tasdiqlaydigan yoki rad etadigan norma yo'q. absence da'vosi manbada norma topilmagani uchungina "supported" bo'lmaydi - u "not_found".
 
@@ -453,10 +479,21 @@ function unverifiedBlock(withheld = [], lang = 'uz', needsFacts = [], { noCalc =
       : `⚠️ ${topic}: norma manbada bor${refs ? ` (${refs})` : ''}, lekin javobdagi aniq ${value} uning matnida tasdiqlanmadi, shuning uchun olib tashlandi.${method}`);
   }
   if (wrong.length) lines.push(ru ? `⚠️ Не соответствует тексту источника, убрано из ответа: ${wrong.join('; ')}.` : `⚠️ Manba matniga mos kelmadi, javobdan olib tashlandi: ${wrong.join('; ')}.`);
-  if (missing.length) {
+  // a claim that a rule does not apply carries no value to withhold: the
+  // notice names the claim, not a missing figure (2026-10-27: "Manbada
+  // tasdiqlanmadi: IT park rezidentlariga tasdiqnoma talabi ... aniq qiymat
+  // keltirilmaydi" under an answer saying no confirmation is required)
+  const absent = uniq(rest.filter(w => !w.normFound && w.kind === 'absence'));
+  if (absent.length) {
     lines.push(ru
-      ? `⚠️ Не подтверждено источником: ${missing.join('; ')}. Норма не найдена в просмотренных источниках — это не значит, что в законе её нет; точное значение не приводится, пока норма не проверена по тексту закона.`
-      : `⚠️ Manbada tasdiqlanmadi: ${missing.join('; ')}. Norma ko'rib chiqilgan manbalarda topilmadi — bu qonunda yo'q degani emas; qonun matnida tekshirilmaguncha aniq qiymat keltirilmaydi.`);
+      ? `⚠️ Утверждение ответа, что нормы нет или она не применяется (${absent.join('; ')}), просмотренными источниками не подтверждено - это не значит, что в законе её нет. Проверьте его по тексту акта с юристом.`
+      : `⚠️ Javobdagi «bunday norma yo'q yoki qo'llanmaydi» degan gap (${absent.join('; ')}) ko'rib chiqilgan manbalarda tasdiqlanmadi — manbada topilmagani bu qonunda yo'q degani emas. Uni akt matni bo'yicha yurist bilan tekshiring.`);
+  }
+  const missingValues = missing.filter(t => !absent.includes(t));
+  if (missingValues.length) {
+    lines.push(ru
+      ? `⚠️ Не подтверждено источником: ${missingValues.join('; ')}. Норма не найдена в просмотренных источниках — это не значит, что в законе её нет; точное значение не приводится, пока норма не проверена по тексту закона.`
+      : `⚠️ Manbada tasdiqlanmadi: ${missingValues.join('; ')}. Norma ko'rib chiqilgan manbalarda topilmadi — bu qonunda yo'q degani emas; qonun matnida tekshirilmaguncha aniq qiymat keltirilmaydi.`);
   }
   if (noCalc) {
     lines.push(ru
@@ -565,13 +602,21 @@ async function guardLegalAnswer({
   let pool = Array.isArray(chunks) ? chunks.slice() : [];
   let retrievals = 0;
   let verifierRan = false;
+  let verifierRetries = 0;
   let verifierReason = null;
   const results = new Map(); // id -> { verdict, topic, reason, needsFacts, deterministic }
 
   const check = async (pending) => {
     for (const c of pending) results.set(c.id, { ...(results.get(c.id) || {}), deterministic: deterministicSupport(c, pool) });
     if (typeof callAI !== 'function') { verifierReason = 'verifier_missing'; return; }
-    const v = await runVerifier({ question, claims: pending, chunks: pool, callAI, model, endpoint, opts, lang });
+    let v = await runVerifier({ question, claims: pending, chunks: pool, callAI, model, endpoint, opts, lang });
+    // X5 (Q4): a verifier that failed technically (a timeout, a cut or unreadable reply, a provider error) withheld every
+    // exact value of an answer that may have been right. One more try, with room for a longer reply; a second
+    // failure leaves the claims unverified as before - never passed.
+    if (!v.ok && v.reason !== 'no_evidence' && opts.verifierRetry !== false) {
+      verifierRetries++;
+      v = await runVerifier({ question, claims: pending, chunks: pool, callAI, model, endpoint, opts: { ...opts, verifierMaxTokens: Math.round((opts.verifierMaxTokens || 900) * 2) }, lang });
+    }
     if (!v.ok) { verifierReason = v.reason; return; }
     verifierRan = true;
     for (const c of pending) {
@@ -639,6 +684,7 @@ async function guardLegalAnswer({
   const noCalc = NO_CALC.test(String(question || ''));
   const out = repaired.text + (withheld.length ? unverifiedBlock(withheld, lang, withheld.flatMap(c => c.needsFacts), { noCalc }) : '');
   const status = !verifierRan ? 'unverified' : (withheld.length ? 'partial' : 'verified');
+  const uncheckedClaims = Number(claims && claims.unchecked) || 0;
   return {
     text: out,
     status,
@@ -646,6 +692,9 @@ async function guardLegalAnswer({
     withheld: withheld.map(c => ({ id: c.id, kind: c.kind, topic: c.topic, verdict: c.verdict, deterministic: c.deterministic, articles: c.articles, normFound: c.normFound, method: c.method })),
     // basis claims kept although the verifier did not confirm them
     unconfirmed: unconfirmed.map(c => ({ id: c.id, kind: c.kind, articles: c.articles, verdict: c.verdict })),
+    // claims the answer makes beyond what one check takes: neither confirmed nor withheld
+    uncheckedClaims,
+    verifierRetries,
     retrievals,
     chunks: pool,
     reason: verifierRan ? null : verifierReason,
@@ -658,5 +707,5 @@ async function guardLegalAnswer({
 
 module.exports = {
   DEFAULTS, wordNumber, quantityFacts, extractCriticalClaims, deterministicSupport,
-  buildEvidence, parseVerdicts, unverifiedBlock, NO_CALC, removeSentences, repairStructure, guardLegalAnswer, citedArticles,
+  buildEvidence, parseVerdicts, unverifiedBlock, NO_CALC, removeSentences, repairStructure, guardLegalAnswer, citedArticles, sentences,
 };

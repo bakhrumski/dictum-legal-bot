@@ -29,6 +29,8 @@ async function resetWithLink(pool, verificationTokens, token, newPassword, { now
   const hash = await bcrypt.hash(String(newPassword), BCRYPT_COST);
   await pool.query('UPDATE admins SET password = $1 WHERE id = $2', [hash, target.id]);
   await pool.query(`DELETE FROM user_sessions WHERE (sess->>'adminId') = $1::text`, [String(target.id)]);
+  // the account's Word / Google Docs panels end with the reset as well
+  try { await require('../addin/word-addin').revokeAllForAdmin(pool, target.id); } catch (e) { console.error('[RECOVERY] add-in revoke failed:', e.message); }
   return { status: 200, success: true, adminId: target.id };
 }
 

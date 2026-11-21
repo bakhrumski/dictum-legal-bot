@@ -41,7 +41,35 @@ const MODEL_PRICING = Object.freeze({
   // Z.AI (docs.z.ai/guides/overview/pricing, 2026-10-12): GLM-5.3-Flash;
   // reasoning is billed as output (no separate field in usage)
   'zai/glm-5.3-flash': Object.freeze({ in: 0.15, out: 0.50, cached: 0.03 }),
+  // Gemini 3.5 Transcribe (ai.google.dev/gemini-api/docs/pricing, 2026-10-14):
+  // audio input $2.00 / 1M (~$0.003 a minute), text output $12.00 / 1M
+  // (~$0.002 a minute); public preview
+  'gemini-3.5-transcribe': Object.freeze({ in: 2.00, out: 12.00, cached: null }),
+  // Gemini 3.5 Flash-Lite (GA, 2026-07): $0.30 in (text/image/video), $2.50
+  // out incl. thinking (ai.google.dev pricing, 2026-10-14)
+  'gemini-3.5-flash-lite': Object.freeze({ in: 0.30, out: 2.50, cached: 0.03 }),
+  // Gemini 3.6 Flash: $0.75 / $3.75 through 2026-12-31, then $1.50 / $7.50
+  // (ai.google.dev pricing, 2026-10-14). Dated in PRICE_SCHEDULE below: the
+  // flat figure would price every 2027 call at half its cost.
+  'gemini-3.6-flash': Object.freeze({ in: 0.75, out: 3.75, cached: null }),
 });
+
+/**
+ * Prices that change on a known date (2026-10-20 review). The entry in
+ * MODEL_PRICING is the price before the first step; from each `from` date
+ * (UTC) the step's price applies. Read through priceAt().
+ */
+const PRICE_SCHEDULE = Object.freeze({
+  'gemini-3.6-flash': Object.freeze([Object.freeze({ from: '2027-01-01', in: 1.50, out: 7.50, cached: null })]),
+});
+
+/** A model's price at a moment (default now), from MODEL_PRICING and PRICE_SCHEDULE; null if unpriced. */
+function priceAt(model, at = Date.now()) {
+  const key = String(model || '').toLowerCase();
+  let price = MODEL_PRICING[key] || null;
+  for (const step of PRICE_SCHEDULE[key] || []) if (new Date(at).getTime() >= Date.parse(`${step.from}T00:00:00Z`)) price = step;
+  return price;
+}
 
 /**
  * VoiceLab calls are logged as 'voicelab/<model>'. The table above carries
@@ -76,7 +104,7 @@ function normalizeCount(value) {
  * free merely because its provider price is not configured here.
  */
 function calculateTokenCost(model, { inTokens = 0, outTokens = 0, cachedTokens = 0 } = {}) {
-  const pricing = voicelabPricing(model) || MODEL_PRICING[String(model || '').toLowerCase()] || overridePricing(model);
+  const pricing = voicelabPricing(model) || priceAt(model) || overridePricing(model);
   if (!pricing) return null;
 
   const input = normalizeCount(inTokens);
@@ -99,6 +127,8 @@ const PRICING_SOURCES = Object.freeze({
   gemini_2026_08_11: { source: 'https://ai.google.dev/gemini-api/docs/pricing (paid tier; the free tier bills $0)', effectiveFrom: null, checkedAt: '2026-08-11', confirmation: 'official_list' },
   voicelab_2026_09_23: { source: 'VoiceLab console list prices', effectiveFrom: null, checkedAt: '2026-09-23', confirmation: 'provider_console' },
   zai_2026_10_12: { source: 'https://docs.z.ai/guides/overview/pricing', effectiveFrom: null, checkedAt: '2026-10-12', confirmation: 'official_list' },
+  gemini_2026_10_14: { source: 'https://ai.google.dev/gemini-api/docs/pricing (Gemini 3.5 Transcribe, paid tier; preview)', effectiveFrom: null, checkedAt: '2026-10-14', confirmation: 'official_list' },
+  gemini_flash_2026_10_14: { source: 'https://ai.google.dev/gemini-api/docs/pricing (Gemini 3.5 Flash-Lite and 3.6 Flash, paid tier; 3.6 Flash doubles from 2027-01-01, see PRICE_SCHEDULE)', effectiveFrom: null, checkedAt: '2026-10-14', confirmation: 'official_list' },
   deepseek_2026_10_12: { source: 'https://api-docs.deepseek.com/quick_start/pricing/ (peak rates; off-peak is half)', effectiveFrom: null, checkedAt: '2026-10-12', confirmation: 'official_list' },
 });
 
@@ -110,6 +140,9 @@ const PRICE_SOURCE_OF = Object.freeze({
   'voicelab/aisha-comet': 'voicelab_2026_09_23', 'voicelab/aisha-orbit': 'voicelab_2026_09_23', 'voicelab/aisha-halo': 'voicelab_2026_09_23',
   'deepseek/deepseek-flash': 'deepseek_2026_10_12', 'deepseek/deepseek-v4-pro': 'deepseek_2026_10_12', 'deepseek/deepseek-flash-thinking': 'deepseek_2026_10_12',
   'zai/glm-5.3-flash': 'zai_2026_10_12',
+  'gemini-3.5-transcribe': 'gemini_2026_10_14',
+  'gemini-3.5-flash-lite': 'gemini_flash_2026_10_14',
+  'gemini-3.6-flash': 'gemini_flash_2026_10_14',
 });
 
 /**
@@ -157,7 +190,7 @@ function pricingSnapshot(model) {
   const key = String(model || '').toLowerCase();
   const override = voicelabPricing(model);
   const custom = override ? null : overridePricing(model);
-  const table = MODEL_PRICING[key];
+  const table = priceAt(key);
   const price = override || table || custom;
   if (!price) return null;
   const meta = custom && !table
@@ -182,8 +215,21 @@ function pricingSnapshot(model) {
  * Token rules: cached input is part of input (billed at the cached rate);
  * reasoning tokens are part of output and are not added again.
  */
+// Priced per successful request, not per token (2026-10-27): DeepSeek's Search
+// and Fetch APIs, $0.75 per 1 000 requests that return HTTP 200 with a result;
+// a failed or empty request is not billed (api-docs.deepseek.com/guides/search).
+const REQUEST_PRICES = Object.freeze({
+  'deepseek/tools-search': Object.freeze({ usd: 0.00075, source: 'https://api-docs.deepseek.com/quick_start/pricing/ (Search: $0.75 / 1 000 successful requests; billed from 2026-11-01)', checkedAt: '2026-10-27' }),
+  'deepseek/tools-fetch': Object.freeze({ usd: 0.00075, source: 'https://api-docs.deepseek.com/quick_start/pricing/ (Fetch: $0.75 / 1 000 successful requests; billed from 2026-11-01)', checkedAt: '2026-10-27' }),
+});
+
 function costForUsage(model, usage = {}) {
   const u = usage || {};
+  const perRequest = REQUEST_PRICES[model];
+  if (perRequest) {
+    const billed = Math.max(0, Number(u.billedRequests) || 0);
+    return { costUsd: billed * perRequest.usd, costSource: 'calculated', snapshot: { basis: 'per successful request', usdPerRequest: perRequest.usd, currency: 'USD', source: perRequest.source, checkedAt: perRequest.checkedAt } };
+  }
   if (Number.isFinite(Number(u.providerCostUsd)) && u.providerCostUsd !== null && u.providerCostUsd !== undefined) {
     return { costUsd: Number(u.providerCostUsd), costSource: 'provider_reported', snapshot: { basis: 'provider-reported cost', currency: 'USD' } };
   }
@@ -269,4 +315,4 @@ function callCostBound({ model, inputTokensMax = null, outputTokensMax = null, t
   return { usd, basis: { model: key, inputTokensMax: Number(inputTokensMax), outputTokensMax: Number(outputTokensMax), in: snap.in, out: snap.out, multiplier: mult, priceSource: snap.source, checkedAt: snap.checkedAt } };
 }
 
-module.exports = { MODEL_PRICING, PRICING_SOURCES, VOICELAB_CREDIT, calculateTokenCost, pricingSnapshot, costForUsage, voicelabCreditUsd, inputTokenBound, callCostBound };
+module.exports = { REQUEST_PRICES, MODEL_PRICING, PRICE_SCHEDULE, priceAt, PRICING_SOURCES, VOICELAB_CREDIT, calculateTokenCost, pricingSnapshot, costForUsage, voicelabCreditUsd, inputTokenBound, callCostBound };

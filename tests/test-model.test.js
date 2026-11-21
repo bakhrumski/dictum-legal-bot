@@ -96,7 +96,9 @@ const through = (mw, { header, session, master = true }) => new Promise((resolve
     assert.ok(/createMiddleware\(\{\s*verifyMaster: require\('\.\.\/rag\/document-explain-route'\)\.createVerifyMaster\(pool\)/u.test(src), 'database check');
     for (const fn of ['callOpenAI', 'callOpenAIStream']) {
       const body = src.slice(src.indexOf(`async function ${fn}(`), src.indexOf(`async function ${fn}(`) + 400);
-      assert.ok(/options = testModel\.apply\(options\);/u.test(body) && body.indexOf('testModel.apply') < body.indexOf('tryZai('), fn);
+      // the test model is applied before the chain (behind the redaction wrapper since E3 / E4)
+      const chain = body.indexOf(`${fn}Chain(`);
+      assert.ok(/options = testModel\.apply\(options\);/u.test(body) && chain > 0 && body.indexOf('testModel.apply') < chain, fn);
     }
     assert.ok(/if \(testModel\.current\(\)\) opinionModel = testModel\.current\(\);/u.test(src));
     assert.ok(/callOpenAI, testModel: testModel\.current,/u.test(src), 'explanation router');

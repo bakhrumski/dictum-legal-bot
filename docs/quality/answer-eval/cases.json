@@ -1,0 +1,1774 @@
+{
+ "version": 1,
+ "note": "Sintetik savollar (2026-11-10, audit X7). Har birini yurist ko'rib chiqadi: kutilgan aktlar, moddalar (articles), aytilishi shart (mustSay) va aytilmasligi kerak (mustNotSay) gaplar, to'g'ri javobning qisqa mazmuni (gold). reviewed=false holatlar hisobotda 'ko'rib chiqilmagan' deb sanaladi va sifat xulosasiga kirmaydi. Modda raqamlari taxmin qilinmagan: ularni faqat yurist qo'shadi. mustSay qoralamalari - texnik signal, yurist tasdiqlamaguncha mezon emas.",
+ "cases": [
+  {
+   "id": "M01",
+   "topic": "mehnat",
+   "lang": "uz",
+   "question": "Ish beruvchi meni ogohlantirmasdan ishdan bo'shatdi va buyruq nusxasini bermayapti. Nima qilishim mumkin?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Mehnat kodeksi",
+      "match": [
+       "mehnat kodeksi",
+       "меҳнат кодекси",
+       "трудов"
+      ],
+      "docIds": [
+       "6257288"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "sud"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "M02",
+   "topic": "mehnat",
+   "lang": "uz",
+   "question": "Ikki oydan beri oylik berilmayapti. Ish haqini undirish uchun qayerga murojaat qilaman?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Mehnat kodeksi",
+      "match": [
+       "mehnat kodeksi",
+       "меҳнат кодекси",
+       "трудов"
+      ],
+      "docIds": [
+       "6257288"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "mehnat inspeksiya|sud"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "M03",
+   "topic": "mehnat",
+   "lang": "uz",
+   "question": "Sinov muddati tugamasdan ishdan bo'shatishdi. Bu qonuniymi va ish beruvchi necha kun oldin ogohlantirishi kerak?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Mehnat kodeksi",
+      "match": [
+       "mehnat kodeksi",
+       "меҳнат кодекси",
+       "трудов"
+      ],
+      "docIds": [
+       "6257288"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "sinov"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "M04",
+   "topic": "mehnat",
+   "lang": "uz",
+   "question": "Homilador xodimani shtat qisqarishi bilan ishdan bo'shatish mumkinmi?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Mehnat kodeksi",
+      "match": [
+       "mehnat kodeksi",
+       "меҳнат кодекси",
+       "трудов"
+      ],
+      "docIds": [
+       "6257288"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "homilador"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "M05",
+   "topic": "mehnat",
+   "lang": "uz",
+   "question": "Ishdan o'z xohishim bilan ketmoqchiman. Arizani necha kun oldin berishim kerak va ish beruvchi meni ushlab qola oladimi?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Mehnat kodeksi",
+      "match": [
+       "mehnat kodeksi",
+       "меҳнат кодекси",
+       "трудов"
+      ],
+      "docIds": [
+       "6257288"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "ariza"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "M06",
+   "topic": "mehnat",
+   "lang": "uz",
+   "question": "Dam olish kuni ishga chaqirishdi. Buning uchun qanday haq to'lanishi kerak?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Mehnat kodeksi",
+      "match": [
+       "mehnat kodeksi",
+       "меҳнат кодекси",
+       "трудов"
+      ],
+      "docIds": [
+       "6257288"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "dam olish"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "M07",
+   "topic": "mehnat",
+   "lang": "uz",
+   "question": "Yillik mehnat ta'tilidan foydalanmadim va ishdan ketyapman. Foydalanilmagan ta'til uchun pul beriladimi?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Mehnat kodeksi",
+      "match": [
+       "mehnat kodeksi",
+       "меҳнат кодекси",
+       "трудов"
+      ],
+      "docIds": [
+       "6257288"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "kompensatsiya"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "M08",
+   "topic": "mehnat",
+   "lang": "uz",
+   "question": "Ish beruvchi mehnat shartnomasini yozma tuzmagan, lekin bir yildan beri ishlayman. Mehnat munosabatlarini qanday isbotlayman?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Mehnat kodeksi",
+      "match": [
+       "mehnat kodeksi",
+       "меҳнат кодекси",
+       "трудов"
+      ],
+      "docIds": [
+       "6257288"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "dalil|guvoh|sud"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "M09",
+   "topic": "mehnat",
+   "lang": "cyr",
+   "question": "Иш берувчи менга интизомий жазо берди, лекин тушунтириш хати олмади. Бу жазони бекор қилдириш мумкинми?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Mehnat kodeksi",
+      "match": [
+       "mehnat kodeksi",
+       "меҳнат кодекси",
+       "трудов"
+      ],
+      "docIds": [
+       "6257288"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "M10",
+   "topic": "mehnat",
+   "lang": "ru",
+   "question": "Меня уволили по сокращению штата. Какие выплаты мне положены и за сколько дней должны были предупредить?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Mehnat kodeksi",
+      "match": [
+       "mehnat kodeksi",
+       "меҳнат кодекси",
+       "трудов"
+      ],
+      "docIds": [
+       "6257288"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "O01",
+   "topic": "oila",
+   "lang": "uz",
+   "question": "Erim bilan ajrashmoqchiman, ikki nafar voyaga yetmagan farzandimiz bor. Nikohdan ajratish qayerda amalga oshiriladi?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Oila kodeksi",
+      "match": [
+       "oila kodeksi",
+       "оила кодекси",
+       "семейн"
+      ],
+      "docIds": [
+       "104720"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "sud"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "O02",
+   "topic": "oila",
+   "lang": "uz",
+   "question": "Sobiq erim aliment to'lamayapti. Uni to'lashga qanday majbur qilaman?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Oila kodeksi",
+      "match": [
+       "oila kodeksi",
+       "оила кодекси",
+       "семейн"
+      ],
+      "docIds": [
+       "104720"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "ijro|majburiy ijro"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "O03",
+   "topic": "oila",
+   "lang": "uz",
+   "question": "Nikoh davrida olingan uy erimning nomida. Ajrashganda bu uy qanday bo'linadi?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Oila kodeksi",
+      "match": [
+       "oila kodeksi",
+       "оила кодекси",
+       "семейн"
+      ],
+      "docIds": [
+       "104720"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "umumiy mulk|birgalikdagi"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "O04",
+   "topic": "oila",
+   "lang": "uz",
+   "question": "Ajrashgandan keyin bola kim bilan qolishini kim hal qiladi?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Oila kodeksi",
+      "match": [
+       "oila kodeksi",
+       "оила кодекси",
+       "семейн"
+      ],
+      "docIds": [
+       "104720"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "sud"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "O05",
+   "topic": "oila",
+   "lang": "uz",
+   "question": "Otalikni sud orqali belgilash uchun nima kerak?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Oila kodeksi",
+      "match": [
+       "oila kodeksi",
+       "оила кодекси",
+       "семейн"
+      ],
+      "docIds": [
+       "104720"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "sud"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "O06",
+   "topic": "oila",
+   "lang": "uz",
+   "question": "Nikoh shartnomasini nikohdan keyin ham tuzsa bo'ladimi va u qayerda tasdiqlanadi?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Oila kodeksi",
+      "match": [
+       "oila kodeksi",
+       "оила кодекси",
+       "семейн"
+      ],
+      "docIds": [
+       "104720"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "notari"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "O07",
+   "topic": "oila",
+   "lang": "ru",
+   "question": "Бывший муж не разрешает вывозить ребёнка за границу. Как решается этот вопрос?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Oila kodeksi",
+      "match": [
+       "oila kodeksi",
+       "оила кодекси",
+       "семейн"
+      ],
+      "docIds": [
+       "104720"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "F01",
+   "topic": "qarz",
+   "lang": "uz",
+   "question": "Tanishimga tilxat bilan qarz bergan edim, muddati o'tdi, qaytarmayapti. Pulni qanday undiraman?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Fuqarolik kodeksi",
+      "match": [
+       "fuqarolik kodeksi",
+       "фуқаролик кодекси",
+       "гражданск"
+      ],
+      "docIds": [
+       "111189",
+       "180552"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "sud|da'vo"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "F02",
+   "topic": "qarz",
+   "lang": "uz",
+   "question": "Qarzni tilxatsiz, og'zaki bergan edim. Sudda buni isbotlay olamanmi?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Fuqarolik kodeksi",
+      "match": [
+       "fuqarolik kodeksi",
+       "фуқаролик кодекси",
+       "гражданск"
+      ],
+      "docIds": [
+       "111189",
+       "180552"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "dalil|yozma"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "F03",
+   "topic": "qarz",
+   "lang": "uz",
+   "question": "Qarz berilganiga besh yil bo'ldi. Hali ham sudga murojaat qilsam bo'ladimi?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Fuqarolik kodeksi",
+      "match": [
+       "fuqarolik kodeksi",
+       "фуқаролик кодекси",
+       "гражданск"
+      ],
+      "docIds": [
+       "111189",
+       "180552"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "da'vo muddati"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "F04",
+   "topic": "pudrat",
+   "lang": "uz",
+   "question": "Usta uy ta'mirini sifatsiz qildi va qayta tuzatishdan bosh tortyapti. Qanday talab qo'ya olaman?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Fuqarolik kodeksi",
+      "match": [
+       "fuqarolik kodeksi",
+       "фуқаролик кодекси",
+       "гражданск"
+      ],
+      "docIds": [
+       "111189",
+       "180552"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "talabnoma|da'vo|sud"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "F05",
+   "topic": "pudrat",
+   "lang": "uz",
+   "question": "Pudratchi ishni shartnomadagi muddatda tugatmadi. Shartnomani bekor qilib, avansni qaytarib olsam bo'ladimi?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Fuqarolik kodeksi",
+      "match": [
+       "fuqarolik kodeksi",
+       "фуқаролик кодекси",
+       "гражданск"
+      ],
+      "docIds": [
+       "111189",
+       "180552"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "bekor qilish|voz kechish"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "F06",
+   "topic": "oldi-sotdi",
+   "lang": "uz",
+   "question": "Mashina sotib oldim, keyin u garovda ekani ma'lum bo'ldi. Nima qilishim mumkin?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Fuqarolik kodeksi",
+      "match": [
+       "fuqarolik kodeksi",
+       "фуқаролик кодекси",
+       "гражданск"
+      ],
+      "docIds": [
+       "111189",
+       "180552"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "sud"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "F07",
+   "topic": "ijara",
+   "lang": "uz",
+   "question": "Uy egasi ijara shartnomasi tugamasdan chiqib ketishimni talab qilyapti. U shunday qilishga haqlimi?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Fuqarolik kodeksi",
+      "match": [
+       "fuqarolik kodeksi",
+       "фуқаролик кодекси",
+       "гражданск"
+      ],
+      "docIds": [
+       "111189",
+       "180552"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "shartnoma"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "F08",
+   "topic": "ijara",
+   "lang": "uz",
+   "question": "Ijarachi uch oydan beri ijara haqini to'lamayapti va uydan chiqmayapti. Uni qanday chiqaraman?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Fuqarolik kodeksi",
+      "match": [
+       "fuqarolik kodeksi",
+       "фуқаролик кодекси",
+       "гражданск"
+      ],
+      "docIds": [
+       "111189",
+       "180552"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "sud"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "F09",
+   "topic": "meros",
+   "lang": "uz",
+   "question": "Otam vafot etdi, vasiyatnoma qoldirmagan. Merosni qabul qilish uchun qayerga va qancha muddatda murojaat qilishim kerak?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Fuqarolik kodeksi",
+      "match": [
+       "fuqarolik kodeksi",
+       "фуқаролик кодекси",
+       "гражданск"
+      ],
+      "docIds": [
+       "111189",
+       "180552"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "notari"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "F10",
+   "topic": "meros",
+   "lang": "uz",
+   "question": "Merosni qabul qilish muddatini o'tkazib yubordim. Uni tiklash mumkinmi?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Fuqarolik kodeksi",
+      "match": [
+       "fuqarolik kodeksi",
+       "фуқаролик кодекси",
+       "гражданск"
+      ],
+      "docIds": [
+       "111189",
+       "180552"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "sud"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "F11",
+   "topic": "meros",
+   "lang": "uz",
+   "question": "Vasiyatnomada menga hech narsa qoldirilmagan, lekin men nogironman va marhumning qaramog'ida edim. Menga ulush tegadimi?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Fuqarolik kodeksi",
+      "match": [
+       "fuqarolik kodeksi",
+       "фуқаролик кодекси",
+       "гражданск"
+      ],
+      "docIds": [
+       "111189",
+       "180552"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "majburiy ulush"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "F12",
+   "topic": "zarar",
+   "lang": "uz",
+   "question": "Yuqori qavatdagi qo'shni kvartiramni suv bostirdi. Zararni qanday undiraman?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Fuqarolik kodeksi",
+      "match": [
+       "fuqarolik kodeksi",
+       "фуқаролик кодекси",
+       "гражданск"
+      ],
+      "docIds": [
+       "111189",
+       "180552"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "zarar"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "F13",
+   "topic": "shartnoma",
+   "lang": "uz",
+   "question": "Shartnomada penya miqdori juda yuqori belgilangan. Sud uni kamaytirishi mumkinmi?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Fuqarolik kodeksi",
+      "match": [
+       "fuqarolik kodeksi",
+       "фуқаролик кодекси",
+       "гражданск"
+      ],
+      "docIds": [
+       "111189",
+       "180552"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "neustoyka|penya"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "F14",
+   "topic": "shartnoma",
+   "lang": "cyr",
+   "question": "Шартномани бир томонлама бекор қилиш мумкинми, агар шартномада бу ҳақда ҳеч нарса ёзилмаган бўлса?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Fuqarolik kodeksi",
+      "match": [
+       "fuqarolik kodeksi",
+       "фуқаролик кодекси",
+       "гражданск"
+      ],
+      "docIds": [
+       "111189",
+       "180552"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "F15",
+   "topic": "qarz",
+   "lang": "ru",
+   "question": "Я дал в долг по расписке, должник не возвращает деньги. Могу ли я взыскать проценты за просрочку?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Fuqarolik kodeksi",
+      "match": [
+       "fuqarolik kodeksi",
+       "фуқаролик кодекси",
+       "гражданск"
+      ],
+      "docIds": [
+       "111189",
+       "180552"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "F16",
+   "topic": "ishonchnoma",
+   "lang": "uz",
+   "question": "Ishonchnoma qancha muddatga beriladi va uni muddatidan oldin bekor qilish mumkinmi?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Fuqarolik kodeksi",
+      "match": [
+       "fuqarolik kodeksi",
+       "фуқаролик кодекси",
+       "гражданск"
+      ],
+      "docIds": [
+       "111189",
+       "180552"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "ishonchnoma"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "I01",
+   "topic": "istemolchi",
+   "lang": "uz",
+   "question": "Do'kondan telefon oldim, bir haftada buzildi. Sotuvchi pulni qaytarishdan bosh tortyapti. Qanday huquqim bor?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Iste'molchilarning huquqlarini himoya qilish to'g'risidagi qonun",
+      "match": [
+       "iste'molchi",
+       "истеъмолчи",
+       "потребител"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "almashtirish|pulni qaytarish|qaytarish"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "I02",
+   "topic": "istemolchi",
+   "lang": "uz",
+   "question": "Sifatli, lekin o'lchami to'g'ri kelmagan kiyimni do'konga qaytarsam bo'ladimi?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Iste'molchilarning huquqlarini himoya qilish to'g'risidagi qonun",
+      "match": [
+       "iste'molchi",
+       "истеъмолчи",
+       "потребител"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "almashtirish|qaytarish"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "I03",
+   "topic": "istemolchi",
+   "lang": "uz",
+   "question": "Onlayn do'kon buyurtmani yetkazmadi va pulni qaytarmayapti. Qayerga shikoyat qilaman?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Iste'molchilarning huquqlarini himoya qilish to'g'risidagi qonun",
+      "match": [
+       "iste'molchi",
+       "истеъмолчи",
+       "потребител"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "shikoyat|sud"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "I04",
+   "topic": "istemolchi",
+   "lang": "ru",
+   "question": "Мне продали товар без гарантийного талона, через месяц он сломался. Могу ли я требовать ремонт или возврат денег?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Iste'molchilarning huquqlarini himoya qilish to'g'risidagi qonun",
+      "match": [
+       "iste'molchi",
+       "истеъмолчи",
+       "потребител"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "S01",
+   "topic": "soliq",
+   "lang": "uz",
+   "question": "Soliq organi kameral tekshiruv natijasi bo'yicha qo'shimcha soliq hisobladi. Bu qaror ustidan qanday shikoyat qilaman?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Soliq kodeksi",
+      "match": [
+       "soliq kodeksi",
+       "солиқ кодекси",
+       "налогов"
+      ],
+      "docIds": [
+       "4674902"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "shikoyat"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "S02",
+   "topic": "soliq",
+   "lang": "uz",
+   "question": "Kvartirani sotsam, daromad solig'i to'laymanmi?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Soliq kodeksi",
+      "match": [
+       "soliq kodeksi",
+       "солиқ кодекси",
+       "налогов"
+      ],
+      "docIds": [
+       "4674902"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "daromad solig'i"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "S03",
+   "topic": "soliq",
+   "lang": "uz",
+   "question": "Yakka tartibdagi tadbirkor qanday soliqlarni to'laydi?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Soliq kodeksi",
+      "match": [
+       "soliq kodeksi",
+       "солиқ кодекси",
+       "налогов"
+      ],
+      "docIds": [
+       "4674902"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "soliq"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "S04",
+   "topic": "soliq",
+   "lang": "uz",
+   "question": "Soliqni kechiktirib to'lasam, penya qanday hisoblanadi?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Soliq kodeksi",
+      "match": [
+       "soliq kodeksi",
+       "солиқ кодекси",
+       "налогов"
+      ],
+      "docIds": [
+       "4674902"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "penya"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "S05",
+   "topic": "soliq",
+   "lang": "uz",
+   "question": "IT Park rezidenti bo'lgan kompaniya xodimlarining ish haqidan olinadigan soliqlar bo'yicha imtiyoz bormi?",
+   "expect": {
+    "acts": [
+     {
+      "label": "VMQ-589 (IT Park nizomi)",
+      "match": [
+       "589",
+       "it park",
+       "raqamli texnologiyalar"
+      ],
+      "docIds": [
+       "4422250"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "imtiyoz"
+    ],
+    "mustNotSay": [
+     "imtiyoz yo'q|imtiyoz mavjud emas"
+    ]
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "S06",
+   "topic": "soliq",
+   "lang": "ru",
+   "question": "Обязана ли компания на упрощённом режиме налогообложения регистрироваться плательщиком НДС?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Soliq kodeksi",
+      "match": [
+       "soliq kodeksi",
+       "солиқ кодекси",
+       "налогов"
+      ],
+      "docIds": [
+       "4674902"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "T01",
+   "topic": "tadbirkorlik",
+   "lang": "uz",
+   "question": "MChJ ochish uchun qanday hujjatlar kerak va eng kam ustav fondi qancha?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Mas'uliyati cheklangan hamda qo'shimcha mas'uliyatli jamiyatlar to'g'risidagi qonun",
+      "match": [
+       "mas'uliyati cheklangan",
+       "масъулияти чекланган",
+       "ограниченной ответственностью"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "ustav"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "T02",
+   "topic": "korporativ",
+   "lang": "uz",
+   "question": "MChJ ishtirokchisi jamiyatdan chiqmoqchi. Ulushining qiymati unga qanday to'lanadi?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Mas'uliyati cheklangan hamda qo'shimcha mas'uliyatli jamiyatlar to'g'risidagi qonun",
+      "match": [
+       "mas'uliyati cheklangan",
+       "масъулияти чекланган",
+       "ограниченной ответственностью"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "ulush"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "T03",
+   "topic": "korporativ",
+   "lang": "uz",
+   "question": "MChJ direktori ishtirokchilarning roziligisiz yirik bitim tuzdi. Bu bitimni bekor qildirish mumkinmi?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Mas'uliyati cheklangan hamda qo'shimcha mas'uliyatli jamiyatlar to'g'risidagi qonun",
+      "match": [
+       "mas'uliyati cheklangan",
+       "масъулияти чекланган",
+       "ограниченной ответственностью"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "yirik bitim"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "T04",
+   "topic": "tadbirkorlik",
+   "lang": "uz",
+   "question": "Kontragent yetkazib berilgan mahsulot uchun pul to'lamayapti. Qaysi sudga va qanday tartibda murojaat qilaman?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Fuqarolik kodeksi",
+      "match": [
+       "fuqarolik kodeksi",
+       "фуқаролик кодекси",
+       "гражданск"
+      ],
+      "docIds": [
+       "111189",
+       "180552"
+      ]
+     },
+     {
+      "label": "Iqtisodiy protsessual kodeks",
+      "match": [
+       "iqtisodiy protsessual",
+       "иқтисодий процессуал",
+       "экономический процессуальн"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "iqtisodiy sud"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "T05",
+   "topic": "tadbirkorlik",
+   "lang": "uz",
+   "question": "Yakka tartibdagi tadbirkor faoliyatini to'xtatmoqchi. Bu qanday rasmiylashtiriladi?",
+   "expect": {
+    "acts": [],
+    "articles": [],
+    "mustSay": [],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "A01",
+   "topic": "mamuriy",
+   "lang": "uz",
+   "question": "YHX xodimi jarima yozdi, lekin men qoidani buzmaganman. Jarima qarori ustidan qayerga va qancha muddatda shikoyat qilaman?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Ma'muriy javobgarlik to'g'risidagi kodeks",
+      "match": [
+       "ma'muriy javobgarlik",
+       "маъмурий жавобгарлик",
+       "административной ответственности"
+      ],
+      "docIds": [
+       "97664"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "shikoyat"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "A02",
+   "topic": "mamuriy",
+   "lang": "uz",
+   "question": "Ma'muriy jarimani o'z vaqtida to'lamasam nima bo'ladi?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Ma'muriy javobgarlik to'g'risidagi kodeks",
+      "match": [
+       "ma'muriy javobgarlik",
+       "маъмурий жавобгарлик",
+       "административной ответственности"
+      ],
+      "docIds": [
+       "97664"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "ijro|majburiy"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "A03",
+   "topic": "murojaat",
+   "lang": "uz",
+   "question": "Hokimiyatga ariza yozgan edim, bir oydan beri javob yo'q. Murojaat qancha muddatda ko'rib chiqilishi kerak?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Jismoniy va yuridik shaxslarning murojaatlari to'g'risidagi qonun",
+      "match": [
+       "murojaatlari",
+       "мурожаатлари",
+       "обращениях"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "muddat|kun"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "A04",
+   "topic": "jinoyat",
+   "lang": "uz",
+   "question": "Meni guvoh sifatida tergovga chaqirishdi. Advokat bilan borishga haqqim bormi?",
+   "expect": {
+    "acts": [],
+    "articles": [],
+    "mustSay": [
+     "advokat"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "A05",
+   "topic": "protsess",
+   "lang": "uz",
+   "question": "Birinchi instansiya sudining qaroridan noroziman. Apellyatsiya shikoyatini qancha muddatda berishim kerak?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Fuqarolik protsessual kodeksi",
+      "match": [
+       "fuqarolik protsessual",
+       "фуқаролик процессуал",
+       "гражданский процессуальн"
+      ],
+      "docIds": [
+       "3517337"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "apellyatsiya"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "A06",
+   "topic": "ijro",
+   "lang": "uz",
+   "question": "Sud qarori chiqdi, lekin qarzdor uni bajarmayapti. Keyingi qadam nima?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Sud hujjatlari va boshqa organlar hujjatlarini ijro etish to'g'risidagi qonun",
+      "match": [
+       "ijro etish",
+       "ижро этиш",
+       "исполнении судебных"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "ijro varaqasi|majburiy ijro"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "A07",
+   "topic": "protsess",
+   "lang": "ru",
+   "question": "Пропустил срок апелляционной жалобы по гражданскому делу. Можно ли его восстановить?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Fuqarolik protsessual kodeksi",
+      "match": [
+       "fuqarolik protsessual",
+       "фуқаролик процессуал",
+       "гражданский процессуальн"
+      ],
+      "docIds": [
+       "3517337"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "U01",
+   "topic": "uy-joy",
+   "lang": "uz",
+   "question": "Kvartiradan sobiq turmush o'rtog'imni ro'yxatdan chiqarmoqchiman, u rozi emas. Bu mumkinmi?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Uy-joy kodeksi",
+      "match": [
+       "uy-joy kodeksi",
+       "уй-жой кодекси",
+       "жилищн"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "sud"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "U02",
+   "topic": "uy-joy",
+   "lang": "uz",
+   "question": "Ko'p kvartirali uydagi umumiy joylarni ta'mirlash xarajatlarini kim to'laydi?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Uy-joy kodeksi",
+      "match": [
+       "uy-joy kodeksi",
+       "уй-жой кодекси",
+       "жилищн"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "mulkdor"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "U03",
+   "topic": "yer",
+   "lang": "uz",
+   "question": "Hovlimning bir qismi davlat ehtiyojlari uchun olib qo'yilmoqda. Kompensatsiya qanday belgilanadi?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Yer kodeksi",
+      "match": [
+       "yer kodeksi",
+       "ер кодекси",
+       "земельн"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "kompensatsiya"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "U04",
+   "topic": "yer",
+   "lang": "uz",
+   "question": "Qo'shni devorini mening yerimga o'tkazib qurdi. Chegarani qanday tiklayman?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Yer kodeksi",
+      "match": [
+       "yer kodeksi",
+       "ер кодекси",
+       "земельн"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "sud|kadastr"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "B01",
+   "topic": "shaxsiy-malumot",
+   "lang": "uz",
+   "question": "Kompaniya mening roziligimsiz telefon raqamimni reklama uchun ishlatyapti. Bunga qarshi nima qila olaman?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Shaxsga doir ma'lumotlar to'g'risidagi qonun",
+      "match": [
+       "shaxsga doir ma'lumotlar",
+       "шахсга доир маълумотлар",
+       "персональных данных"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "rozilik"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "B02",
+   "topic": "pensiya",
+   "lang": "uz",
+   "question": "Pensiyaga chiqish uchun ish stajim yetmayapti. Bu holda pensiya tayinlanadimi?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Fuqarolarning davlat pensiya ta'minoti to'g'risidagi qonun",
+      "match": [
+       "pensiya ta'minoti",
+       "пенсия таъминоти",
+       "пенсионном обеспечении"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "staj"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "B03",
+   "topic": "ipoteka",
+   "lang": "uz",
+   "question": "Ipoteka kreditini to'lay olmay qoldim. Bank uyimni darhol olib qo'ya oladimi?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Garov / ipoteka to'g'risidagi qonunchilik",
+      "match": [
+       "ipoteka",
+       "garov",
+       "ипотека",
+       "гаров",
+       "залог"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "sud|undiruv"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "B04",
+   "topic": "sugurta",
+   "lang": "uz",
+   "question": "Sug'urta kompaniyasi avtohalokatdan keyin to'lovni rad etdi. Qanday e'tiroz bildiraman?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Sug'urta faoliyati to'g'risidagi qonun",
+      "match": [
+       "sug'urta",
+       "суғурта",
+       "страхов"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [
+     "da'vo|shikoyat|sud"
+    ],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "X01",
+   "topic": "aniqlashtirish",
+   "lang": "uz",
+   "question": "Shartnomani buzishdi, nima qilay?",
+   "expect": {
+    "acts": [],
+    "articles": [],
+    "mustSay": [],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "X02",
+   "topic": "doiradan-tashqari",
+   "lang": "uz",
+   "question": "Qozog'iston qonunchiligi bo'yicha MChJ ochish tartibi qanday?",
+   "expect": {
+    "acts": [],
+    "articles": [],
+    "mustSay": [],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "X03",
+   "topic": "eskirgan-norma",
+   "lang": "uz",
+   "question": "Eski Mehnat kodeksi bo'yicha ishdan bo'shatishda qancha nafaqa to'lanar edi va hozir qanday?",
+   "expect": {
+    "acts": [
+     {
+      "label": "Mehnat kodeksi",
+      "match": [
+       "mehnat kodeksi",
+       "меҳнат кодекси",
+       "трудов"
+      ],
+      "docIds": [
+       "6257288"
+      ]
+     }
+    ],
+    "articles": [],
+    "mustSay": [],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  },
+  {
+   "id": "X04",
+   "topic": "manbada-yoq",
+   "lang": "uz",
+   "question": "Sun'iy intellekt yaratgan asarga mualliflik huquqi kimga tegishli?",
+   "expect": {
+    "acts": [],
+    "articles": [],
+    "mustSay": [],
+    "mustNotSay": []
+   },
+   "gold": "",
+   "reviewed": false
+  }
+ ]
+}

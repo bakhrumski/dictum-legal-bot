@@ -97,10 +97,10 @@ test('the versioned constitution and research playbook are separate policy layer
     "har bir tilga olingan O'zbekiston normativ-huquqiy hujjati bosiladigan Lex.uz havolasiga aylangani",
   ]) assert.ok(text.includes(required), `missing playbook rule: ${required}`);
   assert.strictEqual(getConstitutionVersion(), '1.4.0');
-  assert.strictEqual(getPlaybookVersion(), '1.4.0');
+  assert.strictEqual(getPlaybookVersion(), '1.5.0');
   assert.deepStrictEqual(getLegalPolicyVersions(), {
     constitution: '1.4.0',
-    legalResearch: '1.4.0',
+    legalResearch: '1.5.0',
   });
 });
 
@@ -139,7 +139,12 @@ test('Lex research expands beyond laws and codes to implementing acts', () => {
     'talim'
   );
   assert.ok(queries.length >= 4);
-  assert.ok(queries.some(query => query.includes('Vazirlar Mahkamasi qarori')));
+  // implementing acts are found by the act form of each result (PQ / PF / VMQ
+  // steps) and codes and laws by lex.uz's form filter - no act-class words in
+  // the query: lex.uz finds nothing for a long phrase (2026-10-22, tests/lex-queries.test.js)
+  const plan = buildLexResearchPlan('Talabani yakuniy nazoratdan qaysi asosda chetlashtirish mumkin?', 'talim');
+  assert.ok(plan.some(step => step.kind === 'cabinet-decision' && step.preferredPrefixes.includes('VMQ')));
+  assert.ok(plan.some(step => step.actForm === 'code') && plan.some(step => step.actForm === 'law'));
   assert.ok(queries.some(query => query.includes('nizom')));
   assert.ok(queries.some(query => query.includes('yakuniy')));
   assert.ok(queries.some(query => /якуний/iu.test(query)), 'Cyrillic search fallback is missing');
@@ -262,6 +267,7 @@ test('exact PQ, PF and VMQ identifiers use the official Lex.uz act-number filter
   const natural = new URL(buildLexSearchUrl('talabani yakuniy nazoratdan chetlashtirish'));
   assert.strictEqual(natural.searchParams.get('actnum'), null);
   assert.strictEqual(natural.searchParams.get('Query'), 'talabani yakuniy nazoratdan chetlashtirish');
+  assert.strictEqual(natural.searchParams.get('status'), 'Y', 'acts in force only');
 });
 
 test('same-number Cabinet decisions are ranked by the original legal question', () => {
@@ -395,7 +401,7 @@ test('education registry contains the active Cabinet Resolution No. 824', () => 
   assert.ok(/ta'lim jarayonini tashkil etish/i.test(resolution.law_name));
 });
 
-test('advanced RAG uses the same playbook and three-section answer contract', () => {
+test('advanced RAG uses the same playbook and the two-section answer contract (Tahlil, Xulosa)', () => {
   const prompt = buildAdvancedPrompt({
     topic: 'talim',
     topicLabel: "Ta'lim huquqi",
@@ -403,9 +409,13 @@ test('advanced RAG uses the same playbook and three-section answer contract', ()
   });
   assert.ok(prompt.startsWith('ASOSIY HUQUQIY KONSTITUTSIYA'));
   assert.ok(prompt.includes('Constitution-Version: 1.4.0'));
-  assert.ok(prompt.includes('Playbook-Version: 1.4.0'));
-  assert.ok(prompt.includes('MAJBURIY 3-QISMLI JAVOB TUZILMASI'));
-  assert.ok(prompt.includes('Alohida "Manbalar"'));
+  assert.ok(prompt.includes('Playbook-Version: 1.5.0'));
+  assert.ok(prompt.includes('MAJBURIY 2-QISMLI JAVOB TUZILMASI'));
+  assert.ok(prompt.includes('Alohida "Huquqiy asos", "Manbalar"'));
+  // 2026-10-24, owner: no separate "Huquqiy asos" - it repeated Tahlil and Xulosa
+  assert.ok(!/\*\*Huquqiy asos\*\*/u.test(prompt));
+  assert.ok(prompt.indexOf('**Tahlil**') < prompt.indexOf('**Xulosa**'));
+  assert.match(prompt, /Tahlildagi dalil, modda va iqtiboslarni takrorlamang/u);
   assert.ok(!prompt.includes('MAJBURIY 4-QISMLI JAVOB TUZILMASI'));
   assert.strictEqual((prompt.match(/# JuristAI asosiy huquqiy konstitutsiya/g) || []).length, 1);
   assert.strictEqual((prompt.match(/# JuristAI universal legal research playbook/g) || []).length, 1);

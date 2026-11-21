@@ -31,7 +31,8 @@ test('a quote found word for word stays, with a link that highlights it (apostro
   const r = normalizeLegalAnswerCitationsDetailed(t, chunks, 'uz');
   assert.deepStrictEqual([r.quotes.kept, r.quotes.removed], [1, 0]);
   const line = r.text.split('\n').find(l => l.startsWith('> «'));
-  const m = /\[lex\.uz ↗\]\((https:\/\/lex\.uz\/docs\/-8151376#:~:text=([^)\s]+))\)$/u.exec(line);
+  // since 2026-10-27 the link names the act and the article the quote is in
+  const m = /\[O'RQ-1137, 21-modda · lex\.uz ↗\]\((https:\/\/lex\.uz\/docs\/-8151376#:~:text=([^)\s]+))\)$/u.exec(line);
   assert.ok(m, line);
   const [start, end] = m[2].split(',').map(decodeURIComponent);
   assert.strictEqual(start, 'Jamiyat ishtirokchisi jamiyatning ustav fondidagi (ustav kapitalidagi) oʻz', 'the source\'s own letters (oʻ), not the model\'s');
@@ -79,20 +80,30 @@ test('wired: the chat prompt asks for both; web chat returns followUpQuestions a
   const src = fs.readFileSync(path.join(__dirname, '../src/api/server.js'), 'utf8');
   assert.ok(src.includes("require('../rag/answer-structure').promptRules(lexLangForText(userQuestion))"));
   assert.ok(/extractFollowUpQuestions\(displayReply\)/u.test(src) && /followUpQuestions,\n/u.test(src));
-  assert.ok(/normalizeLegalAnswerCitationsDetailed\(displayReply, ragChunks, citationLanguage\)/u.test(src) && /quotes: normalized\.quotes/u.test(src));
+  assert.ok(/normalizeLegalAnswerCitationsDetailed\(displayReply, kbChat\.quoteSources\(ragChunks, firmChat\), citationLanguage\)/u.test(src) && /quotes: normalized\.quotes/u.test(src));
   const tg = fs.readFileSync(path.join(__dirname, '../src/agents/telegram-agent.js'), 'utf8');
   assert.ok(/followUpQuestions: followUp\.questions/u.test(tg) && /Yana so'rashingiz mumkin/u.test(tg));
   const { toTelegramMarkdown } = require('../src/agents/telegram-agent');
   assert.strictEqual(toTelegramMarkdown('> «Norma matni»'), '▎ «Norma matni»');
   // room for the quote and the next questions (2026-10-13): 1 400 by default, env in bounds
   const { telegramAnswerMaxTokens } = require('../src/agents/telegram-agent');
-  assert.deepStrictEqual([telegramAnswerMaxTokens({}), telegramAnswerMaxTokens({ TG_ANSWER_MAX_TOKENS: '2000' }), telegramAnswerMaxTokens({ TG_ANSWER_MAX_TOKENS: '99999' })], [1400, 2000, 1400]);
+  assert.deepStrictEqual([telegramAnswerMaxTokens({}), telegramAnswerMaxTokens({ TG_ANSWER_MAX_TOKENS: '2000' }), telegramAnswerMaxTokens({ TG_ANSWER_MAX_TOKENS: '99999' })], [2500, 2000, 2500]);
   assert.ok(/maxTokens: telegramAnswerMaxTokens\(\), endpoint: '\/tg-agent\/answer'/u.test(tg));
   const ws = fs.readFileSync(path.join(__dirname, '../src/workspace/legal-answer-generator.js'), 'utf8');
   assert.ok(/extractFollowUpQuestions\(reply\)\.text/u.test(ws));
   const html = fs.readFileSync(path.join(__dirname, '../public/dashboard.html'), 'utf8');
   assert.ok(/renderLegalFollowUps\(data\.followUpQuestions \|\| \[\]\)/u.test(html) && /askFollowUp\(this\.getAttribute/u.test(html));
   assert.ok(/QUOTE_RULE_UZ[\s\S]*so'zma-so'z topilmagan iqtibos javobdan olib tashlanadi/u.test(fs.readFileSync(path.join(__dirname, '../src/rag/answer-structure.js'), 'utf8')));
+});
+
+test("a quote's link names its act and unit: the act's number or short name, the heading above it, or a key line's unit", () => {
+  const vmq = { law_name: 'Dasturiy mahsulotlar va axborot texnologiyalari texnologik parki faoliyatini tashkil etish chora-tadbirlari toʻgʻrisida', document_number: 'VMQ-589',
+    chunk_text: "SAVOLGA ENG YAQIN QATOR (17-band) [server so'zlar bo'yicha tanlagan - o'qing va tekshiring]: Oʻzbekiston Respublikasi hududida mehnat faoliyatini amalga oshirish huquqi tasdiqnomalarini olmasdan turib chet ellik mutaxassislarni jalb etish;" };
+  const code = { law_name: 'Oʻzbekiston Respublikasining Fuqarolik kodeksi (ikkinchi qism)', chunk_text: "641-modda. Boshqa\nmatn\n\n642-modda. Buyurtmachining huquqlari\nAgar pudratchi pudrat shartnomasini bajarishga oʻz vaqtida kirishmasa yoki ishni sust bajarsa" };
+  const label = (q, c) => st.quoteSourceLabel(st.findQuote(q, [c]));
+  assert.strictEqual(label('mehnat faoliyatini amalga oshirish huquqi tasdiqnomalarini olmasdan turib', vmq), 'VMQ-589, 17-band');
+  assert.strictEqual(label('Agar pudratchi pudrat shartnomasini bajarishga oʻz vaqtida kirishmasa', code), 'Fuqarolik kodeksi (ikkinchi qism), 642-modda');
+  assert.strictEqual(st.quoteSourceLabel({ chunk: {}, text: 'x', at: 1 }), '', 'nothing known: no label');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

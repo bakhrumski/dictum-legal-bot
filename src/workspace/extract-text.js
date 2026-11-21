@@ -28,10 +28,10 @@ function clean(text) {
 async function extractRaw(buffer, mimeType) {
   if (mimeType === 'text/plain') return buffer.toString('utf8');
   if (mimeType === 'application/pdf') {
-    const pdfParse = require('pdf-parse');
-    return (await pdfParse(buffer)).text;
+    return (await require('../ocr/upload-guard').parsePdf(buffer)).text;
   }
   if (mimeType === DOCX) {
+    require('../ocr/upload-guard').assertZipSafe(buffer);
     const mammoth = require('mammoth');
     return (await mammoth.extractRawText({ buffer })).value;
   }

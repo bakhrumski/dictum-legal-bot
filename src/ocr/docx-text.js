@@ -413,6 +413,7 @@ function missingPlaces(text, words, { per = 3, around = 40 } = {}) {
  * be in the table reader's text as often (its own markup aside).
  */
 async function docxText(buffer, { mammoth = require('mammoth') } = {}) {
+  require('./upload-guard').assertZipSafe(buffer); // a file that unpacks into a huge one is refused before any parser opens it
   const zip = await JSZip.loadAsync(buffer);
   const file = zip.file('word/document.xml');
   const raw = async () => String((await mammoth.extractRawText({ buffer })).value || '').trim();

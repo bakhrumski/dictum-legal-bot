@@ -104,6 +104,88 @@ function fakeRes() {
     process.removeAllListeners('SIGTERM'); process.removeAllListeners('SIGINT');
   });
 
+  // 2026-11-06: a deploy cut a long document answer after 25 s with nothing said ("Javob uzildi")
+  const { trackStream, openStreamCount, shutdownWaitMs } = require('../src/api/lifecycle');
+  const EventEmitter = require('events');
+  const fakeStream = () => { const r = new EventEmitter(); r.ended = false; r.end = () => { r.ended = true; r.emit('finish'); }; return r; };
+
+  await test('an open answer that ends in time is waited for and never told anything', async () => {
+    const res = fakeStream(); let told = false, exitCode = null;
+    trackStream(res, () => { told = true; });
+    const order = [];
+    const shutdown = installGracefulShutdown({
+      server: { close() { order.push('server'); } }, pool: { end: async () => { order.push('pool'); } },
+      beforeClose: [async () => { order.push('save'); }],
+      timeoutMs: 2000, pollMs: 10, exit: (c) => { exitCode = c; }, log: quiet,
+    });
+    const done = shutdown('SIGTERM');
+    await new Promise(r => setTimeout(r, 50));
+    assert.strictEqual(exitCode, null, 'still waiting for the answer');
+    res.end();
+    await done;
+    assert.strictEqual(told, false);
+    assert.strictEqual(exitCode, 0);
+    assert.deepStrictEqual(order, ['save', 'server', 'pool'], 'what lives in memory is saved before the server closes');
+    assert.strictEqual(openStreamCount(), 0);
+    process.removeAllListeners('SIGTERM'); process.removeAllListeners('SIGINT');
+  });
+
+  await test('an answer still open at the end is told why, before the exit', async () => {
+    const res = fakeStream(); const seq = []; let exitCode = null;
+    trackStream(res, () => { seq.push('told'); res.end(); });
+    const shutdown = installGracefulShutdown({ server: { close() {} }, pool: null, timeoutMs: 1700, pollMs: 10,
+      exit: (c) => { seq.push('exit'); exitCode = c; }, log: quiet });
+    const t0 = Date.now();
+    await shutdown('SIGTERM');
+    assert.deepStrictEqual(seq, ['told', 'exit']);
+    assert.strictEqual(exitCode, 0);
+    assert.ok(Date.now() - t0 < 1700, 'before the forced exit');
+    process.removeAllListeners('SIGTERM'); process.removeAllListeners('SIGINT');
+  });
+
+  await test('an endless feed (wait: false) is ended at once and does not hold the shutdown', async () => {
+    const feed = fakeStream(); let exitCode = null;
+    trackStream(feed, null, { wait: false });
+    const shutdown = installGracefulShutdown({ server: { close(cb) { cb(); } }, pool: null, timeoutMs: 5000, pollMs: 10,
+      exit: (c) => { exitCode = c; }, log: quiet });
+    const t0 = Date.now();
+    await shutdown('SIGTERM');
+    assert.ok(feed.ended);
+    assert.strictEqual(exitCode, 0);
+    assert.ok(Date.now() - t0 < 1000, 'no waiting for a stream that never ends');
+    process.removeAllListeners('SIGTERM'); process.removeAllListeners('SIGINT');
+  });
+
+  await test('SHUTDOWN_WAIT_MS: 25 s by default, kept within 5 s - 290 s', () => {
+    assert.strictEqual(shutdownWaitMs({}), 25000);
+    assert.strictEqual(shutdownWaitMs({ SHUTDOWN_WAIT_MS: '280000' }), 280000);
+    assert.strictEqual(shutdownWaitMs({ SHUTDOWN_WAIT_MS: '1000' }), 5000);
+    assert.strictEqual(shutdownWaitMs({ SHUTDOWN_WAIT_MS: '999999' }), 290000);
+    assert.strictEqual(shutdownWaitMs({ SHUTDOWN_WAIT_MS: 'x' }), 25000);
+  });
+
+  await test('wiring: the chat stream is tracked, told SERVER_RESTART with its units released; the editor saves first', () => {
+    assert.ok(/require\('\.\/lifecycle'\)\.trackStream\(res, \(\) => \{[\s\S]{0,200}tariffModule\.refundUsage\(res, 'server_restart'\)[\s\S]{0,200}code: 'SERVER_RESTART'[\s\S]{0,160}refund\.quotaRefunded \? ' — limit qaytarildi\.'/.test(server));
+    assert.ok(server.includes("require('./lifecycle').trackStream(res, null, { wait: false });"), 'the staff event feed');
+    assert.ok(/beforeClose: \[async \(\) => \{ if \(editorHub\) await editorHub\.shutdown\(\); \}\]/.test(server));
+    const live = fs.readFileSync(path.join(__dirname, '..', 'src', 'editor', 'live.js'), 'utf8');
+    assert.ok(/async shutdown\(\) \{[\s\S]{0,200}await Promise\.all\(list\.map\(r => save\(r\)\)\);[\s\S]{0,200}ws\.close\(1012, 'restart'\)/.test(live));
+  });
+
+  await test('the editor hub saves every open document, then closes its sockets with 1012', async () => {
+    const { createHub } = require('../src/editor/live');
+    const saved = [];
+    const hub = createHub({ store: { saveLiveState: async (id) => { saved.push(id); } }, log: quiet });
+    const Y = require('yjs');
+    const closed = [];
+    const ws = { close: (code) => closed.push(code) };
+    hub._rooms.set('d1', { id: 'd1', seeded: true, timer: null, doc: new Y.Doc(), conns: new Map([[ws, {}]]) });
+    hub._rooms.set('d2', { id: 'd2', seeded: false, timer: null, doc: new Y.Doc(), conns: new Map() });
+    assert.strictEqual(await hub.shutdown(), 2);
+    assert.deepStrictEqual(saved, ['d1'], 'only a seeded room has state to save');
+    assert.deepStrictEqual(closed, [1012]);
+  });
+
   await test('server wiring: strict boot, error handler after routes, shutdown installed', () => {
     assert.ok(/if \(err\.workspaceMigrationFatal \|\| process\.env\.BOOT_ALLOW_PARTIAL !== 'true'\) throw err;/.test(server),
       'a migration failure stops boot');

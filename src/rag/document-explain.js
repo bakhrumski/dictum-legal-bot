@@ -334,7 +334,8 @@ function explainSystem(langName) {
 }
 
 // ── Checking the answer against the source (no AI) ──
-const norm = s => String(s || '').toLowerCase().replace(/[\s '’`ʻʼ"«».,;:()\-–—/]+/gu, '');
+// both Latin alphabets read alike (OʻRQ-1184): Ö Ğ Ş Ç fold to o g sh ch before the comparison
+const norm = s => require('../../public/js/uz-alphabet').fold(String(s || '')).replace(/[\s '’`ʻʼ"«».,;:()\-–—/]+/gu, '');
 const digitsOf = s => String(s || '').replace(/[^\d]/gu, '');
 // a figure: thousands groups ("15 000 000", "1,500"), decimals, dates ("01.03.2026")
 const NUMBER = /\d{1,3}(?:[  ]\d{3})+(?:[.,]\d+)?|\d+(?:[.,/]\d+)*/gu;

@@ -12,9 +12,15 @@ const { buildCoreLegalPolicyPrefix } = require('./legal-prompt-policy');
 // lex.uz language segment for a question: Uzbek by default; Russian only when
 // the text is Russian Cyrillic (no Uzbek-specific letters ў/қ/ғ/ҳ).
 function lexLangForText(text) {
-  const t = String(text || '');
+  // A word quoted from a Russian document does not make the question Russian
+  // (2026-11-06: 'Men "Исполнитель" yuristiman' got its analysis in Russian):
+  // quoted parts are left out, then the script with more letters decides.
+  const t = String(text || '').replace(/«[^»]{0,200}»|"[^"]{0,200}"|“[^”]{0,200}”|„[^“”]{0,200}[“”]/gu, ' ');
   if (/[ўқғҳ]/i.test(t)) return 'uz';     // Uzbek Cyrillic
-  if (/[а-яё]/i.test(t)) return 'ru';     // Russian Cyrillic
+  const cyr = (t.match(/[а-яё]/giu) || []).length;
+  const lat = (t.match(/[a-zʻʼ'‘’`öğşç]/giu) || []).length;
+  if (cyr > 0 && cyr >= lat) return 'ru';  // mostly Russian Cyrillic
+  if (cyr > 0 && !lat) return 'ru';
   return 'uz';                            // Latin / default → Uzbek
 }
 
@@ -30,7 +36,7 @@ function buildOpinionPrompt({ lang, ragContext = '', lexUnresolved = [], lexFore
       `- Ground EVERY legal claim ONLY on the KONTEKST below (internal qa-korpus excerpts + live lex.uz excerpts). These are the ONLY permitted sources — no other website, no memory.
 - CITATION PRECISION (required): for every norm you rely on, give the most precise locator the KONTEKST supports, in this order of preference:
     1) Hujjatning to'liq nomi + tasdiqlangan rasmiy raqami + modda/band + qism.
-    2) Qism topilmasa: to'liq nom + rasmiy raqam + modda/band + "tegishli qism/band".
+    2) Qism topilmasa: to'liq nom + rasmiy raqam + modda/band, qismsiz ("tegishli qism" demang).
     3) If no article/band number is available: full document name + confirmed official number.
   Never state a norm without at least option 3. Never invent an article, clause or number that is not in the KONTEKST.
 - Every Uzbek legal-act mention must be a clickable HTML <a href="verified Lex.uz URL"><strong>full name (official number), locator</strong></a>. Use O'RQ for laws, PQ for Presidential decisions, PF for Presidential decrees and VMQ for Cabinet decisions. Never leave a relied-on act as plain text.

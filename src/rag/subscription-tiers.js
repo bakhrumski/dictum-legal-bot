@@ -325,10 +325,19 @@ async function isChannelOkForAdmin(row, adminId) {
   if (!row.telegram_user_id) return false;
   const cachedAt = row.channel_verified_at ? new Date(row.channel_verified_at).getTime() : 0;
   if (cachedAt && (Date.now() - cachedAt) < CHANNEL_REVERIFY_MS) return true;
-  const { isChannelMember } = _bot();
+  const { isChannelMember, checkChannelMembership } = _bot();
   if (typeof isChannelMember !== 'function') return cachedAt > 0;
   try {
-    const ok = await isChannelMember(row.telegram_user_id);
+    // Telegram did not answer (bot not an admin of the channel...): the old
+    // verification stands and nothing is written - an error is not "left"
+    let ok;
+    if (typeof checkChannelMembership === 'function') {
+      const r = await checkChannelMembership(row.telegram_user_id);
+      if (r.member === null) return cachedAt > 0 || _bot().channelGateOnError === 'open';
+      ok = r.member;
+    } else {
+      ok = await isChannelMember(row.telegram_user_id);
+    }
     if (ok) {
       await pool.query('UPDATE admins SET channel_verified_at = NOW() WHERE id = $1', [adminId]);
       return true;
@@ -464,8 +473,10 @@ function commitUsage(res) {
   const text = res && res.locals ? res.locals.deliveredText : undefined;
   const jobs = jobsOf(res);
   const sectionJobs = jobs.filter(t => t && t.section);
-  const settled = sectionJobs.length && typeof text === 'string'
-    ? require('./document-job').settleSections(text, sectionJobs.map(t => t.service)) : {};
+  // nothing delivered at all (a stream cut before its first word, 2026-11-05)
+  // settles as an empty text: a document service is never charged for it
+  const settled = sectionJobs.length
+    ? require('./document-job').settleSections(typeof text === 'string' ? text : '', sectionJobs.map(t => t.service)) : {};
   for (const t of jobs) {
     if (!t || t.refunded || t.committed || !t.jobKey) continue;
     if (t.section && settled[t.service] === 'not_delivered') {
@@ -912,8 +923,11 @@ function enforceQuota(endpoint, { failClosed = false, service: forced, units = 1
             : 'Bepul foydalanish uchun rasmiy Telegram kanalimizga obuna bo\'ling.',
         });
       }
-      const workspaceId = /\/workspaces?\//u.test(String(req.originalUrl || req.url || '')) && req.params && /^[0-9a-f-]{36}$/iu.test(String(req.params.id || ''))
-        ? req.params.id : null;
+      // Workspace routes name the parameter :workspaceId (src/workspace/routes.js);
+      // reading only :id recorded every Workspace AI request without its workspace.
+      const wsParam = req.params ? (req.params.workspaceId || req.params.id) : null;
+      const workspaceId = /\/workspaces?\//u.test(String(req.originalUrl || req.url || '')) && /^[0-9a-f-]{36}$/iu.test(String(wsParam || ''))
+        ? wsParam : null;
       const r = await meterJob(req, res, { service, units: typeof units === 'function' ? units(req) : units, endpoint, workspaceId });
       if (!r.allowed) return;
       passed = true;

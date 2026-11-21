@@ -35,6 +35,8 @@ function normalizeUzbekForSearch(text = '') {
   return String(text || '')
     .normalize('NFKC')
     .toLowerCase()
+    // the 2026 alphabet (OʻRQ-1184: ö ğ ş ç) searches like the old one the corpus is written in
+    .replace(/ö/g, "o'").replace(/ğ/g, "g'").replace(/ş/g, 'sh').replace(/ç/g, 'ch')
     .replace(NORMALIZED_INNER_APOSTROPHE_RX, '$1')
     .replace(NORMALIZED_APOSTROPHE_RX, ' ')
     .replace(NON_WORD_RX, ' ')

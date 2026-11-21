@@ -10,6 +10,9 @@ const {
   canCreateWorkspace,
   isActivePaidPlan,
   isActivePlatinum,
+  isWorkspaceOwnerActive,
+  isMemberActive,
+  STAFF_ROLES,
   requireTask,
   requireWorkspaceAccess,
   withWorkspaceTransaction,
@@ -19,7 +22,11 @@ const {
   createWorkspaceDownloadUrl,
   removeWorkspaceObject,
   uploadWorkspaceObject,
+  downloadWorkspaceObject,
 } = require('./storage');
+// E5: what people write in a Workspace and its files are sealed at rest (src/workspace/sealing.js)
+const sealing = require('./sealing');
+const privacyEnabled = () => require('../privacy/crypto').enabled();
 const {
   booleanValue,
   integer,
@@ -278,7 +285,7 @@ async function listTasks(pool, workspaceId, userId, query) {
 }
 
 function mountWorkspaceRoutes(app, options) {
-  const { pool, requireAuth, aiLimiter, aiService, verificationTokens, tariffModule } = options;
+  const { pool, requireAuth, aiLimiter, aiService, verificationTokens, tariffModule, telegramNotifier } = options;
   // Workspace AI is metered like chat on the asking member's own plan
   // (DECISIONS.md D-7): one unit of fair-use, fail-open, refunded on failure.
   const workspaceAiQuota = (tariffModule && typeof tariffModule.enforceQuota === 'function')
@@ -292,8 +299,8 @@ function mountWorkspaceRoutes(app, options) {
     const rawToken = requiredString(req.params.token, 'token', { min: 20, max: 200 });
     const invitation = (await pool.query(
       `SELECT i.workspace_id,i.role,i.expires_at,i.accepted_at,i.revoked_at,
-              w.name AS workspace_name,
-              juristai_private.has_workspace_entitlement(w.owner_id) AS workspace_active
+              w.name AS workspace_name, w.internal,
+              juristai_private.workspace_owner_active(w.id) AS workspace_active
          FROM workspace_invitations i
          JOIN workspaces w ON w.id=i.workspace_id AND w.deleted_at IS NULL
         WHERE i.token_hash=$1`,
@@ -382,13 +389,13 @@ function mountWorkspaceRoutes(app, options) {
 
   router.get('/workspaces', asyncRoute(async (req, res) => {
     const result = await pool.query(
-      `SELECT w.id, w.name, w.slug, w.default_language, w.owner_id,
+      `SELECT w.id, w.name, w.slug, w.default_language, w.owner_id, w.internal,
               w.created_at, w.updated_at, wm.role,
-              owner.tariff_plan, owner.tariff_expires_at,
+              owner.role AS owner_role, owner.tariff_plan, owner.tariff_expires_at,
               member_account.tariff_plan AS member_tariff_plan,
               member_account.tariff_expires_at AS member_tariff_expires_at,
               member_account.role AS member_role,
-              juristai_private.has_workspace_entitlement(w.owner_id) AS is_active,
+              juristai_private.workspace_owner_active(w.id) AS is_active,
               (SELECT count(*)::int FROM workspace_members m WHERE m.workspace_id=w.id) AS member_count,
               (SELECT count(*)::int FROM workspace_tasks t WHERE t.workspace_id=w.id AND t.deleted_at IS NULL) AS task_count
          FROM workspace_members wm
@@ -401,14 +408,12 @@ function mountWorkspaceRoutes(app, options) {
     );
     res.json({ workspaces: result.rows.map((workspace) => ({
       ...workspace,
-      ownerActive: isActivePlatinum(workspace),
-      memberActive: workspace.role === 'owner' || isActivePaidPlan(workspace, 'silver'),
-      is_active: isActivePlatinum(workspace)
-        && (workspace.role === 'owner' || isActivePaidPlan(workspace, 'silver')),
-      unavailableReason: !isActivePlatinum(workspace)
+      ownerActive: isWorkspaceOwnerActive(workspace),
+      memberActive: isMemberActive(workspace),
+      is_active: isWorkspaceOwnerActive(workspace) && isMemberActive(workspace),
+      unavailableReason: !isWorkspaceOwnerActive(workspace)
         ? 'owner_subscription_expired'
-        : (workspace.role !== 'owner' && !isActivePaidPlan(workspace, 'silver')
-          ? 'member_subscription_expired' : null),
+        : (!isMemberActive(workspace) ? 'member_subscription_expired' : null),
     })) });
   }));
 
@@ -422,13 +427,18 @@ function mountWorkspaceRoutes(app, options) {
         'SELECT role, tariff_plan, tariff_expires_at FROM admins WHERE id=$1 FOR UPDATE',
         [userId]
       )).rows[0];
-      if (!canCreateWorkspace(account)) {
-        throw new WorkspaceError(402, 'workspace_platinum_required', 'Workspace yaratish faqat faol Platinum tarifi bilan mavjud');
+      // an internal (staff) Workspace: a master only, read from the database (migration 025)
+      const internal = req.body.internal === true;
+      if (internal && !canCreateWorkspace(account, { internal: true })) {
+        throw new WorkspaceError(403, 'workspace_internal_master_only', 'Ichki (xodimlar) Workspace’ni faqat master ochadi');
+      }
+      if (!internal && !canCreateWorkspace(account)) {
+        throw new WorkspaceError(402, 'workspace_platinum_required', 'Workspace yaratish uchun faol pullik tarif (Silver, Gold yoki Platinum) kerak');
       }
       return (await db.query(
-        `INSERT INTO workspaces (name, slug, owner_id, default_language, created_by)
-         VALUES ($1,$2,$3,$4,$3) RETURNING *`,
-        [name, workspaceSlug, userId, language]
+        `INSERT INTO workspaces (name, slug, owner_id, default_language, created_by, internal)
+         VALUES ($1,$2,$3,$4,$3,$5) RETURNING *`,
+        [name, workspaceSlug, userId, language, internal]
       )).rows[0];
     });
     res.status(201).json({ workspace, role: 'owner', isActive: true });
@@ -493,7 +503,8 @@ function mountWorkspaceRoutes(app, options) {
     const result = await pool.query(
       `SELECT wm.user_id AS id, wm.role, wm.joined_at, a.username, a.full_name, a.email,
               a.last_active_at, a.tariff_plan, a.tariff_expires_at,
-              CASE WHEN wm.role='owner' THEN juristai_private.has_workspace_entitlement(a.id)
+              CASE WHEN wm.role='owner' THEN juristai_private.workspace_owner_active(wm.workspace_id)
+                   WHEN (SELECT w.internal FROM workspaces w WHERE w.id=wm.workspace_id) AND a.role IN ('master','student','lawyer') THEN true
                    ELSE juristai_private.has_active_paid_entitlement(a.id, 'silver') END AS subscription_active
          FROM workspace_members wm JOIN admins a ON a.id=wm.user_id
         WHERE wm.workspace_id=$1
@@ -608,8 +619,8 @@ function mountWorkspaceRoutes(app, options) {
     const accepted = await withWorkspaceTransaction(pool, userId, async (db) => {
       const invite = (await db.query(
         `SELECT i.id,i.workspace_id,i.role,i.expires_at,i.accepted_at,i.revoked_at,
-                w.name AS workspace_name,
-                juristai_private.has_workspace_entitlement(w.owner_id) AS workspace_active
+                w.name AS workspace_name, w.internal,
+                juristai_private.workspace_owner_active(w.id) AS workspace_active
            FROM workspace_invitations i
            JOIN workspaces w ON w.id=i.workspace_id AND w.deleted_at IS NULL
           WHERE i.token_hash=$1 FOR UPDATE OF i`,
@@ -620,7 +631,14 @@ function mountWorkspaceRoutes(app, options) {
         throw new WorkspaceError(410, 'invitation_unavailable', 'Taklif muddati tugagan yoki undan foydalanilgan');
       }
       if (!invite.workspace_active) {
-        throw new WorkspaceError(402, 'workspace_platinum_required', 'Taklifni qabul qilish uchun Workspace Platinum tarifi faol bo‘lishi kerak');
+        throw new WorkspaceError(402, 'workspace_platinum_required', 'Taklifni qabul qilish uchun Workspace egasining pullik tarifi faol bo‘lishi kerak');
+      }
+      // an internal (staff) Workspace takes staff only - a client never joins one
+      if (invite.internal) {
+        const who = (await db.query('SELECT role FROM admins WHERE id=$1', [userId])).rows[0];
+        if (!who || !STAFF_ROLES.has(String(who.role || '').toLowerCase())) {
+          throw new WorkspaceError(403, 'workspace_internal_staff_only', 'Bu ichki Workspace faqat JuristAI xodimlari uchun');
+        }
       }
       const existingMembership = (await db.query(
         `SELECT role
@@ -756,7 +774,7 @@ function mountWorkspaceRoutes(app, options) {
       pool.query(`SELECT m.* FROM workspace_task_memory_items tm JOIN workspace_memory_items m ON m.id=tm.memory_item_id WHERE tm.workspace_id=$1 AND tm.task_id=$2 AND m.superseded_at IS NULL ORDER BY m.created_at DESC`, [workspaceId, taskId]),
       pool.query(`SELECT l.*,a.username,a.full_name FROM workspace_activity_log l LEFT JOIN admins a ON a.id=l.actor_id WHERE l.workspace_id=$1 AND l.task_id=$2 ORDER BY l.created_at DESC LIMIT 200`, [workspaceId, taskId]),
     ]);
-    res.json({ task, assignees: assignees.rows, watchers: watchers.rows, comments: comments.rows,
+    res.json({ task, assignees: assignees.rows, watchers: watchers.rows, comments: comments.rows.map(c => sealing.openComment(c)),
       links: links.rows, documents: documents.rows, memory: memory.rows, activity: activity.rows });
   }));
 
@@ -764,9 +782,11 @@ function mountWorkspaceRoutes(app, options) {
     const workspaceId = uuid(req.params.workspaceId, 'workspaceId');
     const taskId = uuid(req.params.taskId, 'taskId');
     const userId = actorId(req);
+    let previousStatus = null;
     const task = await withWorkspaceTransaction(pool, userId, async (db) => {
       await requireWorkspaceAccess(db, workspaceId, userId, { minimumRole: 'member', requireActive: true });
       const existing = await requireTask(db, workspaceId, taskId);
+      previousStatus = existing.status;
       const values = [];
       const updates = [];
       const fields = [
@@ -801,6 +821,10 @@ function mountWorkspaceRoutes(app, options) {
       };
     });
     res.json({ task });
+    if (telegramNotifier && previousStatus && task.status !== previousStatus) {
+      telegramNotifier.taskStatusChanged({ workspaceId, taskId, oldStatus: previousStatus, newStatus: task.status, actorId: userId })
+        .catch((e) => console.warn('[WS-TG] status notify failed:', e.message));
+    }
   }));
 
   router.delete('/workspaces/:workspaceId/tasks/:taskId', asyncRoute(async (req, res) => {
@@ -851,10 +875,10 @@ function mountWorkspaceRoutes(app, options) {
       await requireTask(db, workspaceId, taskId);
       return (await db.query(
         `INSERT INTO workspace_task_comments (workspace_id,task_id,author_id,body)
-         VALUES ($1,$2,$3,$4) RETURNING *`, [workspaceId, taskId, userId, body]
+         VALUES ($1,$2,$3,$4) RETURNING *`, [workspaceId, taskId, userId, sealing.sealText(body, sealing.aad.comment(workspaceId, taskId))]
       )).rows[0];
     });
-    res.status(201).json({ comment });
+    res.status(201).json({ comment: sealing.openComment(comment) });
   }));
 
   router.patch('/workspaces/:workspaceId/tasks/:taskId/comments/:commentId', asyncRoute(async (req, res) => {
@@ -869,10 +893,10 @@ function mountWorkspaceRoutes(app, options) {
         `UPDATE workspace_task_comments SET body=$4
           WHERE workspace_id=$1 AND task_id=$2 AND id=$3 AND deleted_at IS NULL
             AND (author_id=$5 OR $6='owner') RETURNING *`,
-        [workspaceId, taskId, commentId, body, userId, access.role]
+        [workspaceId, taskId, commentId, sealing.sealText(body, sealing.aad.comment(workspaceId, taskId)), userId, access.role]
       );
       if (!result.rows[0]) throw new WorkspaceError(404, 'comment_not_found', 'Izoh topilmadi');
-      return result.rows[0];
+      return sealing.openComment(result.rows[0]);
     });
     res.json({ comment });
   }));
@@ -1039,7 +1063,7 @@ function mountWorkspaceRoutes(app, options) {
         ORDER BY m.created_at DESC LIMIT $2`,
       [workspaceId, limit]
     );
-    res.json({ messages: result.rows.reverse() });
+    res.json({ messages: result.rows.reverse().map(m => sealing.openMessage(m, workspaceId)) });
   }));
 
   router.post('/workspaces/:workspaceId/messages', asyncRoute(async (req, res) => {
@@ -1053,10 +1077,10 @@ function mountWorkspaceRoutes(app, options) {
       return (await db.query(
         `INSERT INTO workspace_messages(workspace_id,author_id,body,pinned_task_id)
          VALUES ($1,$2,$3,$4) RETURNING *`,
-        [workspaceId, userId, body, pinnedTaskId]
+        [workspaceId, userId, sealing.sealText(body, sealing.aad.message(workspaceId)), pinnedTaskId]
       )).rows[0];
     });
-    res.status(201).json({ message });
+    res.status(201).json({ message: sealing.openMessage(message) });
   }));
 
   /* -- Direct messages ----------------------------------------
@@ -1112,7 +1136,7 @@ function mountWorkspaceRoutes(app, options) {
         ORDER BY recent.created_at DESC NULLS LAST, COALESCE(a.full_name,a.username)`,
       [workspaceId, userId]
     );
-    res.json({ threads: result.rows });
+    res.json({ threads: result.rows.map(r => sealing.openDm(r, workspaceId, 'last_body')) });
   }));
 
   router.get('/workspaces/:workspaceId/direct-messages/:memberId', asyncRoute(async (req, res) => {
@@ -1133,7 +1157,7 @@ function mountWorkspaceRoutes(app, options) {
         ORDER BY m.created_at DESC LIMIT $4`,
       [workspaceId, userId, memberId, limit]
     );
-    res.json({ messages: result.rows.reverse(), counterpart });
+    res.json({ messages: result.rows.reverse().map(m => sealing.openDm(m, workspaceId)), counterpart });
   }));
 
   router.post('/workspaces/:workspaceId/direct-messages/:memberId', asyncRoute(async (req, res) => {
@@ -1149,10 +1173,10 @@ function mountWorkspaceRoutes(app, options) {
       return (await db.query(
         `INSERT INTO workspace_direct_messages(workspace_id,sender_id,recipient_id,body)
          VALUES ($1,$2,$3,$4) RETURNING *`,
-        [workspaceId, userId, memberId, body]
+        [workspaceId, userId, memberId, sealing.sealText(body, sealing.aad.dm(workspaceId))]
       )).rows[0];
     });
-    res.status(201).json({ message });
+    res.status(201).json({ message: sealing.openDm(message) });
   }));
 
   // Marks what this colleague sent you as read. Only the recipient's own rows
@@ -1230,9 +1254,10 @@ function mountWorkspaceRoutes(app, options) {
         `INSERT INTO workspace_document_versions
            (workspace_id,document_id,version_number,content_text,content_json,source_ai_run_id,created_by)
          VALUES ($1,$2,1,$3,$4,$5,$6) RETURNING *`,
-        [workspaceId, document.id, contentText, contentJson && JSON.stringify(contentJson), sourceAiRunId, userId]
+        [workspaceId, document.id, sealing.sealText(contentText, sealing.aad.versionText(workspaceId, document.id)),
+          contentJson == null ? null : sealing.sealJsonText(contentJson, sealing.aad.versionJson(workspaceId, document.id)), sourceAiRunId, userId]
       )).rows[0];
-      return { document, version };
+      return { document, version: sealing.openVersion(version) };
     });
     res.status(201).json({ ...created, storagePathPrefix: `${workspaceId}/${created.document.id}/${created.version.id}/` });
   }));
@@ -1261,7 +1286,8 @@ function mountWorkspaceRoutes(app, options) {
       // before the version row exists (Astra audit D1).
       const extracted = await extractUploadText(req.file.buffer, req.file.mimetype);
 
-      await uploadWorkspaceObject(objectPath, req.file.buffer, req.file.mimetype);
+      // the file is sealed before it leaves for Storage (its sha256 and size stay the original's)
+      await uploadWorkspaceObject(objectPath, sealing.sealFile(req.file.buffer, objectPath), req.file.mimetype);
       try {
         const created = await withWorkspaceTransaction(pool, userId, async (db) => {
           await requireWorkspaceAccess(db, workspaceId, userId, { minimumRole: 'member', requireActive: true });
@@ -1275,7 +1301,7 @@ function mountWorkspaceRoutes(app, options) {
             `INSERT INTO workspace_document_versions
                (id,workspace_id,document_id,version_number,content_text,created_by)
              VALUES ($1,$2,$3,1,$4,$5) RETURNING *`,
-            [versionId, workspaceId, documentId, extracted.text, userId]
+            [versionId, workspaceId, documentId, sealing.sealText(extracted.text, sealing.aad.versionText(workspaceId, documentId)), userId]
           )).rows[0];
           const file = (await db.query(
             `INSERT INTO workspace_document_files
@@ -1283,7 +1309,7 @@ function mountWorkspaceRoutes(app, options) {
              VALUES ($1,$2,$3,'original',$4,$5,$6,$7,$8) RETURNING *`,
             [fileId, workspaceId, versionId, objectPath, req.file.mimetype, req.file.size, digest, userId]
           )).rows[0];
-          return { document, version, file, textIndex: extracted.status };
+          return { document, version: sealing.openVersion(version), file, textIndex: extracted.status };
         });
         res.status(201).json(created);
       } catch (error) {
@@ -1306,8 +1332,44 @@ function mountWorkspaceRoutes(app, options) {
       [workspaceId, objectPath]
     )).rows[0];
     if (!file) throw new WorkspaceError(404, 'document_file_not_found', 'Hujjat fayli topilmadi');
-    const signedUrl = await createWorkspaceDownloadUrl(objectPath, 120);
-    res.json({ signedUrl, expiresIn: 120 });
+    // E5: files are sealed in Storage, so the download goes through the
+    // server, which opens it (the page opens this URL as before). With no
+    // DATA_KEYS a Storage-signed URL is still given (nothing to open);
+    // createWorkspaceDownloadUrl(objectPath stays for that case.
+    if (!privacyEnabled()) {
+      const signedUrl = await createWorkspaceDownloadUrl(objectPath, 120);
+      return res.json({ signedUrl, expiresIn: 120 });
+    }
+    res.json({ signedUrl: `/api/workspaces/${workspaceId}/document-files/${file.id}/content`, expiresIn: 120 });
+  }));
+
+  // the file itself, opened on the server (E5); the same access as the URL above
+  router.get('/workspaces/:workspaceId/document-files/:fileId/content', asyncStorageRoute(async (req, res) => {
+    const workspaceId = uuid(req.params.workspaceId, 'workspaceId');
+    const fileId = uuid(req.params.fileId, 'fileId');
+    await requireWorkspaceAccess(pool, workspaceId, actorId(req), { requireActive: true });
+    const file = (await pool.query(
+      `SELECT f.storage_object_path, f.mime_type, f.byte_size, f.sha256, d.title
+         FROM workspace_document_files f
+         JOIN workspace_document_versions v ON v.id=f.document_version_id
+         JOIN workspace_documents d ON d.id=v.document_id
+        WHERE f.workspace_id=$1 AND f.id=$2`, [workspaceId, fileId]
+    )).rows[0];
+    if (!file) throw new WorkspaceError(404, 'document_file_not_found', 'Hujjat fayli topilmadi');
+    const bytes = sealing.openFile(await downloadWorkspaceObject(file.storage_object_path), file.storage_object_path);
+    // the stored digest is the original's: a file that does not match is not sent
+    if (file.sha256 && crypto.createHash('sha256').update(bytes).digest('hex') !== file.sha256) {
+      throw new WorkspaceError(409, 'document_file_mismatch', 'Fayl saqlangan nusxaga mos kelmadi');
+    }
+    const name = String(file.storage_object_path).split('/').pop().replace(/^\d+-/, '') || 'file';
+    res.set({
+      'Content-Type': file.mime_type || 'application/octet-stream',
+      'Content-Length': String(bytes.length),
+      'Content-Disposition': `inline; filename="${name.replace(/[^\w.-]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(name)}`,
+      'Cache-Control': 'private, no-store',
+      'X-Content-Type-Options': 'nosniff',
+    });
+    res.end(bytes);
   }));
 
   router.get('/workspaces/:workspaceId/documents/:documentId/versions', asyncRoute(async (req, res) => {
@@ -1321,7 +1383,7 @@ function mountWorkspaceRoutes(app, options) {
         WHERE v.workspace_id=$1 AND v.document_id=$2 ORDER BY v.version_number DESC`,
       [workspaceId, documentId]
     );
-    res.json({ versions: result.rows });
+    res.json({ versions: result.rows.map(v => sealing.openVersion(v, workspaceId)) });
   }));
 
   router.patch('/workspaces/:workspaceId/documents/:documentId', asyncRoute(async (req, res) => {
@@ -1390,10 +1452,11 @@ function mountWorkspaceRoutes(app, options) {
         `INSERT INTO workspace_document_versions
            (workspace_id,document_id,version_number,content_text,content_json,source_ai_run_id,created_by)
          VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-        [workspaceId, documentId, next, contentText, contentJson && JSON.stringify(contentJson), sourceAiRunId, userId]
+        [workspaceId, documentId, next, sealing.sealText(contentText, sealing.aad.versionText(workspaceId, documentId)),
+          contentJson == null ? null : sealing.sealJsonText(contentJson, sealing.aad.versionJson(workspaceId, documentId)), sourceAiRunId, userId]
       )).rows[0];
       await db.query('UPDATE workspace_documents SET updated_at=now() WHERE id=$1', [documentId]);
-      return row;
+      return sealing.openVersion(row);
     });
     res.status(201).json({ version, storagePathPrefix: `${workspaceId}/${documentId}/${version.id}/` });
   }));
@@ -1489,7 +1552,7 @@ function mountWorkspaceRoutes(app, options) {
     );
     res.json({
       thread,
-      messages: messages.rows.map((message) => {
+      messages: messages.rows.map(m => sealing.openAiMessage(m, workspaceId, threadId)).map((message) => {
         const {
           content_json: contentJson,
           citations,
