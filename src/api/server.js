@@ -5191,6 +5191,7 @@ ${feedbackNote}`;
       topic: detectedField || category || null,
     });
     ragCitationChunks = mentionedActs.chunks;
+    if (mentionedActs.removed && mentionedActs.removed.length) analysis = mentionedActs.answer; // a number that belongs to another act
 
     // Apply the same platform-wide verified citation renderer used by Web chat
     // and Telegram before this Master Admin analysis is stored or displayed.
@@ -7774,6 +7775,8 @@ app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, t
       topic,
     });
     ragChunks = mentionedActs.chunks;
+    // a number lex.uz holds under another act than the one the answer names is taken out of the text
+    if (mentionedActs.removed && mentionedActs.removed.length) displayReply = mentionedActs.answer;
     if (mentionedActs.added.length || mentionedActs.unresolved.length || mentionedActs.repealed.length) {
       ragMeta = Object.assign({}, ragMeta || {}, {
         officialCitationHydration: {
@@ -7783,6 +7786,7 @@ app.post('/api/legal-chat', requireAuth, markQuestionTrigger, resolveScanDocs, t
           })),
           unresolved: mentionedActs.unresolved,
           repealed: mentionedActs.repealed,
+          removed: mentionedActs.removed || [],
         },
       });
     }

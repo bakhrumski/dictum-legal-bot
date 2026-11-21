@@ -146,6 +146,48 @@ function adaptResult(result, identifier, index = 0, topic = null) {
   };
 }
 
+/**
+ * Take a number out of the answer where lex.uz holds ANOTHER act under it than the title written right before
+ * it (2026-11-21, owner: the wrong number must not stay in the text either). Only that occurrence - the one
+ * standing after the named title - is removed: "(O'RQ-1010)" with its brackets, "O'RQ-1010, " inside a bracket
+ * that says more ("(O'RQ-1010, 20-modda)" -> "(20-modda)"), or the bare number. The title itself stays.
+ */
+function stripMismatchedIdentifiers(answer = '', mismatched = []) {
+  let text = String(answer || '');
+  const removed = [];
+  for (const m of mismatched || []) {
+    const hits = [];
+    let match;
+    OFFICIAL_ID_RE.lastIndex = 0;
+    while ((match = OFFICIAL_ID_RE.exec(text))) {
+      if (normalizeOfficialDocumentIdentifier(`${match[1]}-${match[2]}`) !== m.identifier) continue;
+      if (namedTitleBefore(text, match.index) !== m.named) continue;
+      hits.push({ index: match.index, length: match[0].length });
+    }
+    for (const hit of hits.reverse()) {
+      let start = hit.index, end = hit.index + hit.length;
+      const son = text.slice(end).match(/^-son(?:li)?/iu);
+      if (son) end += son[0].length;
+      const before = text.slice(0, start), after = text.slice(end);
+      const open = before.match(/\(\s*$/u), close = after.match(/^\s*\)/u), comma = after.match(/^\s*,\s*/u);
+      if (open && close) {
+        // "(O'RQ-1010)": the bracket goes with it, and the space that led to it
+        start -= open[0].length; end += close[0].length;
+        const lead = text.slice(0, start).match(/[ \t]+$/u);
+        if (lead) start -= lead[0].length;
+      } else if (open && comma) {
+        end += comma[0].length;                       // "(O'RQ-1010, 20-modda)" -> "(20-modda)"
+      } else {
+        const lead = before.match(/,?[ \t]+$/u);     // "... Qonuni O'RQ-1010 talablariga" -> "... Qonuni talablariga"
+        if (lead) start -= lead[0].length;
+      }
+      text = text.slice(0, start) + text.slice(end);
+      removed.push(m.identifier);
+    }
+  }
+  return { answer: text, removed: [...new Set(removed)] };
+}
+
 async function hydrateMentionedOfficialActChunks(answer = '', chunks = [], opts = {}) {
   const existing = Array.isArray(chunks) ? [...chunks] : [];
   const maxMentions = Math.max(0, Math.min(6, Number(opts.maxMentions || 4)));
@@ -209,12 +251,15 @@ async function hydrateMentionedOfficialActChunks(answer = '', chunks = [], opts 
     sourceKeys.add(key);
   }
 
-  return { chunks: existing, added, unresolved, repealed, mismatched };
+  // a number lex.uz holds under another act leaves the answer; `answer` is the text to go on with
+  const stripped = stripMismatchedIdentifiers(answer, mismatched);
+  return { chunks: existing, added, unresolved, repealed, mismatched, answer: stripped.answer, removed: stripped.removed };
 }
 
 module.exports = {
   extractOfficialActMentions,
   resultMatchesMention,
   namedTitleBefore,
+  stripMismatchedIdentifiers,
   hydrateMentionedOfficialActChunks,
 };

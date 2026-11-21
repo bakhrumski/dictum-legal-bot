@@ -347,8 +347,12 @@ Known state of the suites (Sept 2026):
   must share that title's words (5-letter starts, distinct, generic words
   such as Respublika / qonun / kodeks / kiritish out) or it is not linked
   and is reported in `mismatched`; with no title named, two DISTINCT telling
-  words or a matching year as before. The wrong number itself stays in the
-  answer as plain text. A registry law kept with its number alone ("684") is
+  words or a matching year as before. Such a number is also taken out of the
+  answer (`stripMismatchedIdentifiers`: the occurrence after the named title
+  only - its brackets with it, or out of a fuller bracket; the hydrator
+  returns `answer` / `removed` and web chat, the master's analysis, Telegram
+  and Workspace AI go on with it); a number lex.uz did not show at all is
+  not proof of an error and stays. A registry law kept with its number alone ("684") is
   an O'RQ number (`isRegistryLaw`, doc_id `...-qonun`): the label read
   "(684)" and a written "O'RQ-684" was cut in two. `tests/citation-hydrator.test.js`.
   A cut answer (2026-11-05, owner: a document analysis ended in "Javob

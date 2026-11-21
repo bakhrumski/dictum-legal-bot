@@ -385,6 +385,7 @@ function createWorkspaceLegalAnswerGenerator(dependencies) {
 
     const mentionedActs = await hydrateMentionedOfficialActChunks(reply, ragChunks, { topic });
     ragChunks = mentionedActs.chunks;
+    if (mentionedActs.removed && mentionedActs.removed.length) reply = mentionedActs.answer; // a number that belongs to another act
     ragMeta = Object.assign({}, ragMeta || {}, {
       officialCitationHydration: {
         added: mentionedActs.added.map((chunk) => ({
