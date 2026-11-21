@@ -649,18 +649,30 @@ function normalizeOfficialDocumentIdentifier(value = '', context = '') {
 // A registry act's public number by its lex.uz id (lex-registry.js
 // document_number), for a chunk whose own number came without its prefix.
 let registryNumbers = null;
+let registryLaws = null;
+function loadRegistry() {
+  if (registryNumbers) return;
+  registryNumbers = new Map();
+  registryLaws = new Set();
+  try {
+    for (const law of require('./lex-registry').getAllLaws()) {
+      const id = (String(law.lex_url || '').match(/docs\/-?(\d+)/u) || [])[1];
+      if (id && law.document_number) registryNumbers.set(id, law.document_number);
+      if (id && /-qonun$/u.test(String(law.doc_id || ''))) registryLaws.add(id);
+    }
+  } catch (_) { /* no registry: no fallback */ }
+}
+const lexIdOf = (url = '') => (String(url || '').match(/lex\.uz\/(?:uz\/|ru\/)?docs\/-?(\d+)/iu) || [])[1] || '';
 function registryDocumentNumber(url = '') {
-  if (!registryNumbers) {
-    registryNumbers = new Map();
-    try {
-      for (const law of require('./lex-registry').getAllLaws()) {
-        const id = (String(law.lex_url || '').match(/docs\/-?(\d+)/u) || [])[1];
-        if (id && law.document_number) registryNumbers.set(id, law.document_number);
-      }
-    } catch (_) { /* no registry: no fallback */ }
-  }
-  const id = (String(url || '').match(/lex\.uz\/(?:uz\/|ru\/)?docs\/-?(\d+)/iu) || [])[1];
+  loadRegistry();
+  const id = lexIdOf(url);
   return id ? registryNumbers.get(id) || '' : '';
+}
+/** Is this lex.uz document one of the registry's laws (doc_id "...-qonun")? Their plain number is an O'RQ number. */
+function isRegistryLaw(url = '') {
+  loadRegistry();
+  const id = lexIdOf(url);
+  return !!id && registryLaws.has(id);
 }
 
 function getChunkDocumentIdentifier(chunk = {}) {
@@ -689,6 +701,9 @@ function getChunkDocumentIdentifier(chunk = {}) {
   if (/^\d+$/u.test(String(normalized || ''))) {
     const fromRegistry = registryDocumentNumber(chunk.source_url || chunk.sourceUrl);
     if (fromRegistry && fromRegistry.replace(/\D/gu, '') === normalized) return fromRegistry;
+    // a registry law kept in the corpus with its number alone (2026-11-21: the label read "(684)" and an
+    // "O'RQ-684" written in the answer was cut in two: "O'RQ-[Davlat xaridlari to'g'risida (684), 20-modda]")
+    if (isRegistryLaw(chunk.source_url || chunk.sourceUrl)) return `O'RQ-${normalized}`;
   }
   return normalized;
 }

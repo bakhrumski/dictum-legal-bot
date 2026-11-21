@@ -336,6 +336,21 @@ Known state of the suites (Sept 2026):
   set aside while citations are linked. The `KEYINGI SAVOLLAR:` block (max
   2) leaves the answer: web chat `followUpQuestions` buttons, Telegram a
   short list, Workspace drops it.
+  A number linked to the wrong act (2026-11-21, owner: an answer named
+  "Valyuta tartibga solish to'g'risida"gi Qonun and its link read a law about
+  teachers): the model had written a wrong O'RQ number after the title, and
+  `official-citation-hydrator.js` looked the NUMBER up on lex.uz and linked
+  what it found - its guard passed because the sentence and that law's title
+  shared "Respublikasining", which stands twice in the title and was counted
+  as two words. Now: when the answer names a title right before the number
+  (`namedTitleBefore`, same sentence, <= 60 chars between), the act found
+  must share that title's words (5-letter starts, distinct, generic words
+  such as Respublika / qonun / kodeks / kiritish out) or it is not linked
+  and is reported in `mismatched`; with no title named, two DISTINCT telling
+  words or a matching year as before. The wrong number itself stays in the
+  answer as plain text. A registry law kept with its number alone ("684") is
+  an O'RQ number (`isRegistryLaw`, doc_id `...-qonun`): the label read
+  "(684)" and a written "O'RQ-684" was cut in two. `tests/citation-hydrator.test.js`.
   A cut answer (2026-11-05, owner: a document analysis ended in "Javob
   uzildi"): the web chat's stream writes `: ping` every 15 s (a proxy closing
   an idle stream during a long digest); a failed answer (cut stream, network,
