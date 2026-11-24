@@ -12349,6 +12349,8 @@ const lifecycle = require('./lifecycle');
 lifecycle.waitForDatabase(pool)
   .then(() => runMigrations())
   .then(() => {
+    // RLS on every public table the server owns, now and hourly (Supabase advisor 2026-11-22)
+    require('../database/rls-guard').startRlsGuard(pool);
     // Registered last, after every route runMigrations mounts.
     app.use(lifecycle.jsonErrorHandler);
     const server = app.listen(PORT, () => {
